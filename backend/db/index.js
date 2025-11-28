@@ -53,10 +53,45 @@ const initDb = async () => {
       -- Departments
       CREATE TABLE IF NOT EXISTS departments (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
+        name VARCHAR(100) UNIQUE NOT NULL,
         salary_type VARCHAR(50) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- Fix duplicate departments (for existing tables)
+      DO $$
+      DECLARE
+        dept_name TEXT;
+        keep_id INTEGER;
+      BEGIN
+        -- For each duplicate department name, update employees to use the lowest id
+        FOR dept_name, keep_id IN
+          SELECT LOWER(name), MIN(id) FROM departments GROUP BY LOWER(name) HAVING COUNT(*) > 1
+        LOOP
+          -- Update employees to point to the kept department
+          UPDATE employees SET department_id = keep_id
+          WHERE department_id IN (SELECT id FROM departments WHERE LOWER(name) = dept_name AND id != keep_id);
+
+          -- Update salary_configs to point to the kept department
+          UPDATE salary_configs SET department_id = keep_id
+          WHERE department_id IN (SELECT id FROM departments WHERE LOWER(name) = dept_name AND id != keep_id);
+
+          -- Delete duplicate departments
+          DELETE FROM departments WHERE LOWER(name) = dept_name AND id != keep_id;
+        END LOOP;
+
+        -- Add unique constraint if not exists
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'departments_name_key'
+        ) THEN
+          ALTER TABLE departments ADD CONSTRAINT departments_name_key UNIQUE (name);
+        END IF;
+      EXCEPTION
+        WHEN unique_violation THEN
+          NULL;
+        WHEN others THEN
+          NULL;
+      END $$;
 
       -- Employees
       CREATE TABLE IF NOT EXISTS employees (
