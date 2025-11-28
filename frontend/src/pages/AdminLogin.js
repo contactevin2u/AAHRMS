@@ -38,13 +38,14 @@ function AdminLogin() {
     <div className="admin-login">
       <div className="login-container">
         <div className="login-header">
-          <h1>Admin Portal</h1>
-          <p>Access the feedback dashboard</p>
+          <div className="login-icon">👋🏼✨</div>
+          <h1>Welcome Back! 🌸</h1>
+          <p>Access the feedback dashboard 📊💫</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="username">Username</label>
+            <label htmlFor="username">👤 Username</label>
             <input
               type="text"
               id="username"
@@ -56,7 +57,7 @@ function AdminLogin() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">🔑 Password</label>
             <input
               type="password"
               id="password"
@@ -70,12 +71,12 @@ function AdminLogin() {
           {error && <div className="error-message">{error}</div>}
 
           <button type="submit" className="login-btn" disabled={isLoading}>
-            {isLoading ? 'Logging in...' : 'Login'}
+            {isLoading ? '✨ Logging in...' : '🚀 Let\'s Go!'}
           </button>
         </form>
 
         <div className="login-footer">
-          <a href="/">Back to feedback form</a>
+          <a href="/">← Back to feedback form 💬</a>
         </div>
       </div>
     </div>

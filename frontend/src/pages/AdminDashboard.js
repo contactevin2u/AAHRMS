@@ -101,7 +101,7 @@ function AdminDashboard() {
   if (loading) {
     return (
       <div className="admin-dashboard">
-        <div className="loading">Loading...</div>
+        <div className="loading">✨ Loading... 🌸</div>
       </div>
     );
   }
@@ -110,13 +110,13 @@ function AdminDashboard() {
     <div className="admin-dashboard">
       <header className="dashboard-header">
         <div className="header-left">
-          <h1>Feedback Dashboard</h1>
+          <h1>📊 Feedback Dashboard ✨</h1>
           <span className="unread-badge">
-            {stats?.overview?.unread || 0} unread
+            📬 {stats?.overview?.unread || 0} unread
           </span>
         </div>
         <button onClick={handleLogout} className="logout-btn">
-          Logout
+          👋 Logout
         </button>
       </header>
 
@@ -124,19 +124,19 @@ function AdminDashboard() {
         <div className="stats-grid">
           <div className="stat-card">
             <span className="stat-number">{stats.overview.total}</span>
-            <span className="stat-label">Total Feedback</span>
+            <span className="stat-label">📝 Total Feedback</span>
           </div>
           <div className="stat-card highlight">
             <span className="stat-number">{stats.overview.unread}</span>
-            <span className="stat-label">Unread</span>
+            <span className="stat-label">🔔 Unread</span>
           </div>
           <div className="stat-card">
             <span className="stat-number">{stats.overview.last_week}</span>
-            <span className="stat-label">Last 7 Days</span>
+            <span className="stat-label">📅 Last 7 Days</span>
           </div>
           <div className="stat-card">
             <span className="stat-number">{stats.overview.last_month}</span>
-            <span className="stat-label">Last 30 Days</span>
+            <span className="stat-label">🗓️ Last 30 Days</span>
           </div>
         </div>
       )}
@@ -151,13 +151,13 @@ function AdminDashboard() {
                 setPagination({ ...pagination, currentPage: 1 });
               }}
             >
-              <option value="">All Categories</option>
-              <option value="suggestion">Suggestion</option>
-              <option value="concern">Concern</option>
-              <option value="complaint">Complaint</option>
-              <option value="praise">Praise</option>
-              <option value="question">Question</option>
-              <option value="other">Other</option>
+              <option value="">🏷️ All Categories</option>
+              <option value="suggestion">💡 Suggestion</option>
+              <option value="concern">🤔 Concern</option>
+              <option value="complaint">😤 Complaint</option>
+              <option value="praise">⭐ Praise</option>
+              <option value="question">❓ Question</option>
+              <option value="other">🌈 Other</option>
             </select>
 
             <select
@@ -167,15 +167,15 @@ function AdminDashboard() {
                 setPagination({ ...pagination, currentPage: 1 });
               }}
             >
-              <option value="">All Status</option>
-              <option value="false">Unread</option>
-              <option value="true">Read</option>
+              <option value="">📋 All Status</option>
+              <option value="false">🔔 Unread</option>
+              <option value="true">✅ Read</option>
             </select>
           </div>
 
           <div className="feedback-list">
             {feedback.length === 0 ? (
-              <div className="no-feedback">No feedback found</div>
+              <div className="no-feedback">📭 No feedback found yet! 🌟</div>
             ) : (
               feedback.map((item) => (
                 <div
@@ -245,20 +245,20 @@ function AdminDashboard() {
               </div>
 
               <div className="detail-message">
-                <h3>Message</h3>
+                <h3>💬 Message</h3>
                 <p>{selectedFeedback.message}</p>
               </div>
 
               <div className="detail-notes">
-                <h3>Admin Notes</h3>
+                <h3>📝 Admin Notes</h3>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add private notes about this feedback..."
+                  placeholder="Add private notes about this feedback... ✍️"
                   rows={4}
                 />
                 <button onClick={handleSaveNotes} className="save-notes-btn">
-                  Save Notes
+                  💾 Save Notes
                 </button>
               </div>
 
@@ -267,13 +267,13 @@ function AdminDashboard() {
                   onClick={() => handleMarkAsRead(selectedFeedback.id, selectedFeedback.is_read)}
                   className={`status-btn ${selectedFeedback.is_read ? 'mark-unread' : 'mark-read'}`}
                 >
-                  {selectedFeedback.is_read ? 'Mark as Unread' : 'Mark as Read'}
+                  {selectedFeedback.is_read ? '📩 Mark as Unread' : '✅ Mark as Read'}
                 </button>
               </div>
             </div>
           ) : (
             <div className="no-selection">
-              <p>Select a feedback item to view details</p>
+              <p>👈 Select a feedback item to view details 💫</p>
             </div>
           )}
         </div>
