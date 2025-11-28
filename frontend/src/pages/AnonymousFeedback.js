@@ -3,12 +3,12 @@ import { feedbackApi } from '../api';
 import './AnonymousFeedback.css';
 
 const CATEGORIES = [
-  { value: 'suggestion', label: 'Suggestion', icon: '💡✨' },
-  { value: 'concern', label: 'Concern', icon: '🤔💭' },
-  { value: 'complaint', label: 'Complaint', icon: '📝😤' },
-  { value: 'praise', label: 'Praise', icon: '⭐🎉' },
-  { value: 'question', label: 'Question', icon: '❓🙋' },
-  { value: 'other', label: 'Other', icon: '💬🌈' },
+  { value: 'suggestion', label: 'Suggestion', icon: '💡' },
+  { value: 'concern', label: 'Concern', icon: '🤔' },
+  { value: 'complaint', label: 'Complaint', icon: '😔' },
+  { value: 'praise', label: 'Praise', icon: '🌟' },
+  { value: 'question', label: 'Question', icon: '❓' },
+  { value: 'other', label: 'Other', icon: '🍃' },
 ];
 
 function AnonymousFeedback() {
@@ -37,7 +37,7 @@ function AnonymousFeedback() {
       await feedbackApi.submit({ category, message });
       setStatus({
         type: 'success',
-        message: '🎉 Yay! Your feedback has been submitted anonymously. Thank you for sharing! 💖✨',
+        message: '🌸 Thank you for sharing! Your thoughts have been received safely. We appreciate you! 🧡',
       });
       setCategory('');
       setMessage('');
@@ -55,22 +55,22 @@ function AnonymousFeedback() {
     <div className="anonymous-feedback">
       <div className="feedback-container">
         <header className="feedback-header">
-          <div className="shield-icon">🛡️✨</div>
-          <h1>Speak Freely 💬</h1>
-          <p className="subtitle">Your voice matters! Share your thoughts anonymously 🌟</p>
+          <div className="shield-icon">🏠</div>
+          <h1>Share Your Thoughts ☕</h1>
+          <p className="subtitle">A safe space to express yourself freely ~ your voice matters 🧡</p>
         </header>
 
         <div className="privacy-notice">
-          <strong>🔒 100% Anonymous 🤫</strong>
+          <strong>🔐 Your Safe Corner</strong>
           <p>
-            We do not collect any identifying information. No IP addresses, no cookies,
-            no tracking. Your feedback is completely confidential! 💯
+            Everything here stays between us. No names, no tracking, just your honest thoughts.
+            Feel free to share what's on your mind ~ we're listening with care 🤎
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="feedback-form">
           <div className="form-group">
-            <label>What type of feedback do you have? 🤔</label>
+            <label>What's on your mind today? 🍂</label>
             <div className="category-grid">
               {CATEGORIES.map((cat) => (
                 <button
@@ -87,12 +87,12 @@ function AnonymousFeedback() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="message">Your Message 📝💭</label>
+            <label htmlFor="message">Tell us more... ✍️</label>
             <textarea
               id="message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Share your thoughts, concerns, or suggestions here! Be as detailed as you'd like - everything is confidential 🤗💕"
+              placeholder="Take your time... write whatever feels right. We're here to listen and make things better together 🌻"
               rows={6}
               maxLength={5000}
             />
@@ -110,12 +110,12 @@ function AnonymousFeedback() {
             className="submit-btn"
             disabled={isSubmitting}
           >
-            {isSubmitting ? '✨ Submitting...' : '🚀 Submit Anonymously'}
+            {isSubmitting ? '☕ Sending...' : '🌿 Share Anonymously'}
           </button>
         </form>
 
         <footer className="feedback-footer">
-          <p>Your feedback helps us build a better workplace for everyone! 🌈💪🏼</p>
+          <p>Together, we grow and create a warmer workplace for everyone 🌻🤎</p>
         </footer>
       </div>
     </div>
