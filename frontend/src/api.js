@@ -42,4 +42,28 @@ export const authApi = {
   setup: (data) => api.post('/auth/setup', data),
 };
 
+export const employeeApi = {
+  getAll: (params) => api.get('/employees', { params }),
+  getOne: (id) => api.get(`/employees/${id}`),
+  create: (data) => api.post('/employees', data),
+  update: (id, data) => api.put(`/employees/${id}`, data),
+  delete: (id) => api.delete(`/employees/${id}`),
+  getStats: () => api.get('/employees/stats/overview'),
+};
+
+export const departmentApi = {
+  getAll: () => api.get('/departments'),
+  getOne: (id) => api.get(`/departments/${id}`),
+  updateSalaryConfig: (id, data) => api.put(`/departments/${id}/salary-config`, data),
+};
+
+export const payrollApi = {
+  getAll: (params) => api.get('/payroll', { params }),
+  getOne: (id) => api.get(`/payroll/${id}`),
+  generate: (data) => api.post('/payroll/generate', data),
+  update: (id, data) => api.put(`/payroll/${id}`, data),
+  calculate: (data) => api.post('/payroll/calculate', data),
+  getSummary: (year, month) => api.get(`/payroll/summary/${year}/${month}`),
+};
+
 export default api;

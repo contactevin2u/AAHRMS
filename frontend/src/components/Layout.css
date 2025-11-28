@@ -1,0 +1,127 @@
+.layout {
+  display: flex;
+  min-height: 100vh;
+  background: linear-gradient(160deg, #fff9f0 0%, #fff4e8 50%, #ffefe0 100%);
+}
+
+.sidebar {
+  width: 260px;
+  background: linear-gradient(180deg, #6b5344 0%, #5a4538 100%);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  height: 100vh;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-header {
+  padding: 25px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.logo {
+  font-size: 2rem;
+}
+
+.sidebar-header h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.nav-links {
+  flex: 1;
+  padding: 20px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.25s ease;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.nav-link.active {
+  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(212, 136, 106, 0.4);
+}
+
+.nav-icon {
+  font-size: 1.3rem;
+}
+
+.sidebar-footer {
+  padding: 20px 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.logout-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  background: none;
+  border: none;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.25s ease;
+}
+
+.logout-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.main-content {
+  flex: 1;
+  margin-left: 260px;
+  min-height: 100vh;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 70px;
+  }
+
+  .sidebar-header h2,
+  .nav-link span:not(.nav-icon),
+  .logout-link span:not(.nav-icon) {
+    display: none;
+  }
+
+  .sidebar-header {
+    justify-content: center;
+  }
+
+  .nav-link,
+  .logout-link {
+    justify-content: center;
+    padding: 14px;
+  }
+
+  .main-content {
+    margin-left: 70px;
+  }
+}
