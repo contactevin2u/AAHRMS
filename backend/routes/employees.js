@@ -141,6 +141,137 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Bulk import employees
+router.post('/bulk-import', authenticateAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { employees } = req.body;
+
+    if (!employees || !Array.isArray(employees) || employees.length === 0) {
+      return res.status(400).json({ error: 'No employees data provided' });
+    }
+
+    // Get all departments for mapping
+    const deptResult = await client.query('SELECT id, name FROM departments');
+    const departmentMap = {};
+    deptResult.rows.forEach(d => {
+      departmentMap[d.name.toLowerCase()] = d.id;
+    });
+
+    await client.query('BEGIN');
+
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+
+    for (let i = 0; i < employees.length; i++) {
+      const emp = employees[i];
+      const rowNum = i + 2; // Excel row number (1-indexed + header)
+
+      try {
+        // Validate required fields
+        if (!emp.employee_id || !emp.name) {
+          results.failed++;
+          results.errors.push(`Row ${rowNum}: Employee ID and Name are required`);
+          continue;
+        }
+
+        // Map department name to ID
+        let departmentId = null;
+        if (emp.department) {
+          departmentId = departmentMap[emp.department.toLowerCase()];
+          if (!departmentId) {
+            results.failed++;
+            results.errors.push(`Row ${rowNum}: Department "${emp.department}" not found`);
+            continue;
+          }
+        }
+
+        // Parse join_date if provided
+        let joinDate = null;
+        if (emp.join_date) {
+          joinDate = new Date(emp.join_date);
+          if (isNaN(joinDate.getTime())) {
+            joinDate = null;
+          }
+        }
+
+        // Check if employee_id already exists
+        const existingEmp = await client.query(
+          'SELECT id FROM employees WHERE employee_id = $1',
+          [emp.employee_id]
+        );
+
+        if (existingEmp.rows.length > 0) {
+          // Update existing employee
+          await client.query(
+            `UPDATE employees SET
+              name = $1, email = $2, phone = $3, ic_number = $4,
+              department_id = $5, position = $6, join_date = $7,
+              bank_name = $8, bank_account_no = $9, bank_account_holder = $10,
+              status = COALESCE($11, status), updated_at = NOW()
+            WHERE employee_id = $12`,
+            [
+              emp.name,
+              emp.email || null,
+              emp.phone || null,
+              emp.ic_number || null,
+              departmentId,
+              emp.position || null,
+              joinDate,
+              emp.bank_name || null,
+              emp.bank_account_no || null,
+              emp.bank_account_holder || null,
+              emp.status || null,
+              emp.employee_id
+            ]
+          );
+        } else {
+          // Insert new employee
+          await client.query(
+            `INSERT INTO employees (employee_id, name, email, phone, ic_number, department_id, position, join_date, bank_name, bank_account_no, bank_account_holder, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            [
+              emp.employee_id,
+              emp.name,
+              emp.email || null,
+              emp.phone || null,
+              emp.ic_number || null,
+              departmentId,
+              emp.position || null,
+              joinDate,
+              emp.bank_name || null,
+              emp.bank_account_no || null,
+              emp.bank_account_holder || null,
+              emp.status || 'active'
+            ]
+          );
+        }
+
+        results.success++;
+      } catch (err) {
+        results.failed++;
+        results.errors.push(`Row ${rowNum}: ${err.message}`);
+      }
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      message: `Import completed: ${results.success} successful, ${results.failed} failed`,
+      ...results
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error importing employees:', error);
+    res.status(500).json({ error: 'Failed to import employees' });
+  } finally {
+    client.release();
+  }
+});
+
 // Get employee stats
 router.get('/stats/overview', authenticateAdmin, async (req, res) => {
   try {

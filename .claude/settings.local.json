@@ -13,7 +13,8 @@
       "Bash(dir:*)",
       "Bash(findstr:*)",
       "Bash(ren \"C:\\Users\\user\\Desktop\\AA HRMS\\frontend\\public\\logo.png.png\" \"logo.png\")",
-      "Bash(move:*)"
+      "Bash(move:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

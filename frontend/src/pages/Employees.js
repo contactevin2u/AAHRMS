@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { employeeApi, departmentApi } from '../api';
 import Layout from '../components/Layout';
+import * as XLSX from 'xlsx';
 import './Employees.css';
 
 function Employees() {
@@ -11,6 +12,11 @@ function Employees() {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [filter, setFilter] = useState({ department_id: '', status: 'active', search: '' });
   const [stats, setStats] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importData, setImportData] = useState(null);
+  const [importResult, setImportResult] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   const [form, setForm] = useState({
     employee_id: '',
@@ -118,6 +124,104 @@ function Employees() {
     setShowModal(true);
   };
 
+  // Excel Import Functions
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        // Map Excel columns to our field names
+        const mappedData = jsonData.map(row => ({
+          employee_id: row['Employee ID'] || row['employee_id'] || row['ID'] || '',
+          name: row['Name'] || row['Full Name'] || row['name'] || '',
+          email: row['Email'] || row['email'] || '',
+          phone: row['Phone'] || row['phone'] || row['Contact'] || '',
+          ic_number: row['IC Number'] || row['IC'] || row['ic_number'] || row['NRIC'] || '',
+          department: row['Department'] || row['department'] || row['Dept'] || '',
+          position: row['Position'] || row['position'] || row['Job Title'] || row['Role'] || '',
+          join_date: row['Join Date'] || row['join_date'] || row['Start Date'] || '',
+          bank_name: row['Bank Name'] || row['Bank'] || row['bank_name'] || '',
+          bank_account_no: row['Account Number'] || row['Bank Account'] || row['bank_account_no'] || '',
+          bank_account_holder: row['Account Holder'] || row['Account Name'] || row['bank_account_holder'] || '',
+          status: row['Status'] || row['status'] || 'active'
+        }));
+
+        setImportData(mappedData);
+        setImportResult(null);
+        setShowImportModal(true);
+      } catch (error) {
+        alert('Error reading Excel file. Please make sure it\'s a valid .xlsx or .xls file.');
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = ''; // Reset input
+  };
+
+  const handleImport = async () => {
+    if (!importData || importData.length === 0) return;
+
+    setImporting(true);
+    try {
+      const res = await employeeApi.bulkImport(importData);
+      setImportResult(res.data);
+      fetchData();
+    } catch (error) {
+      setImportResult({
+        success: 0,
+        failed: importData.length,
+        errors: [error.response?.data?.error || 'Import failed']
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const template = [
+      {
+        'Employee ID': 'EMP001',
+        'Name': 'John Doe',
+        'Email': 'john@company.com',
+        'Phone': '0123456789',
+        'IC Number': '901234-56-7890',
+        'Department': 'Office',
+        'Position': 'Manager',
+        'Join Date': '2024-01-15',
+        'Bank Name': 'Maybank',
+        'Account Number': '1234567890',
+        'Account Holder': 'John Doe',
+        'Status': 'active'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Employees');
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 20 }, { wch: 25 }, { wch: 15 },
+      { wch: 18 }, { wch: 15 }, { wch: 20 }, { wch: 12 },
+      { wch: 15 }, { wch: 18 }, { wch: 20 }, { wch: 10 }
+    ];
+
+    XLSX.writeFile(wb, 'employee_import_template.xlsx');
+  };
+
+  const closeImportModal = () => {
+    setShowImportModal(false);
+    setImportData(null);
+    setImportResult(null);
+  };
+
   return (
     <Layout>
       <div className="employees-page">
@@ -126,9 +230,21 @@ function Employees() {
             <h1>👥 Employees</h1>
             <p>Manage your team members</p>
           </div>
-          <button onClick={openAddModal} className="add-btn">
-            ➕ Add Employee
-          </button>
+          <div className="header-actions">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              accept=".xlsx,.xls"
+              style={{ display: 'none' }}
+            />
+            <button onClick={() => fileInputRef.current?.click()} className="import-btn">
+              📥 Import Excel
+            </button>
+            <button onClick={openAddModal} className="add-btn">
+              ➕ Add Employee
+            </button>
+          </div>
         </header>
 
         {stats && (
@@ -393,6 +509,112 @@ function Employees() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Import Modal */}
+        {showImportModal && (
+          <div className="modal-overlay" onClick={closeImportModal}>
+            <div className="modal import-modal" onClick={(e) => e.stopPropagation()}>
+              <h2>📥 Import Employees from Excel</h2>
+
+              {!importResult ? (
+                <>
+                  <div className="import-info">
+                    <p><strong>{importData?.length || 0}</strong> employees found in file</p>
+                    <button onClick={downloadTemplate} className="template-btn">
+                      📄 Download Template
+                    </button>
+                  </div>
+
+                  {importData && importData.length > 0 && (
+                    <div className="import-preview">
+                      <h4>Preview (first 5 rows):</h4>
+                      <div className="preview-table-wrapper">
+                        <table className="preview-table">
+                          <thead>
+                            <tr>
+                              <th>Employee ID</th>
+                              <th>Name</th>
+                              <th>Department</th>
+                              <th>Position</th>
+                              <th>Phone</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importData.slice(0, 5).map((emp, idx) => (
+                              <tr key={idx}>
+                                <td>{emp.employee_id || '-'}</td>
+                                <td>{emp.name || '-'}</td>
+                                <td>{emp.department || '-'}</td>
+                                <td>{emp.position || '-'}</td>
+                                <td>{emp.phone || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {importData.length > 5 && (
+                        <p className="more-rows">...and {importData.length - 5} more rows</p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="import-note">
+                    <strong>Note:</strong> Department names must match exactly (Office, Indoor Sales, Outdoor Sales, Driver).
+                    Existing employees will be updated if Employee ID matches.
+                  </div>
+
+                  <div className="modal-actions">
+                    <button type="button" onClick={closeImportModal} className="cancel-btn">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleImport}
+                      className="save-btn"
+                      disabled={importing || !importData || importData.length === 0}
+                    >
+                      {importing ? '⏳ Importing...' : `📥 Import ${importData?.length || 0} Employees`}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className={`import-result ${importResult.failed > 0 ? 'has-errors' : 'success'}`}>
+                    <div className="result-summary">
+                      <div className="result-item success">
+                        <span className="result-num">{importResult.success}</span>
+                        <span className="result-label">Successful</span>
+                      </div>
+                      <div className="result-item failed">
+                        <span className="result-num">{importResult.failed}</span>
+                        <span className="result-label">Failed</span>
+                      </div>
+                    </div>
+
+                    {importResult.errors && importResult.errors.length > 0 && (
+                      <div className="error-list">
+                        <h4>Errors:</h4>
+                        <ul>
+                          {importResult.errors.slice(0, 10).map((err, idx) => (
+                            <li key={idx}>{err}</li>
+                          ))}
+                          {importResult.errors.length > 10 && (
+                            <li>...and {importResult.errors.length - 10} more errors</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="modal-actions">
+                    <button onClick={closeImportModal} className="save-btn">
+                      ✓ Done
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
