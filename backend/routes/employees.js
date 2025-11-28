@@ -71,17 +71,17 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 // Create employee
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, name, email, phone, ic_number, department_id, position, join_date } = req.body;
+    const { employee_id, name, email, phone, ic_number, department_id, position, join_date, bank_name, bank_account_no, bank_account_holder } = req.body;
 
     if (!employee_id || !name || !department_id) {
       return res.status(400).json({ error: 'Employee ID, name, and department are required' });
     }
 
     const result = await pool.query(
-      `INSERT INTO employees (employee_id, name, email, phone, ic_number, department_id, position, join_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO employees (employee_id, name, email, phone, ic_number, department_id, position, join_date, bank_name, bank_account_no, bank_account_holder)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [employee_id, name, email, phone, ic_number, department_id, position, join_date]
+      [employee_id, name, email, phone, ic_number, department_id, position, join_date, bank_name, bank_account_no, bank_account_holder]
     );
 
     res.status(201).json(result.rows[0]);
@@ -98,15 +98,16 @@ router.post('/', authenticateAdmin, async (req, res) => {
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { employee_id, name, email, phone, ic_number, department_id, position, join_date, status } = req.body;
+    const { employee_id, name, email, phone, ic_number, department_id, position, join_date, status, bank_name, bank_account_no, bank_account_holder } = req.body;
 
     const result = await pool.query(
       `UPDATE employees
        SET employee_id = $1, name = $2, email = $3, phone = $4, ic_number = $5,
-           department_id = $6, position = $7, join_date = $8, status = $9, updated_at = NOW()
-       WHERE id = $10
+           department_id = $6, position = $7, join_date = $8, status = $9,
+           bank_name = $10, bank_account_no = $11, bank_account_holder = $12, updated_at = NOW()
+       WHERE id = $13
        RETURNING *`,
-      [employee_id, name, email, phone, ic_number, department_id, position, join_date, status, id]
+      [employee_id, name, email, phone, ic_number, department_id, position, join_date, status, bank_name, bank_account_no, bank_account_holder, id]
     );
 
     if (result.rows.length === 0) {

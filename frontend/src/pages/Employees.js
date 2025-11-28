@@ -21,7 +21,10 @@ function Employees() {
     department_id: '',
     position: '',
     join_date: '',
-    status: 'active'
+    status: 'active',
+    bank_name: '',
+    bank_account_no: '',
+    bank_account_holder: ''
   });
 
   useEffect(() => {
@@ -73,7 +76,10 @@ function Employees() {
       department_id: emp.department_id || '',
       position: emp.position || '',
       join_date: emp.join_date ? emp.join_date.split('T')[0] : '',
-      status: emp.status
+      status: emp.status,
+      bank_name: emp.bank_name || '',
+      bank_account_no: emp.bank_account_no || '',
+      bank_account_holder: emp.bank_account_holder || ''
     });
     setShowModal(true);
   };
@@ -100,7 +106,10 @@ function Employees() {
       department_id: '',
       position: '',
       join_date: '',
-      status: 'active'
+      status: 'active',
+      bank_name: '',
+      bank_account_no: '',
+      bank_account_holder: ''
     });
   };
 
@@ -311,6 +320,55 @@ function Employees() {
                       onChange={(e) => setForm({ ...form, join_date: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div className="form-section-title">🏦 Bank Details</div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Bank Name</label>
+                    <select
+                      value={form.bank_name}
+                      onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
+                    >
+                      <option value="">Select bank</option>
+                      <option value="Maybank">Maybank</option>
+                      <option value="CIMB Bank">CIMB Bank</option>
+                      <option value="Public Bank">Public Bank</option>
+                      <option value="RHB Bank">RHB Bank</option>
+                      <option value="Hong Leong Bank">Hong Leong Bank</option>
+                      <option value="AmBank">AmBank</option>
+                      <option value="Bank Islam">Bank Islam</option>
+                      <option value="Bank Rakyat">Bank Rakyat</option>
+                      <option value="OCBC Bank">OCBC Bank</option>
+                      <option value="HSBC Bank">HSBC Bank</option>
+                      <option value="Standard Chartered">Standard Chartered</option>
+                      <option value="UOB Bank">UOB Bank</option>
+                      <option value="Affin Bank">Affin Bank</option>
+                      <option value="Alliance Bank">Alliance Bank</option>
+                      <option value="BSN">BSN</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Account Number</label>
+                    <input
+                      type="text"
+                      value={form.bank_account_no}
+                      onChange={(e) => setForm({ ...form, bank_account_no: e.target.value })}
+                      placeholder="Bank account number"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Account Holder Name</label>
+                  <input
+                    type="text"
+                    value={form.bank_account_holder}
+                    onChange={(e) => setForm({ ...form, bank_account_holder: e.target.value })}
+                    placeholder="Name as per bank account"
+                  />
                 </div>
 
                 {editingEmployee && (

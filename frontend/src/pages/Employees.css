@@ -228,6 +228,15 @@ tr:hover {
   font-size: 1.5rem;
 }
 
+.form-section-title {
+  font-weight: 700;
+  color: #6b5344;
+  font-size: 1rem;
+  margin: 20px 0 15px 0;
+  padding-top: 15px;
+  border-top: 2px solid #f5e6dc;
+}
+
 .form-row {
   display: flex;
   gap: 15px;

@@ -70,9 +70,26 @@ const initDb = async () => {
         position VARCHAR(100),
         join_date DATE,
         status VARCHAR(20) DEFAULT 'active',
+        bank_name VARCHAR(100),
+        bank_account_no VARCHAR(50),
+        bank_account_holder VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- Add bank columns if they don't exist (for existing tables)
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='bank_name') THEN
+          ALTER TABLE employees ADD COLUMN bank_name VARCHAR(100);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='bank_account_no') THEN
+          ALTER TABLE employees ADD COLUMN bank_account_no VARCHAR(50);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='bank_account_holder') THEN
+          ALTER TABLE employees ADD COLUMN bank_account_holder VARCHAR(100);
+        END IF;
+      END $$;
 
       -- Salary Configuration per Department
       CREATE TABLE IF NOT EXISTS salary_configs (
