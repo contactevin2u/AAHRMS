@@ -151,9 +151,10 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       status
     } = req.body;
 
-    // Get employee data for statutory calculations
+    // Get employee data and payroll month/year for statutory calculations
     const payrollRecord = await pool.query(
-      `SELECT p.employee_id, e.date_of_birth, e.epf_contribution_type, e.marital_status, e.spouse_working, e.children_count
+      `SELECT p.employee_id, p.month, p.year,
+              e.date_of_birth, e.epf_contribution_type, e.marital_status, e.spouse_working, e.children_count
        FROM payroll p
        JOIN employees e ON p.employee_id = e.id
        WHERE p.id = $1`,
@@ -165,6 +166,8 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     }
 
     const employee = payrollRecord.rows[0];
+    const payrollMonth = employee.month;
+    const payrollYear = employee.year;
 
     // Calculate gross salary
     const grossSalary = (
@@ -177,8 +180,28 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       parseFloat(bonus || 0)
     );
 
-    // Calculate statutory deductions
-    const statutory = calculateAllStatutory(grossSalary, employee);
+    // Get Year-to-Date data for accurate PCB calculation (LHDN computerized method)
+    const ytdResult = await pool.query(
+      `SELECT
+        COALESCE(SUM(gross_salary), 0) as ytd_gross,
+        COALESCE(SUM(epf_employee), 0) as ytd_epf,
+        COALESCE(SUM(pcb), 0) as ytd_pcb
+       FROM payroll
+       WHERE employee_id = $1
+         AND year = $2
+         AND month < $3`,
+      [employee.employee_id, payrollYear, payrollMonth]
+    );
+
+    const ytdData = {
+      ytdGross: parseFloat(ytdResult.rows[0]?.ytd_gross || 0),
+      ytdEPF: parseFloat(ytdResult.rows[0]?.ytd_epf || 0),
+      ytdPCB: parseFloat(ytdResult.rows[0]?.ytd_pcb || 0),
+      ytdZakat: 0 // Zakat not implemented yet
+    };
+
+    // Calculate statutory deductions with YTD data for accurate PCB
+    const statutory = calculateAllStatutory(grossSalary, employee, payrollMonth, ytdData);
 
     // Total deductions including statutory
     const totalDeductions = (

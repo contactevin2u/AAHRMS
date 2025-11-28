@@ -14,7 +14,15 @@
       "Bash(findstr:*)",
       "Bash(ren \"C:\\Users\\user\\Desktop\\AA HRMS\\frontend\\public\\logo.png.png\" \"logo.png\")",
       "Bash(move:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "WebSearch",
+      "WebFetch(domain:blog.talenox.com)",
+      "WebFetch(domain:payroll.my)",
+      "WebFetch(domain:www.hasil.gov.my)",
+      "WebFetch(domain:www.ajobthing.com)",
+      "WebFetch(domain:taxsummaries.pwc.com)",
+      "WebFetch(domain:support.briohr.com)",
+      "WebFetch(domain:actpayroll.com)"
     ],
     "deny": [],
     "ask": []

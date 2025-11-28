@@ -121,51 +121,130 @@ const calculateEIS = (grossSalary, age = 30) => {
   };
 };
 
-// PCB (Monthly Tax Deduction) - Simplified calculation
-// This is a simplified version. For accurate PCB, use LHDN PCB Calculator or official formula
-const calculatePCB = (grossSalary, epfEmployee, maritalStatus = 'single', spouseWorking = false, childrenCount = 0) => {
-  // Annual estimates
-  const annualGross = grossSalary * 12;
-  const annualEPF = epfEmployee * 12;
+// PCB (Monthly Tax Deduction) - LHDN Computerized Method
+// Formula: Monthly PCB = [(P - M) × R + B] / n
+// Where P = Chargeable Income, M = threshold, R = rate, B = base tax, n = remaining months
+// Reference: https://actpayroll.com/complete-guide-to-pcb-calculations/
 
-  // Reliefs (simplified)
-  const selfRelief = 9000;
-  const spouseRelief = spouseWorking ? 0 : 4000;
+// Tax brackets with M (threshold), R (rate), B (base tax after rebate)
+// B values for Category 1 & 3 (single/married with working spouse) include RM400 rebate
+// B values for Category 2 (married with non-working spouse) include RM800 rebate
+const TAX_BRACKETS = [
+  { min: 0, max: 5000, M: 0, R: 0, B1: 0, B2: 0 },
+  { min: 5001, max: 20000, M: 5000, R: 0.01, B1: -400, B2: -800 },
+  { min: 20001, max: 35000, M: 20000, R: 0.03, B1: -250, B2: -650 },
+  { min: 35001, max: 50000, M: 35000, R: 0.06, B1: 200, B2: -200 },
+  { min: 50001, max: 70000, M: 50000, R: 0.11, B1: 1100, B2: 700 },
+  { min: 70001, max: 100000, M: 70000, R: 0.19, B1: 3300, B2: 2900 },
+  { min: 100001, max: 400000, M: 100000, R: 0.25, B1: 9000, B2: 8600 },
+  { min: 400001, max: 600000, M: 400000, R: 0.26, B1: 84000, B2: 83600 },
+  { min: 600001, max: 2000000, M: 600000, R: 0.28, B1: 136000, B2: 135600 },
+  { min: 2000001, max: Infinity, M: 2000000, R: 0.30, B1: 528000, B2: 527600 }
+];
+
+const calculatePCB = (
+  grossSalary,
+  epfEmployee,
+  maritalStatus = 'single',
+  spouseWorking = false,
+  childrenCount = 0,
+  currentMonth = new Date().getMonth() + 1, // 1-12
+  ytdGross = 0, // Year-to-date gross (excluding current month)
+  ytdEPF = 0, // Year-to-date EPF (excluding current month)
+  ytdPCB = 0, // Year-to-date PCB already paid
+  ytdZakat = 0 // Year-to-date zakat paid
+) => {
+  // Remaining months in the year including current month
+  const remainingMonths = 13 - currentMonth;
+
+  // Calculate annual projected income
+  // YTD income + (current month salary × remaining months)
+  const projectedAnnualGross = ytdGross + (grossSalary * remainingMonths);
+
+  // Calculate annual EPF (capped at RM4,000 for tax relief)
+  const projectedAnnualEPF = ytdEPF + (epfEmployee * remainingMonths);
+  const epfRelief = Math.min(projectedAnnualEPF, 4000);
+
+  // Tax Reliefs (2024)
+  const selfRelief = 9000; // Individual relief
+  const lifeInsuranceRelief = 3000; // Life insurance/takaful (optional - using 0 for safety)
+  const socsoRelief = 350; // SOCSO relief (max)
+  const eisRelief = 350; // EIS relief (max)
+
+  // Spouse relief - RM4,000 if spouse has no income
+  const spouseRelief = (maritalStatus === 'married' && !spouseWorking) ? 4000 : 0;
+
+  // Child relief - RM2,000 per child (under 18)
+  // RM8,000 for child in higher education (simplified to RM2,000)
   const childRelief = childrenCount * 2000;
-  const epfRelief = Math.min(annualEPF, 4000);
-  const socsoRelief = 350; // Max SOCSO relief
 
-  const totalRelief = selfRelief + spouseRelief + childRelief + epfRelief + socsoRelief;
-  const taxableIncome = Math.max(0, annualGross - totalRelief);
+  // Total deductions from gross income
+  const totalRelief = selfRelief + spouseRelief + childRelief + epfRelief + socsoRelief + eisRelief;
 
-  // Tax brackets 2024
-  let annualTax = 0;
-  if (taxableIncome <= 5000) {
-    annualTax = 0;
-  } else if (taxableIncome <= 20000) {
-    annualTax = (taxableIncome - 5000) * 0.01;
-  } else if (taxableIncome <= 35000) {
-    annualTax = 150 + (taxableIncome - 20000) * 0.03;
-  } else if (taxableIncome <= 50000) {
-    annualTax = 600 + (taxableIncome - 35000) * 0.06;
-  } else if (taxableIncome <= 70000) {
-    annualTax = 1500 + (taxableIncome - 50000) * 0.11;
-  } else if (taxableIncome <= 100000) {
-    annualTax = 3700 + (taxableIncome - 70000) * 0.19;
-  } else if (taxableIncome <= 400000) {
-    annualTax = 9400 + (taxableIncome - 100000) * 0.25;
-  } else if (taxableIncome <= 600000) {
-    annualTax = 84400 + (taxableIncome - 400000) * 0.26;
-  } else if (taxableIncome <= 2000000) {
-    annualTax = 136400 + (taxableIncome - 600000) * 0.28;
-  } else {
-    annualTax = 528400 + (taxableIncome - 2000000) * 0.30;
+  // Chargeable Income (P)
+  const chargeableIncome = Math.max(0, projectedAnnualGross - totalRelief);
+
+  // Determine tax category
+  // Category 1 & 3: Single OR Married with working spouse (RM400 rebate)
+  // Category 2: Married with non-working spouse (RM800 rebate)
+  const isCategory2 = maritalStatus === 'married' && !spouseWorking;
+
+  // Find applicable tax bracket
+  let bracket = TAX_BRACKETS[0];
+  for (const b of TAX_BRACKETS) {
+    if (chargeableIncome >= b.min && chargeableIncome <= b.max) {
+      bracket = b;
+      break;
+    }
   }
 
-  // Monthly PCB
-  const monthlyPCB = Math.round(annualTax / 12 * 100) / 100;
+  // Calculate annual tax using formula: (P - M) × R + B
+  const B = isCategory2 ? bracket.B2 : bracket.B1;
+  let annualTax = ((chargeableIncome - bracket.M) * bracket.R) + B;
 
-  return monthlyPCB;
+  // Tax cannot be negative
+  annualTax = Math.max(0, annualTax);
+
+  // Calculate current month PCB
+  // Formula: [(Annual Tax) - (YTD Zakat) - (YTD PCB already paid)] / remaining months
+  let currentMonthPCB = (annualTax - ytdZakat - ytdPCB) / remainingMonths;
+
+  // PCB cannot be negative
+  currentMonthPCB = Math.max(0, currentMonthPCB);
+
+  // Round to 2 decimal places, then round up to nearest 5 cents (LHDN requirement)
+  currentMonthPCB = Math.floor(currentMonthPCB * 100) / 100;
+  currentMonthPCB = Math.ceil(currentMonthPCB * 20) / 20; // Round to nearest 0.05
+
+  // If PCB < RM10, set to 0 (LHDN rule)
+  if (currentMonthPCB < 10) {
+    currentMonthPCB = 0;
+  }
+
+  return currentMonthPCB;
+};
+
+// Simplified PCB calculation for single month (when no YTD data available)
+const calculatePCBSimple = (
+  grossSalary,
+  epfEmployee,
+  maritalStatus = 'single',
+  spouseWorking = false,
+  childrenCount = 0
+) => {
+  // Assume calculating for full year (month 1)
+  return calculatePCB(
+    grossSalary,
+    epfEmployee,
+    maritalStatus,
+    spouseWorking,
+    childrenCount,
+    1, // January
+    0, // No YTD gross
+    0, // No YTD EPF
+    0, // No YTD PCB
+    0  // No YTD Zakat
+  );
 };
 
 // Calculate age from date of birth
@@ -185,17 +264,36 @@ const calculateAge = (dateOfBirth) => {
 };
 
 // Calculate all statutory deductions
-const calculateAllStatutory = (grossSalary, employee = {}) => {
+// ytdData is optional - contains year-to-date figures for accurate PCB calculation
+const calculateAllStatutory = (grossSalary, employee = {}, month = null, ytdData = null) => {
   const age = calculateAge(employee.date_of_birth);
-  const contributionType = employee.epf_contribution_type || 'normal';
   const maritalStatus = employee.marital_status || 'single';
   const spouseWorking = employee.spouse_working || false;
   const childrenCount = employee.children_count || 0;
 
-  const epf = calculateEPF(grossSalary, age, contributionType);
+  const epf = calculateEPF(grossSalary, age);
   const socso = calculateSOCSO(grossSalary, age);
   const eis = calculateEIS(grossSalary, age);
-  const pcb = calculatePCB(grossSalary, epf.employee, maritalStatus, spouseWorking, childrenCount);
+
+  // Calculate PCB with YTD data if available (for accurate LHDN calculation)
+  let pcb;
+  if (ytdData && month) {
+    pcb = calculatePCB(
+      grossSalary,
+      epf.employee,
+      maritalStatus,
+      spouseWorking,
+      childrenCount,
+      month,
+      ytdData.ytdGross || 0,
+      ytdData.ytdEPF || 0,
+      ytdData.ytdPCB || 0,
+      ytdData.ytdZakat || 0
+    );
+  } else {
+    // Use simplified calculation (assumes this is month 1 or standalone calculation)
+    pcb = calculatePCBSimple(grossSalary, epf.employee, maritalStatus, spouseWorking, childrenCount);
+  }
 
   const totalEmployeeDeductions = epf.employee + socso.employee + eis.employee + pcb;
   const totalEmployerContributions = epf.employer + socso.employer + eis.employer;
@@ -218,6 +316,8 @@ module.exports = {
   calculateSOCSO,
   calculateEIS,
   calculatePCB,
+  calculatePCBSimple,
   calculateAge,
-  calculateAllStatutory
+  calculateAllStatutory,
+  TAX_BRACKETS
 };
