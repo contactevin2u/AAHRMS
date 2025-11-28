@@ -189,7 +189,22 @@ tr:hover {
   color: white;
 }
 
-.edit-btn {
+.gross-col {
+  color: #6b5344;
+  font-weight: 600;
+}
+
+.net-col {
+  color: #4a7c35;
+  font-weight: 700;
+}
+
+.action-cell {
+  white-space: nowrap;
+}
+
+.edit-btn,
+.payslip-btn {
   background: none;
   border: none;
   font-size: 1.1rem;
@@ -201,6 +216,76 @@ tr:hover {
 
 .edit-btn:hover {
   background: #fff0e6;
+}
+
+.payslip-btn:hover {
+  background: #e8f5e0;
+}
+
+/* Statutory Summary */
+.statutory-summary {
+  margin-top: -15px;
+  margin-bottom: 25px;
+}
+
+.summary-box.statutory {
+  background: #f8f9fa;
+  border: 1px solid #e8e8e8;
+}
+
+.summary-box.statutory .sum-label {
+  color: #666;
+}
+
+.summary-box.statutory .sum-value {
+  color: #e57373;
+  font-size: 1.1rem;
+}
+
+/* Statutory Info in Modal */
+.statutory-info {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 15px 20px;
+  margin: 20px 0;
+  border: 1px solid #e8e8e8;
+}
+
+.statutory-info h4 {
+  color: #6b5344;
+  margin: 0 0 12px 0;
+  font-size: 0.95rem;
+}
+
+.statutory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.stat-item span:first-child {
+  color: #9a8072;
+}
+
+.stat-item span:last-child {
+  color: #e57373;
+  font-weight: 600;
+}
+
+.stat-note {
+  color: #9a8072;
+  font-size: 0.75rem;
+  margin: 10px 0 0 0;
+  font-style: italic;
 }
 
 /* Modal */
@@ -358,5 +443,15 @@ tr:hover {
 
   .summary-box {
     min-width: auto;
+  }
+
+  .statutory-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .statutory-grid {
+    grid-template-columns: 1fr;
   }
 }
