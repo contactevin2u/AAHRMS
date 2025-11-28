@@ -9,7 +9,11 @@
       "Bash(git push:*)",
       "Bash(git pull:*)",
       "Bash(git checkout:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(ren \"C:\\Users\\user\\Desktop\\AA HRMS\\frontend\\public\\logo.png.png\" \"logo.png\")",
+      "Bash(move:*)"
     ],
     "deny": [],
     "ask": []

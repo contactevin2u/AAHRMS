@@ -38,9 +38,9 @@ function AdminLogin() {
     <div className="admin-login">
       <div className="login-container">
         <div className="login-header">
-          <div className="login-icon">👋🏼✨</div>
-          <h1>Welcome Back! 🌸</h1>
-          <p>Access the feedback dashboard 📊💫</p>
+          <img src="/logo.png" alt="AA Alive" className="login-logo" />
+          <h1>Welcome Back!</h1>
+          <p>AA Alive HRMS Dashboard</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">

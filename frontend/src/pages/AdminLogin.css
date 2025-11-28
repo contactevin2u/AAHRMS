@@ -60,8 +60,9 @@
   margin-bottom: 35px;
 }
 
-.login-icon {
-  font-size: 3.5rem;
+.login-logo {
+  width: 120px;
+  height: auto;
   margin-bottom: 16px;
   filter: drop-shadow(0 4px 8px rgba(180, 120, 80, 0.2));
 }

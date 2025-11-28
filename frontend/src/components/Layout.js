@@ -14,8 +14,8 @@ function Layout({ children }) {
     <div className="layout">
       <nav className="sidebar">
         <div className="sidebar-header">
-          <span className="logo">🏠</span>
-          <h2>HRMS</h2>
+          <img src="/logo.png" alt="AA Alive" className="logo-img" />
+          <h2>AA Alive</h2>
         </div>
 
         <div className="nav-links">
