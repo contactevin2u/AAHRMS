@@ -124,6 +124,31 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='bank_account_holder') THEN
           ALTER TABLE employees ADD COLUMN bank_account_holder VARCHAR(100);
         END IF;
+        -- Statutory fields for employees
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='epf_number') THEN
+          ALTER TABLE employees ADD COLUMN epf_number VARCHAR(20);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='socso_number') THEN
+          ALTER TABLE employees ADD COLUMN socso_number VARCHAR(20);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='tax_number') THEN
+          ALTER TABLE employees ADD COLUMN tax_number VARCHAR(20);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='epf_contribution_type') THEN
+          ALTER TABLE employees ADD COLUMN epf_contribution_type VARCHAR(20) DEFAULT 'normal';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='marital_status') THEN
+          ALTER TABLE employees ADD COLUMN marital_status VARCHAR(20) DEFAULT 'single';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='spouse_working') THEN
+          ALTER TABLE employees ADD COLUMN spouse_working BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='children_count') THEN
+          ALTER TABLE employees ADD COLUMN children_count INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='date_of_birth') THEN
+          ALTER TABLE employees ADD COLUMN date_of_birth DATE;
+        END IF;
       END $$;
 
       -- Salary Configuration per Department
@@ -169,6 +194,41 @@ const initDb = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(employee_id, month, year)
       );
+
+      -- Add statutory columns to payroll if not exist
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='epf_employee') THEN
+          ALTER TABLE payroll ADD COLUMN epf_employee DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='epf_employer') THEN
+          ALTER TABLE payroll ADD COLUMN epf_employer DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='socso_employee') THEN
+          ALTER TABLE payroll ADD COLUMN socso_employee DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='socso_employer') THEN
+          ALTER TABLE payroll ADD COLUMN socso_employer DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='eis_employee') THEN
+          ALTER TABLE payroll ADD COLUMN eis_employee DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='eis_employer') THEN
+          ALTER TABLE payroll ADD COLUMN eis_employer DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='pcb') THEN
+          ALTER TABLE payroll ADD COLUMN pcb DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='gross_salary') THEN
+          ALTER TABLE payroll ADD COLUMN gross_salary DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='net_salary') THEN
+          ALTER TABLE payroll ADD COLUMN net_salary DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='other_deductions') THEN
+          ALTER TABLE payroll ADD COLUMN other_deductions DECIMAL(10,2) DEFAULT 0;
+        END IF;
+      END $$;
 
       -- Insert default departments if not exists
       INSERT INTO departments (name, salary_type) VALUES

@@ -71,17 +71,32 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 // Create employee
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, name, email, phone, ic_number, department_id, position, join_date, bank_name, bank_account_no, bank_account_holder } = req.body;
+    const {
+      employee_id, name, email, phone, ic_number, department_id, position, join_date,
+      bank_name, bank_account_no, bank_account_holder,
+      epf_number, socso_number, tax_number, epf_contribution_type,
+      marital_status, spouse_working, children_count, date_of_birth
+    } = req.body;
 
     if (!employee_id || !name || !department_id) {
       return res.status(400).json({ error: 'Employee ID, name, and department are required' });
     }
 
     const result = await pool.query(
-      `INSERT INTO employees (employee_id, name, email, phone, ic_number, department_id, position, join_date, bank_name, bank_account_no, bank_account_holder)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO employees (
+        employee_id, name, email, phone, ic_number, department_id, position, join_date,
+        bank_name, bank_account_no, bank_account_holder,
+        epf_number, socso_number, tax_number, epf_contribution_type,
+        marital_status, spouse_working, children_count, date_of_birth
+      )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING *`,
-      [employee_id, name, email, phone, ic_number, department_id, position, join_date, bank_name, bank_account_no, bank_account_holder]
+      [
+        employee_id, name, email, phone, ic_number, department_id, position, join_date,
+        bank_name, bank_account_no, bank_account_holder,
+        epf_number, socso_number, tax_number, epf_contribution_type || 'normal',
+        marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth
+      ]
     );
 
     res.status(201).json(result.rows[0]);
@@ -98,16 +113,29 @@ router.post('/', authenticateAdmin, async (req, res) => {
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { employee_id, name, email, phone, ic_number, department_id, position, join_date, status, bank_name, bank_account_no, bank_account_holder } = req.body;
+    const {
+      employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
+      bank_name, bank_account_no, bank_account_holder,
+      epf_number, socso_number, tax_number, epf_contribution_type,
+      marital_status, spouse_working, children_count, date_of_birth
+    } = req.body;
 
     const result = await pool.query(
       `UPDATE employees
        SET employee_id = $1, name = $2, email = $3, phone = $4, ic_number = $5,
            department_id = $6, position = $7, join_date = $8, status = $9,
-           bank_name = $10, bank_account_no = $11, bank_account_holder = $12, updated_at = NOW()
-       WHERE id = $13
+           bank_name = $10, bank_account_no = $11, bank_account_holder = $12,
+           epf_number = $13, socso_number = $14, tax_number = $15, epf_contribution_type = $16,
+           marital_status = $17, spouse_working = $18, children_count = $19, date_of_birth = $20,
+           updated_at = NOW()
+       WHERE id = $21
        RETURNING *`,
-      [employee_id, name, email, phone, ic_number, department_id, position, join_date, status, bank_name, bank_account_no, bank_account_holder, id]
+      [
+        employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
+        bank_name, bank_account_no, bank_account_holder,
+        epf_number, socso_number, tax_number, epf_contribution_type,
+        marital_status, spouse_working, children_count, date_of_birth, id
+      ]
     );
 
     if (result.rows.length === 0) {

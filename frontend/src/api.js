@@ -64,7 +64,10 @@ export const payrollApi = {
   generate: (data) => api.post('/payroll/generate', data),
   update: (id, data) => api.put(`/payroll/${id}`, data),
   calculate: (data) => api.post('/payroll/calculate', data),
+  calculateStatutory: (data) => api.post('/payroll/calculate-statutory', data),
   getSummary: (year, month) => api.get(`/payroll/summary/${year}/${month}`),
+  getPayslip: (id) => api.get(`/payroll/${id}/payslip`),
+  getPayslips: (year, month) => api.get(`/payroll/payslips/${year}/${month}`),
 };
 
 export default api;

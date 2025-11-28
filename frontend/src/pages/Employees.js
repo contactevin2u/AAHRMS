@@ -30,7 +30,16 @@ function Employees() {
     status: 'active',
     bank_name: '',
     bank_account_no: '',
-    bank_account_holder: ''
+    bank_account_holder: '',
+    // Statutory fields
+    epf_number: '',
+    socso_number: '',
+    tax_number: '',
+    epf_contribution_type: 'normal',
+    marital_status: 'single',
+    spouse_working: false,
+    children_count: 0,
+    date_of_birth: ''
   });
 
   useEffect(() => {
@@ -85,7 +94,15 @@ function Employees() {
       status: emp.status,
       bank_name: emp.bank_name || '',
       bank_account_no: emp.bank_account_no || '',
-      bank_account_holder: emp.bank_account_holder || ''
+      bank_account_holder: emp.bank_account_holder || '',
+      epf_number: emp.epf_number || '',
+      socso_number: emp.socso_number || '',
+      tax_number: emp.tax_number || '',
+      epf_contribution_type: emp.epf_contribution_type || 'normal',
+      marital_status: emp.marital_status || 'single',
+      spouse_working: emp.spouse_working || false,
+      children_count: emp.children_count || 0,
+      date_of_birth: emp.date_of_birth ? emp.date_of_birth.split('T')[0] : ''
     });
     setShowModal(true);
   };
@@ -115,7 +132,15 @@ function Employees() {
       status: 'active',
       bank_name: '',
       bank_account_no: '',
-      bank_account_holder: ''
+      bank_account_holder: '',
+      epf_number: '',
+      socso_number: '',
+      tax_number: '',
+      epf_contribution_type: 'normal',
+      marital_status: 'single',
+      spouse_working: false,
+      children_count: 0,
+      date_of_birth: ''
     });
   };
 
@@ -485,6 +510,97 @@ function Employees() {
                     onChange={(e) => setForm({ ...form, bank_account_holder: e.target.value })}
                     placeholder="Name as per bank account"
                   />
+                </div>
+
+                <div className="form-section-title">📋 Statutory Information</div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>EPF Number</label>
+                    <input
+                      type="text"
+                      value={form.epf_number}
+                      onChange={(e) => setForm({ ...form, epf_number: e.target.value })}
+                      placeholder="EPF member number"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>SOCSO Number</label>
+                    <input
+                      type="text"
+                      value={form.socso_number}
+                      onChange={(e) => setForm({ ...form, socso_number: e.target.value })}
+                      placeholder="SOCSO number"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Tax Number (PCB)</label>
+                    <input
+                      type="text"
+                      value={form.tax_number}
+                      onChange={(e) => setForm({ ...form, tax_number: e.target.value })}
+                      placeholder="Income tax number"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Date of Birth</label>
+                    <input
+                      type="date"
+                      value={form.date_of_birth}
+                      onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>EPF Contribution Type</label>
+                    <select
+                      value={form.epf_contribution_type}
+                      onChange={(e) => setForm({ ...form, epf_contribution_type: e.target.value })}
+                    >
+                      <option value="normal">Normal (11%)</option>
+                      <option value="reduced">Reduced (9% - Age 60+)</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Marital Status</label>
+                    <select
+                      value={form.marital_status}
+                      onChange={(e) => setForm({ ...form, marital_status: e.target.value })}
+                    >
+                      <option value="single">Single</option>
+                      <option value="married">Married</option>
+                      <option value="divorced">Divorced</option>
+                      <option value="widowed">Widowed</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Spouse Working?</label>
+                    <select
+                      value={form.spouse_working ? 'yes' : 'no'}
+                      onChange={(e) => setForm({ ...form, spouse_working: e.target.value === 'yes' })}
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Number of Children</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="20"
+                      value={form.children_count}
+                      onChange={(e) => setForm({ ...form, children_count: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
                 </div>
 
                 {editingEmployee && (
