@@ -16,9 +16,10 @@ function Feedback() {
     try {
       setLoading(true);
       const res = await feedbackApi.getAll();
-      setFeedbacks(res.data);
+      setFeedbacks(res.data.feedback || []);
     } catch (error) {
       console.error('Error fetching feedback:', error);
+      setFeedbacks([]);
     } finally {
       setLoading(false);
     }
