@@ -4,12 +4,20 @@
  */
 
 // EPF Contribution Rates (effective 2024)
-// Employee: 11% (can opt for 9% if age > 60)
-// Employer: 13% (salary <= RM5000) or 12% (salary > RM5000)
+// Employee: 11% standard, 0% for age > 60
+// Employer: 13% (salary <= RM5000) or 12% (salary > RM5000), 4% for age > 60
 const calculateEPF = (grossSalary, age = 30, contributionType = 'normal') => {
-  // Contribution type: 'normal' (11%), 'reduced' (9% for age > 60)
-  let employeeRate = contributionType === 'reduced' || age > 60 ? 0.09 : 0.11;
-  let employerRate = grossSalary <= 5000 ? 0.13 : 0.12;
+  let employeeRate, employerRate;
+
+  if (age > 60) {
+    // Age over 60: Employee 0%, Employer 4%
+    employeeRate = 0;
+    employerRate = 0.04;
+  } else {
+    // Standard rates
+    employeeRate = 0.11; // 11%
+    employerRate = grossSalary <= 5000 ? 0.13 : 0.12; // 13% or 12%
+  }
 
   // EPF wage ceiling is RM20,000 for contribution calculation
   const epfWage = Math.min(grossSalary, 20000);

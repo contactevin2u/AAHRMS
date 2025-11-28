@@ -557,16 +557,6 @@ function Employees() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>EPF Contribution Type</label>
-                    <select
-                      value={form.epf_contribution_type}
-                      onChange={(e) => setForm({ ...form, epf_contribution_type: e.target.value })}
-                    >
-                      <option value="normal">Normal (11%)</option>
-                      <option value="reduced">Reduced (9% - Age 60+)</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
                     <label>Marital Status</label>
                     <select
                       value={form.marital_status}
