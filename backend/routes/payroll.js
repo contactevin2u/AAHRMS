@@ -58,27 +58,114 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get single payroll record
-router.get('/:id', authenticateAdmin, async (req, res) => {
+// Get employees available for payroll generation (not yet generated for this month)
+// IMPORTANT: This must be BEFORE /:id route
+router.get('/available-employees/:year/:month', authenticateAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
-    const result = await pool.query(
-      `SELECT p.*, e.name as employee_name, e.employee_id as emp_id, d.name as department_name, d.salary_type
-       FROM payroll p
-       JOIN employees e ON p.employee_id = e.id
-       LEFT JOIN departments d ON e.department_id = d.id
-       WHERE p.id = $1`,
-      [id]
-    );
+    const { year, month } = req.params;
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Payroll record not found' });
-    }
+    const result = await pool.query(`
+      SELECT e.id, e.employee_id as emp_id, e.name, e.default_basic_salary, e.default_allowance,
+             d.name as department_name
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE e.status = 'active'
+        AND e.id NOT IN (
+          SELECT employee_id FROM payroll WHERE year = $1 AND month = $2
+        )
+      ORDER BY e.name
+    `, [year, month]);
 
-    res.json(result.rows[0]);
+    res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching payroll:', error);
-    res.status(500).json({ error: 'Failed to fetch payroll' });
+    console.error('Error fetching available employees:', error);
+    res.status(500).json({ error: 'Failed to fetch available employees' });
+  }
+});
+
+// Get payroll summary for a month
+// IMPORTANT: This must be BEFORE /:id route
+router.get('/summary/:year/:month', authenticateAdmin, async (req, res) => {
+  try {
+    const { year, month } = req.params;
+
+    const summary = await pool.query(`
+      SELECT
+        COUNT(*) as total_employees,
+        SUM(gross_salary) as total_gross,
+        SUM(net_salary) as total_net,
+        SUM(total_salary) as total_payroll,
+        SUM(basic_salary) as total_basic,
+        SUM(commission) as total_commission,
+        SUM(allowance) as total_allowance,
+        SUM(trip_pay) as total_trip_pay,
+        SUM(ot_pay) as total_ot,
+        SUM(bonus) as total_bonus,
+        SUM(deductions) as total_deductions,
+        SUM(epf_employee) as total_epf_employee,
+        SUM(epf_employer) as total_epf_employer,
+        SUM(socso_employee) as total_socso_employee,
+        SUM(socso_employer) as total_socso_employer,
+        SUM(eis_employee) as total_eis_employee,
+        SUM(eis_employer) as total_eis_employer,
+        SUM(pcb) as total_pcb
+      FROM payroll p
+      JOIN employees e ON p.employee_id = e.id
+      WHERE p.year = $1 AND p.month = $2 AND e.status = 'active'
+    `, [year, month]);
+
+    const byDepartment = await pool.query(`
+      SELECT d.name, COUNT(p.id) as employee_count, SUM(p.net_salary) as total
+      FROM payroll p
+      JOIN employees e ON p.employee_id = e.id
+      JOIN departments d ON e.department_id = d.id
+      WHERE p.year = $1 AND p.month = $2 AND e.status = 'active'
+      GROUP BY d.id, d.name
+    `, [year, month]);
+
+    res.json({
+      summary: summary.rows[0],
+      byDepartment: byDepartment.rows
+    });
+  } catch (error) {
+    console.error('Error fetching summary:', error);
+    res.status(500).json({ error: 'Failed to fetch summary' });
+  }
+});
+
+// Bulk generate payslips for a month
+// IMPORTANT: This must be BEFORE /:id route
+router.get('/payslips/:year/:month', authenticateAdmin, async (req, res) => {
+  try {
+    const { year, month } = req.params;
+
+    const result = await pool.query(`
+      SELECT
+        p.*,
+        e.employee_id as emp_code,
+        e.name as employee_name,
+        e.ic_number,
+        e.epf_number,
+        e.socso_number,
+        e.tax_number,
+        e.bank_name,
+        e.bank_account_no,
+        e.position,
+        d.name as department_name
+      FROM payroll p
+      JOIN employees e ON p.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE p.year = $1 AND p.month = $2 AND e.status = 'active'
+      ORDER BY e.name
+    `, [year, month]);
+
+    res.json({
+      period: { year: parseInt(year), month: parseInt(month) },
+      payslips: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching payslips:', error);
+    res.status(500).json({ error: 'Failed to fetch payslips' });
   }
 });
 
@@ -162,27 +249,195 @@ router.post('/generate', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get employees available for payroll generation (not yet generated for this month)
-router.get('/available-employees/:year/:month', authenticateAdmin, async (req, res) => {
+// Calculate commission/trip pay based on inputs
+router.post('/calculate', authenticateAdmin, async (req, res) => {
   try {
-    const { year, month } = req.params;
+    const { employee_id, sales_amount, trip_count, ot_hours, outstation_days } = req.body;
+
+    // Get employee's department config
+    const emp = await pool.query(`
+      SELECT e.*, sc.*
+      FROM employees e
+      LEFT JOIN salary_configs sc ON e.department_id = sc.department_id
+      WHERE e.id = $1
+    `, [employee_id]);
+
+    if (emp.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const config = emp.rows[0];
+
+    const calculations = {
+      basic_salary: parseFloat(config.basic_salary) || 0,
+      commission: config.has_commission ? (parseFloat(sales_amount || 0) * parseFloat(config.commission_rate || 0) / 100) : 0,
+      allowance: config.has_allowance ? parseFloat(config.allowance_amount || 0) : 0,
+      trip_pay: config.has_per_trip ? (parseInt(trip_count || 0) * parseFloat(config.per_trip_rate || 0)) : 0,
+      ot_pay: config.has_ot ? (parseFloat(ot_hours || 0) * parseFloat(config.ot_rate || 0)) : 0,
+      outstation_pay: config.has_outstation ? (parseInt(outstation_days || 0) * parseFloat(config.outstation_rate || 0)) : 0
+    };
+
+    calculations.total = Object.values(calculations).reduce((a, b) => a + b, 0);
+
+    res.json(calculations);
+  } catch (error) {
+    console.error('Error calculating payroll:', error);
+    res.status(500).json({ error: 'Failed to calculate payroll' });
+  }
+});
+
+// Calculate statutory deductions preview
+router.post('/calculate-statutory', authenticateAdmin, async (req, res) => {
+  try {
+    const { employee_id, gross_salary } = req.body;
+
+    // Get employee data
+    const empResult = await pool.query(
+      `SELECT date_of_birth, epf_contribution_type, marital_status, spouse_working, children_count
+       FROM employees WHERE id = $1`,
+      [employee_id]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const employee = empResult.rows[0];
+    const statutory = calculateAllStatutory(parseFloat(gross_salary || 0), employee);
+
+    res.json(statutory);
+  } catch (error) {
+    console.error('Error calculating statutory:', error);
+    res.status(500).json({ error: 'Failed to calculate statutory deductions' });
+  }
+});
+
+// Get single payroll record
+// IMPORTANT: This must be AFTER all specific routes like /available-employees, /summary, etc.
+router.get('/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT p.*, e.name as employee_name, e.employee_id as emp_id, d.name as department_name, d.salary_type
+       FROM payroll p
+       JOIN employees e ON p.employee_id = e.id
+       LEFT JOIN departments d ON e.department_id = d.id
+       WHERE p.id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll record not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching payroll:', error);
+    res.status(500).json({ error: 'Failed to fetch payroll' });
+  }
+});
+
+// Get payslip data for a single payroll record
+router.get('/:id/payslip', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
 
     const result = await pool.query(`
-      SELECT e.id, e.employee_id as emp_id, e.name, e.default_basic_salary, e.default_allowance,
-             d.name as department_name
-      FROM employees e
+      SELECT
+        p.*,
+        e.employee_id as emp_code,
+        e.name as employee_name,
+        e.ic_number,
+        e.epf_number,
+        e.socso_number,
+        e.tax_number,
+        e.bank_name,
+        e.bank_account_no,
+        e.bank_account_holder,
+        e.position,
+        e.join_date,
+        d.name as department_name
+      FROM payroll p
+      JOIN employees e ON p.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
-      WHERE e.status = 'active'
-        AND e.id NOT IN (
-          SELECT employee_id FROM payroll WHERE year = $1 AND month = $2
-        )
-      ORDER BY e.name
-    `, [year, month]);
+      WHERE p.id = $1
+    `, [id]);
 
-    res.json(result.rows);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll record not found' });
+    }
+
+    const payroll = result.rows[0];
+
+    // Format payslip data
+    const payslip = {
+      // Company Info
+      company: {
+        name: 'AA ALIVE SDN BHD',
+        address: '',
+        epf_number: '',
+        socso_number: ''
+      },
+      // Employee Info
+      employee: {
+        code: payroll.emp_code,
+        name: payroll.employee_name,
+        ic_number: payroll.ic_number,
+        epf_number: payroll.epf_number,
+        socso_number: payroll.socso_number,
+        tax_number: payroll.tax_number,
+        department: payroll.department_name,
+        position: payroll.position,
+        join_date: payroll.join_date,
+        bank_name: payroll.bank_name,
+        bank_account_no: payroll.bank_account_no
+      },
+      // Pay Period
+      period: {
+        month: payroll.month,
+        year: payroll.year,
+        month_name: new Date(payroll.year, payroll.month - 1).toLocaleString('en-MY', { month: 'long' })
+      },
+      // Earnings
+      earnings: {
+        basic_salary: parseFloat(payroll.basic_salary) || 0,
+        allowance: parseFloat(payroll.allowance) || 0,
+        commission: parseFloat(payroll.commission) || 0,
+        trip_pay: parseFloat(payroll.trip_pay) || 0,
+        ot_pay: parseFloat(payroll.ot_pay) || 0,
+        outstation_pay: parseFloat(payroll.outstation_pay) || 0,
+        bonus: parseFloat(payroll.bonus) || 0
+      },
+      // Deductions
+      deductions: {
+        epf_employee: parseFloat(payroll.epf_employee) || 0,
+        socso_employee: parseFloat(payroll.socso_employee) || 0,
+        eis_employee: parseFloat(payroll.eis_employee) || 0,
+        pcb: parseFloat(payroll.pcb) || 0,
+        other_deductions: parseFloat(payroll.other_deductions) || 0
+      },
+      // Employer Contributions (for info)
+      employer_contributions: {
+        epf_employer: parseFloat(payroll.epf_employer) || 0,
+        socso_employer: parseFloat(payroll.socso_employer) || 0,
+        eis_employer: parseFloat(payroll.eis_employer) || 0
+      },
+      // Totals
+      totals: {
+        gross_salary: parseFloat(payroll.gross_salary) || 0,
+        total_deductions: parseFloat(payroll.deductions) || 0,
+        net_salary: parseFloat(payroll.net_salary) || 0
+      }
+    };
+
+    // Calculate totals if not already stored
+    payslip.earnings.total = Object.values(payslip.earnings).reduce((a, b) => a + b, 0);
+    payslip.deductions.total = Object.values(payslip.deductions).reduce((a, b) => a + b, 0);
+
+    res.json(payslip);
   } catch (error) {
-    console.error('Error fetching available employees:', error);
-    res.status(500).json({ error: 'Failed to fetch available employees' });
+    console.error('Error fetching payslip:', error);
+    res.status(500).json({ error: 'Failed to fetch payslip' });
   }
 });
 
@@ -324,256 +579,6 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error updating payroll:', error);
     res.status(500).json({ error: 'Failed to update payroll' });
-  }
-});
-
-// Calculate commission/trip pay based on inputs
-router.post('/calculate', authenticateAdmin, async (req, res) => {
-  try {
-    const { employee_id, sales_amount, trip_count, ot_hours, outstation_days } = req.body;
-
-    // Get employee's department config
-    const emp = await pool.query(`
-      SELECT e.*, sc.*
-      FROM employees e
-      LEFT JOIN salary_configs sc ON e.department_id = sc.department_id
-      WHERE e.id = $1
-    `, [employee_id]);
-
-    if (emp.rows.length === 0) {
-      return res.status(404).json({ error: 'Employee not found' });
-    }
-
-    const config = emp.rows[0];
-
-    const calculations = {
-      basic_salary: parseFloat(config.basic_salary) || 0,
-      commission: config.has_commission ? (parseFloat(sales_amount || 0) * parseFloat(config.commission_rate || 0) / 100) : 0,
-      allowance: config.has_allowance ? parseFloat(config.allowance_amount || 0) : 0,
-      trip_pay: config.has_per_trip ? (parseInt(trip_count || 0) * parseFloat(config.per_trip_rate || 0)) : 0,
-      ot_pay: config.has_ot ? (parseFloat(ot_hours || 0) * parseFloat(config.ot_rate || 0)) : 0,
-      outstation_pay: config.has_outstation ? (parseInt(outstation_days || 0) * parseFloat(config.outstation_rate || 0)) : 0
-    };
-
-    calculations.total = Object.values(calculations).reduce((a, b) => a + b, 0);
-
-    res.json(calculations);
-  } catch (error) {
-    console.error('Error calculating payroll:', error);
-    res.status(500).json({ error: 'Failed to calculate payroll' });
-  }
-});
-
-// Get payroll summary for a month
-router.get('/summary/:year/:month', authenticateAdmin, async (req, res) => {
-  try {
-    const { year, month } = req.params;
-
-    const summary = await pool.query(`
-      SELECT
-        COUNT(*) as total_employees,
-        SUM(gross_salary) as total_gross,
-        SUM(net_salary) as total_net,
-        SUM(total_salary) as total_payroll,
-        SUM(basic_salary) as total_basic,
-        SUM(commission) as total_commission,
-        SUM(allowance) as total_allowance,
-        SUM(trip_pay) as total_trip_pay,
-        SUM(ot_pay) as total_ot,
-        SUM(bonus) as total_bonus,
-        SUM(deductions) as total_deductions,
-        SUM(epf_employee) as total_epf_employee,
-        SUM(epf_employer) as total_epf_employer,
-        SUM(socso_employee) as total_socso_employee,
-        SUM(socso_employer) as total_socso_employer,
-        SUM(eis_employee) as total_eis_employee,
-        SUM(eis_employer) as total_eis_employer,
-        SUM(pcb) as total_pcb
-      FROM payroll
-      WHERE year = $1 AND month = $2
-    `, [year, month]);
-
-    const byDepartment = await pool.query(`
-      SELECT d.name, COUNT(p.id) as employee_count, SUM(p.net_salary) as total
-      FROM payroll p
-      JOIN employees e ON p.employee_id = e.id
-      JOIN departments d ON e.department_id = d.id
-      WHERE p.year = $1 AND p.month = $2
-      GROUP BY d.id, d.name
-    `, [year, month]);
-
-    res.json({
-      summary: summary.rows[0],
-      byDepartment: byDepartment.rows
-    });
-  } catch (error) {
-    console.error('Error fetching summary:', error);
-    res.status(500).json({ error: 'Failed to fetch summary' });
-  }
-});
-
-// Calculate statutory deductions preview
-router.post('/calculate-statutory', authenticateAdmin, async (req, res) => {
-  try {
-    const { employee_id, gross_salary } = req.body;
-
-    // Get employee data
-    const empResult = await pool.query(
-      `SELECT date_of_birth, epf_contribution_type, marital_status, spouse_working, children_count
-       FROM employees WHERE id = $1`,
-      [employee_id]
-    );
-
-    if (empResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Employee not found' });
-    }
-
-    const employee = empResult.rows[0];
-    const statutory = calculateAllStatutory(parseFloat(gross_salary || 0), employee);
-
-    res.json(statutory);
-  } catch (error) {
-    console.error('Error calculating statutory:', error);
-    res.status(500).json({ error: 'Failed to calculate statutory deductions' });
-  }
-});
-
-// Get payslip data for a single payroll record
-router.get('/:id/payslip', authenticateAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await pool.query(`
-      SELECT
-        p.*,
-        e.employee_id as emp_code,
-        e.name as employee_name,
-        e.ic_number,
-        e.epf_number,
-        e.socso_number,
-        e.tax_number,
-        e.bank_name,
-        e.bank_account_no,
-        e.bank_account_holder,
-        e.position,
-        e.join_date,
-        d.name as department_name
-      FROM payroll p
-      JOIN employees e ON p.employee_id = e.id
-      LEFT JOIN departments d ON e.department_id = d.id
-      WHERE p.id = $1
-    `, [id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Payroll record not found' });
-    }
-
-    const payroll = result.rows[0];
-
-    // Format payslip data
-    const payslip = {
-      // Company Info
-      company: {
-        name: 'AA ALIVE SDN BHD',
-        address: '',
-        epf_number: '',
-        socso_number: ''
-      },
-      // Employee Info
-      employee: {
-        code: payroll.emp_code,
-        name: payroll.employee_name,
-        ic_number: payroll.ic_number,
-        epf_number: payroll.epf_number,
-        socso_number: payroll.socso_number,
-        tax_number: payroll.tax_number,
-        department: payroll.department_name,
-        position: payroll.position,
-        join_date: payroll.join_date,
-        bank_name: payroll.bank_name,
-        bank_account_no: payroll.bank_account_no
-      },
-      // Pay Period
-      period: {
-        month: payroll.month,
-        year: payroll.year,
-        month_name: new Date(payroll.year, payroll.month - 1).toLocaleString('en-MY', { month: 'long' })
-      },
-      // Earnings
-      earnings: {
-        basic_salary: parseFloat(payroll.basic_salary) || 0,
-        allowance: parseFloat(payroll.allowance) || 0,
-        commission: parseFloat(payroll.commission) || 0,
-        trip_pay: parseFloat(payroll.trip_pay) || 0,
-        ot_pay: parseFloat(payroll.ot_pay) || 0,
-        outstation_pay: parseFloat(payroll.outstation_pay) || 0,
-        bonus: parseFloat(payroll.bonus) || 0
-      },
-      // Deductions
-      deductions: {
-        epf_employee: parseFloat(payroll.epf_employee) || 0,
-        socso_employee: parseFloat(payroll.socso_employee) || 0,
-        eis_employee: parseFloat(payroll.eis_employee) || 0,
-        pcb: parseFloat(payroll.pcb) || 0,
-        other_deductions: parseFloat(payroll.other_deductions) || 0
-      },
-      // Employer Contributions (for info)
-      employer_contributions: {
-        epf_employer: parseFloat(payroll.epf_employer) || 0,
-        socso_employer: parseFloat(payroll.socso_employer) || 0,
-        eis_employer: parseFloat(payroll.eis_employer) || 0
-      },
-      // Totals
-      totals: {
-        gross_salary: parseFloat(payroll.gross_salary) || 0,
-        total_deductions: parseFloat(payroll.deductions) || 0,
-        net_salary: parseFloat(payroll.net_salary) || 0
-      }
-    };
-
-    // Calculate totals if not already stored
-    payslip.earnings.total = Object.values(payslip.earnings).reduce((a, b) => a + b, 0);
-    payslip.deductions.total = Object.values(payslip.deductions).reduce((a, b) => a + b, 0);
-
-    res.json(payslip);
-  } catch (error) {
-    console.error('Error fetching payslip:', error);
-    res.status(500).json({ error: 'Failed to fetch payslip' });
-  }
-});
-
-// Bulk generate payslips for a month
-router.get('/payslips/:year/:month', authenticateAdmin, async (req, res) => {
-  try {
-    const { year, month } = req.params;
-
-    const result = await pool.query(`
-      SELECT
-        p.*,
-        e.employee_id as emp_code,
-        e.name as employee_name,
-        e.ic_number,
-        e.epf_number,
-        e.socso_number,
-        e.tax_number,
-        e.bank_name,
-        e.bank_account_no,
-        e.position,
-        d.name as department_name
-      FROM payroll p
-      JOIN employees e ON p.employee_id = e.id
-      LEFT JOIN departments d ON e.department_id = d.id
-      WHERE p.year = $1 AND p.month = $2
-      ORDER BY e.name
-    `, [year, month]);
-
-    res.json({
-      period: { year: parseInt(year), month: parseInt(month) },
-      payslips: result.rows
-    });
-  } catch (error) {
-    console.error('Error fetching payslips:', error);
-    res.status(500).json({ error: 'Failed to fetch payslips' });
   }
 });
 
