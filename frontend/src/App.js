@@ -5,10 +5,14 @@ import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import Employees from './pages/Employees';
 import Payroll from './pages/Payroll';
+import PayrollV2 from './pages/PayrollV2';
 import SalaryEntry from './pages/SalaryEntry';
 import Payslip from './pages/Payslip';
 import Departments from './pages/Departments';
 import Feedback from './pages/Feedback';
+import Leave from './pages/Leave';
+import Claims from './pages/Claims';
+import Resignations from './pages/Resignations';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -75,6 +79,38 @@ function App() {
           element={
             <ProtectedRoute>
               <Feedback />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/leave"
+          element={
+            <ProtectedRoute>
+              <Leave />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/claims"
+          element={
+            <ProtectedRoute>
+              <Claims />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/payroll-v2"
+          element={
+            <ProtectedRoute>
+              <PayrollV2 />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/resignations"
+          element={
+            <ProtectedRoute>
+              <Resignations />
             </ProtectedRoute>
           }
         />

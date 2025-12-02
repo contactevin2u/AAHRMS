@@ -29,14 +29,24 @@ function Layout({ children }) {
             <span>Employees</span>
           </NavLink>
 
-          <NavLink to="/admin/salary-entry" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">💵</span>
-            <span>Salary Entry</span>
+          <NavLink to="/admin/leave" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <span className="nav-icon">📅</span>
+            <span>Leave</span>
           </NavLink>
 
-          <NavLink to="/admin/payroll" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          <NavLink to="/admin/claims" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <span className="nav-icon">📝</span>
+            <span>Claims</span>
+          </NavLink>
+
+          <NavLink to="/admin/payroll-v2" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             <span className="nav-icon">💰</span>
             <span>Payroll</span>
+          </NavLink>
+
+          <NavLink to="/admin/resignations" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <span className="nav-icon">👋</span>
+            <span>Resignations</span>
           </NavLink>
 
           <NavLink to="/admin/departments" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
