@@ -7,8 +7,10 @@ const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employees');
 const departmentRoutes = require('./routes/departments');
 const payrollRoutes = require('./routes/payroll');
+const payrollNewRoutes = require('./routes/payrollNew');
 const leaveRoutes = require('./routes/leave');
 const claimsRoutes = require('./routes/claims');
+const resignationsRoutes = require('./routes/resignations');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,8 +34,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/payroll-v2', payrollNewRoutes);  // New payroll system
 app.use('/api/leave', leaveRoutes);
 app.use('/api/claims', claimsRoutes);
+app.use('/api/resignations', resignationsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
