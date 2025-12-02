@@ -5,6 +5,7 @@ import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import Employees from './pages/Employees';
 import Payroll from './pages/Payroll';
+import SalaryEntry from './pages/SalaryEntry';
 import Payslip from './pages/Payslip';
 import Departments from './pages/Departments';
 import Feedback from './pages/Feedback';
@@ -34,6 +35,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Employees />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/salary-entry"
+          element={
+            <ProtectedRoute>
+              <SalaryEntry />
             </ProtectedRoute>
           }
         />

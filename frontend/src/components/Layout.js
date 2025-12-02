@@ -7,7 +7,7 @@ function Layout({ children }) {
 
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
-    navigate('/admin/login');
+    navigate('/');
   };
 
   return (
@@ -27,6 +27,11 @@ function Layout({ children }) {
           <NavLink to="/admin/employees" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             <span className="nav-icon">👥</span>
             <span>Employees</span>
+          </NavLink>
+
+          <NavLink to="/admin/salary-entry" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <span className="nav-icon">💵</span>
+            <span>Salary Entry</span>
           </NavLink>
 
           <NavLink to="/admin/payroll" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
