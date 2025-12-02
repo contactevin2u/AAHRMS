@@ -7,10 +7,10 @@ const { calculateAllStatutory } = require('../utils/statutory');
 // Get payroll for a month
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { month, year, department_id, status } = req.query;
+    const { month, year, department_id, status, include_inactive } = req.query;
 
     let query = `
-      SELECT p.*, e.name as employee_name, e.employee_id as emp_id, d.name as department_name
+      SELECT p.*, e.name as employee_name, e.employee_id as emp_id, e.status as employee_status, d.name as department_name
       FROM payroll p
       JOIN employees e ON p.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
@@ -18,6 +18,11 @@ router.get('/', authenticateAdmin, async (req, res) => {
     `;
     const params = [];
     let paramCount = 0;
+
+    // Only show active employees by default
+    if (include_inactive !== 'true') {
+      query += ` AND e.status = 'active'`;
+    }
 
     if (month) {
       paramCount++;
