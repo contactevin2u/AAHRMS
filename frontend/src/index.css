@@ -9,8 +9,8 @@ body {
     Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f7fa;
-  color: #333;
+  background: linear-gradient(160deg, #fff9f0 0%, #fff4e8 50%, #ffefe0 100%);
+  color: #5a4a3e;
   line-height: 1.6;
 }
 
@@ -26,4 +26,17 @@ button {
 
 input, textarea, select {
   font-family: inherit;
+}
+
+/* Maillard Color Variables */
+:root {
+  --maillard-dark: #6b5344;
+  --maillard-medium: #9a8072;
+  --maillard-light: #f5e6dc;
+  --maillard-cream: #fffbf8;
+  --maillard-accent: #e8a87c;
+  --maillard-accent-dark: #d4886a;
+  --maillard-success: #8ec787;
+  --maillard-warning: #ffe4a0;
+  --maillard-error: #e57373;
 }

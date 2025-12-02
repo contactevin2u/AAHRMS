@@ -159,11 +159,19 @@ function PayrollV2() {
   };
 
   const generatePayslipHTML = (data) => {
+    // Extract nested data
+    const emp = data.employee || {};
+    const period = data.period || {};
+    const earnings = data.earnings || {};
+    const deductions = data.deductions || {};
+    const employer = data.employer_contributions || {};
+    const totals = data.totals || {};
+
     return `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Payslip - ${data.employee_name}</title>
+        <title>Payslip - ${emp.name}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
           .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #6b5344; padding-bottom: 20px; }
@@ -185,61 +193,61 @@ function PayrollV2() {
       </head>
       <body>
         <div class="header">
-          <h1>AA Alive Enterprise</h1>
+          <h1>${data.company?.name || 'AA Alive Enterprise'}</h1>
           <p>PAYSLIP</p>
-          <p>For the month of ${getMonthName(data.month)} ${data.year}</p>
+          <p>For the month of ${period.month_name || getMonthName(period.month)} ${period.year}</p>
         </div>
 
         <div class="employee-info">
           <div class="info-block">
             <h3>Employee Details</h3>
-            <p><strong>Name:</strong> ${data.employee_name}</p>
-            <p><strong>Employee ID:</strong> ${data.emp_code || '-'}</p>
-            <p><strong>Department:</strong> ${data.department_name || '-'}</p>
-            <p><strong>Position:</strong> ${data.position || '-'}</p>
+            <p><strong>Name:</strong> ${emp.name || '-'}</p>
+            <p><strong>Employee ID:</strong> ${emp.code || '-'}</p>
+            <p><strong>Department:</strong> ${emp.department || '-'}</p>
+            <p><strong>Position:</strong> ${emp.position || '-'}</p>
           </div>
           <div class="info-block">
             <h3>Payment Details</h3>
-            <p><strong>Bank:</strong> ${data.bank_name || '-'}</p>
-            <p><strong>Account No:</strong> ${data.bank_account_no || '-'}</p>
-            <p><strong>EPF No:</strong> ${data.epf_number || '-'}</p>
-            <p><strong>SOCSO No:</strong> ${data.socso_number || '-'}</p>
+            <p><strong>Bank:</strong> ${emp.bank_name || '-'}</p>
+            <p><strong>Account No:</strong> ${emp.bank_account_no || '-'}</p>
+            <p><strong>EPF No:</strong> ${emp.epf_number || '-'}</p>
+            <p><strong>SOCSO No:</strong> ${emp.socso_number || '-'}</p>
           </div>
         </div>
 
         <table>
           <tr class="section-title"><td colspan="2">EARNINGS</td></tr>
-          <tr><td>Basic Salary</td><td class="amount">RM ${formatNum(data.basic_salary)}</td></tr>
-          <tr><td>Allowance</td><td class="amount">RM ${formatNum(data.fixed_allowance)}</td></tr>
-          ${data.ot_amount > 0 ? `<tr><td>OT (${data.ot_hours || 0} hrs)</td><td class="amount">RM ${formatNum(data.ot_amount)}</td></tr>` : ''}
-          ${data.incentive_amount > 0 ? `<tr><td>Incentive</td><td class="amount">RM ${formatNum(data.incentive_amount)}</td></tr>` : ''}
-          ${data.commission_amount > 0 ? `<tr><td>Commission</td><td class="amount">RM ${formatNum(data.commission_amount)}</td></tr>` : ''}
-          ${data.bonus > 0 ? `<tr><td>Bonus</td><td class="amount">RM ${formatNum(data.bonus)}</td></tr>` : ''}
-          ${data.claims_amount > 0 ? `<tr><td>Claims</td><td class="amount">RM ${formatNum(data.claims_amount)}</td></tr>` : ''}
-          ${data.other_earnings > 0 ? `<tr><td>Other Additions</td><td class="amount">RM ${formatNum(data.other_earnings)}</td></tr>` : ''}
-          <tr class="total-row"><td>GROSS PAY</td><td class="amount">RM ${formatNum(data.gross_salary)}</td></tr>
+          <tr><td>Basic Salary</td><td class="amount">RM ${formatNum(earnings.basic_salary)}</td></tr>
+          <tr><td>Allowance</td><td class="amount">RM ${formatNum(earnings.fixed_allowance)}</td></tr>
+          ${earnings.ot_amount > 0 ? `<tr><td>OT</td><td class="amount">RM ${formatNum(earnings.ot_amount)}</td></tr>` : ''}
+          ${earnings.incentive_amount > 0 ? `<tr><td>Incentive</td><td class="amount">RM ${formatNum(earnings.incentive_amount)}</td></tr>` : ''}
+          ${earnings.commission_amount > 0 ? `<tr><td>Commission</td><td class="amount">RM ${formatNum(earnings.commission_amount)}</td></tr>` : ''}
+          ${earnings.bonus > 0 ? `<tr><td>Bonus</td><td class="amount">RM ${formatNum(earnings.bonus)}</td></tr>` : ''}
+          ${earnings.claims_amount > 0 ? `<tr><td>Claims</td><td class="amount">RM ${formatNum(earnings.claims_amount)}</td></tr>` : ''}
+          ${earnings.other_earnings > 0 ? `<tr><td>Other Additions</td><td class="amount">RM ${formatNum(earnings.other_earnings)}</td></tr>` : ''}
+          <tr class="total-row"><td>GROSS PAY</td><td class="amount">RM ${formatNum(totals.gross_salary)}</td></tr>
         </table>
 
         <table>
           <tr class="section-title"><td colspan="2">DEDUCTIONS</td></tr>
-          <tr><td>EPF (Employee)</td><td class="amount">RM ${formatNum(data.epf_employee)}</td></tr>
-          <tr><td>SOCSO (Employee)</td><td class="amount">RM ${formatNum(data.socso_employee)}</td></tr>
-          <tr><td>EIS (Employee)</td><td class="amount">RM ${formatNum(data.eis_employee)}</td></tr>
-          <tr><td>PCB (Tax)</td><td class="amount">RM ${formatNum(data.pcb)}</td></tr>
-          ${data.unpaid_leave_deduction > 0 ? `<tr><td>Unpaid Leave (${data.unpaid_leave_days} days)</td><td class="amount">RM ${formatNum(data.unpaid_leave_deduction)}</td></tr>` : ''}
-          ${data.other_deductions > 0 ? `<tr><td>Other Deductions</td><td class="amount">RM ${formatNum(data.other_deductions)}</td></tr>` : ''}
-          <tr class="total-row"><td>TOTAL DEDUCTIONS</td><td class="amount">RM ${formatNum(data.total_deductions)}</td></tr>
+          <tr><td>EPF (Employee)</td><td class="amount">RM ${formatNum(deductions.epf_employee)}</td></tr>
+          <tr><td>SOCSO (Employee)</td><td class="amount">RM ${formatNum(deductions.socso_employee)}</td></tr>
+          <tr><td>EIS (Employee)</td><td class="amount">RM ${formatNum(deductions.eis_employee)}</td></tr>
+          <tr><td>PCB (Tax)</td><td class="amount">RM ${formatNum(deductions.pcb)}</td></tr>
+          ${deductions.unpaid_leave_deduction > 0 ? `<tr><td>Unpaid Leave (${deductions.unpaid_leave_days} days)</td><td class="amount">RM ${formatNum(deductions.unpaid_leave_deduction)}</td></tr>` : ''}
+          ${deductions.other_deductions > 0 ? `<tr><td>Other Deductions</td><td class="amount">RM ${formatNum(deductions.other_deductions)}</td></tr>` : ''}
+          <tr class="total-row"><td>TOTAL DEDUCTIONS</td><td class="amount">RM ${formatNum(totals.total_deductions)}</td></tr>
         </table>
 
         <table>
           <tr class="section-title"><td colspan="2">EMPLOYER CONTRIBUTIONS</td></tr>
-          <tr><td>EPF (Employer)</td><td class="amount">RM ${formatNum(data.epf_employer)}</td></tr>
-          <tr><td>SOCSO (Employer)</td><td class="amount">RM ${formatNum(data.socso_employer)}</td></tr>
-          <tr><td>EIS (Employer)</td><td class="amount">RM ${formatNum(data.eis_employer)}</td></tr>
+          <tr><td>EPF (Employer)</td><td class="amount">RM ${formatNum(employer.epf_employer)}</td></tr>
+          <tr><td>SOCSO (Employer)</td><td class="amount">RM ${formatNum(employer.socso_employer)}</td></tr>
+          <tr><td>EIS (Employer)</td><td class="amount">RM ${formatNum(employer.eis_employer)}</td></tr>
         </table>
 
         <table>
-          <tr style="background: #6b5344; color: white;"><td><strong>NET PAY</strong></td><td class="amount" style="font-size: 1.3em;"><strong>RM ${formatNum(data.net_pay)}</strong></td></tr>
+          <tr style="background: #6b5344; color: white;"><td><strong>NET PAY</strong></td><td class="amount" style="font-size: 1.3em;"><strong>RM ${formatNum(totals.net_pay)}</strong></td></tr>
         </table>
 
         <div class="footer">
@@ -380,10 +388,12 @@ function PayrollV2() {
                         <th>Employee</th>
                         <th>Basic</th>
                         <th>Allowance</th>
-                        <th>OT</th>
-                        <th>Others</th>
                         <th>Gross</th>
-                        <th>Deductions</th>
+                        <th>EPF</th>
+                        <th>SOCSO</th>
+                        <th>EIS</th>
+                        <th>PCB</th>
+                        <th>Total Ded.</th>
                         <th>Net</th>
                         <th>Actions</th>
                       </tr>
@@ -398,16 +408,11 @@ function PayrollV2() {
                           </td>
                           <td>{formatAmount(item.basic_salary)}</td>
                           <td>{formatAmount(item.fixed_allowance)}</td>
-                          <td>{formatAmount(item.ot_amount)}</td>
-                          <td>
-                            {formatAmount(
-                              parseFloat(item.incentive_amount || 0) +
-                              parseFloat(item.commission_amount || 0) +
-                              parseFloat(item.bonus || 0) +
-                              parseFloat(item.claims_amount || 0)
-                            )}
-                          </td>
                           <td><strong>{formatAmount(item.gross_salary)}</strong></td>
+                          <td>{formatAmount(item.epf_employee)}</td>
+                          <td>{formatAmount(item.socso_employee)}</td>
+                          <td>{formatAmount(item.eis_employee)}</td>
+                          <td>{formatAmount(item.pcb)}</td>
                           <td>{formatAmount(item.total_deductions)}</td>
                           <td><strong>{formatAmount(item.net_pay)}</strong></td>
                           <td>

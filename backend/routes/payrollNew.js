@@ -175,12 +175,18 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const unpaidDays = unpaidLeaveMap[emp.id] || 0;
       const claimsAmount = claimsMap[emp.id] || 0;
 
+      // DEBUG: Log salary values
+      console.log(`Processing ${emp.name}: raw basic_salary=${emp.basic_salary}, parsed=${basicSalary}, allowance=${fixedAllowance}`);
+
       // Calculate unpaid leave deduction
       const dailyRate = basicSalary / workingDaysInMonth;
       const unpaidDeduction = dailyRate * unpaidDays;
 
       // Gross salary (before unpaid deduction)
       const grossBeforeUnpaid = basicSalary + fixedAllowance + claimsAmount;
+
+      // DEBUG: Log gross calculation
+      console.log(`${emp.name}: basic(${basicSalary}) + allowance(${fixedAllowance}) + claims(${claimsAmount}) = grossBeforeUnpaid(${grossBeforeUnpaid})`);
 
       // Gross for statutory calculation (after unpaid deduction)
       const grossSalary = grossBeforeUnpaid - unpaidDeduction;
@@ -309,8 +315,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     }
 
     // Calculate new values
-    const newBasic = parseFloat(basic_salary) || item.basic_salary;
-    const newAllowance = parseFloat(fixed_allowance) || item.fixed_allowance;
+    const newBasic = parseFloat(basic_salary) || parseFloat(item.basic_salary) || 0;
+    const newAllowance = parseFloat(fixed_allowance) || parseFloat(item.fixed_allowance) || 0;
     const newOT = parseFloat(ot_amount) || 0;
     const newIncentive = parseFloat(incentive_amount) || 0;
     const newCommission = parseFloat(commission_amount) || 0;
@@ -318,12 +324,18 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const newOtherEarnings = parseFloat(other_earnings) || 0;
     const newOtherDeductions = parseFloat(other_deductions) || 0;
 
+    // DEBUG: Log incoming values
+    console.log(`UPDATE Item ${id}: incoming basic_salary=${basic_salary}, item.basic_salary=${item.basic_salary}, newBasic=${newBasic}`);
+
     // Gross salary
     const grossSalary = (
       newBasic + newAllowance + newOT + newIncentive + newCommission +
       newBonus + newOtherEarnings + parseFloat(item.claims_amount || 0) -
       parseFloat(item.unpaid_leave_deduction || 0)
     );
+
+    // DEBUG: Log gross calculation
+    console.log(`UPDATE Gross calc: ${newBasic} + ${newAllowance} + ${newOT} + ${newIncentive} + ${newCommission} + ${newBonus} + ${newOtherEarnings} + ${item.claims_amount || 0} - ${item.unpaid_leave_deduction || 0} = ${grossSalary}`);
 
     // Recalculate statutory
     const statutory = calculateAllStatutory(grossSalary, item, item.month, null);

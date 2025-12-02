@@ -214,6 +214,9 @@ router.post('/generate', authenticateAdmin, async (req, res) => {
       const allowance = parseFloat(emp.default_allowance) || 0;
       const grossSalary = basicSalary + allowance;
 
+      // DEBUG: Log the calculation
+      console.log(`[GENERATE] Employee ${emp.id}: raw default_basic_salary=${emp.default_basic_salary}, parsed=${basicSalary}, allowance=${allowance}, gross=${grossSalary}`);
+
       // Calculate statutory deductions
       const statutory = calculateAllStatutory(grossSalary, emp, month, null);
 
@@ -502,6 +505,9 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     const payrollMonth = employee.month;
     const payrollYear = employee.year;
 
+    // DEBUG: Log incoming values
+    console.log(`[UPDATE] Payroll ${id}: incoming basic_salary=${basic_salary}, commission=${commission}, allowance=${allowance}, trip_pay=${trip_pay}, ot_pay=${ot_pay}, outstation_pay=${outstation_pay}, bonus=${bonus}`);
+
     // Calculate gross salary
     const grossSalary = (
       parseFloat(basic_salary || 0) +
@@ -512,6 +518,9 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       parseFloat(outstation_pay || 0) +
       parseFloat(bonus || 0)
     );
+
+    // DEBUG: Log calculated gross
+    console.log(`[UPDATE] Calculated gross: ${grossSalary}`);
 
     // Get Year-to-Date data for accurate PCB calculation (LHDN computerized method)
     const ytdResult = await pool.query(
