@@ -12,15 +12,15 @@ import './App.css';
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('adminToken');
-  return token ? children : <Navigate to="/admin/login" replace />;
+  return token ? children : <Navigate to="/" replace />;
 }
 
 function App() {
   return (
     <div className="App">
       <Routes>
-        <Route path="/" element={<AnonymousFeedback />} />
-        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/" element={<AdminLogin />} />
+        <Route path="/feedback" element={<AnonymousFeedback />} />
         <Route
           path="/admin/dashboard"
           element={
