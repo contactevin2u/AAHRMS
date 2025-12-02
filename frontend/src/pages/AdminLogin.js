@@ -76,7 +76,7 @@ function AdminLogin() {
         </form>
 
         <div className="login-footer">
-          <a href="/">← Back to feedback form 💬</a>
+          <a href="/feedback" className="feedback-link">📝 Submit Anonymous Feedback</a>
         </div>
       </div>
     </div>
