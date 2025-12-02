@@ -165,15 +165,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     let totalEmployerCost = 0;
     let employeeCount = 0;
 
-    // Create payroll item for each employee (skip those without salary)
+    // Create payroll item for each employee
     for (const emp of employees.rows) {
       const basicSalary = parseFloat(emp.basic_salary) || 0;
       const fixedAllowance = parseFloat(emp.fixed_allowance) || 0;
-
-      // Skip employees without basic salary
-      if (basicSalary <= 0) {
-        continue;
-      }
       const unpaidDays = unpaidLeaveMap[emp.id] || 0;
       const claimsAmount = claimsMap[emp.id] || 0;
 
@@ -254,10 +249,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       total_net: totalNet
     };
 
-    // Add warning if some employees were skipped
+    // Add warning if some employees have no salary set
     if (skippedNames.length > 0) {
-      response.warning = `${skippedNames.length} employee(s) skipped due to missing salary: ${skippedNames.join(', ')}`;
-      response.skipped_employees = skippedNames;
+      response.warning = `${skippedNames.length} employee(s) have no basic salary set: ${skippedNames.join(', ')}. Please edit their payroll items to add salary.`;
+      response.employees_without_salary = skippedNames;
     }
 
     res.status(201).json(response);
