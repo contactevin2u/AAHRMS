@@ -20,15 +20,15 @@ function PayrollV2() {
   // Item edit form
   const [itemForm, setItemForm] = useState({
     basic_salary: 0,
-    allowance: 0,
+    fixed_allowance: 0,
     ot_hours: 0,
     ot_amount: 0,
-    incentive: 0,
-    commission: 0,
+    incentive_amount: 0,
+    commission_amount: 0,
     bonus: 0,
-    other_additions: 0,
-    deduction_other: 0,
-    remarks: ''
+    other_earnings: 0,
+    other_deductions: 0,
+    notes: ''
   });
 
   useEffect(() => {
@@ -117,15 +117,15 @@ function PayrollV2() {
     setEditingItem(item);
     setItemForm({
       basic_salary: item.basic_salary || 0,
-      allowance: item.allowance || 0,
+      fixed_allowance: item.fixed_allowance || 0,
       ot_hours: item.ot_hours || 0,
       ot_amount: item.ot_amount || 0,
-      incentive: item.incentive || 0,
-      commission: item.commission || 0,
+      incentive_amount: item.incentive_amount || 0,
+      commission_amount: item.commission_amount || 0,
       bonus: item.bonus || 0,
-      other_additions: item.other_additions || 0,
-      deduction_other: item.deduction_other || 0,
-      remarks: item.remarks || ''
+      other_earnings: item.other_earnings || 0,
+      other_deductions: item.other_deductions || 0,
+      notes: item.notes || ''
     });
     setShowItemModal(true);
   };
@@ -205,13 +205,13 @@ function PayrollV2() {
         <table>
           <tr class="section-title"><td colspan="2">EARNINGS</td></tr>
           <tr><td>Basic Salary</td><td class="amount">RM ${formatNum(data.basic_salary)}</td></tr>
-          <tr><td>Allowance</td><td class="amount">RM ${formatNum(data.allowance)}</td></tr>
-          ${data.ot_amount > 0 ? `<tr><td>OT (${data.ot_hours} hrs)</td><td class="amount">RM ${formatNum(data.ot_amount)}</td></tr>` : ''}
-          ${data.incentive > 0 ? `<tr><td>Incentive</td><td class="amount">RM ${formatNum(data.incentive)}</td></tr>` : ''}
-          ${data.commission > 0 ? `<tr><td>Commission</td><td class="amount">RM ${formatNum(data.commission)}</td></tr>` : ''}
+          <tr><td>Allowance</td><td class="amount">RM ${formatNum(data.fixed_allowance)}</td></tr>
+          ${data.ot_amount > 0 ? `<tr><td>OT (${data.ot_hours || 0} hrs)</td><td class="amount">RM ${formatNum(data.ot_amount)}</td></tr>` : ''}
+          ${data.incentive_amount > 0 ? `<tr><td>Incentive</td><td class="amount">RM ${formatNum(data.incentive_amount)}</td></tr>` : ''}
+          ${data.commission_amount > 0 ? `<tr><td>Commission</td><td class="amount">RM ${formatNum(data.commission_amount)}</td></tr>` : ''}
           ${data.bonus > 0 ? `<tr><td>Bonus</td><td class="amount">RM ${formatNum(data.bonus)}</td></tr>` : ''}
           ${data.claims_amount > 0 ? `<tr><td>Claims</td><td class="amount">RM ${formatNum(data.claims_amount)}</td></tr>` : ''}
-          ${data.other_additions > 0 ? `<tr><td>Other Additions</td><td class="amount">RM ${formatNum(data.other_additions)}</td></tr>` : ''}
+          ${data.other_earnings > 0 ? `<tr><td>Other Additions</td><td class="amount">RM ${formatNum(data.other_earnings)}</td></tr>` : ''}
           <tr class="total-row"><td>GROSS PAY</td><td class="amount">RM ${formatNum(data.gross_salary)}</td></tr>
         </table>
 
@@ -220,9 +220,9 @@ function PayrollV2() {
           <tr><td>EPF (Employee)</td><td class="amount">RM ${formatNum(data.epf_employee)}</td></tr>
           <tr><td>SOCSO (Employee)</td><td class="amount">RM ${formatNum(data.socso_employee)}</td></tr>
           <tr><td>EIS (Employee)</td><td class="amount">RM ${formatNum(data.eis_employee)}</td></tr>
-          <tr><td>PCB (Tax)</td><td class="amount">RM ${formatNum(data.pcb_amount)}</td></tr>
+          <tr><td>PCB (Tax)</td><td class="amount">RM ${formatNum(data.pcb)}</td></tr>
           ${data.unpaid_leave_deduction > 0 ? `<tr><td>Unpaid Leave (${data.unpaid_leave_days} days)</td><td class="amount">RM ${formatNum(data.unpaid_leave_deduction)}</td></tr>` : ''}
-          ${data.deduction_other > 0 ? `<tr><td>Other Deductions</td><td class="amount">RM ${formatNum(data.deduction_other)}</td></tr>` : ''}
+          ${data.other_deductions > 0 ? `<tr><td>Other Deductions</td><td class="amount">RM ${formatNum(data.other_deductions)}</td></tr>` : ''}
           <tr class="total-row"><td>TOTAL DEDUCTIONS</td><td class="amount">RM ${formatNum(data.total_deductions)}</td></tr>
         </table>
 
@@ -234,7 +234,7 @@ function PayrollV2() {
         </table>
 
         <table>
-          <tr style="background: #6b5344; color: white;"><td><strong>NET PAY</strong></td><td class="amount" style="font-size: 1.3em;"><strong>RM ${formatNum(data.net_salary)}</strong></td></tr>
+          <tr style="background: #6b5344; color: white;"><td><strong>NET PAY</strong></td><td class="amount" style="font-size: 1.3em;"><strong>RM ${formatNum(data.net_pay)}</strong></td></tr>
         </table>
 
         <div class="footer">
@@ -392,19 +392,19 @@ function PayrollV2() {
                             <small>{item.emp_code}</small>
                           </td>
                           <td>{formatAmount(item.basic_salary)}</td>
-                          <td>{formatAmount(item.allowance)}</td>
+                          <td>{formatAmount(item.fixed_allowance)}</td>
                           <td>{formatAmount(item.ot_amount)}</td>
                           <td>
                             {formatAmount(
-                              parseFloat(item.incentive || 0) +
-                              parseFloat(item.commission || 0) +
+                              parseFloat(item.incentive_amount || 0) +
+                              parseFloat(item.commission_amount || 0) +
                               parseFloat(item.bonus || 0) +
                               parseFloat(item.claims_amount || 0)
                             )}
                           </td>
                           <td><strong>{formatAmount(item.gross_salary)}</strong></td>
                           <td>{formatAmount(item.total_deductions)}</td>
-                          <td><strong>{formatAmount(item.net_salary)}</strong></td>
+                          <td><strong>{formatAmount(item.net_pay)}</strong></td>
                           <td>
                             {selectedRun.status === 'draft' && (
                               <button onClick={() => handleEditItem(item)} className="action-btn edit">
@@ -532,8 +532,8 @@ function PayrollV2() {
                     <input
                       type="number"
                       step="0.01"
-                      value={itemForm.allowance}
-                      onChange={(e) => setItemForm({ ...itemForm, allowance: parseFloat(e.target.value) || 0 })}
+                      value={itemForm.fixed_allowance}
+                      onChange={(e) => setItemForm({ ...itemForm, fixed_allowance: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                 </div>
@@ -563,8 +563,8 @@ function PayrollV2() {
                     <input
                       type="number"
                       step="0.01"
-                      value={itemForm.incentive}
-                      onChange={(e) => setItemForm({ ...itemForm, incentive: parseFloat(e.target.value) || 0 })}
+                      value={itemForm.incentive_amount}
+                      onChange={(e) => setItemForm({ ...itemForm, incentive_amount: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                   <div className="form-group">
@@ -572,8 +572,8 @@ function PayrollV2() {
                     <input
                       type="number"
                       step="0.01"
-                      value={itemForm.commission}
-                      onChange={(e) => setItemForm({ ...itemForm, commission: parseFloat(e.target.value) || 0 })}
+                      value={itemForm.commission_amount}
+                      onChange={(e) => setItemForm({ ...itemForm, commission_amount: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                 </div>
@@ -592,8 +592,8 @@ function PayrollV2() {
                     <input
                       type="number"
                       step="0.01"
-                      value={itemForm.other_additions}
-                      onChange={(e) => setItemForm({ ...itemForm, other_additions: parseFloat(e.target.value) || 0 })}
+                      value={itemForm.other_earnings}
+                      onChange={(e) => setItemForm({ ...itemForm, other_earnings: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                 </div>
@@ -602,15 +602,15 @@ function PayrollV2() {
                   <input
                     type="number"
                     step="0.01"
-                    value={itemForm.deduction_other}
-                    onChange={(e) => setItemForm({ ...itemForm, deduction_other: parseFloat(e.target.value) || 0 })}
+                    value={itemForm.other_deductions}
+                    onChange={(e) => setItemForm({ ...itemForm, other_deductions: parseFloat(e.target.value) || 0 })}
                   />
                 </div>
                 <div className="form-group">
-                  <label>Remarks</label>
+                  <label>Notes</label>
                   <textarea
-                    value={itemForm.remarks}
-                    onChange={(e) => setItemForm({ ...itemForm, remarks: e.target.value })}
+                    value={itemForm.notes}
+                    onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })}
                     rows="2"
                     placeholder="Optional notes"
                   />
