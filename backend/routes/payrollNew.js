@@ -117,6 +117,9 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       WHERE e.status = 'active'
     `);
 
+    console.log('Found active employees:', employees.rows.length);
+    console.log('Employee names:', employees.rows.map(e => e.name));
+
     // Check for employees without salary data
     const employeesWithoutSalary = employees.rows.filter(
       emp => !emp.basic_salary || parseFloat(emp.basic_salary) <= 0
@@ -230,7 +233,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       totalNet += netPay;
       totalEmployerCost += employerCost;
       employeeCount++;
+      console.log(`Created payroll item for ${emp.name}, basic: ${basicSalary}`);
     }
+
+    console.log('Total employees processed:', employeeCount);
 
     // Update run totals
     await client.query(`
