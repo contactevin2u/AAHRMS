@@ -77,22 +77,31 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Generate payroll for all active employees for a month
+// Generate payroll for all active employees for a month (or specific employees)
 router.post('/generate', authenticateAdmin, async (req, res) => {
   try {
-    const { month, year } = req.body;
+    const { month, year, employee_ids } = req.body;
 
     if (!month || !year) {
       return res.status(400).json({ error: 'Month and year are required' });
     }
 
-    // Get all active employees with their department salary config
-    const employees = await pool.query(`
-      SELECT e.id, e.department_id, sc.*
+    // Get employees - either specific ones or all active
+    let employeeQuery = `
+      SELECT e.id, e.default_basic_salary, e.default_allowance,
+             e.date_of_birth, e.marital_status, e.spouse_working, e.children_count
       FROM employees e
-      LEFT JOIN salary_configs sc ON e.department_id = sc.department_id
       WHERE e.status = 'active'
-    `);
+    `;
+    const queryParams = [];
+
+    // If specific employee_ids provided, filter by them
+    if (employee_ids && Array.isArray(employee_ids) && employee_ids.length > 0) {
+      employeeQuery += ` AND e.id = ANY($1)`;
+      queryParams.push(employee_ids);
+    }
+
+    const employees = await pool.query(employeeQuery, queryParams);
 
     let created = 0;
     let skipped = 0;
@@ -109,11 +118,30 @@ router.post('/generate', authenticateAdmin, async (req, res) => {
         continue;
       }
 
-      // Create payroll record with default values from salary config
+      const basicSalary = parseFloat(emp.default_basic_salary) || 0;
+      const allowance = parseFloat(emp.default_allowance) || 0;
+      const grossSalary = basicSalary + allowance;
+
+      // Calculate statutory deductions
+      const statutory = calculateAllStatutory(grossSalary, emp, month, null);
+
+      // Create payroll record with default values and statutory deductions
       await pool.query(
-        `INSERT INTO payroll (employee_id, month, year, basic_salary, allowance)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [emp.id, month, year, emp.basic_salary || 0, emp.allowance_amount || 0]
+        `INSERT INTO payroll (
+          employee_id, month, year, basic_salary, allowance,
+          gross_salary, net_salary,
+          epf_employee, epf_employer, socso_employee, socso_employer,
+          eis_employee, eis_employer, pcb, deductions
+        )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        [
+          emp.id, month, year, basicSalary, allowance,
+          grossSalary, statutory.netSalary,
+          statutory.epf.employee, statutory.epf.employer,
+          statutory.socso.employee, statutory.socso.employer,
+          statutory.eis.employee, statutory.eis.employer,
+          statutory.pcb, statutory.totalEmployeeDeductions
+        ]
       );
       created++;
     }
@@ -126,6 +154,30 @@ router.post('/generate', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error generating payroll:', error);
     res.status(500).json({ error: 'Failed to generate payroll' });
+  }
+});
+
+// Get employees available for payroll generation (not yet generated for this month)
+router.get('/available-employees/:year/:month', authenticateAdmin, async (req, res) => {
+  try {
+    const { year, month } = req.params;
+
+    const result = await pool.query(`
+      SELECT e.id, e.employee_id as emp_id, e.name, e.default_basic_salary, e.default_allowance,
+             d.name as department_name
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE e.status = 'active'
+        AND e.id NOT IN (
+          SELECT employee_id FROM payroll WHERE year = $1 AND month = $2
+        )
+      ORDER BY e.name
+    `, [year, month]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching available employees:', error);
+    res.status(500).json({ error: 'Failed to fetch available employees' });
   }
 });
 

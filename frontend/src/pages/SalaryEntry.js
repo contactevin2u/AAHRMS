@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { payrollApi, employeeApi, departmentApi } from '../api';
+import { payrollApi, departmentApi } from '../api';
 import Layout from '../components/Layout';
 import './SalaryEntry.css';
 
@@ -10,6 +10,13 @@ function SalaryEntry() {
   const [saving, setSaving] = useState({});
   const [filter, setFilter] = useState({ department_id: '', search: '' });
   const [message, setMessage] = useState(null);
+
+  // Generate modal state
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [availableEmployees, setAvailableEmployees] = useState([]);
+  const [selectedEmployees, setSelectedEmployees] = useState([]);
+  const [loadingAvailable, setLoadingAvailable] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const currentDate = new Date();
   const [period, setPeriod] = useState({
@@ -42,17 +49,14 @@ function SalaryEntry() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Fetch payroll data for the selected month
       const payrollRes = await payrollApi.getAll({
         month: period.month,
         year: period.year,
         department_id: filter.department_id
       });
 
-      // Map payroll data with employee info
       let data = payrollRes.data;
 
-      // Apply search filter
       if (filter.search) {
         const searchLower = filter.search.toLowerCase();
         data = data.filter(p =>
@@ -69,16 +73,60 @@ function SalaryEntry() {
     }
   };
 
-  const handleGeneratePayroll = async () => {
+  const openGenerateModal = async () => {
+    setShowGenerateModal(true);
+    setLoadingAvailable(true);
+    setSelectedEmployees([]);
+
     try {
-      setLoading(true);
-      const res = await payrollApi.generate({ month: period.month, year: period.year });
+      const res = await payrollApi.getAvailableEmployees(period.year, period.month);
+      setAvailableEmployees(res.data);
+    } catch (error) {
+      console.error('Error fetching available employees:', error);
+      setAvailableEmployees([]);
+    } finally {
+      setLoadingAvailable(false);
+    }
+  };
+
+  const toggleEmployeeSelection = (empId) => {
+    setSelectedEmployees(prev => {
+      if (prev.includes(empId)) {
+        return prev.filter(id => id !== empId);
+      } else {
+        return [...prev, empId];
+      }
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedEmployees(availableEmployees.map(e => e.id));
+  };
+
+  const deselectAll = () => {
+    setSelectedEmployees([]);
+  };
+
+  const handleGenerateSelected = async () => {
+    if (selectedEmployees.length === 0) {
+      setMessage({ type: 'error', text: 'Please select at least one employee' });
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const res = await payrollApi.generate({
+        month: period.month,
+        year: period.year,
+        employee_ids: selectedEmployees
+      });
       setMessage({ type: 'success', text: res.data.message });
+      setShowGenerateModal(false);
       fetchData();
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to generate payroll' });
     } finally {
-      setLoading(false);
+      setGenerating(false);
     }
   };
 
@@ -111,8 +159,6 @@ function SalaryEntry() {
       });
 
       setMessage({ type: 'success', text: `Saved ${emp.employee_name}'s salary` });
-
-      // Refresh to get updated calculations
       fetchData();
     } catch (error) {
       setMessage({ type: 'error', text: `Failed to save ${emp.employee_name}'s salary` });
@@ -180,7 +226,6 @@ function SalaryEntry() {
     );
   };
 
-  // Clear message after 3 seconds
   useEffect(() => {
     if (message) {
       const timer = setTimeout(() => setMessage(null), 3000);
@@ -248,7 +293,7 @@ function SalaryEntry() {
             </select>
           </div>
 
-          <button onClick={handleGeneratePayroll} className="generate-btn">
+          <button onClick={openGenerateModal} className="generate-btn">
             ⚡ Generate Payroll
           </button>
         </div>
@@ -259,8 +304,8 @@ function SalaryEntry() {
           <div className="empty-state">
             <div className="empty-icon">📋</div>
             <h3>No payroll records found</h3>
-            <p>Click "Generate Payroll" to create records for all active employees for {months[period.month - 1]} {period.year}</p>
-            <button onClick={handleGeneratePayroll} className="generate-btn large">
+            <p>Click "Generate Payroll" to create records for {months[period.month - 1]} {period.year}</p>
+            <button onClick={openGenerateModal} className="generate-btn large">
               ⚡ Generate Payroll
             </button>
           </div>
@@ -406,6 +451,76 @@ function SalaryEntry() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Generate Payroll Modal */}
+        {showGenerateModal && (
+          <div className="modal-overlay" onClick={() => setShowGenerateModal(false)}>
+            <div className="modal generate-modal" onClick={(e) => e.stopPropagation()}>
+              <h2>⚡ Generate Payroll</h2>
+              <p className="modal-subtitle">Select employees for {months[period.month - 1]} {period.year}</p>
+
+              {loadingAvailable ? (
+                <div className="modal-loading">Loading employees...</div>
+              ) : availableEmployees.length === 0 ? (
+                <div className="modal-empty">
+                  <p>All active employees already have payroll records for this month.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="selection-actions">
+                    <button onClick={selectAll} className="select-btn">
+                      Select All ({availableEmployees.length})
+                    </button>
+                    <button onClick={deselectAll} className="select-btn">
+                      Deselect All
+                    </button>
+                    <span className="selected-count">
+                      {selectedEmployees.length} selected
+                    </span>
+                  </div>
+
+                  <div className="employee-list">
+                    {availableEmployees.map(emp => (
+                      <div
+                        key={emp.id}
+                        className={`employee-item ${selectedEmployees.includes(emp.id) ? 'selected' : ''}`}
+                        onClick={() => toggleEmployeeSelection(emp.id)}
+                      >
+                        <div className="checkbox">
+                          {selectedEmployees.includes(emp.id) ? '✓' : ''}
+                        </div>
+                        <div className="emp-details">
+                          <span className="emp-name">{emp.name}</span>
+                          <span className="emp-meta">{emp.emp_id} • {emp.department_name || 'No Dept'}</span>
+                        </div>
+                        <div className="emp-salary">
+                          {formatCurrency(parseFloat(emp.default_basic_salary || 0) + parseFloat(emp.default_allowance || 0))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  onClick={() => setShowGenerateModal(false)}
+                  className="cancel-btn"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerateSelected}
+                  className="save-btn"
+                  disabled={generating || selectedEmployees.length === 0}
+                >
+                  {generating ? 'Generating...' : `Generate ${selectedEmployees.length} Payroll`}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

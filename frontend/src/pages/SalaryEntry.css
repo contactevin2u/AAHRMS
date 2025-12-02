@@ -409,6 +409,185 @@
   font-size: 1.1rem;
 }
 
+/* Generate Modal */
+.generate-modal {
+  max-width: 500px;
+  width: 90%;
+}
+
+.modal-subtitle {
+  color: #666;
+  margin: -10px 0 20px;
+}
+
+.modal-loading,
+.modal-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.select-btn {
+  background: #f0f0f0;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.select-btn:hover {
+  background: #e0e0e0;
+}
+
+.selected-count {
+  margin-left: auto;
+  font-weight: 600;
+  color: #667eea;
+}
+
+.employee-list {
+  max-height: 350px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 8px;
+}
+
+.employee-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.employee-item:last-child {
+  border-bottom: none;
+}
+
+.employee-item:hover {
+  background: #f8f9ff;
+}
+
+.employee-item.selected {
+  background: #e8ecff;
+}
+
+.employee-item .checkbox {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  color: white;
+  background: white;
+  transition: all 0.2s;
+}
+
+.employee-item.selected .checkbox {
+  background: #667eea;
+  border-color: #667eea;
+}
+
+.emp-details {
+  flex: 1;
+}
+
+.emp-name {
+  display: block;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.emp-meta {
+  display: block;
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 2px;
+}
+
+.emp-salary {
+  font-weight: 600;
+  color: #667eea;
+  font-size: 0.9rem;
+}
+
+/* Modal Actions */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+}
+
+.modal-actions .cancel-btn {
+  background: #f0f0f0;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.modal-actions .save-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.modal-actions .save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 16px;
+  padding: 25px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal h2 {
+  margin: 0 0 10px;
+  color: #1a1a2e;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .salary-entry-page {
