@@ -167,6 +167,20 @@ function SalaryEntry() {
     }
   };
 
+  const handleDelete = async (emp) => {
+    if (!window.confirm(`Delete payroll record for ${emp.employee_name}? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await payrollApi.delete(emp.id);
+      setMessage({ type: 'success', text: `Deleted ${emp.employee_name}'s payroll record` });
+      fetchData();
+    } catch (error) {
+      setMessage({ type: 'error', text: `Failed to delete ${emp.employee_name}'s payroll` });
+    }
+  };
+
   const handleSaveAll = async () => {
     setMessage({ type: 'info', text: 'Saving all changes...' });
     let successCount = 0;
@@ -325,8 +339,16 @@ function SalaryEntry() {
                       onClick={() => handleSave(emp, index)}
                       className="save-btn"
                       disabled={saving[emp.id]}
+                      title="Save"
                     >
                       {saving[emp.id] ? '...' : '💾'}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(emp)}
+                      className="delete-btn"
+                      title="Delete payroll record"
+                    >
+                      🗑️
                     </button>
                   </div>
                 </div>

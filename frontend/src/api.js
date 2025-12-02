@@ -64,6 +64,7 @@ export const payrollApi = {
   generate: (data) => api.post('/payroll/generate', data),
   getAvailableEmployees: (year, month) => api.get(`/payroll/available-employees/${year}/${month}`),
   update: (id, data) => api.put(`/payroll/${id}`, data),
+  delete: (id) => api.delete(`/payroll/${id}`),
   calculate: (data) => api.post('/payroll/calculate', data),
   calculateStatutory: (data) => api.post('/payroll/calculate-statutory', data),
   getSummary: (year, month) => api.get(`/payroll/summary/${year}/${month}`),
