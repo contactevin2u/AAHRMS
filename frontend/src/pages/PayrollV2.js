@@ -50,7 +50,11 @@ function PayrollV2() {
   const fetchRunDetails = async (id) => {
     try {
       const res = await payrollV2Api.getRun(id);
-      setSelectedRun(res.data);
+      // Flatten the response: merge run data with items array
+      setSelectedRun({
+        ...res.data.run,
+        items: res.data.items
+      });
     } catch (error) {
       console.error('Error fetching run details:', error);
     }
