@@ -108,7 +108,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
     const runId = runResult.rows[0].id;
 
-    // Get all active employees
+    // Get all active employees with salary data
     const employees = await client.query(`
       SELECT e.*,
              e.default_basic_salary as basic_salary,
@@ -116,6 +116,12 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       FROM employees e
       WHERE e.status = 'active'
     `);
+
+    // Check for employees without salary data
+    const employeesWithoutSalary = employees.rows.filter(
+      emp => !emp.basic_salary || parseFloat(emp.basic_salary) <= 0
+    );
+    const skippedNames = employeesWithoutSalary.map(e => e.name);
 
     // Get unpaid leave for this month
     const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -159,10 +165,15 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     let totalEmployerCost = 0;
     let employeeCount = 0;
 
-    // Create payroll item for each employee
+    // Create payroll item for each employee (skip those without salary)
     for (const emp of employees.rows) {
       const basicSalary = parseFloat(emp.basic_salary) || 0;
       const fixedAllowance = parseFloat(emp.fixed_allowance) || 0;
+
+      // Skip employees without basic salary
+      if (basicSalary <= 0) {
+        continue;
+      }
       const unpaidDays = unpaidLeaveMap[emp.id] || 0;
       const claimsAmount = claimsMap[emp.id] || 0;
 
@@ -236,12 +247,20 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
     await client.query('COMMIT');
 
-    res.status(201).json({
+    const response = {
       message: `Payroll run created with ${employeeCount} employees`,
-      run_id: runId,
+      run: runResult.rows[0],
       employee_count: employeeCount,
       total_net: totalNet
-    });
+    };
+
+    // Add warning if some employees were skipped
+    if (skippedNames.length > 0) {
+      response.warning = `${skippedNames.length} employee(s) skipped due to missing salary: ${skippedNames.join(', ')}`;
+      response.skipped_employees = skippedNames;
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error creating payroll run:', error);

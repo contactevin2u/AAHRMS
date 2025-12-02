@@ -67,6 +67,11 @@ function PayrollV2() {
       setShowCreateModal(false);
       fetchRuns();
       fetchRunDetails(res.data.run.id);
+
+      // Show warning if some employees were skipped
+      if (res.data.warning) {
+        alert(res.data.warning + '\n\nPlease set their basic salary in Employees page.');
+      }
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to create payroll run');
     }
