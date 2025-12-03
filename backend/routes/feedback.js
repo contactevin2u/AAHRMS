@@ -174,4 +174,25 @@ router.get('/stats', authenticateAdmin, async (req, res) => {
   }
 });
 
+// ADMIN: Delete feedback
+router.delete('/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM anonymous_feedback WHERE id = $1 RETURNING id',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Feedback not found' });
+    }
+
+    res.json({ message: 'Feedback deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting feedback:', error);
+    res.status(500).json({ error: 'Failed to delete feedback' });
+  }
+});
+
 module.exports = router;

@@ -33,7 +33,9 @@ export const feedbackApi = {
   submit: (data) => api.post('/feedback/submit', data),
   getAll: (params) => api.get('/feedback/all', { params }),
   markAsRead: (id, isRead) => api.patch(`/feedback/${id}/read`, { is_read: isRead }),
+  markRead: (id) => api.patch(`/feedback/${id}/read`, { is_read: true }),
   updateNotes: (id, notes) => api.patch(`/feedback/${id}/notes`, { admin_notes: notes }),
+  delete: (id) => api.delete(`/feedback/${id}`),
   getStats: () => api.get('/feedback/stats'),
 };
 
