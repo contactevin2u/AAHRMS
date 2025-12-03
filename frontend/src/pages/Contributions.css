@@ -1,0 +1,504 @@
+.contributions-page {
+  padding: 30px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.page-header h1 {
+  font-size: 1.8rem;
+  color: #6b5344;
+  margin: 0 0 5px 0;
+}
+
+.page-header p {
+  color: #9a8072;
+  margin: 0;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.toggle-btn {
+  padding: 10px 20px;
+  border: 2px solid #f5e6dc;
+  border-radius: 10px;
+  background: white;
+  color: #9a8072;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn.active {
+  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  border-color: #6b5344;
+  color: white;
+}
+
+.toggle-btn:hover:not(.active) {
+  border-color: #d4886a;
+  color: #6b5344;
+}
+
+/* Layout */
+.contributions-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 25px;
+  min-height: calc(100vh - 200px);
+}
+
+/* Runs Panel */
+.runs-panel {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.runs-panel h3 {
+  margin: 0 0 20px 0;
+  color: #6b5344;
+  font-size: 1.1rem;
+}
+
+.runs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.run-card {
+  padding: 15px;
+  background: #fffbf8;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.run-card:hover {
+  background: #fff8f2;
+}
+
+.run-card.selected {
+  border-color: #d4886a;
+  background: #fff0e6;
+}
+
+.run-period {
+  font-weight: 700;
+  color: #6b5344;
+  margin-bottom: 5px;
+}
+
+.run-dept {
+  font-weight: 500;
+  color: #9a8072;
+  font-size: 0.9em;
+}
+
+.run-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.run-count {
+  font-size: 0.85rem;
+  color: #9a8072;
+}
+
+/* Summary Panel */
+.summary-panel {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 20px;
+  padding: 25px;
+  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #f5e6dc;
+}
+
+.summary-header h2 {
+  margin: 0;
+  color: #6b5344;
+}
+
+.employee-count {
+  background: #f5e6dc;
+  color: #6b5344;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* Contribution Cards */
+.contribution-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 25px;
+}
+
+.contribution-card {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.contribution-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 18px;
+  color: white;
+}
+
+.contribution-card.epf .card-header {
+  background: linear-gradient(135deg, #4a90a4 0%, #357a8f 100%);
+}
+
+.contribution-card.socso .card-header {
+  background: linear-gradient(135deg, #6b8e5c 0%, #567a48 100%);
+}
+
+.contribution-card.eis .card-header {
+  background: linear-gradient(135deg, #9c6b9f 0%, #7d5680 100%);
+}
+
+.contribution-card.pcb .card-header {
+  background: linear-gradient(135deg, #b5855a 0%, #96704a 100%);
+}
+
+.contribution-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.export-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.contribution-card .card-body {
+  background: white;
+  padding: 18px;
+}
+
+.contrib-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  color: #6b5344;
+  font-size: 0.9rem;
+}
+
+.contrib-row.total {
+  border-top: 1px dashed #f5e6dc;
+  margin-top: 8px;
+  padding-top: 12px;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+/* Grand Total */
+.grand-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  padding: 25px 30px;
+  border-radius: 16px;
+  color: white;
+  margin-bottom: 30px;
+}
+
+.grand-total span:first-child {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.grand-total .amount {
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+/* Details Section */
+.details-section {
+  margin-top: 30px;
+}
+
+.details-section h3 {
+  color: #6b5344;
+  margin-bottom: 15px;
+}
+
+.details-table {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #f5e6dc;
+}
+
+.details-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.details-table th {
+  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  color: white;
+  padding: 14px 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.details-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #f5e6dc;
+  color: #6b5344;
+  font-size: 0.85rem;
+}
+
+.details-table tr:hover {
+  background: #fff8f2;
+}
+
+.details-table td small {
+  color: #9a8072;
+}
+
+/* No Selection */
+.no-selection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #9a8072;
+}
+
+.no-data,
+.loading {
+  text-align: center;
+  padding: 30px;
+  color: #9a8072;
+}
+
+/* Yearly Report */
+.yearly-report {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 20px;
+  padding: 25px;
+  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.year-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 25px;
+}
+
+.year-selector label {
+  font-weight: 600;
+  color: #6b5344;
+}
+
+.year-selector select {
+  padding: 10px 16px;
+  border: 2px solid #f5e6dc;
+  border-radius: 10px;
+  font-size: 1rem;
+  color: #6b5344;
+  background: white;
+}
+
+.yearly-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 25px;
+}
+
+.yearly-card {
+  padding: 20px;
+  border-radius: 16px;
+  text-align: center;
+  color: white;
+}
+
+.yearly-card.epf {
+  background: linear-gradient(135deg, #4a90a4 0%, #357a8f 100%);
+}
+
+.yearly-card.socso {
+  background: linear-gradient(135deg, #6b8e5c 0%, #567a48 100%);
+}
+
+.yearly-card.eis {
+  background: linear-gradient(135deg, #9c6b9f 0%, #7d5680 100%);
+}
+
+.yearly-card.pcb {
+  background: linear-gradient(135deg, #b5855a 0%, #96704a 100%);
+}
+
+.yearly-card h4 {
+  margin: 0 0 10px 0;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.yearly-card .amount {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.yearly-card small {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.yearly-grand-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  padding: 25px 30px;
+  border-radius: 16px;
+  color: white;
+  margin-bottom: 30px;
+}
+
+.yearly-grand-total span:first-child {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.yearly-grand-total .amount {
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+.monthly-breakdown {
+  margin-top: 30px;
+}
+
+.monthly-breakdown h3 {
+  color: #6b5344;
+  margin-bottom: 15px;
+}
+
+.monthly-breakdown table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #f5e6dc;
+}
+
+.monthly-breakdown th {
+  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  color: white;
+  padding: 14px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.monthly-breakdown td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #f5e6dc;
+  color: #6b5344;
+}
+
+.monthly-breakdown tr:hover {
+  background: #fff8f2;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .contribution-cards,
+  .yearly-summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 1024px) {
+  .contributions-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .runs-panel {
+    order: 2;
+  }
+
+  .summary-panel {
+    order: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .contributions-page {
+    padding: 20px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+
+  .contribution-cards,
+  .yearly-summary-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .grand-total,
+  .yearly-grand-total {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .details-table {
+    overflow-x: auto;
+  }
+
+  .monthly-breakdown table {
+    font-size: 0.8rem;
+  }
+}

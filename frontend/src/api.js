@@ -135,6 +135,19 @@ export const claimsApi = {
   linkToPayroll: (data) => api.post('/claims/link-to-payroll', data),
 };
 
+// Contributions (Government Payments)
+export const contributionsApi = {
+  getSummary: (runId) => api.get(`/contributions/summary/${runId}`),
+  getDetails: (runId) => api.get(`/contributions/details/${runId}`),
+  getReport: (params) => api.get('/contributions/report', { params }),
+
+  // Export files for government submission
+  exportEPF: (runId) => api.get(`/contributions/export/epf/${runId}`, { responseType: 'blob' }),
+  exportSOCSO: (runId) => api.get(`/contributions/export/socso/${runId}`, { responseType: 'blob' }),
+  exportEIS: (runId) => api.get(`/contributions/export/eis/${runId}`, { responseType: 'blob' }),
+  exportPCB: (runId) => api.get(`/contributions/export/pcb/${runId}`, { responseType: 'blob' }),
+};
+
 // Resignations
 export const resignationsApi = {
   getAll: (params) => api.get('/resignations', { params }),

@@ -3,10 +3,69 @@
  * EPF, SOCSO, EIS, PCB rates for 2024/2025
  */
 
+// Check if IC number is Malaysian format (YYMMDD-SS-NNNN or YYMMDDSSNNNN)
+// Malaysian IC: 12 digits, first 6 are DOB (YYMMDD), next 2 are state code
+const isMalaysianIC = (icNumber) => {
+  if (!icNumber) return false;
+
+  // Remove dashes and spaces
+  const cleanIC = icNumber.replace(/[-\s]/g, '');
+
+  // Must be 12 digits
+  if (!/^\d{12}$/.test(cleanIC)) return false;
+
+  // Validate date portion (YYMMDD)
+  const year = parseInt(cleanIC.substring(0, 2));
+  const month = parseInt(cleanIC.substring(2, 4));
+  const day = parseInt(cleanIC.substring(4, 6));
+
+  // Basic date validation
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+
+  // State codes (00-59 are valid Malaysian states)
+  const stateCode = parseInt(cleanIC.substring(6, 8));
+  // State codes 01-16 are Malaysian states, 21-59 are for born outside Malaysia but are still citizens
+  // Foreign workers typically have passport numbers, not IC
+
+  return true;
+};
+
+// Calculate age from Malaysian IC number
+const calculateAgeFromIC = (icNumber) => {
+  if (!icNumber) return null;
+
+  const cleanIC = icNumber.replace(/[-\s]/g, '');
+  if (cleanIC.length < 6) return null;
+
+  const year = parseInt(cleanIC.substring(0, 2));
+  const month = parseInt(cleanIC.substring(2, 4));
+  const day = parseInt(cleanIC.substring(4, 6));
+
+  // Determine century (00-24 = 2000s, 25-99 = 1900s)
+  // As of 2025, anyone born in 2000 is 25, so 25+ is likely 1900s
+  const currentYear = new Date().getFullYear();
+  const currentYearShort = currentYear % 100;
+  const fullYear = year <= currentYearShort ? 2000 + year : 1900 + year;
+
+  const birthDate = new Date(fullYear, month - 1, day);
+  const today = new Date();
+
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+
+  return age;
+};
+
 // EPF Contribution Rates (effective 2024)
 // Employee: 11% standard, 0% for age > 60
 // Employer: 13% (salary <= RM5000) or 12% (salary > RM5000), 4% for age > 60
-const calculateEPF = (grossSalary, age = 30, contributionType = 'normal') => {
+// Non-Malaysian: Different rates may apply (simplified to same for now)
+const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', isMalaysian = true) => {
   let employeeRate, employerRate;
 
   if (age > 60) {
@@ -263,15 +322,40 @@ const calculateAge = (dateOfBirth) => {
   return age;
 };
 
+// Get employee age - first try IC number, then date_of_birth
+const getEmployeeAge = (employee) => {
+  // Try to get age from Malaysian IC first
+  if (employee.ic_number) {
+    const ageFromIC = calculateAgeFromIC(employee.ic_number);
+    if (ageFromIC !== null && ageFromIC >= 0 && ageFromIC <= 120) {
+      return ageFromIC;
+    }
+  }
+
+  // Fall back to date_of_birth
+  if (employee.date_of_birth) {
+    return calculateAge(employee.date_of_birth);
+  }
+
+  return 30; // Default age
+};
+
 // Calculate all statutory deductions
 // ytdData is optional - contains year-to-date figures for accurate PCB calculation
 const calculateAllStatutory = (grossSalary, employee = {}, month = null, ytdData = null) => {
-  const age = calculateAge(employee.date_of_birth);
+  // Determine if employee is Malaysian based on IC format
+  const isMalaysian = isMalaysianIC(employee.ic_number);
+
+  // Get age from IC or DOB
+  const age = getEmployeeAge(employee);
+
   const maritalStatus = employee.marital_status || 'single';
   const spouseWorking = employee.spouse_working || false;
   const childrenCount = employee.children_count || 0;
 
-  const epf = calculateEPF(grossSalary, age);
+  // Calculate statutory contributions
+  // EPF, SOCSO, EIS apply to all employees regardless of salary amount (even RM 0 salary)
+  const epf = calculateEPF(grossSalary, age, 'normal', isMalaysian);
   const socso = calculateSOCSO(grossSalary, age);
   const eis = calculateEIS(grossSalary, age);
 
@@ -318,6 +402,9 @@ module.exports = {
   calculatePCB,
   calculatePCBSimple,
   calculateAge,
+  calculateAgeFromIC,
+  getEmployeeAge,
+  isMalaysianIC,
   calculateAllStatutory,
   TAX_BRACKETS
 };

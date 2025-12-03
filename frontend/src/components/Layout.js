@@ -44,6 +44,11 @@ function Layout({ children }) {
             <span>Payroll</span>
           </NavLink>
 
+          <NavLink to="/admin/contributions" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <span className="nav-icon">🏛️</span>
+            <span>Contributions</span>
+          </NavLink>
+
           <NavLink to="/admin/resignations" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             <span className="nav-icon">👋</span>
             <span>Resignations</span>

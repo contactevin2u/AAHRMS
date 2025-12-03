@@ -13,6 +13,7 @@ import Feedback from './pages/Feedback';
 import Leave from './pages/Leave';
 import Claims from './pages/Claims';
 import Resignations from './pages/Resignations';
+import Contributions from './pages/Contributions';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -111,6 +112,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Resignations />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/contributions"
+          element={
+            <ProtectedRoute>
+              <Contributions />
             </ProtectedRoute>
           }
         />

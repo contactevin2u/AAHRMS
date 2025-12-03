@@ -207,29 +207,33 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     let employeeCount = 0;
 
     // Create payroll item for each employee
+    // Note: We process ALL employees including those with zero salary
+    // Commission is included in gross for statutory deduction calculation
     for (const emp of employees.rows) {
       const basicSalary = parseFloat(emp.basic_salary) || 0;
       const fixedAllowance = parseFloat(emp.fixed_allowance) || 0;
+      const commissionAmount = 0; // Commission will be added manually when editing payroll item
       const unpaidDays = unpaidLeaveMap[emp.id] || 0;
       const claimsAmount = claimsMap[emp.id] || 0;
 
       // DEBUG: Log salary values
-      console.log(`Processing ${emp.name}: raw basic_salary=${emp.basic_salary}, parsed=${basicSalary}, allowance=${fixedAllowance}`);
+      console.log(`Processing ${emp.name}: basic=${basicSalary}, allowance=${fixedAllowance}`);
 
-      // Calculate unpaid leave deduction
-      const dailyRate = basicSalary / workingDaysInMonth;
+      // Calculate unpaid leave deduction (based on basic salary only)
+      const dailyRate = basicSalary > 0 ? basicSalary / workingDaysInMonth : 0;
       const unpaidDeduction = dailyRate * unpaidDays;
 
-      // Gross salary (before unpaid deduction)
-      const grossBeforeUnpaid = basicSalary + fixedAllowance + claimsAmount;
+      // Gross salary = basic + allowance + commission + claims - unpaid leave
+      // Commission is included in gross for statutory calculation
+      const grossBeforeUnpaid = basicSalary + fixedAllowance + commissionAmount + claimsAmount;
+      const grossSalary = Math.max(0, grossBeforeUnpaid - unpaidDeduction);
 
       // DEBUG: Log gross calculation
-      console.log(`${emp.name}: basic(${basicSalary}) + allowance(${fixedAllowance}) + claims(${claimsAmount}) = grossBeforeUnpaid(${grossBeforeUnpaid})`);
+      console.log(`${emp.name}: gross=${grossSalary} (basic:${basicSalary} + allow:${fixedAllowance} + comm:${commissionAmount} + claims:${claimsAmount} - unpaid:${unpaidDeduction})`);
 
-      // Gross for statutory calculation (after unpaid deduction)
-      const grossSalary = grossBeforeUnpaid - unpaidDeduction;
-
-      // Calculate statutory deductions
+      // Calculate statutory deductions based on gross salary
+      // EPF, SOCSO, EIS are calculated even for zero salary (will be zero)
+      // This uses IC number to detect Malaysian and age
       const statutory = calculateAllStatutory(grossSalary, emp, month, null);
 
       // Total deductions
@@ -241,17 +245,17 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         statutory.pcb
       );
 
-      // Net pay
+      // Net pay (can be negative if deductions > earnings)
       const netPay = grossBeforeUnpaid - totalDeductionsForEmp;
 
-      // Employer total cost
+      // Employer total cost = gross + employer contributions
       const employerCost = grossSalary + statutory.epf.employer + statutory.socso.employer + statutory.eis.employer;
 
       // Insert payroll item
       await client.query(`
         INSERT INTO payroll_items (
           payroll_run_id, employee_id,
-          basic_salary, fixed_allowance, claims_amount,
+          basic_salary, fixed_allowance, commission_amount, claims_amount,
           unpaid_leave_days, unpaid_leave_deduction,
           gross_salary,
           epf_employee, epf_employer,
@@ -259,10 +263,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           eis_employee, eis_employer,
           pcb,
           total_deductions, net_pay, employer_total_cost
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       `, [
         runId, emp.id,
-        basicSalary, fixedAllowance, claimsAmount,
+        basicSalary, fixedAllowance, commissionAmount, claimsAmount,
         unpaidDays, unpaidDeduction,
         grossSalary,
         statutory.epf.employee, statutory.epf.employer,
@@ -332,10 +336,10 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       notes
     } = req.body;
 
-    // Get current item and employee data
+    // Get current item and employee data (including ic_number for age calculation)
     const itemResult = await pool.query(`
       SELECT pi.*, pr.month, pr.year, pr.status as run_status,
-             e.date_of_birth, e.epf_contribution_type, e.marital_status, e.spouse_working, e.children_count
+             e.ic_number, e.date_of_birth, e.epf_contribution_type, e.marital_status, e.spouse_working, e.children_count
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       JOIN employees e ON pi.employee_id = e.id

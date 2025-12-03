@@ -8,6 +8,7 @@ const employeeRoutes = require('./routes/employees');
 const departmentRoutes = require('./routes/departments');
 const payrollRoutes = require('./routes/payroll');
 const payrollNewRoutes = require('./routes/payrollNew');
+const contributionsRoutes = require('./routes/contributions');
 const leaveRoutes = require('./routes/leave');
 const claimsRoutes = require('./routes/claims');
 const resignationsRoutes = require('./routes/resignations');
@@ -35,6 +36,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/payroll-v2', payrollNewRoutes);  // New payroll system
+app.use('/api/contributions', contributionsRoutes);  // Government contributions
 app.use('/api/leave', leaveRoutes);
 app.use('/api/claims', claimsRoutes);
 app.use('/api/resignations', resignationsRoutes);
