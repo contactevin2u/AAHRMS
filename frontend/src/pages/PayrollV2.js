@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { payrollV2Api } from '../api';
+import { payrollV2Api, departmentApi } from '../api';
 import Layout from '../components/Layout';
 import './PayrollV2.css';
 
@@ -10,11 +10,13 @@ function PayrollV2() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [departments, setDepartments] = useState([]);
 
   // Create form
   const [createForm, setCreateForm] = useState({
     month: new Date().getMonth() + 1,
-    year: new Date().getFullYear()
+    year: new Date().getFullYear(),
+    department_id: ''
   });
 
   // Item edit form
@@ -33,7 +35,17 @@ function PayrollV2() {
 
   useEffect(() => {
     fetchRuns();
+    fetchDepartments();
   }, []);
+
+  const fetchDepartments = async () => {
+    try {
+      const res = await departmentApi.getAll();
+      setDepartments(res.data);
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
 
   const fetchRuns = async () => {
     setLoading(true);
@@ -321,6 +333,9 @@ function PayrollV2() {
                   >
                     <div className="run-period">
                       {getMonthName(run.month)} {run.year}
+                      {run.department_name && (
+                        <span className="run-dept"> - {run.department_name}</span>
+                      )}
                     </div>
                     <div className="run-meta">
                       {getStatusBadge(run.status)}
@@ -338,7 +353,12 @@ function PayrollV2() {
               <>
                 <div className="details-header">
                   <div>
-                    <h2>{getMonthName(selectedRun.month)} {selectedRun.year}</h2>
+                    <h2>
+                      {getMonthName(selectedRun.month)} {selectedRun.year}
+                      {selectedRun.department_name && (
+                        <span className="dept-tag"> - {selectedRun.department_name}</span>
+                      )}
+                    </h2>
                     {getStatusBadge(selectedRun.status)}
                   </div>
                   <div className="details-actions">
@@ -506,9 +526,24 @@ function PayrollV2() {
                     </select>
                   </div>
                 </div>
+                <div className="form-group">
+                  <label>Department</label>
+                  <select
+                    value={createForm.department_id}
+                    onChange={(e) => setCreateForm({ ...createForm, department_id: e.target.value })}
+                  >
+                    <option value="">All Departments</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="info-box">
-                  This will create payroll items for all active employees with their default salaries.
-                  Unpaid leave and approved claims will be auto-calculated.
+                  {createForm.department_id
+                    ? `This will create payroll items for active employees in the selected department.`
+                    : `This will create payroll items for all active employees.`
+                  }
+                  {' '}Unpaid leave and approved claims will be auto-calculated.
                 </div>
                 <div className="modal-actions">
                   <button type="button" onClick={() => setShowCreateModal(false)} className="cancel-btn">

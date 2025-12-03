@@ -15,8 +15,10 @@ router.get('/runs', authenticateAdmin, async (req, res) => {
 
     let query = `
       SELECT pr.*,
+             d.name as department_name,
              (SELECT COUNT(*) FROM payroll_items WHERE payroll_run_id = pr.id) as item_count
       FROM payroll_runs pr
+      LEFT JOIN departments d ON pr.department_id = d.id
       WHERE 1=1
     `;
     const params = [];
@@ -26,7 +28,7 @@ router.get('/runs', authenticateAdmin, async (req, res) => {
       params.push(year);
     }
 
-    query += ' ORDER BY pr.year DESC, pr.month DESC';
+    query += ' ORDER BY pr.year DESC, pr.month DESC, d.name NULLS FIRST';
 
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -41,8 +43,13 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Get run details
-    const runResult = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [id]);
+    // Get run details with department name
+    const runResult = await pool.query(`
+      SELECT pr.*, d.name as department_name
+      FROM payroll_runs pr
+      LEFT JOIN departments d ON pr.department_id = d.id
+      WHERE pr.id = $1
+    `, [id]);
 
     if (runResult.rows.length === 0) {
       return res.status(404).json({ error: 'Payroll run not found' });
@@ -77,7 +84,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
 router.post('/runs', authenticateAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { month, year, notes } = req.body;
+    const { month, year, notes, department_id } = req.body;
 
     if (!month || !year) {
       return res.status(400).json({ error: 'Month and year are required' });
@@ -85,40 +92,71 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
     await client.query('BEGIN');
 
-    // Check if run already exists
-    const existing = await client.query(
-      'SELECT id FROM payroll_runs WHERE month = $1 AND year = $2',
-      [month, year]
-    );
+    // Check if run already exists for this month/year/department combination
+    let existingQuery = 'SELECT id FROM payroll_runs WHERE month = $1 AND year = $2';
+    let existingParams = [month, year];
+
+    if (department_id) {
+      existingQuery += ' AND department_id = $3';
+      existingParams.push(department_id);
+    } else {
+      existingQuery += ' AND department_id IS NULL';
+    }
+
+    const existing = await client.query(existingQuery, existingParams);
 
     if (existing.rows.length > 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        error: 'Payroll run already exists for this month',
+        error: department_id
+          ? 'Payroll run already exists for this department and month'
+          : 'Payroll run already exists for this month (all departments)',
         existing_id: existing.rows[0].id
       });
     }
 
-    // Create payroll run
+    // Get department name if filtering by department
+    let departmentName = null;
+    if (department_id) {
+      const deptResult = await client.query('SELECT name FROM departments WHERE id = $1', [department_id]);
+      if (deptResult.rows.length > 0) {
+        departmentName = deptResult.rows[0].name;
+      }
+    }
+
+    // Create payroll run with department info
     const runResult = await client.query(`
-      INSERT INTO payroll_runs (month, year, status, notes)
-      VALUES ($1, $2, 'draft', $3)
+      INSERT INTO payroll_runs (month, year, status, notes, department_id)
+      VALUES ($1, $2, 'draft', $3, $4)
       RETURNING *
-    `, [month, year, notes]);
+    `, [month, year, notes || (departmentName ? `${departmentName} Department` : null), department_id || null]);
 
     const runId = runResult.rows[0].id;
 
-    // Get all active employees with salary data
-    const employees = await client.query(`
+    // Get active employees (optionally filtered by department)
+    let employeeQuery = `
       SELECT e.*,
              e.default_basic_salary as basic_salary,
-             e.default_allowance as fixed_allowance
+             e.default_allowance as fixed_allowance,
+             d.name as department_name
       FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
       WHERE e.status = 'active'
-    `);
+    `;
+    let employeeParams = [];
+
+    if (department_id) {
+      employeeQuery += ' AND e.department_id = $1';
+      employeeParams.push(department_id);
+    }
+
+    const employees = await client.query(employeeQuery, employeeParams);
 
     console.log('Found active employees:', employees.rows.length);
     console.log('Employee names:', employees.rows.map(e => e.name));
+    if (department_id) {
+      console.log('Filtered by department_id:', department_id);
+    }
 
     // Check for employees without salary data
     const employeesWithoutSalary = employees.rows.filter(

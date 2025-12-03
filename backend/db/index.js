@@ -352,13 +352,29 @@ const initDb = async () => {
         total_employer_cost DECIMAL(12,2) DEFAULT 0,
         employee_count INTEGER DEFAULT 0,
         notes TEXT,
+        department_id INTEGER REFERENCES departments(id),
         created_by INTEGER REFERENCES admin_users(id),
         finalized_at TIMESTAMP,
         finalized_by INTEGER REFERENCES admin_users(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(month, year)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- Add department_id column to payroll_runs if not exists
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='department_id') THEN
+          ALTER TABLE payroll_runs ADD COLUMN department_id INTEGER REFERENCES departments(id);
+        END IF;
+        -- Drop old unique constraint and add new one with department_id
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_runs_month_year_key') THEN
+          ALTER TABLE payroll_runs DROP CONSTRAINT payroll_runs_month_year_key;
+        END IF;
+      END $$;
+
+      -- Create unique index for month, year, department_id (nullable)
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_runs_unique
+      ON payroll_runs (month, year, COALESCE(department_id, -1));
 
       -- Payroll Items (one per employee per payroll run)
       CREATE TABLE IF NOT EXISTS payroll_items (

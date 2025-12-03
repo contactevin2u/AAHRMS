@@ -91,6 +91,18 @@
   margin-bottom: 8px;
 }
 
+.run-dept {
+  font-weight: 500;
+  color: #9a8072;
+  font-size: 0.9em;
+}
+
+.dept-tag {
+  font-weight: 500;
+  color: #9a8072;
+  font-size: 0.85em;
+}
+
 .run-meta {
   display: flex;
   justify-content: space-between;
