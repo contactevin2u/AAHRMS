@@ -23,10 +23,41 @@ function Employees() {
   const [importData, setImportData] = useState(null);
   const [importResult, setImportResult] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [salaryAutoPopulated, setSalaryAutoPopulated] = useState(false);
   const fileInputRef = useRef(null);
 
   const goToDepartments = () => {
     navigate('/admin/departments');
+  };
+
+  // Handle department selection and auto-populate salary from department config
+  const handleDepartmentChange = async (deptId) => {
+    setForm(prev => ({ ...prev, department_id: deptId }));
+    setSalaryAutoPopulated(false);
+
+    // Only auto-populate for new employees (not editing)
+    if (!editingEmployee && deptId) {
+      try {
+        const res = await departmentApi.getOne(deptId);
+        const config = res.data.salary_config;
+
+        if (config) {
+          setForm(prev => ({
+            ...prev,
+            department_id: deptId,
+            default_basic_salary: config.basic_salary || '',
+            default_allowance: config.has_allowance ? (config.allowance_amount || '') : '',
+            commission_rate: config.has_commission ? (config.commission_rate || '') : '',
+            per_trip_rate: config.has_per_trip ? (config.per_trip_rate || '') : '',
+            ot_rate: config.has_ot ? (config.ot_rate || '') : '',
+            outstation_rate: config.has_outstation ? (config.outstation_rate || '') : ''
+          }));
+          setSalaryAutoPopulated(true);
+        }
+      } catch (error) {
+        console.error('Error fetching department config:', error);
+      }
+    }
   };
 
   const [form, setForm] = useState({
@@ -145,6 +176,7 @@ function Employees() {
 
   const resetForm = () => {
     setEditingEmployee(null);
+    setSalaryAutoPopulated(false);
     setForm({
       employee_id: '',
       name: '',
@@ -444,7 +476,7 @@ function Employees() {
                     <label>Department *</label>
                     <select
                       value={form.department_id}
-                      onChange={(e) => setForm({ ...form, department_id: e.target.value })}
+                      onChange={(e) => handleDepartmentChange(e.target.value)}
                       required
                     >
                       <option value="">Select department</option>
@@ -635,7 +667,14 @@ function Employees() {
                   </div>
                 </div>
 
-                <div className="form-section-title">💰 Default Salary (for Payroll)</div>
+                <div className="form-section-title">
+                  💰 Default Salary (for Payroll)
+                  {salaryAutoPopulated && !editingEmployee && (
+                    <span className="auto-populated-hint">
+                      ✨ Auto-filled from department config (editable)
+                    </span>
+                  )}
+                </div>
 
                 <div className="form-row">
                   <div className="form-group">

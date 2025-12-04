@@ -250,6 +250,21 @@ tr:hover {
   margin: 20px 0 15px 0;
   padding-top: 15px;
   border-top: 2px solid #f5e6dc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auto-populated-hint {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #4a9c6d;
+  background: linear-gradient(135deg, #e8f5e0 0%, #d4edcc 100%);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid #c8e6b8;
 }
 
 .form-row {
