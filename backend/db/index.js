@@ -168,6 +168,22 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='outstation_rate') THEN
           ALTER TABLE employees ADD COLUMN outstation_rate DECIMAL(10,2) DEFAULT 0;
         END IF;
+        -- Additional salary fields for flexible earning components
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='default_bonus') THEN
+          ALTER TABLE employees ADD COLUMN default_bonus DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='trade_commission_rate') THEN
+          ALTER TABLE employees ADD COLUMN trade_commission_rate DECIMAL(5,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='default_incentive') THEN
+          ALTER TABLE employees ADD COLUMN default_incentive DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='default_other_earnings') THEN
+          ALTER TABLE employees ADD COLUMN default_other_earnings DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='other_earnings_description') THEN
+          ALTER TABLE employees ADD COLUMN other_earnings_description VARCHAR(255);
+        END IF;
       END $$;
 
       -- Salary Configuration per Department
@@ -424,6 +440,20 @@ const initDb = async () => {
 
       CREATE INDEX IF NOT EXISTS idx_payroll_items_run ON payroll_items(payroll_run_id);
       CREATE INDEX IF NOT EXISTS idx_payroll_items_employee ON payroll_items(employee_id);
+
+      -- Add additional earning columns to payroll_items if not exist
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='trade_commission_amount') THEN
+          ALTER TABLE payroll_items ADD COLUMN trade_commission_amount DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='outstation_amount') THEN
+          ALTER TABLE payroll_items ADD COLUMN outstation_amount DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='other_earnings_description') THEN
+          ALTER TABLE payroll_items ADD COLUMN other_earnings_description VARCHAR(255);
+        END IF;
+      END $$;
 
       -- Resignations / Employment Status History
       CREATE TABLE IF NOT EXISTS resignations (

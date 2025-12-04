@@ -369,8 +369,11 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       ot_amount,
       incentive_amount,
       commission_amount,
+      trade_commission_amount,
+      outstation_amount,
       bonus,
       other_earnings,
+      other_earnings_description,
       other_deductions,
       deduction_remarks,
       notes
@@ -402,6 +405,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const newOT = parseFloat(ot_amount) || 0;
     const newIncentive = parseFloat(incentive_amount) || 0;
     const newCommission = parseFloat(commission_amount) || 0;
+    const newTradeCommission = parseFloat(trade_commission_amount) || 0;
+    const newOutstation = parseFloat(outstation_amount) || 0;
     const newBonus = parseFloat(bonus) || 0;
     const newOtherEarnings = parseFloat(other_earnings) || 0;
     const newOtherDeductions = parseFloat(other_deductions) || 0;
@@ -409,15 +414,15 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     // DEBUG: Log incoming values
     console.log(`UPDATE Item ${id}: incoming basic_salary=${basic_salary}, item.basic_salary=${item.basic_salary}, newBasic=${newBasic}`);
 
-    // Gross salary
+    // Gross salary (includes all earning components)
     const grossSalary = (
       newBasic + newAllowance + newOT + newIncentive + newCommission +
-      newBonus + newOtherEarnings + parseFloat(item.claims_amount || 0) -
-      parseFloat(item.unpaid_leave_deduction || 0)
+      newTradeCommission + newOutstation + newBonus + newOtherEarnings +
+      parseFloat(item.claims_amount || 0) - parseFloat(item.unpaid_leave_deduction || 0)
     );
 
     // DEBUG: Log gross calculation
-    console.log(`UPDATE Gross calc: ${newBasic} + ${newAllowance} + ${newOT} + ${newIncentive} + ${newCommission} + ${newBonus} + ${newOtherEarnings} + ${item.claims_amount || 0} - ${item.unpaid_leave_deduction || 0} = ${grossSalary}`);
+    console.log(`UPDATE Gross calc: basic=${newBasic} + allow=${newAllowance} + ot=${newOT} + incent=${newIncentive} + comm=${newCommission} + trade=${newTradeCommission} + outstation=${newOutstation} + bonus=${newBonus} + other=${newOtherEarnings} + claims=${item.claims_amount || 0} - unpaid=${item.unpaid_leave_deduction || 0} = ${grossSalary}`);
 
     // Recalculate statutory
     const statutory = calculateAllStatutory(grossSalary, item, item.month, null);
@@ -442,20 +447,24 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const result = await pool.query(`
       UPDATE payroll_items SET
         basic_salary = $1, fixed_allowance = $2, ot_amount = $3,
-        incentive_amount = $4, commission_amount = $5, bonus = $6,
-        other_earnings = $7, other_deductions = $8, deduction_remarks = $9,
-        gross_salary = $10,
-        epf_employee = $11, epf_employer = $12,
-        socso_employee = $13, socso_employer = $14,
-        eis_employee = $15, eis_employer = $16,
-        pcb = $17,
-        total_deductions = $18, net_pay = $19, employer_total_cost = $20,
-        notes = $21, updated_at = NOW()
-      WHERE id = $22
+        incentive_amount = $4, commission_amount = $5, trade_commission_amount = $6,
+        outstation_amount = $7, bonus = $8,
+        other_earnings = $9, other_earnings_description = $10,
+        other_deductions = $11, deduction_remarks = $12,
+        gross_salary = $13,
+        epf_employee = $14, epf_employer = $15,
+        socso_employee = $16, socso_employer = $17,
+        eis_employee = $18, eis_employer = $19,
+        pcb = $20,
+        total_deductions = $21, net_pay = $22, employer_total_cost = $23,
+        notes = $24, updated_at = NOW()
+      WHERE id = $25
       RETURNING *
     `, [
-      newBasic, newAllowance, newOT, newIncentive, newCommission, newBonus,
-      newOtherEarnings, newOtherDeductions, deduction_remarks,
+      newBasic, newAllowance, newOT, newIncentive, newCommission, newTradeCommission,
+      newOutstation, newBonus,
+      newOtherEarnings, other_earnings_description || null,
+      newOtherDeductions, deduction_remarks,
       grossSalary,
       statutory.epf.employee, statutory.epf.employer,
       statutory.socso.employee, statutory.socso.employer,
@@ -622,9 +631,12 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
         ot_amount: parseFloat(item.ot_amount) || 0,
         incentive_amount: parseFloat(item.incentive_amount) || 0,
         commission_amount: parseFloat(item.commission_amount) || 0,
+        trade_commission_amount: parseFloat(item.trade_commission_amount) || 0,
+        outstation_amount: parseFloat(item.outstation_amount) || 0,
         claims_amount: parseFloat(item.claims_amount) || 0,
         bonus: parseFloat(item.bonus) || 0,
-        other_earnings: parseFloat(item.other_earnings) || 0
+        other_earnings: parseFloat(item.other_earnings) || 0,
+        other_earnings_description: item.other_earnings_description || ''
       },
       deductions: {
         unpaid_leave_days: parseFloat(item.unpaid_leave_days) || 0,

@@ -75,7 +75,11 @@ router.post('/', authenticateAdmin, async (req, res) => {
       employee_id, name, email, phone, ic_number, department_id, position, join_date,
       bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
-      marital_status, spouse_working, children_count, date_of_birth
+      marital_status, spouse_working, children_count, date_of_birth,
+      // Default salary fields
+      default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
+      // Additional earning fields
+      default_bonus, trade_commission_rate, default_incentive, default_other_earnings, other_earnings_description
     } = req.body;
 
     if (!employee_id || !name || !department_id) {
@@ -87,15 +91,19 @@ router.post('/', authenticateAdmin, async (req, res) => {
         employee_id, name, email, phone, ic_number, department_id, position, join_date,
         bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
-        marital_status, spouse_working, children_count, date_of_birth
+        marital_status, spouse_working, children_count, date_of_birth,
+        default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
+        default_bonus, trade_commission_rate, default_incentive, default_other_earnings, other_earnings_description
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
        RETURNING *`,
       [
         employee_id, name, email, phone, ic_number, department_id, position, join_date,
         bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type || 'normal',
-        marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth
+        marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth,
+        default_basic_salary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
+        default_bonus || 0, trade_commission_rate || 0, default_incentive || 0, default_other_earnings || 0, other_earnings_description || null
       ]
     );
 
@@ -117,7 +125,11 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
       bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
-      marital_status, spouse_working, children_count, date_of_birth
+      marital_status, spouse_working, children_count, date_of_birth,
+      // Default salary fields
+      default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
+      // Additional earning fields
+      default_bonus, trade_commission_rate, default_incentive, default_other_earnings, other_earnings_description
     } = req.body;
 
     const result = await pool.query(
@@ -127,14 +139,22 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
            bank_name = $10, bank_account_no = $11, bank_account_holder = $12,
            epf_number = $13, socso_number = $14, tax_number = $15, epf_contribution_type = $16,
            marital_status = $17, spouse_working = $18, children_count = $19, date_of_birth = $20,
+           default_basic_salary = $21, default_allowance = $22, commission_rate = $23,
+           per_trip_rate = $24, ot_rate = $25, outstation_rate = $26,
+           default_bonus = $27, trade_commission_rate = $28, default_incentive = $29,
+           default_other_earnings = $30, other_earnings_description = $31,
            updated_at = NOW()
-       WHERE id = $21
+       WHERE id = $32
        RETURNING *`,
       [
         employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
         bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
-        marital_status, spouse_working, children_count, date_of_birth, id
+        marital_status, spouse_working, children_count, date_of_birth,
+        default_basic_salary || 0, default_allowance || 0, commission_rate || 0,
+        per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
+        default_bonus || 0, trade_commission_rate || 0, default_incentive || 0,
+        default_other_earnings || 0, other_earnings_description || null, id
       ]
     );
 
