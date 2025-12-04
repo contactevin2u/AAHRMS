@@ -252,6 +252,15 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
           [emp.employee_id]
         );
 
+        // Parse date_of_birth if provided
+        let dateOfBirth = null;
+        if (emp.date_of_birth) {
+          dateOfBirth = new Date(emp.date_of_birth);
+          if (isNaN(dateOfBirth.getTime())) {
+            dateOfBirth = null;
+          }
+        }
+
         if (existingEmp.rows.length > 0) {
           // Update existing employee
           await client.query(
@@ -259,8 +268,28 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
               name = $1, email = $2, phone = $3, ic_number = $4,
               department_id = $5, position = $6, join_date = $7,
               bank_name = $8, bank_account_no = $9, bank_account_holder = $10,
-              status = COALESCE($11, status), updated_at = NOW()
-            WHERE employee_id = $12`,
+              status = COALESCE($11, status),
+              epf_number = COALESCE($12, epf_number),
+              socso_number = COALESCE($13, socso_number),
+              tax_number = COALESCE($14, tax_number),
+              epf_contribution_type = COALESCE($15, epf_contribution_type),
+              marital_status = COALESCE($16, marital_status),
+              spouse_working = COALESCE($17, spouse_working),
+              children_count = COALESCE($18, children_count),
+              date_of_birth = COALESCE($19, date_of_birth),
+              default_basic_salary = COALESCE($20, default_basic_salary),
+              default_allowance = COALESCE($21, default_allowance),
+              commission_rate = COALESCE($22, commission_rate),
+              per_trip_rate = COALESCE($23, per_trip_rate),
+              ot_rate = COALESCE($24, ot_rate),
+              outstation_rate = COALESCE($25, outstation_rate),
+              default_bonus = COALESCE($26, default_bonus),
+              trade_commission_rate = COALESCE($27, trade_commission_rate),
+              default_incentive = COALESCE($28, default_incentive),
+              default_other_earnings = COALESCE($29, default_other_earnings),
+              other_earnings_description = COALESCE($30, other_earnings_description),
+              updated_at = NOW()
+            WHERE employee_id = $31`,
             [
               emp.name,
               emp.email || null,
@@ -273,14 +302,39 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
               emp.bank_account_no || null,
               emp.bank_account_holder || null,
               emp.status || null,
+              emp.epf_number || null,
+              emp.socso_number || null,
+              emp.tax_number || null,
+              emp.epf_contribution_type || null,
+              emp.marital_status || null,
+              emp.spouse_working === 'true' || emp.spouse_working === true ? true : (emp.spouse_working === 'false' || emp.spouse_working === false ? false : null),
+              emp.children_count ? parseInt(emp.children_count) : null,
+              dateOfBirth,
+              emp.default_basic_salary ? parseFloat(emp.default_basic_salary) : null,
+              emp.default_allowance ? parseFloat(emp.default_allowance) : null,
+              emp.commission_rate ? parseFloat(emp.commission_rate) : null,
+              emp.per_trip_rate ? parseFloat(emp.per_trip_rate) : null,
+              emp.ot_rate ? parseFloat(emp.ot_rate) : null,
+              emp.outstation_rate ? parseFloat(emp.outstation_rate) : null,
+              emp.default_bonus ? parseFloat(emp.default_bonus) : null,
+              emp.trade_commission_rate ? parseFloat(emp.trade_commission_rate) : null,
+              emp.default_incentive ? parseFloat(emp.default_incentive) : null,
+              emp.default_other_earnings ? parseFloat(emp.default_other_earnings) : null,
+              emp.other_earnings_description || null,
               emp.employee_id
             ]
           );
         } else {
           // Insert new employee
           await client.query(
-            `INSERT INTO employees (employee_id, name, email, phone, ic_number, department_id, position, join_date, bank_name, bank_account_no, bank_account_holder, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            `INSERT INTO employees (
+              employee_id, name, email, phone, ic_number, department_id, position, join_date,
+              bank_name, bank_account_no, bank_account_holder, status,
+              epf_number, socso_number, tax_number, epf_contribution_type,
+              marital_status, spouse_working, children_count, date_of_birth,
+              default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
+              default_bonus, trade_commission_rate, default_incentive, default_other_earnings, other_earnings_description
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)`,
             [
               emp.employee_id,
               emp.name,
@@ -293,7 +347,26 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
               emp.bank_name || null,
               emp.bank_account_no || null,
               emp.bank_account_holder || null,
-              emp.status || 'active'
+              emp.status || 'active',
+              emp.epf_number || null,
+              emp.socso_number || null,
+              emp.tax_number || null,
+              emp.epf_contribution_type || 'normal',
+              emp.marital_status || 'single',
+              emp.spouse_working === 'true' || emp.spouse_working === true ? true : false,
+              emp.children_count ? parseInt(emp.children_count) : 0,
+              dateOfBirth,
+              emp.default_basic_salary ? parseFloat(emp.default_basic_salary) : 0,
+              emp.default_allowance ? parseFloat(emp.default_allowance) : 0,
+              emp.commission_rate ? parseFloat(emp.commission_rate) : 0,
+              emp.per_trip_rate ? parseFloat(emp.per_trip_rate) : 0,
+              emp.ot_rate ? parseFloat(emp.ot_rate) : 0,
+              emp.outstation_rate ? parseFloat(emp.outstation_rate) : 0,
+              emp.default_bonus ? parseFloat(emp.default_bonus) : 0,
+              emp.trade_commission_rate ? parseFloat(emp.trade_commission_rate) : 0,
+              emp.default_incentive ? parseFloat(emp.default_incentive) : 0,
+              emp.default_other_earnings ? parseFloat(emp.default_other_earnings) : 0,
+              emp.other_earnings_description || null
             ]
           );
         }
