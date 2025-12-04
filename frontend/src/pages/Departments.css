@@ -69,6 +69,16 @@
   font-weight: 600;
 }
 
+.employee-count.clickable {
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.employee-count.clickable:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(212, 136, 106, 0.4);
+}
+
 .dept-type {
   margin-bottom: 15px;
   padding-bottom: 15px;
@@ -129,6 +139,34 @@
 .config-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(107, 83, 68, 0.3);
+}
+
+.dept-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.view-employees-btn {
+  flex: 1;
+  padding: 12px;
+  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.view-employees-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(212, 136, 106, 0.3);
+}
+
+.dept-actions .config-btn {
+  flex: 1;
 }
 
 /* Modal */

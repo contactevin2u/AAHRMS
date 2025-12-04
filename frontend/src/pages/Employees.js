@@ -1,22 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { employeeApi, departmentApi } from '../api';
 import Layout from '../components/Layout';
 import * as XLSX from 'xlsx';
 import './Employees.css';
 
 function Employees() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
-  const [filter, setFilter] = useState({ department_id: '', status: 'active', search: '' });
+  const [filter, setFilter] = useState({
+    department_id: searchParams.get('department_id') || '',
+    status: 'active',
+    search: ''
+  });
   const [stats, setStats] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importData, setImportData] = useState(null);
   const [importResult, setImportResult] = useState(null);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
+
+  const goToDepartments = () => {
+    navigate('/admin/departments');
+  };
 
   const [form, setForm] = useState({
     employee_id: '',
@@ -39,7 +50,14 @@ function Employees() {
     marital_status: 'single',
     spouse_working: false,
     children_count: 0,
-    date_of_birth: ''
+    date_of_birth: '',
+    // Default salary fields
+    default_basic_salary: '',
+    default_allowance: '',
+    commission_rate: '',
+    per_trip_rate: '',
+    ot_rate: '',
+    outstation_rate: ''
   });
 
   useEffect(() => {
@@ -102,7 +120,14 @@ function Employees() {
       marital_status: emp.marital_status || 'single',
       spouse_working: emp.spouse_working || false,
       children_count: emp.children_count || 0,
-      date_of_birth: emp.date_of_birth ? emp.date_of_birth.split('T')[0] : ''
+      date_of_birth: emp.date_of_birth ? emp.date_of_birth.split('T')[0] : '',
+      // Salary fields
+      default_basic_salary: emp.default_basic_salary || '',
+      default_allowance: emp.default_allowance || '',
+      commission_rate: emp.commission_rate || '',
+      per_trip_rate: emp.per_trip_rate || '',
+      ot_rate: emp.ot_rate || '',
+      outstation_rate: emp.outstation_rate || ''
     });
     setShowModal(true);
   };
@@ -140,7 +165,14 @@ function Employees() {
       marital_status: 'single',
       spouse_working: false,
       children_count: 0,
-      date_of_birth: ''
+      date_of_birth: '',
+      // Salary fields
+      default_basic_salary: '',
+      default_allowance: '',
+      commission_rate: '',
+      per_trip_rate: '',
+      ot_rate: '',
+      outstation_rate: ''
     });
   };
 
@@ -347,7 +379,17 @@ function Employees() {
                     <tr key={emp.id}>
                       <td><strong>{emp.employee_id}</strong></td>
                       <td>{emp.name}</td>
-                      <td>{emp.department_name || '-'}</td>
+                      <td>
+                        {emp.department_name ? (
+                          <span
+                            className="department-link"
+                            onClick={goToDepartments}
+                            title="Go to Departments"
+                          >
+                            {emp.department_name}
+                          </span>
+                        ) : '-'}
+                      </td>
                       <td>{emp.position || '-'}</td>
                       <td>{emp.phone || '-'}</td>
                       <td>
@@ -589,6 +631,84 @@ function Employees() {
                       max="20"
                       value={form.children_count}
                       onChange={(e) => setForm({ ...form, children_count: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-section-title">💰 Default Salary (for Payroll)</div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Basic Salary (RM)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.default_basic_salary}
+                      onChange={(e) => setForm({ ...form, default_basic_salary: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Allowance (RM)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.default_allowance}
+                      onChange={(e) => setForm({ ...form, default_allowance: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Commission Rate (%)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={form.commission_rate}
+                      onChange={(e) => setForm({ ...form, commission_rate: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Per Trip Rate (RM)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.per_trip_rate}
+                      onChange={(e) => setForm({ ...form, per_trip_rate: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>OT Rate (RM/hour)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.ot_rate}
+                      onChange={(e) => setForm({ ...form, ot_rate: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Outstation Rate (RM/day)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.outstation_rate}
+                      onChange={(e) => setForm({ ...form, outstation_rate: e.target.value })}
+                      placeholder="0.00"
                     />
                   </div>
                 </div>

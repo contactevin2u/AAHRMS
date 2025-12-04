@@ -149,6 +149,21 @@ td {
   color: #6b5344;
 }
 
+.department-link {
+  color: #d4886a;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+.department-link:hover {
+  color: #e8a87c;
+  text-decoration-style: solid;
+}
+
 tr:hover {
   background: #fff8f2;
 }

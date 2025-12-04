@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { departmentApi } from '../api';
 import Layout from '../components/Layout';
 import './Departments.css';
 
 function Departments() {
+  const navigate = useNavigate();
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDept, setSelectedDept] = useState(null);
+
+  const viewEmployees = (deptId) => {
+    navigate(`/admin/employees?department_id=${deptId}`);
+  };
 
   useEffect(() => {
     fetchDepartments();
@@ -70,7 +76,13 @@ function Departments() {
               <div key={dept.id} className="dept-card">
                 <div className="dept-header">
                   <h3>{dept.name}</h3>
-                  <span className="employee-count">{dept.employee_count || 0} employees</span>
+                  <span
+                    className="employee-count clickable"
+                    onClick={() => viewEmployees(dept.id)}
+                    title="View employees in this department"
+                  >
+                    {dept.employee_count || 0} employees
+                  </span>
                 </div>
                 <div className="dept-type">
                   <span className="type-label">Salary Type:</span>
@@ -118,27 +130,35 @@ function Departments() {
                   </div>
                 )}
 
-                <button
-                  onClick={() => setSelectedDept({
-                    ...dept,
-                    salary_config: dept.salary_config || {
-                      basic_salary: 0,
-                      has_commission: false,
-                      commission_rate: 0,
-                      has_allowance: false,
-                      allowance_amount: 0,
-                      has_per_trip: false,
-                      per_trip_rate: 0,
-                      has_ot: false,
-                      ot_rate: 0,
-                      has_outstation: false,
-                      outstation_rate: 0
-                    }
-                  })}
-                  className="config-btn"
-                >
-                  ⚙️ Configure Salary
-                </button>
+                <div className="dept-actions">
+                  <button
+                    onClick={() => viewEmployees(dept.id)}
+                    className="view-employees-btn"
+                  >
+                    👥 View Employees
+                  </button>
+                  <button
+                    onClick={() => setSelectedDept({
+                      ...dept,
+                      salary_config: dept.salary_config || {
+                        basic_salary: 0,
+                        has_commission: false,
+                        commission_rate: 0,
+                        has_allowance: false,
+                        allowance_amount: 0,
+                        has_per_trip: false,
+                        per_trip_rate: 0,
+                        has_ot: false,
+                        ot_rate: 0,
+                        has_outstation: false,
+                        outstation_rate: 0
+                      }
+                    })}
+                    className="config-btn"
+                  >
+                    ⚙️ Configure Salary
+                  </button>
+                </div>
               </div>
             ))}
           </div>
