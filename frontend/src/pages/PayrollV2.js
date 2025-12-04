@@ -80,9 +80,20 @@ function PayrollV2() {
       fetchRuns();
       fetchRunDetails(res.data.run.id);
 
-      // Show warning if some employees were skipped
+      // Build message with carry-forward info and warnings
+      let message = `Payroll created for ${res.data.employee_count} employees.`;
+
+      if (res.data.carried_forward_count > 0) {
+        message += `\n\n✓ ${res.data.carried_forward_count} employee(s) had salary carried forward from previous month.`;
+      }
+
       if (res.data.warning) {
-        alert(res.data.warning + '\n\nPlease set their basic salary in Employees page.');
+        message += `\n\n⚠️ ${res.data.warning}\n\nPlease set their basic salary in Employees page.`;
+      }
+
+      // Only show alert if there's useful info
+      if (res.data.carried_forward_count > 0 || res.data.warning) {
+        alert(message);
       }
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to create payroll run');

@@ -158,10 +158,35 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       console.log('Filtered by department_id:', department_id);
     }
 
-    // Check for employees without salary data
-    const employeesWithoutSalary = employees.rows.filter(
-      emp => !emp.basic_salary || parseFloat(emp.basic_salary) <= 0
-    );
+    // Get previous month's payroll data for salary carry-forward
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+
+    const prevPayrollResult = await client.query(`
+      SELECT pi.employee_id, pi.basic_salary, pi.fixed_allowance
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.month = $1 AND pr.year = $2
+    `, [prevMonth, prevYear]);
+
+    // Create map of previous month's salaries
+    const prevSalaryMap = {};
+    prevPayrollResult.rows.forEach(row => {
+      prevSalaryMap[row.employee_id] = {
+        basic_salary: parseFloat(row.basic_salary) || 0,
+        fixed_allowance: parseFloat(row.fixed_allowance) || 0
+      };
+    });
+
+    console.log(`Previous payroll (${prevMonth}/${prevYear}): ${prevPayrollResult.rows.length} records found`);
+
+    // Check for employees without salary data (considering carry-forward)
+    const employeesWithoutSalary = employees.rows.filter(emp => {
+      const prevSalary = prevSalaryMap[emp.id];
+      const hasPrevSalary = prevSalary && prevSalary.basic_salary > 0;
+      const hasDefaultSalary = emp.basic_salary && parseFloat(emp.basic_salary) > 0;
+      return !hasPrevSalary && !hasDefaultSalary;
+    });
     const skippedNames = employeesWithoutSalary.map(e => e.name);
 
     // Get unpaid leave for this month
@@ -205,19 +230,28 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     let totalNet = 0;
     let totalEmployerCost = 0;
     let employeeCount = 0;
+    let carriedForwardCount = 0;
 
     // Create payroll item for each employee
     // Note: We process ALL employees including those with zero salary
     // Commission is included in gross for statutory deduction calculation
     for (const emp of employees.rows) {
-      const basicSalary = parseFloat(emp.basic_salary) || 0;
-      const fixedAllowance = parseFloat(emp.fixed_allowance) || 0;
+      // Salary carry-forward: Use previous month's salary if available, otherwise use employee default
+      const prevSalary = prevSalaryMap[emp.id];
+      const basicSalary = prevSalary ? prevSalary.basic_salary : (parseFloat(emp.basic_salary) || 0);
+      const fixedAllowance = prevSalary ? prevSalary.fixed_allowance : (parseFloat(emp.fixed_allowance) || 0);
       const commissionAmount = 0; // Commission will be added manually when editing payroll item
       const unpaidDays = unpaidLeaveMap[emp.id] || 0;
       const claimsAmount = claimsMap[emp.id] || 0;
 
+      // Track carry-forward
+      if (prevSalary) {
+        carriedForwardCount++;
+      }
+
       // DEBUG: Log salary values
-      console.log(`Processing ${emp.name}: basic=${basicSalary}, allowance=${fixedAllowance}`);
+      const salarySource = prevSalary ? 'previous month' : 'employee default';
+      console.log(`Processing ${emp.name}: basic=${basicSalary}, allowance=${fixedAllowance} (from ${salarySource})`);
 
       // Calculate unpaid leave deduction (based on basic salary only)
       const dailyRate = basicSalary > 0 ? basicSalary / workingDaysInMonth : 0;
@@ -300,8 +334,14 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       message: `Payroll run created with ${employeeCount} employees`,
       run: runResult.rows[0],
       employee_count: employeeCount,
-      total_net: totalNet
+      total_net: totalNet,
+      carried_forward_count: carriedForwardCount
     };
+
+    // Add info about salary carry-forward
+    if (carriedForwardCount > 0) {
+      response.info = `${carriedForwardCount} employee(s) had salary carried forward from ${prevMonth}/${prevYear}`;
+    }
 
     // Add warning if some employees have no salary set
     if (skippedNames.length > 0) {
