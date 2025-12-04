@@ -27,11 +27,8 @@ function PayrollV2() {
     ot_amount: 0,
     incentive_amount: 0,
     commission_amount: 0,
-    trade_commission_amount: 0,
     outstation_amount: 0,
     bonus: 0,
-    other_earnings: 0,
-    other_earnings_description: '',
     other_deductions: 0,
     deduction_remarks: '',
     notes: ''
@@ -154,11 +151,8 @@ function PayrollV2() {
       ot_amount: item.ot_amount || 0,
       incentive_amount: item.incentive_amount || 0,
       commission_amount: item.commission_amount || 0,
-      trade_commission_amount: item.trade_commission_amount || 0,
       outstation_amount: item.outstation_amount || 0,
       bonus: item.bonus || 0,
-      other_earnings: item.other_earnings || 0,
-      other_earnings_description: item.other_earnings_description || '',
       other_deductions: item.other_deductions || 0,
       deduction_remarks: item.deduction_remarks || '',
       notes: item.notes || ''
@@ -255,7 +249,6 @@ function PayrollV2() {
           ${earnings.commission_amount > 0 ? `<tr><td>Commission</td><td class="amount">RM ${formatNum(earnings.commission_amount)}</td></tr>` : ''}
           ${earnings.bonus > 0 ? `<tr><td>Bonus</td><td class="amount">RM ${formatNum(earnings.bonus)}</td></tr>` : ''}
           ${earnings.claims_amount > 0 ? `<tr><td>Claims</td><td class="amount">RM ${formatNum(earnings.claims_amount)}</td></tr>` : ''}
-          ${earnings.other_earnings > 0 ? `<tr><td>Other Additions</td><td class="amount">RM ${formatNum(earnings.other_earnings)}</td></tr>` : ''}
           <tr class="total-row"><td>GROSS PAY</td><td class="amount">RM ${formatNum(totals.gross_salary)}</td></tr>
         </table>
 
@@ -643,15 +636,6 @@ function PayrollV2() {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Trade Commission (RM)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={itemForm.trade_commission_amount}
-                      onChange={(e) => setItemForm({ ...itemForm, trade_commission_amount: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="form-group">
                     <label>Outstation (RM)</label>
                     <input
                       type="number"
@@ -660,8 +644,6 @@ function PayrollV2() {
                       onChange={(e) => setItemForm({ ...itemForm, outstation_amount: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-                </div>
-                <div className="form-row">
                   <div className="form-group">
                     <label>Bonus (RM)</label>
                     <input
@@ -671,26 +653,8 @@ function PayrollV2() {
                       onChange={(e) => setItemForm({ ...itemForm, bonus: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Other Additions (RM)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={itemForm.other_earnings}
-                      onChange={(e) => setItemForm({ ...itemForm, other_earnings: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
                 </div>
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>Other Additions Description</label>
-                    <input
-                      type="text"
-                      value={itemForm.other_earnings_description}
-                      onChange={(e) => setItemForm({ ...itemForm, other_earnings_description: e.target.value })}
-                      placeholder="e.g., Transport, Housing..."
-                    />
-                  </div>
                   <div className="form-group">
                     <label>Other Deductions (RM)</label>
                     <input

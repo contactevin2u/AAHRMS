@@ -91,10 +91,7 @@ function Employees() {
     outstation_rate: '',
     // Additional earning fields
     default_bonus: '',
-    trade_commission_rate: '',
-    default_incentive: '',
-    default_other_earnings: '',
-    other_earnings_description: ''
+    default_incentive: ''
   });
 
   useEffect(() => {
@@ -167,10 +164,7 @@ function Employees() {
       outstation_rate: emp.outstation_rate || '',
       // Additional earning fields
       default_bonus: emp.default_bonus || '',
-      trade_commission_rate: emp.trade_commission_rate || '',
-      default_incentive: emp.default_incentive || '',
-      default_other_earnings: emp.default_other_earnings || '',
-      other_earnings_description: emp.other_earnings_description || ''
+      default_incentive: emp.default_incentive || ''
     });
     setShowModal(true);
   };
@@ -219,10 +213,7 @@ function Employees() {
       outstation_rate: '',
       // Additional earning fields
       default_bonus: '',
-      trade_commission_rate: '',
-      default_incentive: '',
-      default_other_earnings: '',
-      other_earnings_description: ''
+      default_incentive: ''
     });
   };
 
@@ -793,44 +784,6 @@ function Employees() {
                       value={form.default_incentive}
                       onChange={(e) => setForm({ ...form, default_incentive: e.target.value })}
                       placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Trade Commission Rate (%)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={form.trade_commission_rate}
-                      onChange={(e) => setForm({ ...form, trade_commission_rate: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Other Earnings (RM)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.default_other_earnings}
-                      onChange={(e) => setForm({ ...form, default_other_earnings: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group" style={{ flex: 1 }}>
-                    <label>Other Earnings Description</label>
-                    <input
-                      type="text"
-                      value={form.other_earnings_description}
-                      onChange={(e) => setForm({ ...form, other_earnings_description: e.target.value })}
-                      placeholder="e.g., Transport allowance, Housing, etc."
                     />
                   </div>
                 </div>

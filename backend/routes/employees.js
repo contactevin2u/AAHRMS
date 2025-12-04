@@ -79,7 +79,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
       // Default salary fields
       default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
       // Additional earning fields
-      default_bonus, trade_commission_rate, default_incentive, default_other_earnings, other_earnings_description
+      default_bonus, default_incentive
     } = req.body;
 
     if (!employee_id || !name || !department_id) {
@@ -93,9 +93,9 @@ router.post('/', authenticateAdmin, async (req, res) => {
         epf_number, socso_number, tax_number, epf_contribution_type,
         marital_status, spouse_working, children_count, date_of_birth,
         default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
-        default_bonus, trade_commission_rate, default_incentive, default_other_earnings, other_earnings_description
+        default_bonus, default_incentive
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
        RETURNING *`,
       [
         employee_id, name, email, phone, ic_number, department_id, position, join_date,
@@ -103,7 +103,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
         epf_number, socso_number, tax_number, epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth,
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
-        default_bonus || 0, trade_commission_rate || 0, default_incentive || 0, default_other_earnings || 0, other_earnings_description || null
+        default_bonus || 0, default_incentive || 0
       ]
     );
 
@@ -129,7 +129,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       // Default salary fields
       default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
       // Additional earning fields
-      default_bonus, trade_commission_rate, default_incentive, default_other_earnings, other_earnings_description
+      default_bonus, default_incentive
     } = req.body;
 
     const result = await pool.query(
@@ -141,10 +141,9 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
            marital_status = $17, spouse_working = $18, children_count = $19, date_of_birth = $20,
            default_basic_salary = $21, default_allowance = $22, commission_rate = $23,
            per_trip_rate = $24, ot_rate = $25, outstation_rate = $26,
-           default_bonus = $27, trade_commission_rate = $28, default_incentive = $29,
-           default_other_earnings = $30, other_earnings_description = $31,
+           default_bonus = $27, default_incentive = $28,
            updated_at = NOW()
-       WHERE id = $32
+       WHERE id = $29
        RETURNING *`,
       [
         employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
@@ -153,8 +152,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
         marital_status, spouse_working, children_count, date_of_birth,
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0,
         per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
-        default_bonus || 0, trade_commission_rate || 0, default_incentive || 0,
-        default_other_earnings || 0, other_earnings_description || null, id
+        default_bonus || 0, default_incentive || 0, id
       ]
     );
 
@@ -284,12 +282,9 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
               ot_rate = COALESCE($24, ot_rate),
               outstation_rate = COALESCE($25, outstation_rate),
               default_bonus = COALESCE($26, default_bonus),
-              trade_commission_rate = COALESCE($27, trade_commission_rate),
-              default_incentive = COALESCE($28, default_incentive),
-              default_other_earnings = COALESCE($29, default_other_earnings),
-              other_earnings_description = COALESCE($30, other_earnings_description),
+              default_incentive = COALESCE($27, default_incentive),
               updated_at = NOW()
-            WHERE employee_id = $31`,
+            WHERE employee_id = $28`,
             [
               emp.name,
               emp.email || null,
@@ -317,10 +312,7 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
               emp.ot_rate ? parseFloat(emp.ot_rate) : null,
               emp.outstation_rate ? parseFloat(emp.outstation_rate) : null,
               emp.default_bonus ? parseFloat(emp.default_bonus) : null,
-              emp.trade_commission_rate ? parseFloat(emp.trade_commission_rate) : null,
               emp.default_incentive ? parseFloat(emp.default_incentive) : null,
-              emp.default_other_earnings ? parseFloat(emp.default_other_earnings) : null,
-              emp.other_earnings_description || null,
               emp.employee_id
             ]
           );
@@ -333,8 +325,8 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
               epf_number, socso_number, tax_number, epf_contribution_type,
               marital_status, spouse_working, children_count, date_of_birth,
               default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
-              default_bonus, trade_commission_rate, default_incentive, default_other_earnings, other_earnings_description
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)`,
+              default_bonus, default_incentive
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
             [
               emp.employee_id,
               emp.name,
@@ -363,10 +355,7 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
               emp.ot_rate ? parseFloat(emp.ot_rate) : 0,
               emp.outstation_rate ? parseFloat(emp.outstation_rate) : 0,
               emp.default_bonus ? parseFloat(emp.default_bonus) : 0,
-              emp.trade_commission_rate ? parseFloat(emp.trade_commission_rate) : 0,
-              emp.default_incentive ? parseFloat(emp.default_incentive) : 0,
-              emp.default_other_earnings ? parseFloat(emp.default_other_earnings) : 0,
-              emp.other_earnings_description || null
+              emp.default_incentive ? parseFloat(emp.default_incentive) : 0
             ]
           );
         }
