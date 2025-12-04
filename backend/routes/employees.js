@@ -73,7 +73,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
   try {
     const {
       employee_id, name, email, phone, ic_number, department_id, position, join_date,
-      bank_name, bank_account_no, bank_account_holder,
+      address, bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
       marital_status, spouse_working, children_count, date_of_birth,
       // Default salary fields
@@ -89,17 +89,17 @@ router.post('/', authenticateAdmin, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO employees (
         employee_id, name, email, phone, ic_number, department_id, position, join_date,
-        bank_name, bank_account_no, bank_account_holder,
+        address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
         marital_status, spouse_working, children_count, date_of_birth,
         default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
         default_bonus, default_incentive
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
        RETURNING *`,
       [
         employee_id, name, email, phone, ic_number, department_id, position, join_date,
-        bank_name, bank_account_no, bank_account_holder,
+        address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth,
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
@@ -123,7 +123,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     const { id } = req.params;
     const {
       employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
-      bank_name, bank_account_no, bank_account_holder,
+      address, bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
       marital_status, spouse_working, children_count, date_of_birth,
       // Default salary fields
@@ -136,18 +136,18 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       `UPDATE employees
        SET employee_id = $1, name = $2, email = $3, phone = $4, ic_number = $5,
            department_id = $6, position = $7, join_date = $8, status = $9,
-           bank_name = $10, bank_account_no = $11, bank_account_holder = $12,
-           epf_number = $13, socso_number = $14, tax_number = $15, epf_contribution_type = $16,
-           marital_status = $17, spouse_working = $18, children_count = $19, date_of_birth = $20,
-           default_basic_salary = $21, default_allowance = $22, commission_rate = $23,
-           per_trip_rate = $24, ot_rate = $25, outstation_rate = $26,
-           default_bonus = $27, default_incentive = $28,
+           address = $10, bank_name = $11, bank_account_no = $12, bank_account_holder = $13,
+           epf_number = $14, socso_number = $15, tax_number = $16, epf_contribution_type = $17,
+           marital_status = $18, spouse_working = $19, children_count = $20, date_of_birth = $21,
+           default_basic_salary = $22, default_allowance = $23, commission_rate = $24,
+           per_trip_rate = $25, ot_rate = $26, outstation_rate = $27,
+           default_bonus = $28, default_incentive = $29,
            updated_at = NOW()
-       WHERE id = $29
+       WHERE id = $30
        RETURNING *`,
       [
         employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
-        bank_name, bank_account_no, bank_account_holder,
+        address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
         marital_status, spouse_working, children_count, date_of_birth,
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0,
@@ -218,9 +218,16 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
 
       try {
         // Validate required fields
-        if (!emp.employee_id || !emp.name) {
+        const missingFields = [];
+        if (!emp.employee_id) missingFields.push('Employee ID');
+        if (!emp.name) missingFields.push('Name');
+        if (!emp.department) missingFields.push('Department');
+        if (!emp.ic_number) missingFields.push('IC Number');
+        if (!emp.default_basic_salary && emp.default_basic_salary !== 0) missingFields.push('Basic Salary');
+
+        if (missingFields.length > 0) {
           results.failed++;
-          results.errors.push(`Row ${rowNum}: Employee ID and Name are required`);
+          results.errors.push(`Row ${rowNum}: Missing required fields: ${missingFields.join(', ')}`);
           continue;
         }
 
@@ -230,7 +237,7 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
           departmentId = departmentMap[emp.department.toLowerCase()];
           if (!departmentId) {
             results.failed++;
-            results.errors.push(`Row ${rowNum}: Department "${emp.department}" not found`);
+            results.errors.push(`Row ${rowNum}: Department "${emp.department}" not found. Valid departments: ${Object.keys(departmentMap).join(', ')}`);
             continue;
           }
         }
@@ -265,26 +272,27 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
             `UPDATE employees SET
               name = $1, email = $2, phone = $3, ic_number = $4,
               department_id = $5, position = $6, join_date = $7,
-              bank_name = $8, bank_account_no = $9, bank_account_holder = $10,
-              status = COALESCE($11, status),
-              epf_number = COALESCE($12, epf_number),
-              socso_number = COALESCE($13, socso_number),
-              tax_number = COALESCE($14, tax_number),
-              epf_contribution_type = COALESCE($15, epf_contribution_type),
-              marital_status = COALESCE($16, marital_status),
-              spouse_working = COALESCE($17, spouse_working),
-              children_count = COALESCE($18, children_count),
-              date_of_birth = COALESCE($19, date_of_birth),
-              default_basic_salary = COALESCE($20, default_basic_salary),
-              default_allowance = COALESCE($21, default_allowance),
-              commission_rate = COALESCE($22, commission_rate),
-              per_trip_rate = COALESCE($23, per_trip_rate),
-              ot_rate = COALESCE($24, ot_rate),
-              outstation_rate = COALESCE($25, outstation_rate),
-              default_bonus = COALESCE($26, default_bonus),
-              default_incentive = COALESCE($27, default_incentive),
+              address = COALESCE($8, address),
+              bank_name = $9, bank_account_no = $10, bank_account_holder = $11,
+              status = COALESCE($12, status),
+              epf_number = COALESCE($13, epf_number),
+              socso_number = COALESCE($14, socso_number),
+              tax_number = COALESCE($15, tax_number),
+              epf_contribution_type = COALESCE($16, epf_contribution_type),
+              marital_status = COALESCE($17, marital_status),
+              spouse_working = COALESCE($18, spouse_working),
+              children_count = COALESCE($19, children_count),
+              date_of_birth = COALESCE($20, date_of_birth),
+              default_basic_salary = COALESCE($21, default_basic_salary),
+              default_allowance = COALESCE($22, default_allowance),
+              commission_rate = COALESCE($23, commission_rate),
+              per_trip_rate = COALESCE($24, per_trip_rate),
+              ot_rate = COALESCE($25, ot_rate),
+              outstation_rate = COALESCE($26, outstation_rate),
+              default_bonus = COALESCE($27, default_bonus),
+              default_incentive = COALESCE($28, default_incentive),
               updated_at = NOW()
-            WHERE employee_id = $28`,
+            WHERE employee_id = $29`,
             [
               emp.name,
               emp.email || null,
@@ -293,6 +301,7 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
               departmentId,
               emp.position || null,
               joinDate,
+              emp.address || null,
               emp.bank_name || null,
               emp.bank_account_no || null,
               emp.bank_account_holder || null,
@@ -321,12 +330,12 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
           await client.query(
             `INSERT INTO employees (
               employee_id, name, email, phone, ic_number, department_id, position, join_date,
-              bank_name, bank_account_no, bank_account_holder, status,
+              address, bank_name, bank_account_no, bank_account_holder, status,
               epf_number, socso_number, tax_number, epf_contribution_type,
               marital_status, spouse_working, children_count, date_of_birth,
               default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
               default_bonus, default_incentive
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`,
             [
               emp.employee_id,
               emp.name,
@@ -336,6 +345,7 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
               departmentId,
               emp.position || null,
               joinDate,
+              emp.address || null,
               emp.bank_name || null,
               emp.bank_account_no || null,
               emp.bank_account_holder || null,

@@ -356,6 +356,24 @@ tr:hover {
   gap: 12px;
 }
 
+.header-actions .template-btn {
+  background: none;
+  border: 2px solid #6b5344;
+  color: #6b5344;
+  padding: 14px 24px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.header-actions .template-btn:hover {
+  background: #6b5344;
+  color: white;
+  transform: translateY(-2px);
+}
+
 .import-btn {
   background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
   color: white;

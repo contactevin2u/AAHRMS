@@ -184,6 +184,10 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='other_earnings_description') THEN
           ALTER TABLE employees ADD COLUMN other_earnings_description VARCHAR(255);
         END IF;
+        -- Address field
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='address') THEN
+          ALTER TABLE employees ADD COLUMN address TEXT;
+        END IF;
       END $$;
 
       -- Salary Configuration per Department

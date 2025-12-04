@@ -70,6 +70,7 @@ function Employees() {
     position: '',
     join_date: '',
     status: 'active',
+    address: '',
     bank_name: '',
     bank_account_no: '',
     bank_account_holder: '',
@@ -144,6 +145,7 @@ function Employees() {
       position: emp.position || '',
       join_date: emp.join_date ? emp.join_date.split('T')[0] : '',
       status: emp.status,
+      address: emp.address || '',
       bank_name: emp.bank_name || '',
       bank_account_no: emp.bank_account_no || '',
       bank_account_holder: emp.bank_account_holder || '',
@@ -193,6 +195,7 @@ function Employees() {
       position: '',
       join_date: '',
       status: 'active',
+      address: '',
       bank_name: '',
       bank_account_no: '',
       bank_account_holder: '',
@@ -236,20 +239,41 @@ function Employees() {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Map Excel columns to our field names
+        // Map Excel columns to our field names (supporting multiple column name formats)
         const mappedData = jsonData.map(row => ({
+          // Personal Info
           employee_id: row['Employee ID'] || row['employee_id'] || row['ID'] || '',
           name: row['Name'] || row['Full Name'] || row['name'] || '',
           email: row['Email'] || row['email'] || '',
-          phone: row['Phone'] || row['phone'] || row['Contact'] || '',
-          ic_number: row['IC Number'] || row['IC'] || row['ic_number'] || row['NRIC'] || '',
+          phone: row['Phone'] || row['phone'] || row['Contact'] || row['Phone No'] || '',
+          ic_number: row['IC Number'] || row['IC'] || row['ic_number'] || row['NRIC'] || row['IC/NRIC'] || '',
           department: row['Department'] || row['department'] || row['Dept'] || '',
           position: row['Position'] || row['position'] || row['Job Title'] || row['Role'] || '',
           join_date: row['Join Date'] || row['join_date'] || row['Start Date'] || '',
+          date_of_birth: row['Date of Birth'] || row['date_of_birth'] || row['DOB'] || row['Birthday'] || '',
+          address: row['Address'] || row['address'] || '',
+          status: row['Status'] || row['status'] || 'active',
+          // Bank Details
           bank_name: row['Bank Name'] || row['Bank'] || row['bank_name'] || '',
-          bank_account_no: row['Account Number'] || row['Bank Account'] || row['bank_account_no'] || '',
+          bank_account_no: row['Account Number'] || row['Bank Account'] || row['bank_account_no'] || row['Bank Account No'] || '',
           bank_account_holder: row['Account Holder'] || row['Account Name'] || row['bank_account_holder'] || '',
-          status: row['Status'] || row['status'] || 'active'
+          // Statutory Info
+          epf_number: row['EPF Number'] || row['epf_number'] || row['EPF No'] || '',
+          socso_number: row['SOCSO Number'] || row['socso_number'] || row['SOCSO No'] || '',
+          tax_number: row['Tax Number'] || row['tax_number'] || row['Tax No'] || row['PCB Number'] || '',
+          epf_contribution_type: row['EPF Type'] || row['epf_contribution_type'] || 'normal',
+          marital_status: row['Marital Status'] || row['marital_status'] || 'single',
+          spouse_working: row['Spouse Working'] || row['spouse_working'] || 'false',
+          children_count: row['Children Count'] || row['children_count'] || row['No of Children'] || '0',
+          // Salary & Compensation
+          default_basic_salary: row['Basic Salary'] || row['default_basic_salary'] || '',
+          default_allowance: row['Allowance'] || row['default_allowance'] || '',
+          commission_rate: row['Commission Rate'] || row['commission_rate'] || row['Commission (%)'] || '',
+          per_trip_rate: row['Per Trip Rate'] || row['per_trip_rate'] || '',
+          ot_rate: row['OT Rate'] || row['ot_rate'] || row['Overtime Rate'] || '',
+          outstation_rate: row['Outstation Rate'] || row['outstation_rate'] || '',
+          default_bonus: row['Bonus'] || row['default_bonus'] || row['Default Bonus'] || '',
+          default_incentive: row['Incentive'] || row['default_incentive'] || row['Default Incentive'] || ''
         }));
 
         setImportData(mappedData);
@@ -285,18 +309,71 @@ function Employees() {
   const downloadTemplate = () => {
     const template = [
       {
+        // Personal Info
         'Employee ID': 'EMP001',
         'Name': 'John Doe',
         'Email': 'john@company.com',
         'Phone': '0123456789',
         'IC Number': '901234-56-7890',
+        'Date of Birth': '1990-05-15',
+        'Address': '123 Jalan Example, 50000 Kuala Lumpur',
         'Department': 'Office',
         'Position': 'Manager',
         'Join Date': '2024-01-15',
+        'Status': 'active',
+        // Bank Details
         'Bank Name': 'Maybank',
         'Account Number': '1234567890',
         'Account Holder': 'John Doe',
-        'Status': 'active'
+        // Statutory Info
+        'EPF Number': 'EPF12345',
+        'SOCSO Number': 'SOCSO12345',
+        'Tax Number': 'TAX12345',
+        'EPF Type': 'normal',
+        'Marital Status': 'married',
+        'Spouse Working': 'true',
+        'Children Count': '2',
+        // Salary & Compensation
+        'Basic Salary': '3500.00',
+        'Allowance': '500.00',
+        'Commission Rate': '0',
+        'Per Trip Rate': '0',
+        'OT Rate': '15.00',
+        'Outstation Rate': '0',
+        'Bonus': '500.00',
+        'Incentive': '200.00'
+      },
+      {
+        // Example 2 - Sales Employee
+        'Employee ID': 'EMP002',
+        'Name': 'Jane Smith',
+        'Email': 'jane@company.com',
+        'Phone': '0198765432',
+        'IC Number': '880512-14-5678',
+        'Date of Birth': '1988-05-12',
+        'Address': '456 Jalan Sample, 40000 Shah Alam',
+        'Department': 'Indoor Sales',
+        'Position': 'Sales Executive',
+        'Join Date': '2024-02-01',
+        'Status': 'active',
+        'Bank Name': 'CIMB Bank',
+        'Account Number': '9876543210',
+        'Account Holder': 'Jane Smith',
+        'EPF Number': 'EPF23456',
+        'SOCSO Number': 'SOCSO23456',
+        'Tax Number': 'TAX23456',
+        'EPF Type': 'normal',
+        'Marital Status': 'single',
+        'Spouse Working': 'false',
+        'Children Count': '0',
+        'Basic Salary': '2500.00',
+        'Allowance': '300.00',
+        'Commission Rate': '5.00',
+        'Per Trip Rate': '0',
+        'OT Rate': '12.00',
+        'Outstation Rate': '0',
+        'Bonus': '0',
+        'Incentive': '100.00'
       }
     ];
 
@@ -304,11 +381,37 @@ function Employees() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Employees');
 
-    // Set column widths
+    // Set column widths for all columns
     ws['!cols'] = [
-      { wch: 12 }, { wch: 20 }, { wch: 25 }, { wch: 15 },
-      { wch: 18 }, { wch: 15 }, { wch: 20 }, { wch: 12 },
-      { wch: 15 }, { wch: 18 }, { wch: 20 }, { wch: 10 }
+      { wch: 12 }, // Employee ID
+      { wch: 20 }, // Name
+      { wch: 25 }, // Email
+      { wch: 15 }, // Phone
+      { wch: 18 }, // IC Number
+      { wch: 12 }, // Date of Birth
+      { wch: 40 }, // Address
+      { wch: 15 }, // Department
+      { wch: 18 }, // Position
+      { wch: 12 }, // Join Date
+      { wch: 10 }, // Status
+      { wch: 18 }, // Bank Name
+      { wch: 18 }, // Account Number
+      { wch: 20 }, // Account Holder
+      { wch: 12 }, // EPF Number
+      { wch: 14 }, // SOCSO Number
+      { wch: 12 }, // Tax Number
+      { wch: 10 }, // EPF Type
+      { wch: 14 }, // Marital Status
+      { wch: 14 }, // Spouse Working
+      { wch: 14 }, // Children Count
+      { wch: 12 }, // Basic Salary
+      { wch: 12 }, // Allowance
+      { wch: 14 }, // Commission Rate
+      { wch: 14 }, // Per Trip Rate
+      { wch: 10 }, // OT Rate
+      { wch: 14 }, // Outstation Rate
+      { wch: 10 }, // Bonus
+      { wch: 10 }  // Incentive
     ];
 
     XLSX.writeFile(wb, 'employee_import_template.xlsx');
@@ -333,14 +436,17 @@ function Employees() {
               type="file"
               ref={fileInputRef}
               onChange={handleFileSelect}
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               style={{ display: 'none' }}
             />
+            <button onClick={downloadTemplate} className="template-btn">
+              Download Template
+            </button>
             <button onClick={() => fileInputRef.current?.click()} className="import-btn">
-              📥 Import Excel
+              Upload Employees
             </button>
             <button onClick={openAddModal} className="add-btn">
-              ➕ Add Employee
+              + Add Employee
             </button>
           </div>
         </header>
@@ -546,7 +652,17 @@ function Employees() {
                   </div>
                 </div>
 
-                <div className="form-section-title">🏦 Bank Details</div>
+                <div className="form-group">
+                  <label>Address</label>
+                  <textarea
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    placeholder="Full address"
+                    rows="2"
+                  />
+                </div>
+
+                <div className="form-section-title">Bank Details</div>
 
                 <div className="form-row">
                   <div className="form-group">
@@ -839,8 +955,8 @@ function Employees() {
                               <th>Employee ID</th>
                               <th>Name</th>
                               <th>Department</th>
-                              <th>Position</th>
-                              <th>Phone</th>
+                              <th>IC Number</th>
+                              <th>Basic Salary</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -849,8 +965,8 @@ function Employees() {
                                 <td>{emp.employee_id || '-'}</td>
                                 <td>{emp.name || '-'}</td>
                                 <td>{emp.department || '-'}</td>
-                                <td>{emp.position || '-'}</td>
-                                <td>{emp.phone || '-'}</td>
+                                <td>{emp.ic_number || '-'}</td>
+                                <td>{emp.default_basic_salary ? `RM ${emp.default_basic_salary}` : '-'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -863,8 +979,10 @@ function Employees() {
                   )}
 
                   <div className="import-note">
+                    <strong>Mandatory Fields:</strong> Employee ID, Name, Department, IC Number, Basic Salary
+                    <br /><br />
                     <strong>Note:</strong> Department names must match exactly (Office, Indoor Sales, Outdoor Sales, Driver).
-                    Existing employees will be updated if Employee ID matches.
+                    If Employee ID already exists, the record will be updated instead of creating a duplicate.
                   </div>
 
                   <div className="modal-actions">
