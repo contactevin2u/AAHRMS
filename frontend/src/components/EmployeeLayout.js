@@ -47,8 +47,8 @@ function EmployeeLayout({ children }) {
     <div className="ess-layout">
       <aside className={`ess-sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
         <div className="ess-sidebar-header">
-          <img src="/logo.png" alt="AA Alive" className="ess-logo" />
-          <span className="ess-brand">Employee Portal</span>
+          <img src="/logo.png" alt="AA HRMS" className="ess-logo" />
+          <span className="ess-brand">AA HRMS</span>
         </div>
 
         <nav className="ess-nav">

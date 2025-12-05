@@ -43,8 +43,8 @@ function Layout({ children }) {
     <div className="layout">
       <nav className="sidebar">
         <div className="sidebar-header">
-          <img src="/logo.png" alt="AA Alive" className="logo-img" />
-          <h2>AA Alive</h2>
+          <img src="/logo.png" alt="AA HRMS" className="logo-img" />
+          <h2>AA HRMS</h2>
           {adminInfo && (
             <div className="admin-info">
               <span className="admin-name">{adminInfo.name || adminInfo.username}</span>

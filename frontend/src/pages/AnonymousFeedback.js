@@ -55,7 +55,7 @@ function AnonymousFeedback() {
     <div className="anonymous-feedback">
       <div className="feedback-container">
         <header className="feedback-header">
-          <img src="/logo.png" alt="AA Alive" className="feedback-logo" />
+          <img src="/logo.png" alt="AA HRMS" className="feedback-logo" />
           <h1>Share Your Thoughts</h1>
           <p className="subtitle">A safe space to express yourself freely ~ your voice matters</p>
         </header>
