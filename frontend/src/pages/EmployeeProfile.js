@@ -111,6 +111,25 @@ function EmployeeProfile() {
                 <label>Status</label>
                 <span className={`status-badge ${profile?.status}`}>{profile?.status || '-'}</span>
               </div>
+              <div className="profile-item">
+                <label>Employment Type</label>
+                <span className={`employment-type-badge ${profile?.employment_type || 'probation'}`}>
+                  {profile?.employment_type === 'confirmed' ? 'Confirmed' :
+                   profile?.employment_type === 'contract' ? 'Contract' : 'Probation'}
+                </span>
+              </div>
+              {profile?.employment_type !== 'confirmed' && profile?.probation_end_date && (
+                <div className="profile-item">
+                  <label>Probation End Date</label>
+                  <span>{formatDate(profile?.probation_end_date)}</span>
+                </div>
+              )}
+              {profile?.employment_type === 'confirmed' && profile?.confirmation_date && (
+                <div className="profile-item">
+                  <label>Confirmation Date</label>
+                  <span>{formatDate(profile?.confirmation_date)}</span>
+                </div>
+              )}
             </div>
           </section>
 

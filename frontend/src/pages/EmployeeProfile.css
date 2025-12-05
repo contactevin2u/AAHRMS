@@ -72,6 +72,29 @@
   color: #d85454;
 }
 
+.employment-type-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.employment-type-badge.probation {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.employment-type-badge.confirmed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.employment-type-badge.contract {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
 .profile-note {
   margin-top: 25px;
   padding: 15px 20px;

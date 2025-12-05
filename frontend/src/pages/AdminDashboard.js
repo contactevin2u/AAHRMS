@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { feedbackApi, employeeApi, payrollApi } from '../api';
+import { feedbackApi, employeeApi, payrollApi, probationApi } from '../api';
 import Layout from '../components/Layout';
 import './AdminDashboard.css';
 
@@ -9,6 +9,7 @@ function AdminDashboard() {
   const [feedbackStats, setFeedbackStats] = useState(null);
   const [payrollSummary, setPayrollSummary] = useState(null);
   const [recentFeedback, setRecentFeedback] = useState([]);
+  const [pendingProbations, setPendingProbations] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -23,16 +24,18 @@ function AdminDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [empStats, fbStats, payroll, feedback] = await Promise.all([
+      const [empStats, fbStats, payroll, feedback, probations] = await Promise.all([
         employeeApi.getStats(),
         feedbackApi.getStats(),
         payrollApi.getSummary(currentYear, currentMonth),
-        feedbackApi.getAll({ limit: 5 })
+        feedbackApi.getAll({ limit: 5 }),
+        probationApi.getPending().catch(() => ({ data: [] }))
       ]);
       setStats(empStats.data);
       setFeedbackStats(fbStats.data);
       setPayrollSummary(payroll.data);
       setRecentFeedback(feedback.data.feedback || feedback.data || []);
+      setPendingProbations(probations.data || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -198,6 +201,59 @@ function AdminDashboard() {
             </div>
           </div>
 
+          {/* Probation Alerts */}
+          <div className={`dashboard-card probation-card ${pendingProbations.length > 0 ? 'has-alerts' : ''}`}>
+            <div className="card-header">
+              <h3>📋 Probation Alerts</h3>
+              <button onClick={() => navigate('/admin/employees?employment_type=probation')} className="view-all-btn">
+                View All →
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="stats-row">
+                <div className={`stat-item ${pendingProbations.length > 0 ? 'highlight-warning' : ''}`}>
+                  <span className="stat-value">{pendingProbations.length}</span>
+                  <span className="stat-label">Pending Review</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-value">{stats?.overview?.on_probation || 0}</span>
+                  <span className="stat-label">On Probation</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-value">{stats?.overview?.confirmed || 0}</span>
+                  <span className="stat-label">Confirmed</span>
+                </div>
+              </div>
+              {pendingProbations.length > 0 && (
+                <div className="probation-list">
+                  <h4>Ending Soon</h4>
+                  {pendingProbations.slice(0, 3).map(emp => (
+                    <div key={emp.id} className="probation-item">
+                      <div className="emp-info">
+                        <span className="emp-name">{emp.name}</span>
+                        <span className="emp-dept">{emp.department_name}</span>
+                      </div>
+                      <div className="probation-date">
+                        {new Date(emp.probation_end_date).toLocaleDateString()}
+                      </div>
+                      <button
+                        onClick={() => navigate(`/admin/employees?search=${emp.employee_id}`)}
+                        className="review-btn"
+                      >
+                        Review
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {pendingProbations.length === 0 && (
+                <div className="no-alerts">
+                  <p>No probation reviews pending</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Quick Actions */}
           <div className="dashboard-card actions-card">
             <div className="card-header">
@@ -209,7 +265,7 @@ function AdminDashboard() {
                   <span className="action-icon">➕</span>
                   <span>Add Employee</span>
                 </button>
-                <button onClick={() => navigate('/admin/payroll')} className="action-btn">
+                <button onClick={() => navigate('/admin/payroll-v2')} className="action-btn">
                   <span className="action-icon">💵</span>
                   <span>Process Payroll</span>
                 </button>
