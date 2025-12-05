@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { essApi } from '../api';
 import EmployeeLayout from '../components/EmployeeLayout';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import './EmployeePayslips.css';
 
 function EmployeePayslips() {
@@ -47,6 +49,33 @@ function EmployeePayslips() {
       setSelectedPayslip(res.data);
     } catch (error) {
       console.error('Error fetching payslip details:', error);
+    }
+  };
+
+  const handleDownload = async () => {
+    const element = document.getElementById('payslip-print');
+    if (!element) return;
+
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+      const fileName = `Payslip_${getMonthName(selectedPayslip.month)}_${selectedPayslip.year}.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to download payslip. Please try printing instead.');
     }
   };
 
@@ -118,6 +147,7 @@ function EmployeePayslips() {
               <div className="modal-header">
                 <h2>Payslip - {getMonthName(selectedPayslip.month)} {selectedPayslip.year}</h2>
                 <div className="modal-header-actions">
+                  <button className="btn-download" onClick={handleDownload}>Download PDF</button>
                   <button className="btn-print" onClick={() => window.print()}>Print</button>
                   <button className="close-btn" onClick={() => setSelectedPayslip(null)}>×</button>
                 </div>

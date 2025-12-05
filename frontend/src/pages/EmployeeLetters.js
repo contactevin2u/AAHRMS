@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { essApi } from '../api';
 import EmployeeLayout from '../components/EmployeeLayout';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import './EmployeeLetters.css';
 
 function EmployeeLetters() {
@@ -72,6 +74,33 @@ function EmployeeLetters() {
 
   const getTypeInfo = (type) => {
     return letterTypes[type] || { label: type, color: '#7a8a9a' };
+  };
+
+  const handleDownload = async () => {
+    const element = document.getElementById('letter-print');
+    if (!element) return;
+
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+      const fileName = `Letter_${selectedLetter.subject}_${new Date(selectedLetter.created_at).toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to download letter. Please try printing instead.');
+    }
   };
 
   const unreadCount = letters.filter(l => l.status === 'unread').length;
@@ -150,6 +179,7 @@ function EmployeeLetters() {
               <div className="modal-header">
                 <h2>Letter Details</h2>
                 <div className="modal-header-actions">
+                  <button className="btn-download" onClick={handleDownload}>Download PDF</button>
                   <button className="btn-print" onClick={() => window.print()}>Print</button>
                   <button className="close-btn" onClick={() => setSelectedLetter(null)}>×</button>
                 </div>

@@ -160,6 +160,22 @@
   background: #219a52;
 }
 
+.btn-download {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-download:hover {
+  background: #2980b9;
+}
+
 /* Payslip Preview with Letterhead */
 .payslip-preview {
   background: white;
@@ -405,6 +421,7 @@
 
   .modal-header,
   .btn-print,
+  .btn-download,
   .close-btn {
     display: none !important;
   }

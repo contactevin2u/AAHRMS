@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { payrollApi } from '../api';
 import Layout from '../components/Layout';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import './Payslip.css';
 
 function Payslip() {
@@ -31,6 +33,33 @@ function Payslip() {
     window.print();
   };
 
+  const handleDownload = async () => {
+    const element = printRef.current;
+    if (!element) return;
+
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+      const fileName = `Payslip_${payslip.employee.code}_${payslip.period.month_name}_${payslip.period.year}.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to download payslip. Please try printing instead.');
+    }
+  };
+
   const formatCurrency = (amount) => {
     return `RM ${parseFloat(amount || 0).toFixed(2)}`;
   };
@@ -57,6 +86,9 @@ function Payslip() {
         <div className="payslip-actions no-print">
           <button onClick={() => navigate(-1)} className="back-btn">
             Back
+          </button>
+          <button onClick={handleDownload} className="download-btn">
+            Download PDF
           </button>
           <button onClick={handlePrint} className="print-btn">
             Print Payslip
