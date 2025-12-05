@@ -537,6 +537,174 @@ const initDb = async () => {
       CREATE INDEX IF NOT EXISTS idx_notifications_employee ON notifications(employee_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
       CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+
+      -- =====================================================
+      -- HR LETTERS / NOTICES TABLE
+      -- =====================================================
+
+      -- HR Letters (Warning, Appreciation, Promotion, etc.)
+      CREATE TABLE IF NOT EXISTS hr_letters (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        letter_type VARCHAR(50) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        attachment_url TEXT,
+        attachment_name VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'unread',
+        issued_by INTEGER REFERENCES admin_users(id),
+        issued_by_name VARCHAR(100),
+        read_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_hr_letters_employee ON hr_letters(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_hr_letters_type ON hr_letters(letter_type);
+      CREATE INDEX IF NOT EXISTS idx_hr_letters_status ON hr_letters(status);
+      CREATE INDEX IF NOT EXISTS idx_hr_letters_created ON hr_letters(created_at DESC);
+
+      -- Letter Templates
+      CREATE TABLE IF NOT EXISTS letter_templates (
+        id SERIAL PRIMARY KEY,
+        letter_type VARCHAR(50) NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Insert default letter templates
+      INSERT INTO letter_templates (letter_type, name, subject, content) VALUES
+        ('warning', 'Warning Letter (Surat Amaran)', 'Official Warning Notice',
+         'Dear {{employee_name}},
+
+This letter serves as an official warning regarding {{reason}}.
+
+We have observed the following concerns:
+{{details}}
+
+Please be advised that this matter is being documented in your employment record. We expect immediate improvement in the areas mentioned above.
+
+Failure to comply may result in further disciplinary action, up to and including termination of employment.
+
+Please acknowledge receipt of this letter by signing below.
+
+Regards,
+Human Resources Department
+{{company_name}}'),
+        ('appreciation', 'Appreciation Letter', 'Letter of Appreciation',
+         'Dear {{employee_name}},
+
+We would like to take this opportunity to express our sincere appreciation for your outstanding contribution to the company.
+
+{{details}}
+
+Your dedication and hard work have not gone unnoticed. We are fortunate to have you as part of our team.
+
+Keep up the excellent work!
+
+Best regards,
+Human Resources Department
+{{company_name}}'),
+        ('promotion', 'Promotion Letter', 'Congratulations on Your Promotion',
+         'Dear {{employee_name}},
+
+We are pleased to inform you that you have been promoted to the position of {{new_position}}, effective {{effective_date}}.
+
+This promotion reflects your hard work, dedication, and valuable contributions to our organization.
+
+Your new responsibilities will include:
+{{details}}
+
+Your revised compensation package will be communicated to you separately.
+
+Congratulations on this well-deserved achievement!
+
+Best regards,
+Human Resources Department
+{{company_name}}'),
+        ('performance_improvement', 'Performance Improvement Notice', 'Performance Improvement Plan Notice',
+         'Dear {{employee_name}},
+
+Following our recent discussions regarding your work performance, this letter outlines the areas requiring improvement.
+
+Areas of Concern:
+{{details}}
+
+Expected Improvements:
+- {{improvement_1}}
+- {{improvement_2}}
+- {{improvement_3}}
+
+Review Period: {{review_period}}
+
+We are committed to supporting your success. Please do not hesitate to reach out if you need any assistance or resources.
+
+Regards,
+Human Resources Department
+{{company_name}}'),
+        ('salary_adjustment', 'Salary Adjustment Letter', 'Notification of Salary Adjustment',
+         'Dear {{employee_name}},
+
+We are pleased to inform you of an adjustment to your compensation, effective {{effective_date}}.
+
+Your new salary details are as follows:
+- Previous Basic Salary: RM {{old_salary}}
+- New Basic Salary: RM {{new_salary}}
+
+{{details}}
+
+This adjustment reflects your contributions and performance within the organization.
+
+Congratulations!
+
+Best regards,
+Human Resources Department
+{{company_name}}'),
+        ('general_notice', 'General Notice', 'Important Notice',
+         'Dear {{employee_name}},
+
+{{details}}
+
+If you have any questions, please contact the HR department.
+
+Regards,
+Human Resources Department
+{{company_name}}'),
+        ('termination', 'Termination Letter', 'Notice of Employment Termination',
+         'Dear {{employee_name}},
+
+This letter serves as formal notification that your employment with {{company_name}} will be terminated effective {{effective_date}}.
+
+Reason for Termination:
+{{details}}
+
+Please note the following:
+- Your final paycheck will be processed on {{final_pay_date}}
+- All company property must be returned by your last working day
+- Exit interview will be scheduled with HR
+
+Regards,
+Human Resources Department
+{{company_name}}'),
+        ('confirmation', 'Confirmation Letter', 'Employment Confirmation',
+         'Dear {{employee_name}},
+
+We are pleased to confirm that your probationary period has been successfully completed.
+
+Effective {{effective_date}}, you are now confirmed as a permanent employee of {{company_name}} in the position of {{position}}.
+
+{{details}}
+
+Congratulations and welcome to the team!
+
+Best regards,
+Human Resources Department
+{{company_name}}')
+      ON CONFLICT DO NOTHING;
     `);
     console.log('Database tables initialized');
   } catch (err) {

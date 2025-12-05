@@ -600,6 +600,95 @@ router.get('/notifications/unread-count', authenticateEmployee, async (req, res)
 });
 
 // =====================================================
+// HR LETTERS / DOCUMENTS
+// =====================================================
+
+// Get employee's letters
+router.get('/letters', authenticateEmployee, async (req, res) => {
+  try {
+    const { status, letter_type } = req.query;
+
+    let query = `
+      SELECT * FROM hr_letters
+      WHERE employee_id = $1
+    `;
+    const params = [req.employee.id];
+    let paramCount = 1;
+
+    if (status) {
+      paramCount++;
+      query += ` AND status = $${paramCount}`;
+      params.push(status);
+    }
+
+    if (letter_type) {
+      paramCount++;
+      query += ` AND letter_type = $${paramCount}`;
+      params.push(letter_type);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching letters:', error);
+    res.status(500).json({ error: 'Failed to fetch letters' });
+  }
+});
+
+// Get single letter and mark as read
+router.get('/letters/:id', authenticateEmployee, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get the letter (only if it belongs to this employee)
+    const result = await pool.query(
+      'SELECT * FROM hr_letters WHERE id = $1 AND employee_id = $2',
+      [id, req.employee.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Letter not found' });
+    }
+
+    const letter = result.rows[0];
+
+    // If unread, mark as read
+    if (letter.status === 'unread') {
+      await pool.query(
+        `UPDATE hr_letters SET status = 'read', read_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [id]
+      );
+      letter.status = 'read';
+      letter.read_at = new Date();
+    }
+
+    res.json(letter);
+  } catch (error) {
+    console.error('Error fetching letter:', error);
+    res.status(500).json({ error: 'Failed to fetch letter' });
+  }
+});
+
+// Get unread letters count
+router.get('/letters/unread/count', authenticateEmployee, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT COUNT(*) as count FROM hr_letters
+       WHERE employee_id = $1 AND status = 'unread'`,
+      [req.employee.id]
+    );
+
+    res.json({ count: parseInt(result.rows[0].count) });
+  } catch (error) {
+    console.error('Error fetching unread count:', error);
+    res.status(500).json({ error: 'Failed to fetch unread count' });
+  }
+});
+
+// =====================================================
 // DASHBOARD SUMMARY
 // =====================================================
 
@@ -658,13 +747,20 @@ router.get('/dashboard', authenticateEmployee, async (req, res) => {
       [req.employee.id]
     );
 
+    // Get unread letters
+    const unreadLettersResult = await pool.query(
+      `SELECT COUNT(*) as count FROM hr_letters WHERE employee_id = $1 AND status = 'unread'`,
+      [req.employee.id]
+    );
+
     res.json({
       employee: empResult.rows[0] || null,
       latestPayslip: payslipResult.rows[0] || null,
       leaveBalances: leaveResult.rows,
       pendingLeaveRequests: parseInt(pendingLeaveResult.rows[0].count),
       pendingClaims: parseInt(pendingClaimsResult.rows[0].count),
-      unreadNotifications: parseInt(unreadResult.rows[0].count)
+      unreadNotifications: parseInt(unreadResult.rows[0].count),
+      unreadLetters: parseInt(unreadLettersResult.rows[0].count)
     });
   } catch (error) {
     console.error('Error fetching dashboard:', error);

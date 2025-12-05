@@ -14,6 +14,7 @@ import Leave from './pages/Leave';
 import Claims from './pages/Claims';
 import Resignations from './pages/Resignations';
 import Contributions from './pages/Contributions';
+import Letters from './pages/Letters';
 // Employee Self-Service (ESS) imports
 import EmployeeLogin from './pages/EmployeeLogin';
 import EmployeeDashboard from './pages/EmployeeDashboard';
@@ -22,6 +23,7 @@ import EmployeePayslips from './pages/EmployeePayslips';
 import EmployeeLeave from './pages/EmployeeLeave';
 import EmployeeClaims from './pages/EmployeeClaims';
 import EmployeeNotifications from './pages/EmployeeNotifications';
+import EmployeeLetters from './pages/EmployeeLetters';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -136,6 +138,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/letters"
+          element={
+            <ProtectedRoute>
+              <Letters />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Employee Self-Service (ESS) Routes */}
         <Route path="/employee/login" element={<EmployeeLogin />} />
@@ -184,6 +194,14 @@ function App() {
           element={
             <EmployeeProtectedRoute>
               <EmployeeNotifications />
+            </EmployeeProtectedRoute>
+          }
+        />
+        <Route
+          path="/employee/letters"
+          element={
+            <EmployeeProtectedRoute>
+              <EmployeeLetters />
             </EmployeeProtectedRoute>
           }
         />

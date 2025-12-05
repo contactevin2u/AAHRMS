@@ -54,6 +54,11 @@ function Layout({ children }) {
             <span>Resignations</span>
           </NavLink>
 
+          <NavLink to="/admin/letters" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <span className="nav-icon">📋</span>
+            <span>HR Letters</span>
+          </NavLink>
+
           <NavLink to="/admin/departments" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             <span className="nav-icon">🏢</span>
             <span>Departments</span>

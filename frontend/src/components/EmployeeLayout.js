@@ -30,16 +30,17 @@ function EmployeeLayout({ children }) {
   const handleLogout = () => {
     localStorage.removeItem('employeeToken');
     localStorage.removeItem('employeeInfo');
-    navigate('/ess/login');
+    navigate('/employee/login');
   };
 
   const navItems = [
-    { path: '/ess/dashboard', label: 'Dashboard', icon: 'home' },
-    { path: '/ess/profile', label: 'My Profile', icon: 'person' },
-    { path: '/ess/payslips', label: 'Salary Records', icon: 'receipt' },
-    { path: '/ess/leave', label: 'Leave', icon: 'calendar' },
-    { path: '/ess/claims', label: 'Claims', icon: 'wallet' },
-    { path: '/ess/notifications', label: 'Notifications', icon: 'bell', badge: unreadCount },
+    { path: '/employee/dashboard', label: 'Dashboard', icon: 'home' },
+    { path: '/employee/profile', label: 'My Profile', icon: 'person' },
+    { path: '/employee/payslips', label: 'Salary Records', icon: 'receipt' },
+    { path: '/employee/leave', label: 'Leave', icon: 'calendar' },
+    { path: '/employee/claims', label: 'Claims', icon: 'wallet' },
+    { path: '/employee/letters', label: 'HR Documents', icon: 'document' },
+    { path: '/employee/notifications', label: 'Notifications', icon: 'bell', badge: unreadCount },
   ];
 
   return (
@@ -106,6 +107,7 @@ function getIcon(name) {
     receipt: '📄',
     calendar: '📅',
     wallet: '💰',
+    document: '📋',
     bell: '🔔',
   };
   return icons[name] || '📌';

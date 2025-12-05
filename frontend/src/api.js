@@ -176,6 +176,20 @@ export const resignationsApi = {
   calculateSettlement: (data) => api.post('/resignations/calculate-settlement', data),
 };
 
+// HR Letters
+export const lettersApi = {
+  getAll: (params) => api.get('/letters', { params }),
+  getOne: (id) => api.get(`/letters/${id}`),
+  create: (data) => api.post('/letters', data),
+  update: (id, data) => api.put(`/letters/${id}`, data),
+  delete: (id) => api.delete(`/letters/${id}`),
+
+  getEmployeeLetters: (employeeId) => api.get(`/letters/employee/${employeeId}`),
+  getTemplates: () => api.get('/letters/templates/all'),
+  getTemplatesByType: (type) => api.get(`/letters/templates/type/${type}`),
+  getStats: () => api.get('/letters/stats/summary'),
+};
+
 // =====================================================
 // EMPLOYEE SELF-SERVICE (ESS) API
 // =====================================================
@@ -212,6 +226,11 @@ export const essApi = {
   markNotificationRead: (id) => api.put(`/ess/notifications/${id}/read`),
   markAllNotificationsRead: () => api.put('/ess/notifications/read-all'),
   getUnreadCount: () => api.get('/ess/notifications/unread-count'),
+
+  // Letters / HR Documents
+  getLetters: (params) => api.get('/ess/letters', { params }),
+  getLetter: (id) => api.get(`/ess/letters/${id}`),
+  getUnreadLettersCount: () => api.get('/ess/letters/unread/count'),
 };
 
 export default api;
