@@ -76,6 +76,7 @@ function AdminLogin() {
         </form>
 
         <div className="login-footer">
+          <a href="/employee/login" className="employee-link">👤 Employee Portal Login</a>
           <a href="/feedback" className="feedback-link">📝 Submit Anonymous Feedback</a>
         </div>
       </div>

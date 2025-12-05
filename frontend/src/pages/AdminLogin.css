@@ -165,16 +165,33 @@
   margin-top: 30px;
   padding-top: 25px;
   border-top: 2px solid #f5e6dc;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .login-footer a {
   color: #c47d5a;
   font-size: 0.95rem;
   font-weight: 600;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
+  text-decoration: none;
 }
 
 .login-footer a:hover {
   color: #a86a4a;
-  text-decoration: none;
+}
+
+.login-footer .employee-link {
+  background: linear-gradient(135deg, #5478a8 0%, #6a8fc8 100%);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+.login-footer .employee-link:hover {
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(84, 120, 168, 0.3);
 }
