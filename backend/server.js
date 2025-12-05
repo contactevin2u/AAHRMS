@@ -12,6 +12,7 @@ const contributionsRoutes = require('./routes/contributions');
 const leaveRoutes = require('./routes/leave');
 const claimsRoutes = require('./routes/claims');
 const resignationsRoutes = require('./routes/resignations');
+const essRoutes = require('./routes/ess');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -40,6 +41,7 @@ app.use('/api/contributions', contributionsRoutes);  // Government contributions
 app.use('/api/leave', leaveRoutes);
 app.use('/api/claims', claimsRoutes);
 app.use('/api/resignations', resignationsRoutes);
+app.use('/api/ess', essRoutes);  // Employee Self-Service Portal
 
 // Health check
 app.get('/api/health', (req, res) => {

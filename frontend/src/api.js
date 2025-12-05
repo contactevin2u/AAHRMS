@@ -6,9 +6,17 @@ const api = axios.create({
   baseURL: API_URL,
 });
 
-// Add auth token to requests
+// Add auth token to requests (supports both admin and employee tokens)
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('adminToken');
+  // Check which token to use based on the URL path
+  let token = null;
+
+  if (config.url?.startsWith('/ess')) {
+    token = localStorage.getItem('employeeToken');
+  } else {
+    token = localStorage.getItem('adminToken');
+  }
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -20,9 +28,14 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      localStorage.removeItem('adminToken');
-      if (window.location.pathname.startsWith('/admin')) {
-        window.location.href = '/admin/login';
+      const path = window.location.pathname;
+
+      if (path.startsWith('/ess')) {
+        localStorage.removeItem('employeeToken');
+        window.location.href = '/ess/login';
+      } else if (path.startsWith('/admin')) {
+        localStorage.removeItem('adminToken');
+        window.location.href = '/';
       }
     }
     return Promise.reject(error);
@@ -161,6 +174,44 @@ export const resignationsApi = {
   process: (id, data) => api.post(`/resignations/${id}/process`, data),
   cancel: (id) => api.post(`/resignations/${id}/cancel`),
   calculateSettlement: (data) => api.post('/resignations/calculate-settlement', data),
+};
+
+// =====================================================
+// EMPLOYEE SELF-SERVICE (ESS) API
+// =====================================================
+
+export const essApi = {
+  // Authentication
+  login: (credentials) => api.post('/ess/login', credentials),
+  forgotPassword: (email) => api.post('/ess/forgot-password', { email }),
+  resetPassword: (token, newPassword) => api.post('/ess/reset-password', { token, newPassword }),
+  setPassword: (data) => api.post('/ess/set-password', data),
+
+  // Dashboard
+  getDashboard: () => api.get('/ess/dashboard'),
+
+  // Profile
+  getProfile: () => api.get('/ess/profile'),
+
+  // Payslips
+  getPayslips: (params) => api.get('/ess/payslips', { params }),
+  getPayslip: (id) => api.get(`/ess/payslips/${id}`),
+
+  // Leave
+  getLeaveBalance: () => api.get('/ess/leave/balance'),
+  getLeaveHistory: (params) => api.get('/ess/leave/history', { params }),
+  getLeaveTypes: () => api.get('/ess/leave/types'),
+  applyLeave: (data) => api.post('/ess/leave/apply', data),
+
+  // Claims
+  getClaims: (params) => api.get('/ess/claims', { params }),
+  submitClaim: (data) => api.post('/ess/claims', data),
+
+  // Notifications
+  getNotifications: (params) => api.get('/ess/notifications', { params }),
+  markNotificationRead: (id) => api.put(`/ess/notifications/${id}/read`),
+  markAllNotificationsRead: () => api.put('/ess/notifications/read-all'),
+  getUnreadCount: () => api.get('/ess/notifications/unread-count'),
 };
 
 export default api;

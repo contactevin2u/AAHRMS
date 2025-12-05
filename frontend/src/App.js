@@ -14,11 +14,24 @@ import Leave from './pages/Leave';
 import Claims from './pages/Claims';
 import Resignations from './pages/Resignations';
 import Contributions from './pages/Contributions';
+// Employee Self-Service (ESS) imports
+import EmployeeLogin from './pages/EmployeeLogin';
+import EmployeeDashboard from './pages/EmployeeDashboard';
+import EmployeeProfile from './pages/EmployeeProfile';
+import EmployeePayslips from './pages/EmployeePayslips';
+import EmployeeLeave from './pages/EmployeeLeave';
+import EmployeeClaims from './pages/EmployeeClaims';
+import EmployeeNotifications from './pages/EmployeeNotifications';
 import './App.css';
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('adminToken');
   return token ? children : <Navigate to="/" replace />;
+}
+
+function EmployeeProtectedRoute({ children }) {
+  const token = localStorage.getItem('employeeToken');
+  return token ? children : <Navigate to="/employee/login" replace />;
 }
 
 function App() {
@@ -123,6 +136,58 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Employee Self-Service (ESS) Routes */}
+        <Route path="/employee/login" element={<EmployeeLogin />} />
+        <Route
+          path="/employee/dashboard"
+          element={
+            <EmployeeProtectedRoute>
+              <EmployeeDashboard />
+            </EmployeeProtectedRoute>
+          }
+        />
+        <Route
+          path="/employee/profile"
+          element={
+            <EmployeeProtectedRoute>
+              <EmployeeProfile />
+            </EmployeeProtectedRoute>
+          }
+        />
+        <Route
+          path="/employee/payslips"
+          element={
+            <EmployeeProtectedRoute>
+              <EmployeePayslips />
+            </EmployeeProtectedRoute>
+          }
+        />
+        <Route
+          path="/employee/leave"
+          element={
+            <EmployeeProtectedRoute>
+              <EmployeeLeave />
+            </EmployeeProtectedRoute>
+          }
+        />
+        <Route
+          path="/employee/claims"
+          element={
+            <EmployeeProtectedRoute>
+              <EmployeeClaims />
+            </EmployeeProtectedRoute>
+          }
+        />
+        <Route
+          path="/employee/notifications"
+          element={
+            <EmployeeProtectedRoute>
+              <EmployeeNotifications />
+            </EmployeeProtectedRoute>
+          }
+        />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

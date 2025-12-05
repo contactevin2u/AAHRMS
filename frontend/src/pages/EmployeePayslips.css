@@ -1,0 +1,246 @@
+.ess-payslips {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.ess-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.filter-section select {
+  padding: 10px 16px;
+  border: 2px solid #dce6f0;
+  border-radius: 10px;
+  font-size: 1rem;
+  color: #445566;
+  background: white;
+  cursor: pointer;
+}
+
+.no-data-card {
+  background: white;
+  border-radius: 16px;
+  padding: 50px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(80, 120, 180, 0.08);
+}
+
+.no-data-card p {
+  color: #7a8a9a;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.payslips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.payslip-card {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(80, 120, 180, 0.08);
+  border: 1px solid #e8f0f8;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.payslip-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(80, 120, 180, 0.15);
+}
+
+.payslip-month-header {
+  background: linear-gradient(135deg, #6a8fc8 0%, #5478a8 100%);
+  color: white;
+  padding: 18px 20px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.payslip-details {
+  padding: 20px;
+}
+
+.payslip-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 0.95rem;
+  color: #5a6a7a;
+}
+
+.payslip-row.net {
+  border-top: 2px solid #f0f5fa;
+  margin-top: 8px;
+  padding-top: 12px;
+  font-weight: 700;
+  color: #2a9d5c;
+  font-size: 1.1rem;
+}
+
+.deduction {
+  color: #d85454;
+}
+
+.payslip-status {
+  padding: 12px 20px;
+  background: #f8faff;
+  border-top: 1px solid #f0f5fa;
+}
+
+.payslip-status .status {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.payslip-status .status.finalized {
+  background: #e8f8e8;
+  color: #2a9d5c;
+}
+
+.payslip-status .status.draft {
+  background: #fff3e0;
+  color: #e67e22;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.payslip-modal {
+  background: white;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 25px;
+  border-bottom: 1px solid #f0f5fa;
+  background: #fafcff;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #445566;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.8rem;
+  color: #7a8a9a;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #445566;
+}
+
+.modal-body {
+  padding: 25px;
+}
+
+.payslip-section {
+  margin-bottom: 25px;
+}
+
+.payslip-section:last-child {
+  margin-bottom: 0;
+}
+
+.payslip-section h3 {
+  font-size: 1rem;
+  color: #445566;
+  margin: 0 0 15px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f0f5fa;
+}
+
+.payslip-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.payslip-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+  color: #5a6a7a;
+}
+
+.payslip-item.total {
+  font-weight: 700;
+  color: #445566;
+  border-top: 1px solid #f0f5fa;
+  padding-top: 10px;
+  margin-top: 5px;
+}
+
+.net-section {
+  background: linear-gradient(135deg, #e8f8e8 0%, #d8f0d8 100%);
+  padding: 20px;
+  border-radius: 12px;
+  margin: 0 -25px -25px -25px;
+  border-radius: 0 0 20px 20px;
+}
+
+.net-pay-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.net-pay-row span:first-child {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2a7d4c;
+}
+
+.net-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2a9d5c;
+}
+
+.notes-text {
+  color: #5a6a7a;
+  font-size: 0.95rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .payslips-grid {
+    grid-template-columns: 1fr;
+  }
+}

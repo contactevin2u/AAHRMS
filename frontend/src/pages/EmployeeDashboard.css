@@ -1,0 +1,210 @@
+.ess-dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.ess-page-header {
+  margin-bottom: 30px;
+}
+
+.ess-page-header h1 {
+  font-size: 1.8rem;
+  color: #445566;
+  margin: 0 0 8px 0;
+}
+
+.ess-page-header p {
+  color: #7a8a9a;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.ess-loading,
+.ess-error {
+  text-align: center;
+  padding: 60px 20px;
+  color: #7a8a9a;
+  font-size: 1.1rem;
+}
+
+.ess-error {
+  color: #d85454;
+}
+
+.ess-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.ess-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(80, 120, 180, 0.08);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  border: 1px solid #e8f0f8;
+}
+
+.ess-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(80, 120, 180, 0.15);
+}
+
+.ess-card-header {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #f0f5fa;
+  background: #fafcff;
+}
+
+.ess-card-icon {
+  font-size: 1.5rem;
+}
+
+.ess-card-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #445566;
+  font-weight: 600;
+  flex: 1;
+}
+
+.ess-card-body {
+  padding: 20px;
+}
+
+.ess-card-footer {
+  padding: 15px 20px;
+  background: #f8faff;
+  color: #6a8fc8;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-top: 1px solid #f0f5fa;
+  text-align: right;
+}
+
+.no-data {
+  color: #a0b0c0;
+  font-style: italic;
+  margin: 0;
+}
+
+/* Payslip Card */
+.payslip-card .payslip-month {
+  font-size: 0.95rem;
+  color: #7a8a9a;
+  margin-bottom: 12px;
+}
+
+.payslip-card .payslip-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.payslip-card .payslip-amount .label {
+  font-size: 0.85rem;
+  color: #7a8a9a;
+}
+
+.payslip-card .payslip-amount .amount {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #2a9d5c;
+}
+
+.payslip-card .payslip-gross {
+  font-size: 0.85rem;
+  color: #7a8a9a;
+  margin-top: 10px;
+}
+
+/* Leave Card */
+.leave-card .leave-balances {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.leave-card .leave-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f8faff;
+  border-radius: 8px;
+}
+
+.leave-card .leave-type {
+  font-weight: 600;
+  color: #445566;
+}
+
+.leave-card .leave-days {
+  color: #6a8fc8;
+  font-weight: 600;
+}
+
+.pending-badge {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fff3e0;
+  color: #e67e22;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Claims Card */
+.claims-card .claims-info {
+  margin-bottom: 10px;
+}
+
+.claims-card .claims-pending {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #e67e22;
+}
+
+.claims-card .claims-desc {
+  color: #7a8a9a;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* Notifications Card */
+.notification-badge {
+  background: #ff6b6b;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.notifications-desc {
+  color: #5a6a7a;
+  margin: 0;
+}
+
+/* Profile Card */
+.profile-card .profile-info p {
+  margin: 8px 0;
+  color: #5a6a7a;
+  font-size: 0.95rem;
+}
+
+.profile-card .profile-info strong {
+  color: #445566;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ess-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}

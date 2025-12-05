@@ -188,6 +188,22 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='address') THEN
           ALTER TABLE employees ADD COLUMN address TEXT;
         END IF;
+        -- Employee Self-Service (ESS) Authentication fields
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='password_hash') THEN
+          ALTER TABLE employees ADD COLUMN password_hash VARCHAR(255);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='last_login') THEN
+          ALTER TABLE employees ADD COLUMN last_login TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='password_reset_token') THEN
+          ALTER TABLE employees ADD COLUMN password_reset_token VARCHAR(255);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='password_reset_expires') THEN
+          ALTER TABLE employees ADD COLUMN password_reset_expires TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='ess_enabled') THEN
+          ALTER TABLE employees ADD COLUMN ess_enabled BOOLEAN DEFAULT TRUE;
+        END IF;
       END $$;
 
       -- Salary Configuration per Department
@@ -500,6 +516,27 @@ const initDb = async () => {
 
       CREATE INDEX IF NOT EXISTS idx_holidays_date ON public_holidays(date);
       CREATE INDEX IF NOT EXISTS idx_holidays_year ON public_holidays(year);
+
+      -- =====================================================
+      -- EMPLOYEE SELF-SERVICE (ESS) TABLES
+      -- =====================================================
+
+      -- Notifications for employees
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT,
+        reference_type VARCHAR(50),
+        reference_id INTEGER,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_employee ON notifications(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
+      CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
     `);
     console.log('Database tables initialized');
   } catch (err) {
