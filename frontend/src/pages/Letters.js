@@ -405,56 +405,95 @@ function Letters() {
           <div className="modal view-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Letter Details</h2>
-              <button className="close-btn" onClick={() => setShowViewModal(false)}>×</button>
+              <div className="modal-header-actions">
+                <button className="btn-print" onClick={() => window.print()}>Print</button>
+                <button className="close-btn" onClick={() => setShowViewModal(false)}>×</button>
+              </div>
             </div>
             <div className="modal-body">
-              <div className="letter-meta">
-                <div className="meta-row">
-                  <span className="meta-label">To:</span>
-                  <span className="meta-value">{selectedLetter.employee_name} ({selectedLetter.employee_code})</span>
+              {/* Letter Preview with Letterhead */}
+              <div className="letter-preview" id="letter-print">
+                {/* Letterhead */}
+                <div className="letterhead">
+                  <div className="letterhead-logo">
+                    <img src="/logo.png" alt="AA Alive" />
+                  </div>
+                  <div className="letterhead-info">
+                    <h1>AA Alive Sdn. Bhd.</h1>
+                    <p className="company-reg">Company No.: 1204108-D</p>
+                    <p className="company-address">
+                      1, Jalan Perusahaan Amari, Kawasan Industri Batu Caves,<br />
+                      68100 Batu Caves, Selangor
+                    </p>
+                  </div>
                 </div>
-                <div className="meta-row">
-                  <span className="meta-label">Type:</span>
-                  <span
-                    className="type-badge"
-                    style={{ backgroundColor: getTypeColor(selectedLetter.letter_type) }}
-                  >
-                    {getTypeLabel(selectedLetter.letter_type)}
-                  </span>
+
+                <div className="letter-divider"></div>
+
+                {/* Letter Date */}
+                <div className="letter-date">
+                  Date: {new Date(selectedLetter.created_at).toLocaleDateString('en-MY', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
                 </div>
-                <div className="meta-row">
-                  <span className="meta-label">Issued:</span>
-                  <span className="meta-value">{formatDate(selectedLetter.created_at)}</span>
+
+                {/* Letter Recipient */}
+                <div className="letter-recipient">
+                  <p><strong>To:</strong></p>
+                  <p>{selectedLetter.employee_name}</p>
+                  <p>Employee ID: {selectedLetter.employee_code}</p>
+                  {selectedLetter.department_name && <p>Department: {selectedLetter.department_name}</p>}
                 </div>
-                <div className="meta-row">
-                  <span className="meta-label">Issued By:</span>
-                  <span className="meta-value">{selectedLetter.issued_by_name}</span>
+
+                {/* Letter Subject */}
+                <div className="letter-subject-line">
+                  <strong>Subject: {selectedLetter.subject}</strong>
                 </div>
-                <div className="meta-row">
-                  <span className="meta-label">Status:</span>
-                  <span className={`status-badge ${selectedLetter.status}`}>
-                    {selectedLetter.status}
-                    {selectedLetter.read_at && ` (${formatDate(selectedLetter.read_at)})`}
-                  </span>
+
+                {/* Letter Body */}
+                <div className="letter-body">
+                  <pre>{selectedLetter.content}</pre>
                 </div>
+
+                {/* Signature Section */}
+                <div className="letter-signature">
+                  <div className="signature-block">
+                    <div className="signature-line"></div>
+                    <p className="signature-name">{selectedLetter.issued_by_name}</p>
+                    {selectedLetter.issued_by_designation && (
+                      <p className="signature-designation">{selectedLetter.issued_by_designation}</p>
+                    )}
+                    <p className="signature-date">
+                      Date: {new Date(selectedLetter.created_at).toLocaleDateString('en-MY')}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedLetter.attachment_url && (
+                  <div className="letter-attachment">
+                    <strong>Attachment:</strong>
+                    <a href={selectedLetter.attachment_url} target="_blank" rel="noopener noreferrer">
+                      {selectedLetter.attachment_name || 'Download Attachment'}
+                    </a>
+                  </div>
+                )}
               </div>
 
-              <div className="letter-subject">
-                <strong>Subject:</strong> {selectedLetter.subject}
+              {/* Letter Meta Info (not printed) */}
+              <div className="letter-meta-info">
+                <span className={`status-badge ${selectedLetter.status}`}>
+                  {selectedLetter.status === 'read' ? 'Read' : 'Unread'}
+                  {selectedLetter.read_at && ` on ${formatDate(selectedLetter.read_at)}`}
+                </span>
+                <span
+                  className="type-badge"
+                  style={{ backgroundColor: getTypeColor(selectedLetter.letter_type) }}
+                >
+                  {getTypeLabel(selectedLetter.letter_type)}
+                </span>
               </div>
-
-              <div className="letter-content">
-                <pre>{selectedLetter.content}</pre>
-              </div>
-
-              {selectedLetter.attachment_url && (
-                <div className="letter-attachment">
-                  <strong>Attachment:</strong>
-                  <a href={selectedLetter.attachment_url} target="_blank" rel="noopener noreferrer">
-                    {selectedLetter.attachment_name || 'Download Attachment'}
-                  </a>
-                </div>
-              )}
             </div>
           </div>
         </div>

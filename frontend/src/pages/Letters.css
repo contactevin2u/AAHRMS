@@ -515,6 +515,230 @@
   text-decoration: underline;
 }
 
+/* Modal Header Actions */
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-print {
+  background: #27ae60;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-print:hover {
+  background: #219a52;
+}
+
+/* Letter Preview with Letterhead */
+.letter-preview {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 40px;
+  margin-bottom: 20px;
+}
+
+/* Letterhead */
+.letterhead {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.letterhead-logo {
+  flex-shrink: 0;
+}
+
+.letterhead-logo img {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+}
+
+.letterhead-info {
+  flex: 1;
+}
+
+.letterhead-info h1 {
+  margin: 0 0 5px 0;
+  font-size: 1.5rem;
+  color: #8B4513;
+  font-weight: 700;
+}
+
+.letterhead-info .company-reg {
+  margin: 0 0 5px 0;
+  font-size: 0.9rem;
+  color: #555;
+  font-weight: 500;
+}
+
+.letterhead-info .company-address {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+.letter-divider {
+  height: 3px;
+  background: linear-gradient(90deg, #8B4513 0%, #D2691E 50%, #8B4513 100%);
+  margin-bottom: 30px;
+}
+
+/* Letter Content Sections */
+.letter-date {
+  text-align: right;
+  margin-bottom: 25px;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.letter-recipient {
+  margin-bottom: 25px;
+  line-height: 1.6;
+}
+
+.letter-recipient p {
+  margin: 0 0 3px 0;
+  color: #333;
+}
+
+.letter-subject-line {
+  margin-bottom: 25px;
+  padding: 10px 0;
+  border-bottom: 1px solid #ddd;
+  text-decoration: underline;
+}
+
+.letter-subject-line strong {
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.letter-body {
+  margin-bottom: 40px;
+}
+
+.letter-body pre {
+  margin: 0;
+  font-family: 'Times New Roman', Times, serif;
+  white-space: pre-wrap;
+  line-height: 1.8;
+  color: #333;
+  font-size: 1rem;
+}
+
+/* Signature Section */
+.letter-signature {
+  margin-top: 50px;
+}
+
+.signature-block {
+  max-width: 250px;
+}
+
+.signature-line {
+  width: 200px;
+  height: 1px;
+  background: #333;
+  margin-bottom: 10px;
+}
+
+.signature-name {
+  margin: 0 0 3px 0;
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.signature-designation {
+  margin: 0 0 3px 0;
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.signature-date {
+  margin: 0;
+  color: #777;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+/* Letter Meta Info (shown below preview) */
+.letter-meta-info {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+/* Print Styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .letter-preview,
+  .letter-preview * {
+    visibility: visible;
+  }
+
+  .letter-preview {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: none;
+    padding: 20mm;
+    margin: 0;
+    box-shadow: none;
+  }
+
+  .modal-overlay {
+    position: absolute;
+    background: white;
+  }
+
+  .modal {
+    box-shadow: none;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .modal-header,
+  .modal-footer,
+  .letter-meta-info,
+  .btn-print,
+  .close-btn {
+    display: none !important;
+  }
+
+  .letterhead-logo img {
+    width: 70px;
+    height: 70px;
+  }
+
+  .letterhead-info h1 {
+    font-size: 1.4rem;
+  }
+
+  .letter-body pre {
+    font-size: 12pt;
+  }
+}
+
 @media (max-width: 768px) {
   .letters-page {
     padding: 15px;
@@ -542,5 +766,19 @@
 
   .filters-bar select {
     width: 100%;
+  }
+
+  .letter-preview {
+    padding: 20px;
+  }
+
+  .letterhead {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .letterhead-logo img {
+    width: 60px;
+    height: 60px;
   }
 }

@@ -149,56 +149,85 @@ function EmployeeLetters() {
             <div className="modal letter-detail-modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>Letter Details</h2>
-                <button className="close-btn" onClick={() => setSelectedLetter(null)}>×</button>
+                <div className="modal-header-actions">
+                  <button className="btn-print" onClick={() => window.print()}>Print</button>
+                  <button className="close-btn" onClick={() => setSelectedLetter(null)}>×</button>
+                </div>
               </div>
               <div className="modal-body">
-                <div className="letter-info-card">
-                  <div className="info-row">
-                    <span className="info-label">Type</span>
-                    <span
-                      className="letter-type-badge"
-                      style={{ backgroundColor: getTypeInfo(selectedLetter.letter_type).color }}
-                    >
-                      {getTypeInfo(selectedLetter.letter_type).label}
-                    </span>
+                {/* Letter with Letterhead */}
+                <div className="letter-preview" id="letter-print">
+                  {/* Letterhead */}
+                  <div className="letterhead">
+                    <div className="letterhead-logo">
+                      <img src="/logo.png" alt="AA Alive" />
+                    </div>
+                    <div className="letterhead-info">
+                      <h1>AA Alive Sdn. Bhd.</h1>
+                      <p className="company-reg">Company No.: 1204108-D</p>
+                      <p className="company-address">
+                        1, Jalan Perusahaan Amari, Kawasan Industri Batu Caves,<br />
+                        68100 Batu Caves, Selangor
+                      </p>
+                    </div>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Date Issued</span>
-                    <span className="info-value">{formatDateTime(selectedLetter.created_at)}</span>
+
+                  <div className="letter-divider"></div>
+
+                  {/* Letter Date */}
+                  <div className="letter-date-line">
+                    Date: {formatDate(selectedLetter.created_at)}
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Issued By</span>
-                    <span className="info-value">{selectedLetter.issued_by_name || 'HR Department'}</span>
+
+                  {/* Letter Subject */}
+                  <div className="letter-subject-line">
+                    <strong>Subject: {selectedLetter.subject}</strong>
                   </div>
-                  {selectedLetter.read_at && (
-                    <div className="info-row">
-                      <span className="info-label">Read On</span>
-                      <span className="info-value">{formatDateTime(selectedLetter.read_at)}</span>
+
+                  {/* Letter Body */}
+                  <div className="letter-body-content">
+                    <pre>{selectedLetter.content}</pre>
+                  </div>
+
+                  {/* Signature Section */}
+                  <div className="letter-signature">
+                    <div className="signature-block">
+                      <div className="signature-line"></div>
+                      <p className="signature-name">{selectedLetter.issued_by_name || 'HR Department'}</p>
+                      {selectedLetter.issued_by_designation && (
+                        <p className="signature-designation">{selectedLetter.issued_by_designation}</p>
+                      )}
+                      <p className="signature-date">Date: {formatDate(selectedLetter.created_at)}</p>
+                    </div>
+                  </div>
+
+                  {selectedLetter.attachment_url && (
+                    <div className="letter-attachment-section">
+                      <strong>Attachment:</strong>
+                      <a
+                        href={selectedLetter.attachment_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="attachment-link"
+                      >
+                        📎 {selectedLetter.attachment_name || 'Download Attachment'}
+                      </a>
                     </div>
                   )}
                 </div>
 
-                <div className="letter-subject-section">
-                  <h3>{selectedLetter.subject}</h3>
+                {/* Letter Meta Info (not printed) */}
+                <div className="letter-meta-info">
+                  <span
+                    className="letter-type-badge"
+                    style={{ backgroundColor: getTypeInfo(selectedLetter.letter_type).color }}
+                  >
+                    {getTypeInfo(selectedLetter.letter_type).label}
+                  </span>
+                  {selectedLetter.read_at && (
+                    <span className="read-info">Read on {formatDateTime(selectedLetter.read_at)}</span>
+                  )}
                 </div>
-
-                <div className="letter-body-section">
-                  <pre>{selectedLetter.content}</pre>
-                </div>
-
-                {selectedLetter.attachment_url && (
-                  <div className="letter-attachment-section">
-                    <strong>Attachment:</strong>
-                    <a
-                      href={selectedLetter.attachment_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="attachment-link"
-                    >
-                      📎 {selectedLetter.attachment_name || 'Download Attachment'}
-                    </a>
-                  </div>
-                )}
               </div>
             </div>
           </div>
