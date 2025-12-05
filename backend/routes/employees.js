@@ -6,7 +6,7 @@ const { authenticateAdmin } = require('../middleware/auth');
 // Get all employees
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { department_id, status, search } = req.query;
+    const { department_id, status, search, employment_type, probation_status } = req.query;
 
     let query = `
       SELECT e.*, d.name as department_name
@@ -33,6 +33,20 @@ router.get('/', authenticateAdmin, async (req, res) => {
       paramCount++;
       query += ` AND (e.name ILIKE $${paramCount} OR e.employee_id ILIKE $${paramCount})`;
       params.push(`%${search}%`);
+    }
+
+    // Filter by employment type (probation, confirmed, contract)
+    if (employment_type) {
+      paramCount++;
+      query += ` AND e.employment_type = $${paramCount}`;
+      params.push(employment_type);
+    }
+
+    // Filter by probation status (ongoing, pending_review, confirmed, extended)
+    if (probation_status) {
+      paramCount++;
+      query += ` AND e.probation_status = $${paramCount}`;
+      params.push(probation_status);
     }
 
     query += ' ORDER BY e.created_at DESC';
@@ -79,11 +93,30 @@ router.post('/', authenticateAdmin, async (req, res) => {
       // Default salary fields
       default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
       // Additional earning fields
-      default_bonus, default_incentive
+      default_bonus, default_incentive,
+      // Probation fields
+      employment_type, probation_months, salary_before_confirmation, salary_after_confirmation, increment_amount
     } = req.body;
 
     if (!employee_id || !name || !department_id) {
       return res.status(400).json({ error: 'Employee ID, name, and department are required' });
+    }
+
+    // Calculate probation end date if join_date and probation_months are provided
+    let probation_end_date = null;
+    const empType = employment_type || 'probation';
+    const probMonths = probation_months || 3;
+
+    if (join_date && empType === 'probation') {
+      const joinDateObj = new Date(join_date);
+      joinDateObj.setMonth(joinDateObj.getMonth() + probMonths);
+      probation_end_date = joinDateObj.toISOString().split('T')[0];
+    }
+
+    // Calculate increment amount if both salaries provided
+    let calcIncrement = increment_amount;
+    if (!calcIncrement && salary_before_confirmation && salary_after_confirmation) {
+      calcIncrement = parseFloat(salary_after_confirmation) - parseFloat(salary_before_confirmation);
     }
 
     const result = await pool.query(
@@ -93,9 +126,11 @@ router.post('/', authenticateAdmin, async (req, res) => {
         epf_number, socso_number, tax_number, epf_contribution_type,
         marital_status, spouse_working, children_count, date_of_birth,
         default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
-        default_bonus, default_incentive
+        default_bonus, default_incentive,
+        employment_type, probation_months, probation_end_date, probation_status,
+        salary_before_confirmation, salary_after_confirmation, increment_amount
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
        RETURNING *`,
       [
         employee_id, name, email, phone, ic_number, department_id, position, join_date,
@@ -103,7 +138,9 @@ router.post('/', authenticateAdmin, async (req, res) => {
         epf_number, socso_number, tax_number, epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth,
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
-        default_bonus || 0, default_incentive || 0
+        default_bonus || 0, default_incentive || 0,
+        empType, probMonths, probation_end_date, empType === 'confirmed' ? 'confirmed' : 'ongoing',
+        salary_before_confirmation || null, salary_after_confirmation || null, calcIncrement || null
       ]
     );
 
@@ -129,8 +166,37 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       // Default salary fields
       default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
       // Additional earning fields
-      default_bonus, default_incentive
+      default_bonus, default_incentive,
+      // Probation fields
+      employment_type, probation_months, salary_before_confirmation, salary_after_confirmation, increment_amount,
+      probation_notes
     } = req.body;
+
+    // Get current employee data to check if we need to recalculate probation_end_date
+    const currentEmp = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
+    if (currentEmp.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    const current = currentEmp.rows[0];
+
+    // Calculate probation end date if join_date or probation_months changed
+    let probation_end_date = current.probation_end_date;
+    const newJoinDate = join_date || current.join_date;
+    const newProbMonths = probation_months !== undefined ? probation_months : (current.probation_months || 3);
+    const newEmpType = employment_type || current.employment_type || 'probation';
+
+    // Recalculate if still on probation and dates/months changed
+    if (newEmpType === 'probation' && newJoinDate) {
+      const joinDateObj = new Date(newJoinDate);
+      joinDateObj.setMonth(joinDateObj.getMonth() + newProbMonths);
+      probation_end_date = joinDateObj.toISOString().split('T')[0];
+    }
+
+    // Calculate increment amount if both salaries provided
+    let calcIncrement = increment_amount;
+    if (calcIncrement === undefined && salary_before_confirmation && salary_after_confirmation) {
+      calcIncrement = parseFloat(salary_after_confirmation) - parseFloat(salary_before_confirmation);
+    }
 
     const result = await pool.query(
       `UPDATE employees
@@ -142,8 +208,11 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
            default_basic_salary = $22, default_allowance = $23, commission_rate = $24,
            per_trip_rate = $25, ot_rate = $26, outstation_rate = $27,
            default_bonus = $28, default_incentive = $29,
+           employment_type = $30, probation_months = $31, probation_end_date = $32,
+           salary_before_confirmation = $33, salary_after_confirmation = $34, increment_amount = $35,
+           probation_notes = $36,
            updated_at = NOW()
-       WHERE id = $30
+       WHERE id = $37
        RETURNING *`,
       [
         employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
@@ -152,13 +221,12 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
         marital_status, spouse_working, children_count, date_of_birth,
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0,
         per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
-        default_bonus || 0, default_incentive || 0, id
+        default_bonus || 0, default_incentive || 0,
+        newEmpType, newProbMonths, probation_end_date,
+        salary_before_confirmation, salary_after_confirmation, calcIncrement,
+        probation_notes, id
       ]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Employee not found' });
-    }
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -506,7 +574,10 @@ router.get('/stats/overview', authenticateAdmin, async (req, res) => {
       SELECT
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE status = 'active') as active,
-        COUNT(*) FILTER (WHERE status = 'inactive') as inactive
+        COUNT(*) FILTER (WHERE status = 'inactive') as inactive,
+        COUNT(*) FILTER (WHERE status = 'active' AND employment_type = 'probation') as on_probation,
+        COUNT(*) FILTER (WHERE status = 'active' AND employment_type = 'confirmed') as confirmed,
+        COUNT(*) FILTER (WHERE status = 'active' AND probation_status = 'pending_review') as pending_review
       FROM employees
     `);
 

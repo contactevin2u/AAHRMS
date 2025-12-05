@@ -192,6 +192,15 @@ export const lettersApi = {
   getStats: () => api.get('/letters/stats/summary'),
 };
 
+// Probation Management
+export const probationApi = {
+  getPending: () => api.get('/probation/pending'),
+  getAll: (params) => api.get('/probation/all', { params }),
+  confirm: (id, data) => api.post(`/probation/${id}/confirm`, data),
+  extend: (id, data) => api.post(`/probation/${id}/extend`, data),
+  getHistory: (id) => api.get(`/probation/${id}/history`),
+};
+
 // Admin User Management
 export const adminUsersApi = {
   getAll: () => api.get('/admin-users'),

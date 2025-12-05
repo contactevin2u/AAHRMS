@@ -267,6 +267,37 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='ess_enabled') THEN
           ALTER TABLE employees ADD COLUMN ess_enabled BOOLEAN DEFAULT TRUE;
         END IF;
+        -- Probation tracking fields
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='employment_type') THEN
+          ALTER TABLE employees ADD COLUMN employment_type VARCHAR(20) DEFAULT 'probation';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='probation_months') THEN
+          ALTER TABLE employees ADD COLUMN probation_months INTEGER DEFAULT 3;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='probation_end_date') THEN
+          ALTER TABLE employees ADD COLUMN probation_end_date DATE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='confirmation_date') THEN
+          ALTER TABLE employees ADD COLUMN confirmation_date DATE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='salary_before_confirmation') THEN
+          ALTER TABLE employees ADD COLUMN salary_before_confirmation DECIMAL(10,2);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='salary_after_confirmation') THEN
+          ALTER TABLE employees ADD COLUMN salary_after_confirmation DECIMAL(10,2);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='increment_amount') THEN
+          ALTER TABLE employees ADD COLUMN increment_amount DECIMAL(10,2);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='probation_status') THEN
+          ALTER TABLE employees ADD COLUMN probation_status VARCHAR(20) DEFAULT 'ongoing';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='probation_extended_months') THEN
+          ALTER TABLE employees ADD COLUMN probation_extended_months INTEGER;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='probation_notes') THEN
+          ALTER TABLE employees ADD COLUMN probation_notes TEXT;
+        END IF;
       END $$;
 
       -- Salary Configuration per Department
@@ -776,6 +807,26 @@ Best regards,
 Human Resources Department
 {{company_name}}')
       ON CONFLICT DO NOTHING;
+
+      -- =====================================================
+      -- PROBATION HISTORY TABLE (Audit Log)
+      -- =====================================================
+      CREATE TABLE IF NOT EXISTS probation_history (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        action VARCHAR(50) NOT NULL,
+        old_status VARCHAR(20),
+        new_status VARCHAR(20),
+        old_salary DECIMAL(10,2),
+        new_salary DECIMAL(10,2),
+        extension_months INTEGER,
+        notes TEXT,
+        performed_by INTEGER REFERENCES admin_users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_probation_history_employee ON probation_history(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_probation_history_created ON probation_history(created_at DESC);
     `);
     console.log('Database tables initialized');
   } catch (err) {
