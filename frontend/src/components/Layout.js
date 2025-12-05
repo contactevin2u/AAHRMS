@@ -33,6 +33,12 @@ function Layout({ children }) {
     return ['super_admin', 'boss', 'director'].includes(adminInfo.role);
   };
 
+  // Check if user is super admin (for role management)
+  const isSuperAdmin = () => {
+    if (!adminInfo) return false;
+    return adminInfo.role === 'super_admin';
+  };
+
   return (
     <div className="layout">
       <nav className="sidebar">
@@ -102,6 +108,13 @@ function Layout({ children }) {
             <NavLink to="/admin/users" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
               <span className="nav-icon">👤</span>
               <span>User Management</span>
+            </NavLink>
+          )}
+
+          {isSuperAdmin() && (
+            <NavLink to="/admin/roles" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">🔐</span>
+              <span>Role Management</span>
             </NavLink>
           )}
         </div>

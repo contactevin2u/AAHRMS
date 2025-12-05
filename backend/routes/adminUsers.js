@@ -302,4 +302,211 @@ router.get('/me/permissions', authenticateAdmin, async (req, res) => {
   }
 });
 
+// ==================== ROLE MANAGEMENT (Super Admin Only) ====================
+
+// Check if user is super_admin
+const requireSuperAdmin = async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      'SELECT role FROM admin_users WHERE id = $1',
+      [req.admin.id]
+    );
+
+    if (result.rows.length === 0 || result.rows[0].role !== 'super_admin') {
+      return res.status(403).json({ error: 'Only Super Admin can manage roles' });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Super admin check error:', error);
+    res.status(500).json({ error: 'Permission check failed' });
+  }
+};
+
+// Get single role
+router.get('/roles/:id', authenticateAdmin, requireSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'SELECT * FROM admin_roles WHERE id = $1',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Role not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching role:', error);
+    res.status(500).json({ error: 'Failed to fetch role' });
+  }
+});
+
+// Create new role
+router.post('/roles', authenticateAdmin, requireSuperAdmin, async (req, res) => {
+  try {
+    const { name, display_name, description, permissions } = req.body;
+
+    if (!name || !display_name) {
+      return res.status(400).json({ error: 'Name and display name are required' });
+    }
+
+    // Validate name format (lowercase, underscores only)
+    if (!/^[a-z][a-z0-9_]*$/.test(name)) {
+      return res.status(400).json({ error: 'Role name must be lowercase letters, numbers, and underscores only' });
+    }
+
+    // Check if role name already exists
+    const existing = await pool.query(
+      'SELECT id FROM admin_roles WHERE name = $1',
+      [name]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Role name already exists' });
+    }
+
+    const result = await pool.query(`
+      INSERT INTO admin_roles (name, display_name, description, permissions, is_system)
+      VALUES ($1, $2, $3, $4, FALSE)
+      RETURNING *
+    `, [name, display_name, description || '', permissions || {}]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating role:', error);
+    res.status(500).json({ error: 'Failed to create role' });
+  }
+});
+
+// Update role
+router.put('/roles/:id', authenticateAdmin, requireSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { display_name, description, permissions } = req.body;
+
+    // Check if role exists
+    const existingRole = await pool.query(
+      'SELECT * FROM admin_roles WHERE id = $1',
+      [id]
+    );
+
+    if (existingRole.rows.length === 0) {
+      return res.status(404).json({ error: 'Role not found' });
+    }
+
+    // For system roles, only allow updating permissions
+    const role = existingRole.rows[0];
+
+    let query, params;
+    if (role.is_system) {
+      // System roles: only update permissions
+      query = `
+        UPDATE admin_roles
+        SET permissions = COALESCE($1, permissions),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING *
+      `;
+      params = [permissions, id];
+    } else {
+      // Custom roles: can update everything except name
+      query = `
+        UPDATE admin_roles
+        SET display_name = COALESCE($1, display_name),
+            description = COALESCE($2, description),
+            permissions = COALESCE($3, permissions),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $4
+        RETURNING *
+      `;
+      params = [display_name, description, permissions, id];
+    }
+
+    const result = await pool.query(query, params);
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating role:', error);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
+// Delete role
+router.delete('/roles/:id', authenticateAdmin, requireSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if role exists
+    const existingRole = await pool.query(
+      'SELECT * FROM admin_roles WHERE id = $1',
+      [id]
+    );
+
+    if (existingRole.rows.length === 0) {
+      return res.status(404).json({ error: 'Role not found' });
+    }
+
+    const role = existingRole.rows[0];
+
+    // Prevent deleting system roles
+    if (role.is_system) {
+      return res.status(403).json({ error: 'System roles cannot be deleted' });
+    }
+
+    // Check if any users have this role
+    const usersWithRole = await pool.query(
+      'SELECT COUNT(*) FROM admin_users WHERE role = $1',
+      [role.name]
+    );
+
+    if (parseInt(usersWithRole.rows[0].count) > 0) {
+      return res.status(400).json({
+        error: 'Cannot delete role that is assigned to users. Reassign users first.'
+      });
+    }
+
+    await pool.query('DELETE FROM admin_roles WHERE id = $1', [id]);
+
+    res.json({ message: 'Role deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting role:', error);
+    res.status(500).json({ error: 'Failed to delete role' });
+  }
+});
+
+// Get available permissions list
+router.get('/permissions/list', authenticateAdmin, requireSuperAdmin, async (req, res) => {
+  try {
+    // Define all available permissions in the system
+    const permissions = [
+      { key: 'all', label: 'Full Access', description: 'Complete access to all features' },
+      { key: 'dashboard', label: 'Dashboard', description: 'View dashboard and statistics' },
+      { key: 'employees', label: 'Employees', description: 'Manage employee records' },
+      { key: 'employees_view', label: 'Employees (View Only)', description: 'View employee records only' },
+      { key: 'payroll', label: 'Payroll', description: 'Full payroll management' },
+      { key: 'payroll_view', label: 'Payroll (View Only)', description: 'View payroll records only' },
+      { key: 'payroll_approve', label: 'Payroll Approve', description: 'Approve/finalize payroll runs' },
+      { key: 'leave', label: 'Leave', description: 'Manage leave requests' },
+      { key: 'leave_approve', label: 'Leave Approve', description: 'Approve leave requests' },
+      { key: 'claims', label: 'Claims', description: 'Manage claims' },
+      { key: 'claims_approve', label: 'Claims Approve', description: 'Approve claims' },
+      { key: 'resignations', label: 'Resignations', description: 'Manage resignations' },
+      { key: 'letters', label: 'HR Letters', description: 'Issue HR letters' },
+      { key: 'departments', label: 'Departments', description: 'Manage departments' },
+      { key: 'contributions', label: 'Contributions', description: 'View government contributions' },
+      { key: 'feedback', label: 'Feedback', description: 'View anonymous feedback' },
+      { key: 'users', label: 'User Management', description: 'Manage admin users' },
+      { key: 'reports', label: 'Reports', description: 'View and export reports' },
+    ];
+
+    res.json(permissions);
+  } catch (error) {
+    console.error('Error fetching permissions list:', error);
+    res.status(500).json({ error: 'Failed to fetch permissions' });
+  }
+});
+
 module.exports = router;

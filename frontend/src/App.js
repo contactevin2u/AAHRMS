@@ -16,6 +16,7 @@ import Resignations from './pages/Resignations';
 import Contributions from './pages/Contributions';
 import Letters from './pages/Letters';
 import UserManagement from './pages/UserManagement';
+import RoleManagement from './pages/RoleManagement';
 // Employee Self-Service (ESS) imports
 import EmployeeLogin from './pages/EmployeeLogin';
 import EmployeeDashboard from './pages/EmployeeDashboard';
@@ -152,6 +153,14 @@ function App() {
           element={
             <ProtectedRoute>
               <UserManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/roles"
+          element={
+            <ProtectedRoute>
+              <RoleManagement />
             </ProtectedRoute>
           }
         />

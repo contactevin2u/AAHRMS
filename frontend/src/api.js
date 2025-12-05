@@ -200,6 +200,12 @@ export const adminUsersApi = {
   resetPassword: (id, newPassword) => api.post(`/admin-users/${id}/reset-password`, { newPassword }),
 
   getRoles: () => api.get('/admin-users/roles/all'),
+  getRole: (id) => api.get(`/admin-users/roles/${id}`),
+  createRole: (data) => api.post('/admin-users/roles', data),
+  updateRole: (id, data) => api.put(`/admin-users/roles/${id}`, data),
+  deleteRole: (id) => api.delete(`/admin-users/roles/${id}`),
+  getPermissionsList: () => api.get('/admin-users/permissions/list'),
+
   getMyPermissions: () => api.get('/admin-users/me/permissions'),
 };
 
