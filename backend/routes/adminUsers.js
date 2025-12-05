@@ -302,6 +302,142 @@ router.get('/me/permissions', authenticateAdmin, async (req, res) => {
   }
 });
 
+// ==================== PROFILE MANAGEMENT ====================
+
+// Get current user's profile
+router.get('/me/profile', authenticateAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        au.id, au.username, au.name, au.email, au.role, au.status,
+        au.designation, au.phone, au.signature_text,
+        au.last_login, au.created_at, au.updated_at,
+        ar.display_name as role_display_name
+      FROM admin_users au
+      LEFT JOIN admin_roles ar ON au.role = ar.name
+      WHERE au.id = $1
+    `, [req.admin.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// Update current user's own profile
+router.put('/me/profile', authenticateAdmin, async (req, res) => {
+  try {
+    const { name, email, designation, phone, signature_text } = req.body;
+
+    const result = await pool.query(`
+      UPDATE admin_users
+      SET name = COALESCE($1, name),
+          email = COALESCE($2, email),
+          designation = COALESCE($3, designation),
+          phone = COALESCE($4, phone),
+          signature_text = COALESCE($5, signature_text),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $6
+      RETURNING id, username, name, email, role, designation, phone, signature_text, updated_at
+    `, [name, email, designation, phone, signature_text, req.admin.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Change own password
+router.post('/me/change-password', authenticateAdmin, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    // Verify current password
+    const user = await pool.query(
+      'SELECT password_hash FROM admin_users WHERE id = $1',
+      [req.admin.id]
+    );
+
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const validPassword = await bcrypt.compare(currentPassword, user.rows[0].password_hash);
+    if (!validPassword) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash and update new password
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await pool.query(
+      'UPDATE admin_users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [passwordHash, req.admin.id]
+    );
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// Super Admin: Update any user's profile
+router.put('/profile/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, designation, phone, signature_text } = req.body;
+
+    // Check if current user is super_admin
+    const currentUser = await pool.query(
+      'SELECT role FROM admin_users WHERE id = $1',
+      [req.admin.id]
+    );
+
+    if (currentUser.rows[0]?.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Only Super Admin can edit other users\' profiles' });
+    }
+
+    const result = await pool.query(`
+      UPDATE admin_users
+      SET name = COALESCE($1, name),
+          email = COALESCE($2, email),
+          designation = COALESCE($3, designation),
+          phone = COALESCE($4, phone),
+          signature_text = COALESCE($5, signature_text),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $6
+      RETURNING id, username, name, email, role, designation, phone, signature_text, updated_at
+    `, [name, email, designation, phone, signature_text, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
 // ==================== ROLE MANAGEMENT (Super Admin Only) ====================
 
 // Check if user is super_admin

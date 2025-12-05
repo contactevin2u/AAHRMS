@@ -120,6 +120,10 @@ function Layout({ children }) {
         </div>
 
         <div className="sidebar-footer">
+          <NavLink to="/admin/profile" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <span className="nav-icon">⚙️</span>
+            <span>My Profile</span>
+          </NavLink>
           <button onClick={handleLogout} className="logout-link">
             <span className="nav-icon">👋</span>
             <span>Logout</span>

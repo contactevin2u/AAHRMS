@@ -104,25 +104,27 @@ router.post('/', authenticateAdmin, async (req, res) => {
 
     await client.query('BEGIN');
 
-    // Get admin user name
+    // Get admin user name and designation
     const adminResult = await client.query(
-      'SELECT username FROM admin_users WHERE id = $1',
+      'SELECT name, username, designation FROM admin_users WHERE id = $1',
       [req.admin.id]
     );
-    const issuedByName = adminResult.rows[0]?.username || 'Admin';
+    const adminUser = adminResult.rows[0];
+    const issuedByName = adminUser?.name || adminUser?.username || 'Admin';
+    const issuedByDesignation = adminUser?.designation || '';
 
     // Create the letter
     const letterResult = await client.query(`
       INSERT INTO hr_letters (
         employee_id, letter_type, subject, content,
-        attachment_url, attachment_name, issued_by, issued_by_name, status
+        attachment_url, attachment_name, issued_by, issued_by_name, issued_by_designation, status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'unread')
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'unread')
       RETURNING *
     `, [
       employee_id, letter_type, subject, content,
       attachment_url || null, attachment_name || null,
-      req.admin.id, issuedByName
+      req.admin.id, issuedByName, issuedByDesignation
     ]);
 
     const letter = letterResult.rows[0];

@@ -70,6 +70,16 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='created_by') THEN
           ALTER TABLE admin_users ADD COLUMN created_by INTEGER;
         END IF;
+        -- Profile fields for letters and approvals
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='designation') THEN
+          ALTER TABLE admin_users ADD COLUMN designation VARCHAR(100);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='phone') THEN
+          ALTER TABLE admin_users ADD COLUMN phone VARCHAR(20);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='signature_text') THEN
+          ALTER TABLE admin_users ADD COLUMN signature_text VARCHAR(255);
+        END IF;
       END $$;
 
       -- Roles table for permission management
@@ -616,6 +626,14 @@ const initDb = async () => {
       CREATE INDEX IF NOT EXISTS idx_hr_letters_type ON hr_letters(letter_type);
       CREATE INDEX IF NOT EXISTS idx_hr_letters_status ON hr_letters(status);
       CREATE INDEX IF NOT EXISTS idx_hr_letters_created ON hr_letters(created_at DESC);
+
+      -- Add issued_by_designation to hr_letters if not exists
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='hr_letters' AND column_name='issued_by_designation') THEN
+          ALTER TABLE hr_letters ADD COLUMN issued_by_designation VARCHAR(100);
+        END IF;
+      END $$;
 
       -- Letter Templates
       CREATE TABLE IF NOT EXISTS letter_templates (

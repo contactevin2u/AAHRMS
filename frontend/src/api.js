@@ -207,6 +207,12 @@ export const adminUsersApi = {
   getPermissionsList: () => api.get('/admin-users/permissions/list'),
 
   getMyPermissions: () => api.get('/admin-users/me/permissions'),
+
+  // Profile management
+  getMyProfile: () => api.get('/admin-users/me/profile'),
+  updateMyProfile: (data) => api.put('/admin-users/me/profile', data),
+  changePassword: (currentPassword, newPassword) => api.post('/admin-users/me/change-password', { currentPassword, newPassword }),
+  updateUserProfile: (id, data) => api.put(`/admin-users/profile/${id}`, data),
 };
 
 // =====================================================
