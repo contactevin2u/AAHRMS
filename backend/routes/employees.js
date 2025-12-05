@@ -392,6 +392,113 @@ router.post('/bulk-import', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Bulk update employees
+router.put('/bulk-update', authenticateAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { employee_ids, updates } = req.body;
+
+    if (!employee_ids || !Array.isArray(employee_ids) || employee_ids.length === 0) {
+      return res.status(400).json({ error: 'No employees selected' });
+    }
+
+    if (!updates || Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No updates provided' });
+    }
+
+    await client.query('BEGIN');
+
+    // Build dynamic update query based on provided fields
+    const allowedFields = [
+      'department_id', 'position', 'status', 'bank_name',
+      'default_basic_salary', 'default_allowance', 'commission_rate',
+      'per_trip_rate', 'ot_rate', 'outstation_rate', 'default_bonus', 'default_incentive'
+    ];
+
+    const setClauses = [];
+    const values = [];
+    let paramCount = 0;
+
+    for (const [field, value] of Object.entries(updates)) {
+      if (allowedFields.includes(field) && value !== '' && value !== null && value !== undefined) {
+        paramCount++;
+        setClauses.push(`${field} = $${paramCount}`);
+        values.push(value);
+      }
+    }
+
+    if (setClauses.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    // Add updated_at
+    paramCount++;
+    setClauses.push(`updated_at = NOW()`);
+
+    // Add employee IDs as final parameter
+    paramCount++;
+    values.push(employee_ids);
+
+    const query = `
+      UPDATE employees
+      SET ${setClauses.join(', ')}
+      WHERE id = ANY($${paramCount})
+      RETURNING id
+    `;
+
+    const result = await client.query(query, values);
+
+    await client.query('COMMIT');
+
+    res.json({
+      message: `Successfully updated ${result.rowCount} employees`,
+      updated: result.rowCount
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error bulk updating employees:', error);
+    res.status(500).json({ error: 'Failed to bulk update employees' });
+  } finally {
+    client.release();
+  }
+});
+
+// Bulk delete (deactivate) employees
+router.post('/bulk-delete', authenticateAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { employee_ids } = req.body;
+
+    if (!employee_ids || !Array.isArray(employee_ids) || employee_ids.length === 0) {
+      return res.status(400).json({ error: 'No employees selected' });
+    }
+
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `UPDATE employees
+       SET status = 'inactive', updated_at = NOW()
+       WHERE id = ANY($1) AND status = 'active'
+       RETURNING id`,
+      [employee_ids]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      message: `Successfully deactivated ${result.rowCount} employees`,
+      deactivated: result.rowCount
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error bulk deleting employees:', error);
+    res.status(500).json({ error: 'Failed to bulk delete employees' });
+  } finally {
+    client.release();
+  }
+});
+
 // Get employee stats
 router.get('/stats/overview', authenticateAdmin, async (req, res) => {
   try {

@@ -65,6 +65,8 @@ export const employeeApi = {
   delete: (id) => api.delete(`/employees/${id}`),
   getStats: () => api.get('/employees/stats/overview'),
   bulkImport: (employees) => api.post('/employees/bulk-import', { employees }),
+  bulkUpdate: (employee_ids, updates) => api.put('/employees/bulk-update', { employee_ids, updates }),
+  bulkDelete: (employee_ids) => api.post('/employees/bulk-delete', { employee_ids }),
 };
 
 export const departmentApi = {

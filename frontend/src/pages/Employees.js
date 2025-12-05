@@ -26,6 +26,23 @@ function Employees() {
   const [salaryAutoPopulated, setSalaryAutoPopulated] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Bulk selection state
+  const [selectedEmployees, setSelectedEmployees] = useState([]);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditForm, setBulkEditForm] = useState({
+    department_id: '',
+    position: '',
+    status: '',
+    bank_name: '',
+    default_basic_salary: '',
+    default_allowance: '',
+    commission_rate: '',
+    per_trip_rate: '',
+    ot_rate: '',
+    outstation_rate: ''
+  });
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+
   const goToDepartments = () => {
     navigate('/admin/departments');
   };
@@ -423,6 +440,101 @@ function Employees() {
     setImportResult(null);
   };
 
+  // Bulk selection functions
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedEmployees(employees.map(emp => emp.id));
+    } else {
+      setSelectedEmployees([]);
+    }
+  };
+
+  const handleSelectEmployee = (empId) => {
+    setSelectedEmployees(prev => {
+      if (prev.includes(empId)) {
+        return prev.filter(id => id !== empId);
+      } else {
+        return [...prev, empId];
+      }
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedEmployees([]);
+  };
+
+  // Bulk Edit
+  const openBulkEditModal = () => {
+    setBulkEditForm({
+      department_id: '',
+      position: '',
+      status: '',
+      bank_name: '',
+      default_basic_salary: '',
+      default_allowance: '',
+      commission_rate: '',
+      per_trip_rate: '',
+      ot_rate: '',
+      outstation_rate: ''
+    });
+    setShowBulkEditModal(true);
+  };
+
+  const handleBulkEditSubmit = async (e) => {
+    e.preventDefault();
+
+    // Filter out empty values
+    const updates = {};
+    Object.entries(bulkEditForm).forEach(([key, value]) => {
+      if (value !== '' && value !== null && value !== undefined) {
+        updates[key] = value;
+      }
+    });
+
+    if (Object.keys(updates).length === 0) {
+      alert('Please fill in at least one field to update');
+      return;
+    }
+
+    setBulkUpdating(true);
+    try {
+      const res = await employeeApi.bulkUpdate(selectedEmployees, updates);
+      alert(res.data.message);
+      setShowBulkEditModal(false);
+      setSelectedEmployees([]);
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to update employees');
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
+  // Bulk Delete
+  const handleBulkDelete = async () => {
+    const activeSelected = employees.filter(
+      emp => selectedEmployees.includes(emp.id) && emp.status === 'active'
+    );
+
+    if (activeSelected.length === 0) {
+      alert('No active employees selected to deactivate');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to deactivate ${activeSelected.length} employee(s)?`)) {
+      return;
+    }
+
+    try {
+      const res = await employeeApi.bulkDelete(activeSelected.map(emp => emp.id));
+      alert(res.data.message);
+      setSelectedEmployees([]);
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to deactivate employees');
+    }
+  };
+
   return (
     <Layout>
       <div className="employees-page">
@@ -500,6 +612,26 @@ function Employees() {
           </select>
         </div>
 
+        {/* Bulk Action Bar */}
+        {selectedEmployees.length > 0 && (
+          <div className="bulk-action-bar">
+            <span className="selected-count">
+              {selectedEmployees.length} employee(s) selected
+            </span>
+            <div className="bulk-actions">
+              <button onClick={openBulkEditModal} className="bulk-edit-btn">
+                ✏️ Bulk Edit
+              </button>
+              <button onClick={handleBulkDelete} className="bulk-delete-btn">
+                🗑️ Deactivate Selected
+              </button>
+              <button onClick={clearSelection} className="bulk-clear-btn">
+                ✕ Clear Selection
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="loading">☕ Loading...</div>
         ) : (
@@ -507,6 +639,13 @@ function Employees() {
             <table>
               <thead>
                 <tr>
+                  <th className="checkbox-col">
+                    <input
+                      type="checkbox"
+                      checked={employees.length > 0 && selectedEmployees.length === employees.length}
+                      onChange={handleSelectAll}
+                    />
+                  </th>
                   <th>ID</th>
                   <th>Name</th>
                   <th>Department</th>
@@ -519,11 +658,18 @@ function Employees() {
               <tbody>
                 {employees.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="no-data">No employees found 🍃</td>
+                    <td colSpan="8" className="no-data">No employees found 🍃</td>
                   </tr>
                 ) : (
                   employees.map(emp => (
-                    <tr key={emp.id}>
+                    <tr key={emp.id} className={selectedEmployees.includes(emp.id) ? 'selected' : ''}>
+                      <td className="checkbox-col">
+                        <input
+                          type="checkbox"
+                          checked={selectedEmployees.includes(emp.id)}
+                          onChange={() => handleSelectEmployee(emp.id)}
+                        />
+                      </td>
                       <td><strong>{emp.employee_id}</strong></td>
                       <td>{emp.name}</td>
                       <td>
@@ -1034,6 +1180,163 @@ function Employees() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Edit Modal */}
+        {showBulkEditModal && (
+          <div className="modal-overlay" onClick={() => setShowBulkEditModal(false)}>
+            <div className="modal bulk-edit-modal" onClick={(e) => e.stopPropagation()}>
+              <h2>✏️ Bulk Edit ({selectedEmployees.length} employees)</h2>
+              <p className="bulk-edit-note">Only fill in the fields you want to update. Empty fields will be left unchanged.</p>
+              <form onSubmit={handleBulkEditSubmit}>
+                <div className="form-section-title">Basic Info</div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Department</label>
+                    <select
+                      value={bulkEditForm.department_id}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, department_id: e.target.value })}
+                    >
+                      <option value="">-- No Change --</option>
+                      {departments.map(d => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Position</label>
+                    <input
+                      type="text"
+                      value={bulkEditForm.position}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, position: e.target.value })}
+                      placeholder="Leave empty for no change"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Status</label>
+                    <select
+                      value={bulkEditForm.status}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, status: e.target.value })}
+                    >
+                      <option value="">-- No Change --</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Bank Name</label>
+                    <select
+                      value={bulkEditForm.bank_name}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, bank_name: e.target.value })}
+                    >
+                      <option value="">-- No Change --</option>
+                      <option value="Maybank">Maybank</option>
+                      <option value="CIMB Bank">CIMB Bank</option>
+                      <option value="Public Bank">Public Bank</option>
+                      <option value="RHB Bank">RHB Bank</option>
+                      <option value="Hong Leong Bank">Hong Leong Bank</option>
+                      <option value="AmBank">AmBank</option>
+                      <option value="Bank Islam">Bank Islam</option>
+                      <option value="Bank Rakyat">Bank Rakyat</option>
+                      <option value="OCBC Bank">OCBC Bank</option>
+                      <option value="HSBC Bank">HSBC Bank</option>
+                      <option value="UOB Bank">UOB Bank</option>
+                      <option value="BSN">BSN</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-section-title">💰 Salary Settings</div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Basic Salary (RM)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={bulkEditForm.default_basic_salary}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, default_basic_salary: e.target.value })}
+                      placeholder="Leave empty for no change"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Allowance (RM)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={bulkEditForm.default_allowance}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, default_allowance: e.target.value })}
+                      placeholder="Leave empty for no change"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Commission Rate (%)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={bulkEditForm.commission_rate}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, commission_rate: e.target.value })}
+                      placeholder="Leave empty for no change"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Per Trip Rate (RM)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={bulkEditForm.per_trip_rate}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, per_trip_rate: e.target.value })}
+                      placeholder="Leave empty for no change"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>OT Rate (RM/hour)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={bulkEditForm.ot_rate}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, ot_rate: e.target.value })}
+                      placeholder="Leave empty for no change"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Outstation Rate (RM/day)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={bulkEditForm.outstation_rate}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, outstation_rate: e.target.value })}
+                      placeholder="Leave empty for no change"
+                    />
+                  </div>
+                </div>
+
+                <div className="modal-actions">
+                  <button type="button" onClick={() => setShowBulkEditModal(false)} className="cancel-btn">
+                    Cancel
+                  </button>
+                  <button type="submit" className="save-btn" disabled={bulkUpdating}>
+                    {bulkUpdating ? '⏳ Updating...' : `💾 Update ${selectedEmployees.length} Employees`}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
