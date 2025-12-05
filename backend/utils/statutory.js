@@ -162,21 +162,88 @@ const calculateSOCSO = (grossSalary, age = 30) => {
   };
 };
 
+// EIS (Employment Insurance System) Contribution Table 2024
+// Based on official PERKESO EIS contribution table
+const EIS_TABLE = [
+  { min: 0, max: 30, ee: 0.05, er: 0.05 },
+  { min: 30.01, max: 50, ee: 0.10, er: 0.10 },
+  { min: 50.01, max: 70, ee: 0.15, er: 0.15 },
+  { min: 70.01, max: 100, ee: 0.20, er: 0.20 },
+  { min: 100.01, max: 140, ee: 0.25, er: 0.25 },
+  { min: 140.01, max: 200, ee: 0.35, er: 0.35 },
+  { min: 200.01, max: 300, ee: 0.50, er: 0.50 },
+  { min: 300.01, max: 400, ee: 0.70, er: 0.70 },
+  { min: 400.01, max: 500, ee: 0.90, er: 0.90 },
+  { min: 500.01, max: 600, ee: 1.10, er: 1.10 },
+  { min: 600.01, max: 700, ee: 1.30, er: 1.30 },
+  { min: 700.01, max: 800, ee: 1.50, er: 1.50 },
+  { min: 800.01, max: 900, ee: 1.70, er: 1.70 },
+  { min: 900.01, max: 1000, ee: 1.90, er: 1.90 },
+  { min: 1000.01, max: 1100, ee: 2.10, er: 2.10 },
+  { min: 1100.01, max: 1200, ee: 2.30, er: 2.30 },
+  { min: 1200.01, max: 1300, ee: 2.50, er: 2.50 },
+  { min: 1300.01, max: 1400, ee: 2.70, er: 2.70 },
+  { min: 1400.01, max: 1500, ee: 2.90, er: 2.90 },
+  { min: 1500.01, max: 1600, ee: 3.10, er: 3.10 },
+  { min: 1600.01, max: 1700, ee: 3.30, er: 3.30 },
+  { min: 1700.01, max: 1800, ee: 3.50, er: 3.50 },
+  { min: 1800.01, max: 1900, ee: 3.70, er: 3.70 },
+  { min: 1900.01, max: 2000, ee: 3.90, er: 3.90 },
+  { min: 2000.01, max: 2100, ee: 4.10, er: 4.10 },
+  { min: 2100.01, max: 2200, ee: 4.30, er: 4.30 },
+  { min: 2200.01, max: 2300, ee: 4.50, er: 4.50 },
+  { min: 2300.01, max: 2400, ee: 4.70, er: 4.70 },
+  { min: 2400.01, max: 2500, ee: 4.90, er: 4.90 },
+  { min: 2500.01, max: 2600, ee: 5.10, er: 5.10 },
+  { min: 2600.01, max: 2700, ee: 5.30, er: 5.30 },
+  { min: 2700.01, max: 2800, ee: 5.50, er: 5.50 },
+  { min: 2800.01, max: 2900, ee: 5.70, er: 5.70 },
+  { min: 2900.01, max: 3000, ee: 5.90, er: 5.90 },
+  { min: 3000.01, max: 3100, ee: 6.10, er: 6.10 },
+  { min: 3100.01, max: 3200, ee: 6.30, er: 6.30 },
+  { min: 3200.01, max: 3300, ee: 6.50, er: 6.50 },
+  { min: 3300.01, max: 3400, ee: 6.70, er: 6.70 },
+  { min: 3400.01, max: 3500, ee: 6.90, er: 6.90 },
+  { min: 3500.01, max: 3600, ee: 7.10, er: 7.10 },
+  { min: 3600.01, max: 3700, ee: 7.30, er: 7.30 },
+  { min: 3700.01, max: 3800, ee: 7.50, er: 7.50 },
+  { min: 3800.01, max: 3900, ee: 7.70, er: 7.70 },
+  { min: 3900.01, max: 4000, ee: 7.90, er: 7.90 },
+  { min: 4000.01, max: 4100, ee: 8.10, er: 8.10 },
+  { min: 4100.01, max: 4200, ee: 8.30, er: 8.30 },
+  { min: 4200.01, max: 4300, ee: 8.50, er: 8.50 },
+  { min: 4300.01, max: 4400, ee: 8.70, er: 8.70 },
+  { min: 4400.01, max: 4500, ee: 8.90, er: 8.90 },
+  { min: 4500.01, max: 4600, ee: 9.10, er: 9.10 },
+  { min: 4600.01, max: 4700, ee: 9.30, er: 9.30 },
+  { min: 4700.01, max: 4800, ee: 9.50, er: 9.50 },
+  { min: 4800.01, max: 4900, ee: 9.70, er: 9.70 },
+  { min: 4900.01, max: 5000, ee: 9.90, er: 9.90 },
+];
+
 // EIS (Employment Insurance System)
-// Rate: 0.2% each for employee and employer
-// Ceiling: RM5000
+// Uses contribution table, ceiling RM5000
 const calculateEIS = (grossSalary, age = 30) => {
   // EIS not applicable for age >= 57
   if (age >= 57) {
     return { employee: 0, employer: 0 };
   }
 
-  const eisWage = Math.min(grossSalary, 5000);
-  const rate = 0.002; // 0.2%
+  // EIS ceiling is RM5000
+  if (grossSalary > 5000) {
+    // Max contribution for salary > RM5000
+    return { employee: 9.90, employer: 9.90 };
+  }
+
+  const bracket = EIS_TABLE.find(b => grossSalary >= b.min && grossSalary <= b.max);
+
+  if (!bracket) {
+    return { employee: 0, employer: 0 };
+  }
 
   return {
-    employee: Math.round(eisWage * rate * 100) / 100,
-    employer: Math.round(eisWage * rate * 100) / 100
+    employee: bracket.ee,
+    employer: bracket.er
   };
 };
 
