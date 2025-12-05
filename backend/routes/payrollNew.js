@@ -162,12 +162,22 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     const prevMonth = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
 
-    const prevPayrollResult = await client.query(`
+    // Look for previous month's payroll - first try same department, then any department
+    let prevPayrollQuery = `
       SELECT pi.employee_id, pi.basic_salary, pi.fixed_allowance
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       WHERE pr.month = $1 AND pr.year = $2
-    `, [prevMonth, prevYear]);
+    `;
+    let prevPayrollParams = [prevMonth, prevYear];
+
+    if (department_id) {
+      // First try to find previous payroll for same department
+      prevPayrollQuery += ' AND (pr.department_id = $3 OR pr.department_id IS NULL)';
+      prevPayrollParams.push(department_id);
+    }
+
+    const prevPayrollResult = await client.query(prevPayrollQuery, prevPayrollParams);
 
     // Create map of previous month's salaries
     const prevSalaryMap = {};
