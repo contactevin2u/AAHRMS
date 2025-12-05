@@ -64,15 +64,25 @@ function Payslip() {
         </div>
 
         <div className="payslip-container" ref={printRef}>
-          {/* Header */}
-          <div className="payslip-header">
-            <div className="company-info">
-              <img src="/logo.png" alt="Company Logo" className="company-logo" />
-              <div>
-                <h1>{payslip.company.name}</h1>
-                <p>{payslip.company.address}</p>
-              </div>
+          {/* Letterhead */}
+          <div className="letterhead">
+            <div className="letterhead-logo">
+              <img src="/logo.png" alt="AA Alive" />
             </div>
+            <div className="letterhead-info">
+              <h1>AA Alive Sdn. Bhd.</h1>
+              <p className="company-reg">Company No.: 1204108-D</p>
+              <p className="company-address">
+                1, Jalan Perusahaan Amari, Kawasan Industri Batu Caves,<br />
+                68100 Batu Caves, Selangor
+              </p>
+            </div>
+          </div>
+
+          <div className="letter-divider"></div>
+
+          {/* Payslip Title */}
+          <div className="payslip-header">
             <div className="payslip-title">
               <h2>PAYSLIP</h2>
               <p>{payslip.period.month_name} {payslip.period.year}</p>

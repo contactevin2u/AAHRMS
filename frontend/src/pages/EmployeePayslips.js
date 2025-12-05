@@ -117,9 +117,37 @@ function EmployeePayslips() {
             <div className="modal payslip-modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>Payslip - {getMonthName(selectedPayslip.month)} {selectedPayslip.year}</h2>
-                <button className="close-btn" onClick={() => setSelectedPayslip(null)}>×</button>
+                <div className="modal-header-actions">
+                  <button className="btn-print" onClick={() => window.print()}>Print</button>
+                  <button className="close-btn" onClick={() => setSelectedPayslip(null)}>×</button>
+                </div>
               </div>
               <div className="modal-body">
+                {/* Payslip with Letterhead */}
+                <div className="payslip-preview" id="payslip-print">
+                  {/* Letterhead */}
+                  <div className="letterhead">
+                    <div className="letterhead-logo">
+                      <img src="/logo.png" alt="AA Alive" />
+                    </div>
+                    <div className="letterhead-info">
+                      <h1>AA Alive Sdn. Bhd.</h1>
+                      <p className="company-reg">Company No.: 1204108-D</p>
+                      <p className="company-address">
+                        1, Jalan Perusahaan Amari, Kawasan Industri Batu Caves,<br />
+                        68100 Batu Caves, Selangor
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="letter-divider"></div>
+
+                  {/* Payslip Title */}
+                  <div className="payslip-title-section">
+                    <h2>PAYSLIP</h2>
+                    <p>{getMonthName(selectedPayslip.month)} {selectedPayslip.year}</p>
+                  </div>
+
                 <section className="payslip-section">
                   <h3>Earnings</h3>
                   <div className="payslip-items">
@@ -229,6 +257,13 @@ function EmployeePayslips() {
                     <p className="notes-text">{selectedPayslip.notes}</p>
                   </section>
                 )}
+
+                  {/* Footer */}
+                  <div className="payslip-footer">
+                    <p>This is a computer-generated payslip. No signature required.</p>
+                    <p>Generated on: {new Date().toLocaleDateString('en-MY')}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
