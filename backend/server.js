@@ -14,6 +14,7 @@ const claimsRoutes = require('./routes/claims');
 const resignationsRoutes = require('./routes/resignations');
 const essRoutes = require('./routes/ess');
 const lettersRoutes = require('./routes/letters');
+const adminUsersRoutes = require('./routes/adminUsers');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,6 +45,7 @@ app.use('/api/claims', claimsRoutes);
 app.use('/api/resignations', resignationsRoutes);
 app.use('/api/ess', essRoutes);  // Employee Self-Service Portal
 app.use('/api/letters', lettersRoutes);  // HR Letters/Notices
+app.use('/api/admin-users', adminUsersRoutes);  // Admin User Management
 
 // Health check
 app.get('/api/health', (req, res) => {

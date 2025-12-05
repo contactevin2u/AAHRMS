@@ -26,6 +26,10 @@ function AdminLogin() {
     try {
       const response = await authApi.login({ username, password });
       localStorage.setItem('adminToken', response.data.token);
+      // Store admin info for role-based features
+      if (response.data.admin) {
+        localStorage.setItem('adminInfo', JSON.stringify(response.data.admin));
+      }
       navigate('/admin/dashboard');
     } catch (error) {
       setError(error.response?.data?.error || 'Login failed. Please try again.');

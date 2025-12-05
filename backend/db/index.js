@@ -46,6 +46,59 @@ const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Add role-based access control columns to admin_users
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='name') THEN
+          ALTER TABLE admin_users ADD COLUMN name VARCHAR(100);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='email') THEN
+          ALTER TABLE admin_users ADD COLUMN email VARCHAR(100);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='role') THEN
+          ALTER TABLE admin_users ADD COLUMN role VARCHAR(50) DEFAULT 'admin';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='status') THEN
+          ALTER TABLE admin_users ADD COLUMN status VARCHAR(20) DEFAULT 'active';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='last_login') THEN
+          ALTER TABLE admin_users ADD COLUMN last_login TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='updated_at') THEN
+          ALTER TABLE admin_users ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='created_by') THEN
+          ALTER TABLE admin_users ADD COLUMN created_by INTEGER;
+        END IF;
+      END $$;
+
+      -- Roles table for permission management
+      CREATE TABLE IF NOT EXISTS admin_roles (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(50) UNIQUE NOT NULL,
+        display_name VARCHAR(100) NOT NULL,
+        description TEXT,
+        permissions JSONB DEFAULT '{}',
+        is_system BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Insert default roles
+      INSERT INTO admin_roles (name, display_name, description, permissions, is_system) VALUES
+        ('super_admin', 'Super Admin', 'Full system control with all permissions',
+         '{"all": true}', TRUE),
+        ('boss', 'Boss', 'Full access view, can approve and review everything',
+         '{"dashboard": true, "employees": true, "leave": true, "claims": true, "payroll": true, "contributions": true, "resignations": true, "letters": true, "departments": true, "feedback": true, "users": true, "approve_leave": true, "approve_claims": true, "view_salary": true}', TRUE),
+        ('director', 'Director', 'High access, can manage HR tasks, issue letters, view salary',
+         '{"dashboard": true, "employees": true, "leave": true, "claims": true, "payroll": true, "contributions": true, "resignations": true, "letters": true, "departments": true, "feedback": true, "users": true, "approve_leave": true, "approve_claims": true, "view_salary": true}', TRUE),
+        ('hr', 'HR', 'Manage employees, payroll, letters, leave, claims',
+         '{"dashboard": true, "employees": true, "leave": true, "claims": true, "payroll": true, "contributions": true, "resignations": true, "letters": true, "departments": true, "feedback": true, "approve_leave": true, "approve_claims": true, "view_salary": true}', TRUE),
+        ('manager', 'Manager', 'Can view team data, approve leave and claims',
+         '{"dashboard": true, "employees": {"view": true}, "leave": true, "claims": true, "approve_leave": true, "approve_claims": true}', FALSE),
+        ('viewer', 'Viewer', 'Read-only access to reports and dashboards',
+         '{"dashboard": true, "employees": {"view": true}, "payroll": {"view": true}, "contributions": {"view": true}}', FALSE)
+      ON CONFLICT (name) DO NOTHING;
+
       CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON anonymous_feedback(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_feedback_category ON anonymous_feedback(category);
       CREATE INDEX IF NOT EXISTS idx_feedback_is_read ON anonymous_feedback(is_read);

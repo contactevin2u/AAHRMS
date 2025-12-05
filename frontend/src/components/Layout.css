@@ -16,11 +16,34 @@
 }
 
 .sidebar-header {
-  padding: 25px;
+  padding: 20px 25px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.admin-info {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+}
+
+.admin-role {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: capitalize;
 }
 
 .logo-img {

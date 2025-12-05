@@ -190,6 +190,19 @@ export const lettersApi = {
   getStats: () => api.get('/letters/stats/summary'),
 };
 
+// Admin User Management
+export const adminUsersApi = {
+  getAll: () => api.get('/admin-users'),
+  getOne: (id) => api.get(`/admin-users/${id}`),
+  create: (data) => api.post('/admin-users', data),
+  update: (id, data) => api.put(`/admin-users/${id}`, data),
+  delete: (id) => api.delete(`/admin-users/${id}`),
+  resetPassword: (id, newPassword) => api.post(`/admin-users/${id}/reset-password`, { newPassword }),
+
+  getRoles: () => api.get('/admin-users/roles/all'),
+  getMyPermissions: () => api.get('/admin-users/me/permissions'),
+};
+
 // =====================================================
 // EMPLOYEE SELF-SERVICE (ESS) API
 // =====================================================

@@ -13,24 +13,44 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const result = await pool.query(
-      'SELECT * FROM admin_users WHERE username = $1',
-      [username]
-    );
+    // Get user with role and permissions
+    const result = await pool.query(`
+      SELECT au.*, ar.permissions, ar.display_name as role_display_name
+      FROM admin_users au
+      LEFT JOIN admin_roles ar ON au.role = ar.name
+      WHERE au.username = $1
+    `, [username]);
 
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const admin = result.rows[0];
+
+    // Check if user is active
+    if (admin.status !== 'active') {
+      return res.status(403).json({ error: 'Your account has been deactivated. Please contact administrator.' });
+    }
+
     const validPassword = await bcrypt.compare(password, admin.password_hash);
 
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Update last login
+    await pool.query(
+      'UPDATE admin_users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
+      [admin.id]
+    );
+
     const token = jwt.sign(
-      { id: admin.id, username: admin.username },
+      {
+        id: admin.id,
+        username: admin.username,
+        role: admin.role || 'admin',
+        name: admin.name
+      },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -41,6 +61,11 @@ router.post('/login', async (req, res) => {
       admin: {
         id: admin.id,
         username: admin.username,
+        name: admin.name,
+        email: admin.email,
+        role: admin.role || 'admin',
+        role_display_name: admin.role_display_name || 'Admin',
+        permissions: admin.permissions || {}
       },
     });
   } catch (error) {
@@ -68,13 +93,16 @@ router.post('/setup', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    // First user is always super_admin
     const result = await pool.query(
-      'INSERT INTO admin_users (username, password_hash) VALUES ($1, $2) RETURNING id, username',
+      `INSERT INTO admin_users (username, password_hash, name, role, status)
+       VALUES ($1, $2, 'Super Admin', 'super_admin', 'active')
+       RETURNING id, username, name, role`,
       [username, passwordHash]
     );
 
     res.status(201).json({
-      message: 'Admin account created successfully',
+      message: 'Super Admin account created successfully',
       admin: result.rows[0],
     });
   } catch (error) {

@@ -1,13 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import './Layout.css';
 
 function Layout({ children }) {
   const navigate = useNavigate();
+  const [adminInfo, setAdminInfo] = useState(null);
+
+  useEffect(() => {
+    const storedInfo = localStorage.getItem('adminInfo');
+    if (storedInfo) {
+      setAdminInfo(JSON.parse(storedInfo));
+    }
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminInfo');
     navigate('/');
+  };
+
+  // Check if user has permission to see a menu item
+  const hasPermission = (permission) => {
+    if (!adminInfo) return true; // Show all if no info (fallback)
+    if (adminInfo.role === 'super_admin') return true;
+    if (adminInfo.permissions?.all === true) return true;
+    return adminInfo.permissions?.[permission] === true;
+  };
+
+  // Check if user can access user management (super_admin, boss, director only)
+  const canManageUsers = () => {
+    if (!adminInfo) return false;
+    return ['super_admin', 'boss', 'director'].includes(adminInfo.role);
   };
 
   return (
@@ -16,6 +39,12 @@ function Layout({ children }) {
         <div className="sidebar-header">
           <img src="/logo.png" alt="AA Alive" className="logo-img" />
           <h2>AA Alive</h2>
+          {adminInfo && (
+            <div className="admin-info">
+              <span className="admin-name">{adminInfo.name || adminInfo.username}</span>
+              <span className="admin-role">{adminInfo.role_display_name || adminInfo.role}</span>
+            </div>
+          )}
         </div>
 
         <div className="nav-links">
@@ -68,6 +97,13 @@ function Layout({ children }) {
             <span className="nav-icon">💬</span>
             <span>Feedback</span>
           </NavLink>
+
+          {canManageUsers() && (
+            <NavLink to="/admin/users" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">👤</span>
+              <span>User Management</span>
+            </NavLink>
+          )}
         </div>
 
         <div className="sidebar-footer">
