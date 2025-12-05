@@ -728,3 +728,147 @@ tr:hover {
   border-radius: 8px;
   border-left: 3px solid #e8a87c;
 }
+
+/* Employment Type Badge */
+.employment-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.employment-badge.probation {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.employment-badge.confirmed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.employment-badge.contract {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Review Button */
+.review-btn {
+  margin-left: 8px;
+  padding: 4px 10px;
+  background: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.review-btn:hover {
+  background: #f57c00;
+  transform: scale(1.05);
+}
+
+/* Pending Review Row */
+.employees-table tbody tr.pending-review {
+  background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+  animation: pulse-bg 2s ease-in-out infinite;
+}
+
+@keyframes pulse-bg {
+  0%, 100% { background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%); }
+  50% { background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%); }
+}
+
+/* Probation Modal */
+.probation-modal {
+  max-width: 500px;
+}
+
+.probation-info {
+  background: #fffbf8;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid #f5e6dc;
+}
+
+.probation-info .info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #f5e6dc;
+}
+
+.probation-info .info-row:last-child {
+  border-bottom: none;
+}
+
+.probation-info .label {
+  color: #9a8072;
+  font-size: 0.9rem;
+}
+
+.probation-info .value {
+  color: #6b5344;
+  font-weight: 600;
+}
+
+.probation-info .value.highlight {
+  color: #e65100;
+}
+
+/* Action Tabs */
+.action-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.action-tabs .tab {
+  flex: 1;
+  padding: 12px;
+  background: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #757575;
+  transition: all 0.2s ease;
+}
+
+.action-tabs .tab:hover {
+  background: #e0e0e0;
+}
+
+.action-tabs .tab.active {
+  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
+  border-color: #d4886a;
+  color: white;
+}
+
+.action-content {
+  padding: 15px;
+  background: #f9fafb;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.action-content p {
+  margin: 0 0 15px 0;
+  color: #6b5344;
+  font-size: 0.9rem;
+}
+
+/* Confirm and Extend Buttons */
+.confirm-btn {
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%) !important;
+}
+
+.extend-btn {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%) !important;
+}

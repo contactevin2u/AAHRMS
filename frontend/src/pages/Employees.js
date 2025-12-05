@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { employeeApi, departmentApi } from '../api';
+import { employeeApi, departmentApi, probationApi } from '../api';
 import Layout from '../components/Layout';
 import * as XLSX from 'xlsx';
 import './Employees.css';
@@ -16,8 +16,17 @@ function Employees() {
   const [filter, setFilter] = useState({
     department_id: searchParams.get('department_id') || '',
     status: 'active',
-    search: ''
+    search: '',
+    employment_type: ''
   });
+
+  // Probation action modal state
+  const [showProbationModal, setShowProbationModal] = useState(false);
+  const [probationEmployee, setProbationEmployee] = useState(null);
+  const [probationAction, setProbationAction] = useState('confirm'); // 'confirm' or 'extend'
+  const [extensionMonths, setExtensionMonths] = useState(1);
+  const [probationNotes, setProbationNotes] = useState('');
+  const [processingProbation, setProcessingProbation] = useState(false);
   const [stats, setStats] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importData, setImportData] = useState(null);
@@ -109,7 +118,14 @@ function Employees() {
     outstation_rate: '',
     // Additional earning fields
     default_bonus: '',
-    default_incentive: ''
+    default_incentive: '',
+    // Probation fields
+    employment_type: 'probation',
+    probation_months: 3,
+    salary_before_confirmation: '',
+    salary_after_confirmation: '',
+    increment_amount: '',
+    probation_notes: ''
   });
 
   useEffect(() => {
@@ -183,7 +199,14 @@ function Employees() {
       outstation_rate: emp.outstation_rate || '',
       // Additional earning fields
       default_bonus: emp.default_bonus || '',
-      default_incentive: emp.default_incentive || ''
+      default_incentive: emp.default_incentive || '',
+      // Probation fields
+      employment_type: emp.employment_type || 'probation',
+      probation_months: emp.probation_months || 3,
+      salary_before_confirmation: emp.salary_before_confirmation || '',
+      salary_after_confirmation: emp.salary_after_confirmation || '',
+      increment_amount: emp.increment_amount || '',
+      probation_notes: emp.probation_notes || ''
     });
     setShowModal(true);
   };
@@ -233,7 +256,14 @@ function Employees() {
       outstation_rate: '',
       // Additional earning fields
       default_bonus: '',
-      default_incentive: ''
+      default_incentive: '',
+      // Probation fields
+      employment_type: 'probation',
+      probation_months: 3,
+      salary_before_confirmation: '',
+      salary_after_confirmation: '',
+      increment_amount: '',
+      probation_notes: ''
     });
   };
 
@@ -535,6 +565,68 @@ function Employees() {
     }
   };
 
+  // Probation modal functions
+  const openProbationModal = (emp) => {
+    setProbationEmployee(emp);
+    setProbationAction('confirm');
+    setExtensionMonths(1);
+    setProbationNotes('');
+    setShowProbationModal(true);
+  };
+
+  const handleProbationConfirm = async () => {
+    if (!probationEmployee) return;
+
+    setProcessingProbation(true);
+    try {
+      await probationApi.confirm(probationEmployee.id, {
+        notes: probationNotes,
+        generate_letter: true
+      });
+      alert('Employee confirmed successfully! Confirmation letter has been generated.');
+      setShowProbationModal(false);
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to confirm employee');
+    } finally {
+      setProcessingProbation(false);
+    }
+  };
+
+  const handleProbationExtend = async () => {
+    if (!probationEmployee) return;
+
+    setProcessingProbation(true);
+    try {
+      await probationApi.extend(probationEmployee.id, {
+        extension_months: extensionMonths,
+        notes: probationNotes
+      });
+      alert(`Probation extended by ${extensionMonths} month(s)`);
+      setShowProbationModal(false);
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to extend probation');
+    } finally {
+      setProcessingProbation(false);
+    }
+  };
+
+  // Calculate increment when salary fields change
+  const handleSalaryChange = (field, value) => {
+    const newForm = { ...form, [field]: value };
+
+    if (field === 'salary_before_confirmation' || field === 'salary_after_confirmation') {
+      const before = parseFloat(newForm.salary_before_confirmation) || 0;
+      const after = parseFloat(newForm.salary_after_confirmation) || 0;
+      if (before > 0 && after > 0) {
+        newForm.increment_amount = (after - before).toFixed(2);
+      }
+    }
+
+    setForm(newForm);
+  };
+
   return (
     <Layout>
       <div className="employees-page">
@@ -610,6 +702,15 @@ function Employees() {
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
+          <select
+            value={filter.employment_type}
+            onChange={(e) => setFilter({ ...filter, employment_type: e.target.value })}
+          >
+            <option value="">All Employment Types</option>
+            <option value="probation">On Probation</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="contract">Contract</option>
+          </select>
         </div>
 
         {/* Bulk Action Bar */}
@@ -650,7 +751,7 @@ function Employees() {
                   <th>Name</th>
                   <th>Department</th>
                   <th>Position</th>
-                  <th>Phone</th>
+                  <th>Employment</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -658,46 +759,66 @@ function Employees() {
               <tbody>
                 {employees.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="no-data">No employees found 🍃</td>
+                    <td colSpan="8" className="no-data">No employees found</td>
                   </tr>
                 ) : (
-                  employees.map(emp => (
-                    <tr key={emp.id} className={selectedEmployees.includes(emp.id) ? 'selected' : ''}>
-                      <td className="checkbox-col">
-                        <input
-                          type="checkbox"
-                          checked={selectedEmployees.includes(emp.id)}
-                          onChange={() => handleSelectEmployee(emp.id)}
-                        />
-                      </td>
-                      <td><strong>{emp.employee_id}</strong></td>
-                      <td>{emp.name}</td>
-                      <td>
-                        {emp.department_name ? (
-                          <span
-                            className="department-link"
-                            onClick={goToDepartments}
-                            title="Go to Departments"
-                          >
-                            {emp.department_name}
+                  employees.map(emp => {
+                    const isPendingReview = emp.employment_type === 'probation' &&
+                      emp.probation_end_date &&
+                      new Date(emp.probation_end_date) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+                    return (
+                      <tr key={emp.id} className={`${selectedEmployees.includes(emp.id) ? 'selected' : ''} ${isPendingReview ? 'pending-review' : ''}`}>
+                        <td className="checkbox-col">
+                          <input
+                            type="checkbox"
+                            checked={selectedEmployees.includes(emp.id)}
+                            onChange={() => handleSelectEmployee(emp.id)}
+                          />
+                        </td>
+                        <td><strong>{emp.employee_id}</strong></td>
+                        <td>{emp.name}</td>
+                        <td>
+                          {emp.department_name ? (
+                            <span
+                              className="department-link"
+                              onClick={goToDepartments}
+                              title="Go to Departments"
+                            >
+                              {emp.department_name}
+                            </span>
+                          ) : '-'}
+                        </td>
+                        <td>{emp.position || '-'}</td>
+                        <td>
+                          <span className={`employment-badge ${emp.employment_type || 'probation'}`}>
+                            {emp.employment_type === 'confirmed' ? 'Confirmed' :
+                             emp.employment_type === 'contract' ? 'Contract' : 'Probation'}
                           </span>
-                        ) : '-'}
-                      </td>
-                      <td>{emp.position || '-'}</td>
-                      <td>{emp.phone || '-'}</td>
-                      <td>
-                        <span className={`status-badge ${emp.status}`}>
-                          {emp.status}
-                        </span>
-                      </td>
-                      <td>
-                        <button onClick={() => handleEdit(emp)} className="edit-btn">✏️</button>
-                        {emp.status === 'active' && (
-                          <button onClick={() => handleDelete(emp.id)} className="delete-btn">🗑️</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                          {isPendingReview && (
+                            <button
+                              className="review-btn"
+                              onClick={() => openProbationModal(emp)}
+                              title="Review probation"
+                            >
+                              Review
+                            </button>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`status-badge ${emp.status}`}>
+                            {emp.status}
+                          </span>
+                        </td>
+                        <td>
+                          <button onClick={() => handleEdit(emp)} className="edit-btn">✏️</button>
+                          {emp.status === 'active' && (
+                            <button onClick={() => handleDelete(emp.id)} className="delete-btn">🗑️</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1050,6 +1171,90 @@ function Employees() {
                   </div>
                 </div>
 
+                <div className="form-section-title">📋 Probation & Confirmation</div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Employment Type</label>
+                    <select
+                      value={form.employment_type}
+                      onChange={(e) => setForm({ ...form, employment_type: e.target.value })}
+                    >
+                      <option value="probation">Probation</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="contract">Contract</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Probation Duration (months)</label>
+                    <select
+                      value={form.probation_months}
+                      onChange={(e) => setForm({ ...form, probation_months: parseInt(e.target.value) })}
+                      disabled={form.employment_type === 'confirmed'}
+                    >
+                      <option value={1}>1 month</option>
+                      <option value={2}>2 months</option>
+                      <option value={3}>3 months</option>
+                      <option value={4}>4 months</option>
+                      <option value={5}>5 months</option>
+                      <option value={6}>6 months</option>
+                    </select>
+                  </div>
+                </div>
+
+                {form.employment_type === 'probation' && (
+                  <>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Salary Before Confirmation (RM)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={form.salary_before_confirmation}
+                          onChange={(e) => handleSalaryChange('salary_before_confirmation', e.target.value)}
+                          placeholder="Current basic salary"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Salary After Confirmation (RM)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={form.salary_after_confirmation}
+                          onChange={(e) => handleSalaryChange('salary_after_confirmation', e.target.value)}
+                          placeholder="New salary after confirmation"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Increment Amount (RM)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={form.increment_amount}
+                          onChange={(e) => setForm({ ...form, increment_amount: e.target.value })}
+                          placeholder="Auto-calculated"
+                          readOnly
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Probation End Date</label>
+                        <input
+                          type="text"
+                          value={form.join_date && form.probation_months ?
+                            new Date(new Date(form.join_date).setMonth(new Date(form.join_date).getMonth() + form.probation_months)).toLocaleDateString() :
+                            'Set join date first'}
+                          disabled
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 {editingEmployee && (
                   <div className="form-group">
                     <label>Status</label>
@@ -1337,6 +1542,133 @@ function Employees() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Probation Review Modal */}
+        {showProbationModal && probationEmployee && (
+          <div className="modal-overlay" onClick={() => setShowProbationModal(false)}>
+            <div className="modal probation-modal" onClick={(e) => e.stopPropagation()}>
+              <h2>📋 Probation Review</h2>
+
+              <div className="probation-info">
+                <div className="info-row">
+                  <span className="label">Employee:</span>
+                  <span className="value">{probationEmployee.name} ({probationEmployee.employee_id})</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">Department:</span>
+                  <span className="value">{probationEmployee.department_name}</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">Position:</span>
+                  <span className="value">{probationEmployee.position}</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">Join Date:</span>
+                  <span className="value">{probationEmployee.join_date ? new Date(probationEmployee.join_date).toLocaleDateString() : '-'}</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">Probation End:</span>
+                  <span className="value highlight">{probationEmployee.probation_end_date ? new Date(probationEmployee.probation_end_date).toLocaleDateString() : '-'}</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">Current Salary:</span>
+                  <span className="value">RM {parseFloat(probationEmployee.default_basic_salary || 0).toFixed(2)}</span>
+                </div>
+                {probationEmployee.salary_after_confirmation && (
+                  <div className="info-row">
+                    <span className="label">New Salary (After Confirm):</span>
+                    <span className="value highlight">RM {parseFloat(probationEmployee.salary_after_confirmation).toFixed(2)}</span>
+                  </div>
+                )}
+                {probationEmployee.increment_amount && (
+                  <div className="info-row">
+                    <span className="label">Increment:</span>
+                    <span className="value">+ RM {parseFloat(probationEmployee.increment_amount).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="action-tabs">
+                <button
+                  className={`tab ${probationAction === 'confirm' ? 'active' : ''}`}
+                  onClick={() => setProbationAction('confirm')}
+                >
+                  Confirm Employee
+                </button>
+                <button
+                  className={`tab ${probationAction === 'extend' ? 'active' : ''}`}
+                  onClick={() => setProbationAction('extend')}
+                >
+                  Extend Probation
+                </button>
+              </div>
+
+              {probationAction === 'confirm' && (
+                <div className="action-content">
+                  <p>Confirm this employee's employment. Their salary will be updated to the post-probation amount and a confirmation letter will be generated.</p>
+                  <div className="form-group">
+                    <label>Notes (optional)</label>
+                    <textarea
+                      value={probationNotes}
+                      onChange={(e) => setProbationNotes(e.target.value)}
+                      placeholder="Any notes for this confirmation..."
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {probationAction === 'extend' && (
+                <div className="action-content">
+                  <p>Extend the probation period for this employee.</p>
+                  <div className="form-group">
+                    <label>Extension Period</label>
+                    <select
+                      value={extensionMonths}
+                      onChange={(e) => setExtensionMonths(parseInt(e.target.value))}
+                    >
+                      <option value={1}>1 month</option>
+                      <option value={2}>2 months</option>
+                      <option value={3}>3 months</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Reason for Extension</label>
+                    <textarea
+                      value={probationNotes}
+                      onChange={(e) => setProbationNotes(e.target.value)}
+                      placeholder="Reason for extending probation..."
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowProbationModal(false)} className="cancel-btn">
+                  Cancel
+                </button>
+                {probationAction === 'confirm' ? (
+                  <button
+                    onClick={handleProbationConfirm}
+                    className="save-btn confirm-btn"
+                    disabled={processingProbation}
+                  >
+                    {processingProbation ? 'Processing...' : 'Confirm Employment'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleProbationExtend}
+                    className="save-btn extend-btn"
+                    disabled={processingProbation}
+                  >
+                    {processingProbation ? 'Processing...' : `Extend by ${extensionMonths} month(s)`}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
