@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import Layout from '../components/Layout';
 
 function CompanyManagement() {
   const [companies, setCompanies] = useState([]);
@@ -110,13 +111,16 @@ function CompanyManagement() {
 
   if (loading) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        <p>Loading companies...</p>
-      </div>
+      <Layout>
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <p>Loading companies...</p>
+        </div>
+      </Layout>
     );
   }
 
   return (
+    <Layout>
     <div style={{ padding: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h1 style={{ margin: 0 }}>Company Management</h1>
@@ -388,6 +392,7 @@ function CompanyManagement() {
         </div>
       )}
     </div>
+    </Layout>
   );
 }
 
