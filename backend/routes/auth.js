@@ -118,4 +118,44 @@ router.post('/setup', async (req, res) => {
   }
 });
 
+// Upgrade existing user to super_admin (one-time use)
+router.post('/upgrade-to-super-admin', async (req, res) => {
+  try {
+    const { username, setupKey } = req.body;
+
+    // Security check
+    if (setupKey !== 'HRMS_SETUP_2024') {
+      return res.status(403).json({ error: 'Invalid setup key' });
+    }
+
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    // Check if user exists
+    const user = await pool.query(
+      'SELECT id, username, role FROM admin_users WHERE username = $1',
+      [username]
+    );
+
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Update to super_admin and remove company_id (system-level admin)
+    await pool.query(
+      'UPDATE admin_users SET role = $1, company_id = NULL WHERE username = $2',
+      ['super_admin', username]
+    );
+
+    res.json({
+      message: `User "${username}" upgraded to super_admin successfully`,
+      note: 'Please log out and log back in to see the changes'
+    });
+  } catch (error) {
+    console.error('Upgrade error:', error);
+    res.status(500).json({ error: 'Failed to upgrade user' });
+  }
+});
+
 module.exports = router;
