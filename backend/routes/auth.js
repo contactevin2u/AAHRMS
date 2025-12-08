@@ -118,6 +118,50 @@ router.post('/setup', async (req, res) => {
   }
 });
 
+// Create new super_admin account (with setup key)
+router.post('/create-super-admin', async (req, res) => {
+  try {
+    const { username, password, name, setupKey } = req.body;
+
+    // Security check
+    if (setupKey !== 'HRMS_SETUP_2024') {
+      return res.status(403).json({ error: 'Invalid setup key' });
+    }
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    // Check if username already exists
+    const existing = await pool.query(
+      'SELECT id FROM admin_users WHERE username = $1',
+      [username]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const result = await pool.query(
+      `INSERT INTO admin_users (username, password_hash, name, role, status, company_id)
+       VALUES ($1, $2, $3, 'super_admin', 'active', NULL)
+       RETURNING id, username, name, role`,
+      [username, passwordHash, name || 'Super Admin']
+    );
+
+    res.status(201).json({
+      message: 'Super Admin account created successfully',
+      admin: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Create super admin error:', error);
+    res.status(500).json({ error: 'Failed to create super admin' });
+  }
+});
+
 // Upgrade existing user to super_admin (one-time use)
 router.post('/upgrade-to-super-admin', async (req, res) => {
   try {
