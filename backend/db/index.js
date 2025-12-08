@@ -956,6 +956,101 @@ Human Resources Department
 
       CREATE INDEX IF NOT EXISTS idx_probation_history_employee ON probation_history(employee_id);
       CREATE INDEX IF NOT EXISTS idx_probation_history_created ON probation_history(created_at DESC);
+
+      -- =====================================================
+      -- FLEXIBLE COMMISSION & ALLOWANCE SYSTEM
+      -- =====================================================
+
+      -- Commission Types (predefined list per company)
+      CREATE TABLE IF NOT EXISTS commission_types (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        calculation_type VARCHAR(20) DEFAULT 'fixed',
+        is_active BOOLEAN DEFAULT TRUE,
+        company_id INTEGER REFERENCES companies(id) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Allowance Types (predefined list per company)
+      CREATE TABLE IF NOT EXISTS allowance_types (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        is_taxable BOOLEAN DEFAULT TRUE,
+        is_active BOOLEAN DEFAULT TRUE,
+        company_id INTEGER REFERENCES companies(id) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Employee Commission Assignments
+      CREATE TABLE IF NOT EXISTS employee_commissions (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        commission_type_id INTEGER REFERENCES commission_types(id) ON DELETE CASCADE,
+        amount DECIMAL(10,2) DEFAULT 0,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(employee_id, commission_type_id)
+      );
+
+      -- Employee Allowance Assignments
+      CREATE TABLE IF NOT EXISTS employee_allowances (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        allowance_type_id INTEGER REFERENCES allowance_types(id) ON DELETE CASCADE,
+        amount DECIMAL(10,2) DEFAULT 0,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(employee_id, allowance_type_id)
+      );
+
+      -- Payroll Commission Items (breakdown per payroll)
+      CREATE TABLE IF NOT EXISTS payroll_commission_items (
+        id SERIAL PRIMARY KEY,
+        payroll_item_id INTEGER REFERENCES payroll_items(id) ON DELETE CASCADE,
+        commission_type_id INTEGER REFERENCES commission_types(id),
+        commission_name VARCHAR(100),
+        amount DECIMAL(10,2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Payroll Allowance Items (breakdown per payroll)
+      CREATE TABLE IF NOT EXISTS payroll_allowance_items (
+        id SERIAL PRIMARY KEY,
+        payroll_item_id INTEGER REFERENCES payroll_items(id) ON DELETE CASCADE,
+        allowance_type_id INTEGER REFERENCES allowance_types(id),
+        allowance_name VARCHAR(100),
+        amount DECIMAL(10,2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Create indexes
+      CREATE INDEX IF NOT EXISTS idx_commission_types_company ON commission_types(company_id);
+      CREATE INDEX IF NOT EXISTS idx_allowance_types_company ON allowance_types(company_id);
+      CREATE INDEX IF NOT EXISTS idx_employee_commissions_employee ON employee_commissions(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_employee_allowances_employee ON employee_allowances(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_payroll_commission_items_payroll ON payroll_commission_items(payroll_item_id);
+      CREATE INDEX IF NOT EXISTS idx_payroll_allowance_items_payroll ON payroll_allowance_items(payroll_item_id);
+
+      -- Insert default commission types
+      INSERT INTO commission_types (name, description, calculation_type, company_id) VALUES
+        ('Sales Commission', 'Commission based on sales', 'percentage', 1),
+        ('Referral Commission', 'Commission for referrals', 'fixed', 1),
+        ('Target Bonus', 'Bonus for hitting targets', 'fixed', 1),
+        ('Performance Bonus', 'Performance-based bonus', 'fixed', 1),
+        ('Project Commission', 'Commission per project', 'fixed', 1)
+      ON CONFLICT DO NOTHING;
+
+      -- Insert default allowance types
+      INSERT INTO allowance_types (name, description, is_taxable, company_id) VALUES
+        ('Transport Allowance', 'Monthly transport allowance', TRUE, 1),
+        ('Meal Allowance', 'Daily meal allowance', TRUE, 1),
+        ('Phone Allowance', 'Mobile phone allowance', TRUE, 1),
+        ('Petrol Allowance', 'Fuel reimbursement', TRUE, 1),
+        ('Parking Allowance', 'Parking fees', TRUE, 1),
+        ('Housing Allowance', 'Housing assistance', TRUE, 1)
+      ON CONFLICT DO NOTHING;
     `);
     console.log('Database tables initialized');
   } catch (err) {

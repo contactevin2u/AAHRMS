@@ -17,6 +17,7 @@ const lettersRoutes = require('./routes/letters');
 const adminUsersRoutes = require('./routes/adminUsers');
 const probationRoutes = require('./routes/probation');
 const companiesRoutes = require('./routes/companies');
+const earningsRoutes = require('./routes/earnings');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -50,6 +51,7 @@ app.use('/api/letters', lettersRoutes);  // HR Letters/Notices
 app.use('/api/admin-users', adminUsersRoutes);  // Admin User Management
 app.use('/api/probation', probationRoutes);  // Probation Management
 app.use('/api/companies', companiesRoutes);  // Company Management (Multi-tenant)
+app.use('/api/earnings', earningsRoutes);  // Commission & Allowance Types
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -201,6 +201,35 @@ export const probationApi = {
   getHistory: (id) => api.get(`/probation/${id}/history`),
 };
 
+// Commission & Allowance (Earnings)
+export const earningsApi = {
+  // Commission Types
+  getCommissionTypes: () => api.get('/earnings/commission-types'),
+  createCommissionType: (data) => api.post('/earnings/commission-types', data),
+  updateCommissionType: (id, data) => api.put(`/earnings/commission-types/${id}`, data),
+  deleteCommissionType: (id) => api.delete(`/earnings/commission-types/${id}`),
+
+  // Allowance Types
+  getAllowanceTypes: () => api.get('/earnings/allowance-types'),
+  createAllowanceType: (data) => api.post('/earnings/allowance-types', data),
+  updateAllowanceType: (id, data) => api.put(`/earnings/allowance-types/${id}`, data),
+  deleteAllowanceType: (id) => api.delete(`/earnings/allowance-types/${id}`),
+
+  // Employee Commissions
+  getEmployeeCommissions: (employeeId) => api.get(`/earnings/employees/${employeeId}/commissions`),
+  addEmployeeCommission: (employeeId, data) => api.post(`/earnings/employees/${employeeId}/commissions`, data),
+  updateEmployeeCommission: (employeeId, commissionId, data) => api.put(`/earnings/employees/${employeeId}/commissions/${commissionId}`, data),
+  removeEmployeeCommission: (employeeId, commissionId) => api.delete(`/earnings/employees/${employeeId}/commissions/${commissionId}`),
+  bulkSaveCommissions: (employeeId, commissions) => api.post(`/earnings/employees/${employeeId}/commissions/bulk`, { commissions }),
+
+  // Employee Allowances
+  getEmployeeAllowances: (employeeId) => api.get(`/earnings/employees/${employeeId}/allowances`),
+  addEmployeeAllowance: (employeeId, data) => api.post(`/earnings/employees/${employeeId}/allowances`, data),
+  updateEmployeeAllowance: (employeeId, allowanceId, data) => api.put(`/earnings/employees/${employeeId}/allowances/${allowanceId}`, data),
+  removeEmployeeAllowance: (employeeId, allowanceId) => api.delete(`/earnings/employees/${employeeId}/allowances/${allowanceId}`),
+  bulkSaveAllowances: (employeeId, allowances) => api.post(`/earnings/employees/${employeeId}/allowances/bulk`, { allowances }),
+};
+
 // Admin User Management
 export const adminUsersApi = {
   getAll: () => api.get('/admin-users'),
