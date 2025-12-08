@@ -16,6 +16,7 @@ const essRoutes = require('./routes/ess');
 const lettersRoutes = require('./routes/letters');
 const adminUsersRoutes = require('./routes/adminUsers');
 const probationRoutes = require('./routes/probation');
+const companiesRoutes = require('./routes/companies');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -48,6 +49,7 @@ app.use('/api/ess', essRoutes);  // Employee Self-Service Portal
 app.use('/api/letters', lettersRoutes);  // HR Letters/Notices
 app.use('/api/admin-users', adminUsersRoutes);  // Admin User Management
 app.use('/api/probation', probationRoutes);  // Probation Management
+app.use('/api/companies', companiesRoutes);  // Company Management (Multi-tenant)
 
 // Health check
 app.get('/api/health', (req, res) => {

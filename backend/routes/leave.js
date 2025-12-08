@@ -2,17 +2,26 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
+const { getCompanyFilter } = require('../middleware/tenant');
 
 // =====================================================
-// LEAVE TYPES
+// LEAVE TYPES (filtered by company)
 // =====================================================
 
 // Get all leave types
 router.get('/types', authenticateAdmin, async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM leave_types ORDER BY code'
-    );
+    const companyId = getCompanyFilter(req);
+    let query = 'SELECT * FROM leave_types';
+    let params = [];
+
+    if (companyId !== null) {
+      query += ' WHERE company_id = $1';
+      params = [companyId];
+    }
+    query += ' ORDER BY code';
+
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching leave types:', error);
@@ -24,11 +33,12 @@ router.get('/types', authenticateAdmin, async (req, res) => {
 router.post('/types', authenticateAdmin, async (req, res) => {
   try {
     const { code, name, is_paid, default_days_per_year, description } = req.body;
+    const companyId = req.companyId || 1;
 
     const result = await pool.query(
-      `INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [code, name, is_paid, default_days_per_year || 0, description]
+      `INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [code, name, is_paid, default_days_per_year || 0, description, companyId]
     );
 
     res.status(201).json(result.rows[0]);

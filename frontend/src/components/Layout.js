@@ -49,6 +49,16 @@ function Layout({ children }) {
             <div className="admin-info">
               <span className="admin-name">{adminInfo.name || adminInfo.username}</span>
               <span className="admin-role">{adminInfo.role_display_name || adminInfo.role}</span>
+              {adminInfo.company_name && (
+                <span className="admin-company" style={{ fontSize: '11px', color: '#90caf9', marginTop: '4px', display: 'block' }}>
+                  {adminInfo.company_name}
+                </span>
+              )}
+              {isSuperAdmin() && !adminInfo.company_id && (
+                <span className="admin-company" style={{ fontSize: '11px', color: '#ffd54f', marginTop: '4px', display: 'block' }}>
+                  System Admin
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -115,6 +125,13 @@ function Layout({ children }) {
             <NavLink to="/admin/roles" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
               <span className="nav-icon">🔐</span>
               <span>Role Management</span>
+            </NavLink>
+          )}
+
+          {isSuperAdmin() && (
+            <NavLink to="/admin/companies" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">🏬</span>
+              <span>Companies</span>
             </NavLink>
           )}
         </div>

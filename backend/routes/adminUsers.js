@@ -3,21 +3,36 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
 const { authenticateAdmin, requirePermission } = require('../middleware/auth');
+const { getCompanyFilter, isSuperAdmin } = require('../middleware/tenant');
 
-// Get all admin users
+// Get all admin users (filtered by company)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const result = await pool.query(`
+    const companyId = getCompanyFilter(req);
+
+    let query = `
       SELECT
         au.id, au.username, au.name, au.email, au.role, au.status,
-        au.last_login, au.created_at, au.updated_at,
+        au.last_login, au.created_at, au.updated_at, au.company_id,
         ar.display_name as role_display_name,
-        creator.username as created_by_name
+        creator.username as created_by_name,
+        c.name as company_name
       FROM admin_users au
       LEFT JOIN admin_roles ar ON au.role = ar.name
       LEFT JOIN admin_users creator ON au.created_by = creator.id
-      ORDER BY au.created_at DESC
-    `);
+      LEFT JOIN companies c ON au.company_id = c.id
+    `;
+
+    let params = [];
+    // If not super_admin, only show users from same company
+    if (companyId !== null) {
+      query += ' WHERE au.company_id = $1';
+      params = [companyId];
+    }
+
+    query += ' ORDER BY au.created_at DESC';
+
+    const result = await pool.query(query, params);
 
     // Remove password_hash from results
     const users = result.rows.map(user => {

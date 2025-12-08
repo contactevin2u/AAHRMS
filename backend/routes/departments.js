@@ -2,13 +2,24 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
+const { getCompanyFilter } = require('../middleware/tenant');
 
-// Get all departments
+// Get all departments (filtered by company)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM departments ORDER BY name'
-    );
+    const companyId = getCompanyFilter(req);
+
+    let query = 'SELECT * FROM departments';
+    let params = [];
+
+    if (companyId !== null) {
+      query += ' WHERE company_id = $1';
+      params = [companyId];
+    }
+
+    query += ' ORDER BY name';
+
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching departments:', error);
@@ -16,12 +27,21 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get department with salary config
+// Get department with salary config (with company check)
 router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const companyId = getCompanyFilter(req);
 
-    const dept = await pool.query('SELECT * FROM departments WHERE id = $1', [id]);
+    let deptQuery = 'SELECT * FROM departments WHERE id = $1';
+    let params = [id];
+
+    if (companyId !== null) {
+      deptQuery += ' AND company_id = $2';
+      params.push(companyId);
+    }
+
+    const dept = await pool.query(deptQuery, params);
     if (dept.rows.length === 0) {
       return res.status(404).json({ error: 'Department not found' });
     }

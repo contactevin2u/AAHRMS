@@ -18,6 +18,7 @@ import Letters from './pages/Letters';
 import UserManagement from './pages/UserManagement';
 import RoleManagement from './pages/RoleManagement';
 import MyProfile from './pages/MyProfile';
+import CompanyManagement from './pages/CompanyManagement';
 // Employee Self-Service (ESS) imports
 import EmployeeLogin from './pages/EmployeeLogin';
 import EmployeeDashboard from './pages/EmployeeDashboard';
@@ -170,6 +171,14 @@ function App() {
           element={
             <ProtectedRoute>
               <MyProfile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/companies"
+          element={
+            <ProtectedRoute>
+              <CompanyManagement />
             </ProtectedRoute>
           }
         />

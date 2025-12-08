@@ -29,6 +29,31 @@ pool.on('error', (err) => {
 const initDb = async () => {
   try {
     await pool.query(`
+      -- =====================================================
+      -- MULTI-COMPANY / MULTI-TENANT SUPPORT
+      -- =====================================================
+
+      -- Companies Table (must be created first)
+      CREATE TABLE IF NOT EXISTS companies (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        code VARCHAR(50) UNIQUE NOT NULL,
+        logo_url TEXT,
+        address TEXT,
+        phone VARCHAR(50),
+        email VARCHAR(255),
+        registration_number VARCHAR(100),
+        status VARCHAR(20) DEFAULT 'active',
+        settings JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Create default company if not exists (for migration)
+      INSERT INTO companies (id, name, code, status)
+      VALUES (1, 'Default Company', 'DEFAULT', 'active')
+      ON CONFLICT (code) DO NOTHING;
+
       -- Anonymous Feedback
       CREATE TABLE IF NOT EXISTS anonymous_feedback (
         id SERIAL PRIMARY KEY,
@@ -38,6 +63,14 @@ const initDb = async () => {
         is_read BOOLEAN DEFAULT FALSE,
         admin_notes TEXT
       );
+
+      -- Add company_id to anonymous_feedback
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='anonymous_feedback' AND column_name='company_id') THEN
+          ALTER TABLE anonymous_feedback ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+        END IF;
+      END $$;
 
       CREATE TABLE IF NOT EXISTS admin_users (
         id SERIAL PRIMARY KEY,
@@ -80,6 +113,12 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='signature_text') THEN
           ALTER TABLE admin_users ADD COLUMN signature_text VARCHAR(255);
         END IF;
+        -- Multi-company support: company_id (NULL for super_admin system-wide access)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='company_id') THEN
+          ALTER TABLE admin_users ADD COLUMN company_id INTEGER REFERENCES companies(id);
+          -- Migrate existing non-super_admin users to default company
+          UPDATE admin_users SET company_id = 1 WHERE role != 'super_admin' AND company_id IS NULL;
+        END IF;
       END $$;
 
       -- Roles table for permission management
@@ -116,10 +155,27 @@ const initDb = async () => {
       -- Departments
       CREATE TABLE IF NOT EXISTS departments (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(100) UNIQUE NOT NULL,
+        name VARCHAR(100) NOT NULL,
         salary_type VARCHAR(50) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- Add company_id to departments
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='departments' AND column_name='company_id') THEN
+          ALTER TABLE departments ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+          -- Migrate existing departments to default company
+          UPDATE departments SET company_id = 1 WHERE company_id IS NULL;
+        END IF;
+        -- Drop the old unique constraint on name only (if exists)
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'departments_name_key') THEN
+          ALTER TABLE departments DROP CONSTRAINT departments_name_key;
+        END IF;
+      END $$;
+
+      -- Create unique constraint on name + company_id (each company can have same department names)
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_departments_name_company ON departments(name, company_id);
 
       -- Fix duplicate departments (for existing tables)
       DO $$
@@ -298,7 +354,15 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='probation_notes') THEN
           ALTER TABLE employees ADD COLUMN probation_notes TEXT;
         END IF;
+        -- Multi-company support
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='company_id') THEN
+          ALTER TABLE employees ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+          -- Migrate existing employees to default company
+          UPDATE employees SET company_id = 1 WHERE company_id IS NULL;
+        END IF;
       END $$;
+
+      CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id);
 
       -- Salary Configuration per Department
       CREATE TABLE IF NOT EXISTS salary_configs (
@@ -317,6 +381,15 @@ const initDb = async () => {
         outstation_rate DECIMAL(10,2) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- Add company_id to salary_configs (inherits from department, but explicit for queries)
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='salary_configs' AND column_name='company_id') THEN
+          ALTER TABLE salary_configs ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+          UPDATE salary_configs SET company_id = 1 WHERE company_id IS NULL;
+        END IF;
+      END $$;
 
       -- Monthly Payroll Records
       CREATE TABLE IF NOT EXISTS payroll (
@@ -377,6 +450,11 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='other_deductions') THEN
           ALTER TABLE payroll ADD COLUMN other_deductions DECIMAL(10,2) DEFAULT 0;
         END IF;
+        -- Multi-company support
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll' AND column_name='company_id') THEN
+          ALTER TABLE payroll ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+          UPDATE payroll SET company_id = 1 WHERE company_id IS NULL;
+        END IF;
       END $$;
 
       -- Insert default departments if not exists
@@ -394,7 +472,7 @@ const initDb = async () => {
       -- Leave Types (AL, ML, UL, etc.)
       CREATE TABLE IF NOT EXISTS leave_types (
         id SERIAL PRIMARY KEY,
-        code VARCHAR(10) UNIQUE NOT NULL,
+        code VARCHAR(10) NOT NULL,
         name VARCHAR(50) NOT NULL,
         is_paid BOOLEAN DEFAULT TRUE,
         default_days_per_year INTEGER DEFAULT 0,
@@ -402,16 +480,32 @@ const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- Insert default leave types
-      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description) VALUES
-        ('AL', 'Annual Leave', TRUE, 14, 'Paid annual leave'),
-        ('ML', 'Medical Leave', TRUE, 14, 'Paid medical/sick leave'),
-        ('UL', 'Unpaid Leave', FALSE, 0, 'Unpaid leave - deducted from salary'),
-        ('EL', 'Emergency Leave', TRUE, 3, 'Emergency leave'),
-        ('CL', 'Compassionate Leave', TRUE, 3, 'Bereavement/compassionate leave'),
-        ('ML2', 'Maternity Leave', TRUE, 60, 'Maternity leave'),
-        ('PL', 'Paternity Leave', TRUE, 7, 'Paternity leave')
-      ON CONFLICT (code) DO NOTHING;
+      -- Add company_id to leave_types
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_types' AND column_name='company_id') THEN
+          ALTER TABLE leave_types ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+          UPDATE leave_types SET company_id = 1 WHERE company_id IS NULL;
+        END IF;
+        -- Drop old unique constraint and create new one with company_id
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leave_types_code_key') THEN
+          ALTER TABLE leave_types DROP CONSTRAINT leave_types_code_key;
+        END IF;
+      END $$;
+
+      -- Unique constraint on code + company_id
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_leave_types_code_company ON leave_types(code, company_id);
+
+      -- Insert default leave types for default company
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id) VALUES
+        ('AL', 'Annual Leave', TRUE, 14, 'Paid annual leave', 1),
+        ('ML', 'Medical Leave', TRUE, 14, 'Paid medical/sick leave', 1),
+        ('UL', 'Unpaid Leave', FALSE, 0, 'Unpaid leave - deducted from salary', 1),
+        ('EL', 'Emergency Leave', TRUE, 3, 'Emergency leave', 1),
+        ('CL', 'Compassionate Leave', TRUE, 3, 'Bereavement/compassionate leave', 1),
+        ('ML2', 'Maternity Leave', TRUE, 60, 'Maternity leave', 1),
+        ('PL', 'Paternity Leave', TRUE, 7, 'Paternity leave', 1)
+      ON CONFLICT DO NOTHING;
 
       -- Leave Balances (per employee per year)
       CREATE TABLE IF NOT EXISTS leave_balances (
@@ -490,17 +584,24 @@ const initDb = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- Add department_id column to payroll_runs if not exists
+      -- Add department_id and company_id columns to payroll_runs if not exists
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='department_id') THEN
           ALTER TABLE payroll_runs ADD COLUMN department_id INTEGER REFERENCES departments(id);
+        END IF;
+        -- Multi-company support
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='company_id') THEN
+          ALTER TABLE payroll_runs ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+          UPDATE payroll_runs SET company_id = 1 WHERE company_id IS NULL;
         END IF;
         -- Drop old unique constraint and add new one with department_id
         IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_runs_month_year_key') THEN
           ALTER TABLE payroll_runs DROP CONSTRAINT payroll_runs_month_year_key;
         END IF;
       END $$;
+
+      CREATE INDEX IF NOT EXISTS idx_payroll_runs_company ON payroll_runs(company_id);
 
       -- Create unique index for month, year, department_id (nullable)
       CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_runs_unique
@@ -608,8 +709,18 @@ const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Add company_id to public_holidays
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='public_holidays' AND column_name='company_id') THEN
+          ALTER TABLE public_holidays ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+          UPDATE public_holidays SET company_id = 1 WHERE company_id IS NULL;
+        END IF;
+      END $$;
+
       CREATE INDEX IF NOT EXISTS idx_holidays_date ON public_holidays(date);
       CREATE INDEX IF NOT EXISTS idx_holidays_year ON public_holidays(year);
+      CREATE INDEX IF NOT EXISTS idx_holidays_company ON public_holidays(company_id);
 
       -- =====================================================
       -- EMPLOYEE SELF-SERVICE (ESS) TABLES
@@ -658,13 +769,20 @@ const initDb = async () => {
       CREATE INDEX IF NOT EXISTS idx_hr_letters_status ON hr_letters(status);
       CREATE INDEX IF NOT EXISTS idx_hr_letters_created ON hr_letters(created_at DESC);
 
-      -- Add issued_by_designation to hr_letters if not exists
+      -- Add issued_by_designation and company_id to hr_letters if not exists
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='hr_letters' AND column_name='issued_by_designation') THEN
           ALTER TABLE hr_letters ADD COLUMN issued_by_designation VARCHAR(100);
         END IF;
+        -- Multi-company support
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='hr_letters' AND column_name='company_id') THEN
+          ALTER TABLE hr_letters ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+          UPDATE hr_letters SET company_id = 1 WHERE company_id IS NULL;
+        END IF;
       END $$;
+
+      CREATE INDEX IF NOT EXISTS idx_hr_letters_company ON hr_letters(company_id);
 
       -- Letter Templates
       CREATE TABLE IF NOT EXISTS letter_templates (
@@ -678,8 +796,19 @@ const initDb = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Add company_id to letter_templates
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='letter_templates' AND column_name='company_id') THEN
+          ALTER TABLE letter_templates ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
+          UPDATE letter_templates SET company_id = 1 WHERE company_id IS NULL;
+        END IF;
+      END $$;
+
+      CREATE INDEX IF NOT EXISTS idx_letter_templates_company ON letter_templates(company_id);
+
       -- Insert default letter templates
-      INSERT INTO letter_templates (letter_type, name, subject, content) VALUES
+      INSERT INTO letter_templates (letter_type, name, subject, content, company_id) VALUES
         ('warning', 'Warning Letter (Surat Amaran)', 'Official Warning Notice',
          'Dear {{employee_name}},
 
@@ -696,7 +825,7 @@ Please acknowledge receipt of this letter by signing below.
 
 Regards,
 Human Resources Department
-{{company_name}}'),
+{{company_name}}', 1),
         ('appreciation', 'Appreciation Letter', 'Letter of Appreciation',
          'Dear {{employee_name}},
 
@@ -710,7 +839,7 @@ Keep up the excellent work!
 
 Best regards,
 Human Resources Department
-{{company_name}}'),
+{{company_name}}', 1),
         ('promotion', 'Promotion Letter', 'Congratulations on Your Promotion',
          'Dear {{employee_name}},
 
@@ -727,7 +856,7 @@ Congratulations on this well-deserved achievement!
 
 Best regards,
 Human Resources Department
-{{company_name}}'),
+{{company_name}}', 1),
         ('performance_improvement', 'Performance Improvement Notice', 'Performance Improvement Plan Notice',
          'Dear {{employee_name}},
 
@@ -747,7 +876,7 @@ We are committed to supporting your success. Please do not hesitate to reach out
 
 Regards,
 Human Resources Department
-{{company_name}}'),
+{{company_name}}', 1),
         ('salary_adjustment', 'Salary Adjustment Letter', 'Notification of Salary Adjustment',
          'Dear {{employee_name}},
 
@@ -765,7 +894,7 @@ Congratulations!
 
 Best regards,
 Human Resources Department
-{{company_name}}'),
+{{company_name}}', 1),
         ('general_notice', 'General Notice', 'Important Notice',
          'Dear {{employee_name}},
 
@@ -775,7 +904,7 @@ If you have any questions, please contact the HR department.
 
 Regards,
 Human Resources Department
-{{company_name}}'),
+{{company_name}}', 1),
         ('termination', 'Termination Letter', 'Notice of Employment Termination',
          'Dear {{employee_name}},
 
@@ -791,7 +920,7 @@ Please note the following:
 
 Regards,
 Human Resources Department
-{{company_name}}'),
+{{company_name}}', 1),
         ('confirmation', 'Confirmation Letter', 'Employment Confirmation',
          'Dear {{employee_name}},
 
@@ -805,7 +934,7 @@ Congratulations and welcome to the team!
 
 Best regards,
 Human Resources Department
-{{company_name}}')
+{{company_name}}', 1)
       ON CONFLICT DO NOTHING;
 
       -- =====================================================

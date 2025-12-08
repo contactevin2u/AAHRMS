@@ -19,11 +19,13 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Login and password are required' });
     }
 
-    // Find employee by email or employee_id
+    // Find employee by email or employee_id, including company info
     const result = await pool.query(
-      `SELECT id, employee_id, name, email, password_hash, status, ess_enabled, department_id
-       FROM employees
-       WHERE (email = $1 OR employee_id = $1) AND status = 'active'`,
+      `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled, e.department_id, e.company_id,
+              c.name as company_name, c.code as company_code, c.logo_url as company_logo
+       FROM employees e
+       LEFT JOIN companies c ON e.company_id = c.id
+       WHERE (e.email = $1 OR e.employee_id = $1) AND e.status = 'active'`,
       [login]
     );
 
@@ -58,14 +60,15 @@ router.post('/login', async (req, res) => {
       [employee.id]
     );
 
-    // Generate JWT token
+    // Generate JWT token with company context
     const token = jwt.sign(
       {
         id: employee.id,
         employee_id: employee.employee_id,
         name: employee.name,
         email: employee.email,
-        role: 'employee'
+        role: 'employee',
+        company_id: employee.company_id
       },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
@@ -77,7 +80,11 @@ router.post('/login', async (req, res) => {
         id: employee.id,
         employee_id: employee.employee_id,
         name: employee.name,
-        email: employee.email
+        email: employee.email,
+        company_id: employee.company_id,
+        company_name: employee.company_name,
+        company_code: employee.company_code,
+        company_logo: employee.company_logo
       }
     });
   } catch (error) {

@@ -13,11 +13,13 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Get user with role and permissions
+    // Get user with role, permissions, and company info
     const result = await pool.query(`
-      SELECT au.*, ar.permissions, ar.display_name as role_display_name
+      SELECT au.*, ar.permissions, ar.display_name as role_display_name,
+             c.id as company_id, c.name as company_name, c.code as company_code, c.logo_url as company_logo
       FROM admin_users au
       LEFT JOIN admin_roles ar ON au.role = ar.name
+      LEFT JOIN companies c ON au.company_id = c.id
       WHERE au.username = $1
     `, [username]);
 
@@ -49,7 +51,8 @@ router.post('/login', async (req, res) => {
         id: admin.id,
         username: admin.username,
         role: admin.role || 'admin',
-        name: admin.name
+        name: admin.name,
+        company_id: admin.company_id  // Include company_id in token (null for super_admin)
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -65,7 +68,11 @@ router.post('/login', async (req, res) => {
         email: admin.email,
         role: admin.role || 'admin',
         role_display_name: admin.role_display_name || 'Admin',
-        permissions: admin.permissions || {}
+        permissions: admin.permissions || {},
+        company_id: admin.company_id,
+        company_name: admin.company_name,
+        company_code: admin.company_code,
+        company_logo: admin.company_logo
       },
     });
   } catch (error) {

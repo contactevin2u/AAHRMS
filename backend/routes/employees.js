@@ -2,11 +2,13 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
+const { getCompanyFilter, isSuperAdmin } = require('../middleware/tenant');
 
-// Get all employees
+// Get all employees (filtered by company)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
     const { department_id, status, search, employment_type, probation_status } = req.query;
+    const companyId = getCompanyFilter(req);
 
     let query = `
       SELECT e.*, d.name as department_name
@@ -16,6 +18,13 @@ router.get('/', authenticateAdmin, async (req, res) => {
     `;
     const params = [];
     let paramCount = 0;
+
+    // Company filter (skip for super_admin viewing all)
+    if (companyId !== null) {
+      paramCount++;
+      query += ` AND e.company_id = $${paramCount}`;
+      params.push(companyId);
+    }
 
     if (department_id) {
       paramCount++;
@@ -59,17 +68,27 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get single employee
+// Get single employee (with company check)
 router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
-      `SELECT e.*, d.name as department_name
-       FROM employees e
-       LEFT JOIN departments d ON e.department_id = d.id
-       WHERE e.id = $1`,
-      [id]
-    );
+    const companyId = getCompanyFilter(req);
+
+    let query = `
+      SELECT e.*, d.name as department_name
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE e.id = $1
+    `;
+    const params = [id];
+
+    // Company filter (skip for super_admin viewing all)
+    if (companyId !== null) {
+      query += ` AND e.company_id = $2`;
+      params.push(companyId);
+    }
+
+    const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Employee not found' });
@@ -82,7 +101,7 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Create employee
+// Create employee (with company_id)
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
     const {
@@ -97,6 +116,9 @@ router.post('/', authenticateAdmin, async (req, res) => {
       // Probation fields
       employment_type, probation_months, salary_before_confirmation, salary_after_confirmation, increment_amount
     } = req.body;
+
+    // Get company_id from authenticated user (or default to 1 for super_admin)
+    const companyId = req.companyId || 1;
 
     if (!employee_id || !name || !department_id) {
       return res.status(400).json({ error: 'Employee ID, name, and department are required' });
@@ -128,9 +150,10 @@ router.post('/', authenticateAdmin, async (req, res) => {
         default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
         default_bonus, default_incentive,
         employment_type, probation_months, probation_end_date, probation_status,
-        salary_before_confirmation, salary_after_confirmation, increment_amount
+        salary_before_confirmation, salary_after_confirmation, increment_amount,
+        company_id
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)
        RETURNING *`,
       [
         employee_id, name, email, phone, ic_number, department_id, position, join_date,
@@ -140,7 +163,8 @@ router.post('/', authenticateAdmin, async (req, res) => {
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
         default_bonus || 0, default_incentive || 0,
         empType, probMonths, probation_end_date, empType === 'confirmed' ? 'confirmed' : 'ongoing',
-        salary_before_confirmation || null, salary_after_confirmation || null, calcIncrement || null
+        salary_before_confirmation || null, salary_after_confirmation || null, calcIncrement || null,
+        companyId
       ]
     );
 
@@ -567,9 +591,13 @@ router.post('/bulk-delete', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get employee stats
+// Get employee stats (filtered by company)
 router.get('/stats/overview', authenticateAdmin, async (req, res) => {
   try {
+    const companyId = getCompanyFilter(req);
+    const companyFilter = companyId !== null ? 'AND company_id = $1' : '';
+    const params = companyId !== null ? [companyId] : [];
+
     const stats = await pool.query(`
       SELECT
         COUNT(*) as total,
@@ -579,15 +607,23 @@ router.get('/stats/overview', authenticateAdmin, async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'active' AND employment_type = 'confirmed') as confirmed,
         COUNT(*) FILTER (WHERE status = 'active' AND probation_status = 'pending_review') as pending_review
       FROM employees
-    `);
+      WHERE 1=1 ${companyFilter}
+    `, params);
 
-    const byDepartment = await pool.query(`
-      SELECT d.name, COUNT(e.id) as count
-      FROM departments d
-      LEFT JOIN employees e ON d.id = e.department_id AND e.status = 'active'
-      GROUP BY d.id, d.name
-      ORDER BY d.name
-    `);
+    const byDepartmentQuery = companyId !== null
+      ? `SELECT d.name, COUNT(e.id) as count
+         FROM departments d
+         LEFT JOIN employees e ON d.id = e.department_id AND e.status = 'active' AND e.company_id = $1
+         WHERE d.company_id = $1
+         GROUP BY d.id, d.name
+         ORDER BY d.name`
+      : `SELECT d.name, COUNT(e.id) as count
+         FROM departments d
+         LEFT JOIN employees e ON d.id = e.department_id AND e.status = 'active'
+         GROUP BY d.id, d.name
+         ORDER BY d.name`;
+
+    const byDepartment = await pool.query(byDepartmentQuery, params);
 
     res.json({
       overview: stats.rows[0],

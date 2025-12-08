@@ -13,6 +13,8 @@ const authenticateAdmin = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.admin = decoded;
+    // Extract company_id for tenant isolation
+    req.companyId = decoded.company_id;
     next();
   } catch (error) {
     return res.status(403).json({ error: 'Invalid or expired token.' });
@@ -114,6 +116,8 @@ const authenticateEmployee = (req, res, next) => {
     }
 
     req.employee = decoded;
+    // Extract company_id for tenant isolation
+    req.companyId = decoded.company_id;
     next();
   } catch (error) {
     return res.status(403).json({ error: 'Invalid or expired token.' });
