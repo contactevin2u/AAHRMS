@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { adminUsersApi } from '../api';
+import Layout from '../components/Layout';
 import './UserManagement.css';
 
 function UserManagement() {
@@ -202,6 +203,7 @@ function UserManagement() {
   };
 
   return (
+    <Layout>
     <div className="user-management-page">
       <div className="page-header">
         <div>
@@ -468,6 +470,7 @@ function UserManagement() {
         </div>
       )}
     </div>
+    </Layout>
   );
 }
 
