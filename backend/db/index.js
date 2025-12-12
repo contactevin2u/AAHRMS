@@ -458,12 +458,17 @@ const initDb = async () => {
       END $$;
 
       -- Insert default departments if not exists
-      INSERT INTO departments (name, salary_type) VALUES
-        ('Office', 'fixed_bonus_commission_allowance'),
-        ('Indoor Sales', 'commission_only'),
-        ('Outdoor Sales', 'basic_allowance_commission'),
-        ('Driver', 'basic_trip_commission_outstation_ot')
-      ON CONFLICT DO NOTHING;
+      -- Payroll Structure:
+      -- Office: basic + allowance + bonus + OT
+      -- Indoor Sales: basic + commission
+      -- Outdoor Sales: basic + commission + allowance + bonus
+      -- Driver: basic + upsell commission + outstation + OT + trip commission
+      INSERT INTO departments (name, salary_type, company_id) VALUES
+        ('Office', 'basic_allowance_bonus_ot', 1),
+        ('Indoor Sales', 'basic_commission', 1),
+        ('Outdoor Sales', 'basic_commission_allowance_bonus', 1),
+        ('Driver', 'basic_upsell_outstation_ot_trip', 1)
+      ON CONFLICT (name, company_id) DO NOTHING;
 
       -- =====================================================
       -- NEW HRMS SYSTEM TABLES
@@ -667,6 +672,17 @@ const initDb = async () => {
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='other_earnings_description') THEN
           ALTER TABLE payroll_items ADD COLUMN other_earnings_description VARCHAR(255);
+        END IF;
+        -- OT hours tracking
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='ot_hours') THEN
+          ALTER TABLE payroll_items ADD COLUMN ot_hours DECIMAL(5,2) DEFAULT 0;
+        END IF;
+        -- Public holiday days worked and pay (extra 1.0x daily rate)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='ph_days_worked') THEN
+          ALTER TABLE payroll_items ADD COLUMN ph_days_worked DECIMAL(5,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='ph_pay') THEN
+          ALTER TABLE payroll_items ADD COLUMN ph_pay DECIMAL(10,2) DEFAULT 0;
         END IF;
       END $$;
 

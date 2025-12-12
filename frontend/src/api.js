@@ -73,6 +73,7 @@ export const departmentApi = {
   getAll: () => api.get('/departments'),
   getOne: (id) => api.get(`/departments/${id}`),
   updateSalaryConfig: (id, data) => api.put(`/departments/${id}/salary-config`, data),
+  seed: () => api.post('/departments/seed'),
 };
 
 export const payrollApi = {

@@ -25,8 +25,11 @@ function PayrollV2() {
     fixed_allowance: 0,
     ot_hours: 0,
     ot_amount: 0,
+    ph_days_worked: 0,         // Public holiday days worked
+    ph_pay: 0,                 // Public holiday extra pay
     incentive_amount: 0,
-    commission_amount: 0,
+    commission_amount: 0,        // For Indoor/Outdoor Sales commission OR Driver trip commission
+    trade_commission_amount: 0,  // For Driver upsell commission
     outstation_amount: 0,
     bonus: 0,
     other_deductions: 0,
@@ -149,8 +152,11 @@ function PayrollV2() {
       fixed_allowance: item.fixed_allowance || 0,
       ot_hours: item.ot_hours || 0,
       ot_amount: item.ot_amount || 0,
+      ph_days_worked: item.ph_days_worked || 0,
+      ph_pay: item.ph_pay || 0,
       incentive_amount: item.incentive_amount || 0,
       commission_amount: item.commission_amount || 0,
+      trade_commission_amount: item.trade_commission_amount || 0,
       outstation_amount: item.outstation_amount || 0,
       bonus: item.bonus || 0,
       other_deductions: item.other_deductions || 0,
@@ -158,6 +164,76 @@ function PayrollV2() {
       notes: item.notes || ''
     });
     setShowItemModal(true);
+  };
+
+  // Get department-specific field visibility
+  const getDepartmentFields = (deptName) => {
+    const dept = (deptName || '').toLowerCase();
+    return {
+      // Office: basic + allowance + bonus + OT
+      showAllowance: dept === 'office' || dept === 'outdoor sales',
+      showBonus: dept === 'office' || dept === 'outdoor sales',
+      showOT: dept === 'office' || dept === 'driver',
+      // Indoor Sales: basic + commission
+      showCommission: dept === 'indoor sales' || dept === 'outdoor sales',
+      // Outdoor Sales: basic + commission + allowance + bonus
+      // Driver: basic + upsell commission + outstation + OT + trip commission
+      showUpsellCommission: dept === 'driver',
+      showTripCommission: dept === 'driver',
+      showOutstation: dept === 'driver',
+      // All departments have basic salary
+      showBasic: true
+    };
+  };
+
+  // Calculate OT amount based on OT hours (1.0x rate)
+  // OT Amount = (Basic / working days / 8 hours) * OT hours * 1.0
+  const calculateOTAmount = (basicSalary, otHours, workingDays = 22) => {
+    if (!basicSalary || !otHours || otHours <= 0) return 0;
+    const dailyRate = basicSalary / workingDays;
+    const hourlyRate = dailyRate / 8;
+    const otAmount = hourlyRate * otHours * 1.0; // 1.0x rate
+    return Math.round(otAmount * 100) / 100;
+  };
+
+  // Calculate public holiday extra pay (1.0x daily rate per PH day worked)
+  const calculatePHPay = (basicSalary, phDaysWorked, workingDays = 22) => {
+    if (!basicSalary || !phDaysWorked || phDaysWorked <= 0) return 0;
+    const dailyRate = basicSalary / workingDays;
+    const phPay = dailyRate * phDaysWorked * 1.0; // 1.0x extra
+    return Math.round(phPay * 100) / 100;
+  };
+
+  // Handle OT hours change - auto-calculate OT amount
+  const handleOTHoursChange = (otHours) => {
+    const calculatedOT = calculateOTAmount(itemForm.basic_salary, otHours);
+    setItemForm({
+      ...itemForm,
+      ot_hours: otHours,
+      ot_amount: calculatedOT
+    });
+  };
+
+  // Handle PH days change - auto-calculate PH pay
+  const handlePHDaysChange = (phDays) => {
+    const calculatedPH = calculatePHPay(itemForm.basic_salary, phDays);
+    setItemForm({
+      ...itemForm,
+      ph_days_worked: phDays,
+      ph_pay: calculatedPH
+    });
+  };
+
+  // Handle basic salary change - recalculate OT and PH
+  const handleBasicSalaryChange = (basicSalary) => {
+    const calculatedOT = calculateOTAmount(basicSalary, itemForm.ot_hours);
+    const calculatedPH = calculatePHPay(basicSalary, itemForm.ph_days_worked);
+    setItemForm({
+      ...itemForm,
+      basic_salary: basicSalary,
+      ot_amount: calculatedOT,
+      ph_pay: calculatedPH
+    });
   };
 
   const handleUpdateItem = async (e) => {
@@ -244,9 +320,12 @@ function PayrollV2() {
           <tr class="section-title"><td colspan="2">EARNINGS</td></tr>
           <tr><td>Basic Salary</td><td class="amount">RM ${formatNum(earnings.basic_salary)}</td></tr>
           <tr><td>Allowance</td><td class="amount">RM ${formatNum(earnings.fixed_allowance)}</td></tr>
-          ${earnings.ot_amount > 0 ? `<tr><td>OT</td><td class="amount">RM ${formatNum(earnings.ot_amount)}</td></tr>` : ''}
+          ${earnings.ot_amount > 0 ? `<tr><td>OT (${earnings.ot_hours || 0} hrs @ 1.0x)</td><td class="amount">RM ${formatNum(earnings.ot_amount)}</td></tr>` : ''}
+          ${earnings.ph_pay > 0 ? `<tr><td>Public Holiday Pay (${earnings.ph_days_worked || 0} days @ 1.0x)</td><td class="amount">RM ${formatNum(earnings.ph_pay)}</td></tr>` : ''}
           ${earnings.incentive_amount > 0 ? `<tr><td>Incentive</td><td class="amount">RM ${formatNum(earnings.incentive_amount)}</td></tr>` : ''}
           ${earnings.commission_amount > 0 ? `<tr><td>Commission</td><td class="amount">RM ${formatNum(earnings.commission_amount)}</td></tr>` : ''}
+          ${earnings.trade_commission_amount > 0 ? `<tr><td>Upsell Commission</td><td class="amount">RM ${formatNum(earnings.trade_commission_amount)}</td></tr>` : ''}
+          ${earnings.outstation_amount > 0 ? `<tr><td>Outstation</td><td class="amount">RM ${formatNum(earnings.outstation_amount)}</td></tr>` : ''}
           ${earnings.bonus > 0 ? `<tr><td>Bonus</td><td class="amount">RM ${formatNum(earnings.bonus)}</td></tr>` : ''}
           ${earnings.claims_amount > 0 ? `<tr><td>Claims</td><td class="amount">RM ${formatNum(earnings.claims_amount)}</td></tr>` : ''}
           <tr class="total-row"><td>GROSS PAY</td><td class="amount">RM ${formatNum(totals.gross_salary)}</td></tr>
@@ -569,11 +648,15 @@ function PayrollV2() {
         )}
 
         {/* Edit Item Modal */}
-        {showItemModal && editingItem && (
+        {showItemModal && editingItem && (() => {
+          const fields = getDepartmentFields(editingItem.department_name);
+          return (
           <div className="modal-overlay" onClick={() => setShowItemModal(false)}>
             <div className="modal large" onClick={(e) => e.stopPropagation()}>
               <h2>Edit Payroll - {editingItem.employee_name}</h2>
+              <p className="dept-info">Department: <strong>{editingItem.department_name || 'Unknown'}</strong></p>
               <form onSubmit={handleUpdateItem}>
+                {/* Basic Salary - All departments */}
                 <div className="form-row">
                   <div className="form-group">
                     <label>Basic Salary (RM)</label>
@@ -581,79 +664,153 @@ function PayrollV2() {
                       type="number"
                       step="0.01"
                       value={itemForm.basic_salary}
-                      onChange={(e) => setItemForm({ ...itemForm, basic_salary: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => handleBasicSalaryChange(parseFloat(e.target.value) || 0)}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Allowance (RM)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={itemForm.fixed_allowance}
-                      onChange={(e) => setItemForm({ ...itemForm, fixed_allowance: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
+                  {/* Allowance - Office, Outdoor Sales */}
+                  {fields.showAllowance && (
+                    <div className="form-group">
+                      <label>Allowance (RM)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.fixed_allowance}
+                        onChange={(e) => setItemForm({ ...itemForm, fixed_allowance: parseFloat(e.target.value) || 0 })}
+                      />
+                      <small className="field-hint">Not subject to statutory deductions</small>
+                    </div>
+                  )}
                 </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>OT Hours</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={itemForm.ot_hours}
-                      onChange={(e) => setItemForm({ ...itemForm, ot_hours: parseFloat(e.target.value) || 0 })}
-                    />
+
+                {/* OT - Office, Driver */}
+                {fields.showOT && (
+                  <>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>OT Hours</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={itemForm.ot_hours}
+                          onChange={(e) => handleOTHoursChange(parseFloat(e.target.value) || 0)}
+                        />
+                        <small className="field-hint">Rate: 1.0x hourly</small>
+                      </div>
+                      <div className="form-group">
+                        <label>OT Amount (RM)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={itemForm.ot_amount}
+                          onChange={(e) => setItemForm({ ...itemForm, ot_amount: parseFloat(e.target.value) || 0 })}
+                        />
+                        <small className="field-hint">Auto-calculated or manual override</small>
+                      </div>
+                    </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Public Holiday Days Worked</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          value={itemForm.ph_days_worked}
+                          onChange={(e) => handlePHDaysChange(parseFloat(e.target.value) || 0)}
+                        />
+                        <small className="field-hint">Extra 1.0x daily rate</small>
+                      </div>
+                      <div className="form-group">
+                        <label>PH Extra Pay (RM)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={itemForm.ph_pay}
+                          onChange={(e) => setItemForm({ ...itemForm, ph_pay: parseFloat(e.target.value) || 0 })}
+                        />
+                        <small className="field-hint">Auto-calculated or manual override</small>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Commission - Indoor Sales, Outdoor Sales */}
+                {fields.showCommission && (
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Commission (RM)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.commission_amount}
+                        onChange={(e) => setItemForm({ ...itemForm, commission_amount: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Incentive (RM)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.incentive_amount}
+                        onChange={(e) => setItemForm({ ...itemForm, incentive_amount: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>OT Amount (RM)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={itemForm.ot_amount}
-                      onChange={(e) => setItemForm({ ...itemForm, ot_amount: parseFloat(e.target.value) || 0 })}
-                    />
+                )}
+
+                {/* Driver-specific fields */}
+                {fields.showUpsellCommission && (
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Upsell Commission (RM)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.trade_commission_amount}
+                        onChange={(e) => setItemForm({ ...itemForm, trade_commission_amount: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Trip Commission (RM)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.commission_amount}
+                        onChange={(e) => setItemForm({ ...itemForm, commission_amount: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Incentive (RM)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={itemForm.incentive_amount}
-                      onChange={(e) => setItemForm({ ...itemForm, incentive_amount: parseFloat(e.target.value) || 0 })}
-                    />
+                )}
+
+                {fields.showOutstation && (
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Outstation (RM)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.outstation_amount}
+                        onChange={(e) => setItemForm({ ...itemForm, outstation_amount: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Commission (RM)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={itemForm.commission_amount}
-                      onChange={(e) => setItemForm({ ...itemForm, commission_amount: parseFloat(e.target.value) || 0 })}
-                    />
+                )}
+
+                {/* Bonus - Office, Outdoor Sales */}
+                {fields.showBonus && (
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Bonus (RM)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.bonus}
+                        onChange={(e) => setItemForm({ ...itemForm, bonus: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Outstation (RM)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={itemForm.outstation_amount}
-                      onChange={(e) => setItemForm({ ...itemForm, outstation_amount: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Bonus (RM)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={itemForm.bonus}
-                      onChange={(e) => setItemForm({ ...itemForm, bonus: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-                </div>
+                )}
+
+                {/* Deductions - All departments */}
                 <div className="form-row">
                   <div className="form-group">
                     <label>Other Deductions (RM)</label>
@@ -684,6 +841,15 @@ function PayrollV2() {
                   />
                 </div>
 
+                {/* Deduction rules info */}
+                <div className="info-box">
+                  <strong>Statutory Deduction Rules:</strong>
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', fontSize: '0.85rem' }}>
+                    <li><strong>Subject to EPF, SOCSO, EIS, PCB:</strong> Basic + Commission + Bonus</li>
+                    <li><strong>NOT subject to deductions:</strong> OT, Allowance, PH Pay, Outstation</li>
+                  </ul>
+                </div>
+
                 {/* Auto-calculated info */}
                 <div className="auto-info">
                   <h4>Auto-calculated values:</h4>
@@ -700,7 +866,8 @@ function PayrollV2() {
               </form>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </Layout>
   );

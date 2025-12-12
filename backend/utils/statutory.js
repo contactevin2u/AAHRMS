@@ -408,6 +408,8 @@ const getEmployeeAge = (employee) => {
 };
 
 // Calculate all statutory deductions
+// IMPORTANT: Only basic, commission, and bonus are subject to statutory deductions
+// OT and allowance are NOT subject to EPF, SOCSO, EIS, PCB
 // ytdData is optional - contains year-to-date figures for accurate PCB calculation
 const calculateAllStatutory = (grossSalary, employee = {}, month = null, ytdData = null) => {
   // Determine if employee is Malaysian based on IC format
@@ -462,6 +464,122 @@ const calculateAllStatutory = (grossSalary, employee = {}, month = null, ytdData
   };
 };
 
+// =====================================================
+// OT CALCULATION
+// =====================================================
+// OT Rate: 1.0x (flat rate per hour)
+// Public Holiday: Extra 1.0x daily rate (on top of normal pay)
+// OT on Public Holiday: Still 1.0x (no extra multiplier for OT itself)
+
+// Selangor Public Holidays 2024/2025
+const SELANGOR_PUBLIC_HOLIDAYS = {
+  2024: [
+    '2024-01-01', // New Year
+    '2024-01-25', // Thaipusam
+    '2024-02-01', // Federal Territory Day
+    '2024-02-10', // Chinese New Year
+    '2024-02-11', // Chinese New Year (2nd day)
+    '2024-03-28', // Nuzul Al-Quran
+    '2024-04-10', // Hari Raya Aidilfitri
+    '2024-04-11', // Hari Raya Aidilfitri (2nd day)
+    '2024-05-01', // Labour Day
+    '2024-05-22', // Wesak Day
+    '2024-06-03', // Agong's Birthday
+    '2024-06-17', // Hari Raya Aidiladha
+    '2024-07-07', // Awal Muharram
+    '2024-08-31', // Merdeka Day
+    '2024-09-16', // Malaysia Day
+    '2024-09-16', // Prophet Muhammad's Birthday
+    '2024-10-31', // Deepavali
+    '2024-12-11', // Sultan of Selangor's Birthday
+    '2024-12-25', // Christmas
+  ],
+  2025: [
+    '2025-01-01', // New Year
+    '2025-01-14', // Thaipusam (estimated)
+    '2025-01-29', // Chinese New Year
+    '2025-01-30', // Chinese New Year (2nd day)
+    '2025-02-01', // Federal Territory Day
+    '2025-03-17', // Nuzul Al-Quran (estimated)
+    '2025-03-31', // Hari Raya Aidilfitri (estimated)
+    '2025-04-01', // Hari Raya Aidilfitri (2nd day)
+    '2025-05-01', // Labour Day
+    '2025-05-12', // Wesak Day (estimated)
+    '2025-06-02', // Agong's Birthday
+    '2025-06-07', // Hari Raya Aidiladha (estimated)
+    '2025-06-27', // Awal Muharram (estimated)
+    '2025-08-31', // Merdeka Day
+    '2025-09-05', // Prophet Muhammad's Birthday (estimated)
+    '2025-09-16', // Malaysia Day
+    '2025-10-20', // Deepavali (estimated)
+    '2025-12-11', // Sultan of Selangor's Birthday
+    '2025-12-25', // Christmas
+  ]
+};
+
+// Check if a date is a public holiday in Selangor
+const isPublicHoliday = (dateStr, year = null) => {
+  if (!dateStr) return false;
+
+  const date = new Date(dateStr);
+  const y = year || date.getFullYear();
+  const dateFormatted = date.toISOString().split('T')[0];
+
+  const holidays = SELANGOR_PUBLIC_HOLIDAYS[y] || [];
+  return holidays.includes(dateFormatted);
+};
+
+// Count public holidays in a given month
+const countPublicHolidaysInMonth = (year, month) => {
+  const holidays = SELANGOR_PUBLIC_HOLIDAYS[year] || [];
+  return holidays.filter(h => {
+    const d = new Date(h);
+    return d.getMonth() + 1 === month;
+  }).length;
+};
+
+// Get list of public holidays in a month
+const getPublicHolidaysInMonth = (year, month) => {
+  const holidays = SELANGOR_PUBLIC_HOLIDAYS[year] || [];
+  return holidays.filter(h => {
+    const d = new Date(h);
+    return d.getMonth() + 1 === month;
+  });
+};
+
+// Calculate OT amount
+// OT Rate: 1.0x per hour (flat rate)
+// basicSalary is used to calculate the hourly rate
+const calculateOT = (basicSalary, otHours, workingDaysInMonth = 22) => {
+  if (!otHours || otHours <= 0) return 0;
+
+  // OT rate is 1.0x
+  const OT_RATE = 1.0;
+
+  // Calculate hourly rate: basic salary / working days / 8 hours
+  const dailyRate = basicSalary / workingDaysInMonth;
+  const hourlyRate = dailyRate / 8;
+
+  // OT amount = hourly rate × OT hours × OT rate multiplier
+  const otAmount = hourlyRate * otHours * OT_RATE;
+
+  return Math.round(otAmount * 100) / 100;
+};
+
+// Calculate public holiday extra pay
+// If employee works on public holiday, they get extra 1.0x daily rate
+const calculatePublicHolidayPay = (basicSalary, publicHolidayDaysWorked, workingDaysInMonth = 22) => {
+  if (!publicHolidayDaysWorked || publicHolidayDaysWorked <= 0) return 0;
+
+  // Extra rate is 1.0x daily rate
+  const PH_EXTRA_RATE = 1.0;
+
+  const dailyRate = basicSalary / workingDaysInMonth;
+  const phPay = dailyRate * publicHolidayDaysWorked * PH_EXTRA_RATE;
+
+  return Math.round(phPay * 100) / 100;
+};
+
 module.exports = {
   calculateEPF,
   calculateSOCSO,
@@ -473,5 +591,12 @@ module.exports = {
   getEmployeeAge,
   isMalaysianIC,
   calculateAllStatutory,
-  TAX_BRACKETS
+  TAX_BRACKETS,
+  // OT and Public Holiday functions
+  calculateOT,
+  calculatePublicHolidayPay,
+  isPublicHoliday,
+  countPublicHolidaysInMonth,
+  getPublicHolidaysInMonth,
+  SELANGOR_PUBLIC_HOLIDAYS
 };

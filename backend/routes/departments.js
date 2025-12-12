@@ -4,6 +4,33 @@ const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter } = require('../middleware/tenant');
 
+// Seed default departments (run once to initialize)
+router.post('/seed', authenticateAdmin, async (req, res) => {
+  try {
+    // Check if departments already exist
+    const existing = await pool.query('SELECT COUNT(*) FROM departments');
+
+    if (parseInt(existing.rows[0].count) > 0) {
+      return res.json({ message: 'Departments already exist', count: existing.rows[0].count });
+    }
+
+    // Insert default departments
+    const result = await pool.query(`
+      INSERT INTO departments (name, salary_type, company_id) VALUES
+        ('Office', 'basic_allowance_bonus_ot', 1),
+        ('Indoor Sales', 'basic_commission', 1),
+        ('Outdoor Sales', 'basic_commission_allowance_bonus', 1),
+        ('Driver', 'basic_upsell_outstation_ot_trip', 1)
+      RETURNING *
+    `);
+
+    res.json({ message: 'Departments seeded successfully', departments: result.rows });
+  } catch (error) {
+    console.error('Error seeding departments:', error);
+    res.status(500).json({ error: 'Failed to seed departments' });
+  }
+});
+
 // Get all departments (filtered by company)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {

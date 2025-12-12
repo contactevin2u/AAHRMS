@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
-const { calculateAllStatutory } = require('../utils/statutory');
+const { calculateAllStatutory, calculateOT, calculatePublicHolidayPay, getPublicHolidaysInMonth } = require('../utils/statutory');
 
 // =====================================================
 // PAYROLL RUNS
@@ -235,6 +235,44 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0;
     });
 
+    // Get flexible commissions for each employee
+    const commissionsResult = await client.query(`
+      SELECT ec.employee_id,
+             SUM(ec.amount) as total_commissions,
+             json_agg(json_build_object('type', ct.name, 'amount', ec.amount)) as commission_details
+      FROM employee_commissions ec
+      JOIN commission_types ct ON ec.commission_type_id = ct.id
+      WHERE ec.is_active = TRUE AND ct.is_active = TRUE
+      GROUP BY ec.employee_id
+    `);
+
+    const commissionsMap = {};
+    commissionsResult.rows.forEach(r => {
+      commissionsMap[r.employee_id] = {
+        total: parseFloat(r.total_commissions) || 0,
+        details: r.commission_details
+      };
+    });
+
+    // Get flexible allowances for each employee
+    const allowancesResult = await client.query(`
+      SELECT ea.employee_id,
+             SUM(ea.amount) as total_allowances,
+             json_agg(json_build_object('type', at.name, 'amount', ea.amount, 'taxable', at.is_taxable)) as allowance_details
+      FROM employee_allowances ea
+      JOIN allowance_types at ON ea.allowance_type_id = at.id
+      WHERE ea.is_active = TRUE AND at.is_active = TRUE
+      GROUP BY ea.employee_id
+    `);
+
+    const allowancesMap = {};
+    allowancesResult.rows.forEach(r => {
+      allowancesMap[r.employee_id] = {
+        total: parseFloat(r.total_allowances) || 0,
+        details: r.allowance_details
+      };
+    });
+
     let totalGross = 0;
     let totalDeductions = 0;
     let totalNet = 0;
@@ -250,7 +288,13 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const prevSalary = prevSalaryMap[emp.id];
       const basicSalary = prevSalary ? prevSalary.basic_salary : (parseFloat(emp.basic_salary) || 0);
       const fixedAllowance = prevSalary ? prevSalary.fixed_allowance : (parseFloat(emp.fixed_allowance) || 0);
-      const commissionAmount = 0; // Commission will be added manually when editing payroll item
+
+      // Get flexible commissions and allowances
+      const flexCommissions = commissionsMap[emp.id] || { total: 0, details: [] };
+      const flexAllowances = allowancesMap[emp.id] || { total: 0, details: [] };
+      const commissionAmount = flexCommissions.total; // Auto-populated from employee settings
+      const flexAllowanceAmount = flexAllowances.total; // Additional allowances from settings
+
       const unpaidDays = unpaidLeaveMap[emp.id] || 0;
       const claimsAmount = claimsMap[emp.id] || 0;
 
@@ -267,18 +311,25 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const dailyRate = basicSalary > 0 ? basicSalary / workingDaysInMonth : 0;
       const unpaidDeduction = dailyRate * unpaidDays;
 
-      // Gross salary = basic + allowance + commission + claims - unpaid leave
-      // Commission is included in gross for statutory calculation
-      const grossBeforeUnpaid = basicSalary + fixedAllowance + commissionAmount + claimsAmount;
+      // Gross salary = basic + allowance + flex allowances + commission + claims - unpaid leave
+      // Commission and flexible allowances are auto-populated from employee settings
+      const totalAllowances = fixedAllowance + flexAllowanceAmount;
+      const grossBeforeUnpaid = basicSalary + totalAllowances + commissionAmount + claimsAmount;
       const grossSalary = Math.max(0, grossBeforeUnpaid - unpaidDeduction);
 
       // DEBUG: Log gross calculation
-      console.log(`${emp.name}: gross=${grossSalary} (basic:${basicSalary} + allow:${fixedAllowance} + comm:${commissionAmount} + claims:${claimsAmount} - unpaid:${unpaidDeduction})`);
+      console.log(`${emp.name}: gross=${grossSalary} (basic:${basicSalary} + allow:${fixedAllowance} + flexAllow:${flexAllowanceAmount} + comm:${commissionAmount} + claims:${claimsAmount} - unpaid:${unpaidDeduction})`);
 
-      // Calculate statutory deductions based on gross salary
+      // IMPORTANT: Statutory deductions only apply to: basic + commission + bonus
+      // OT, allowance, outstation, incentive are NOT subject to EPF, SOCSO, EIS, PCB
+      // At payroll creation, bonus is 0 (can be added later via edit)
+      const statutoryBase = basicSalary + commissionAmount; // bonus added during edit
+      console.log(`${emp.name}: statutory base (basic + commission) = ${statutoryBase}`);
+
+      // Calculate statutory deductions based on statutory base only
       // EPF, SOCSO, EIS are calculated even for zero salary (will be zero)
       // This uses IC number to detect Malaysian and age
-      const statutory = calculateAllStatutory(grossSalary, emp, month, null);
+      const statutory = calculateAllStatutory(statutoryBase, emp, month, null);
 
       // Total deductions
       const totalDeductionsForEmp = (
@@ -295,7 +346,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       // Employer total cost = gross + employer contributions
       const employerCost = grossSalary + statutory.epf.employer + statutory.socso.employer + statutory.eis.employer;
 
-      // Insert payroll item
+      // Insert payroll item (fixed_allowance now includes flex allowances combined)
       await client.query(`
         INSERT INTO payroll_items (
           payroll_run_id, employee_id,
@@ -310,7 +361,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       `, [
         runId, emp.id,
-        basicSalary, fixedAllowance, commissionAmount, claimsAmount,
+        basicSalary, totalAllowances, commissionAmount, claimsAmount,
         unpaidDays, unpaidDeduction,
         grossSalary,
         statutory.epf.employee, statutory.epf.employer,
@@ -376,9 +427,13 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const {
       basic_salary,
       fixed_allowance,
+      ot_hours,
       ot_amount,
+      ph_days_worked,    // Public holiday days worked
+      ph_pay,            // Public holiday extra pay
       incentive_amount,
       commission_amount,
+      trade_commission_amount,  // Upsell commission for Driver
       outstation_amount,
       bonus,
       other_deductions,
@@ -409,9 +464,13 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     // Calculate new values
     const newBasic = parseFloat(basic_salary) || parseFloat(item.basic_salary) || 0;
     const newAllowance = parseFloat(fixed_allowance) || parseFloat(item.fixed_allowance) || 0;
-    const newOT = parseFloat(ot_amount) || 0;
+    const newOTHours = parseFloat(ot_hours) || 0;
+    const newOT = parseFloat(ot_amount) || 0;  // OT amount (1.0x rate, not subject to deductions)
+    const newPHDays = parseFloat(ph_days_worked) || 0;
+    const newPHPay = parseFloat(ph_pay) || 0;  // PH extra pay (1.0x daily rate, not subject to deductions)
     const newIncentive = parseFloat(incentive_amount) || 0;
     const newCommission = parseFloat(commission_amount) || 0;
+    const newTradeCommission = parseFloat(trade_commission_amount) || 0;  // Upsell commission
     const newOutstation = parseFloat(outstation_amount) || 0;
     const newBonus = parseFloat(bonus) || 0;
     const newOtherDeductions = parseFloat(other_deductions) || 0;
@@ -420,17 +479,28 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     console.log(`UPDATE Item ${id}: incoming basic_salary=${basic_salary}, item.basic_salary=${item.basic_salary}, newBasic=${newBasic}`);
 
     // Gross salary (includes all earning components)
+    // Payroll Structure:
+    // - Office: basic + allowance + bonus + OT + PH pay
+    // - Indoor Sales: basic + commission
+    // - Outdoor Sales: basic + commission + allowance + bonus
+    // - Driver: basic + upsell commission (trade_commission) + outstation + OT + trip commission + PH pay
+    // Note: OT and PH pay are NOT subject to statutory deductions
     const grossSalary = (
-      newBasic + newAllowance + newOT + newIncentive + newCommission +
-      newOutstation + newBonus +
+      newBasic + newAllowance + newOT + newPHPay + newIncentive + newCommission +
+      newTradeCommission + newOutstation + newBonus +
       parseFloat(item.claims_amount || 0) - parseFloat(item.unpaid_leave_deduction || 0)
     );
 
     // DEBUG: Log gross calculation
-    console.log(`UPDATE Gross calc: basic=${newBasic} + allow=${newAllowance} + ot=${newOT} + incent=${newIncentive} + comm=${newCommission} + outstation=${newOutstation} + bonus=${newBonus} + claims=${item.claims_amount || 0} - unpaid=${item.unpaid_leave_deduction || 0} = ${grossSalary}`);
+    console.log(`UPDATE Gross calc: basic=${newBasic} + allow=${newAllowance} + ot=${newOT} + ph=${newPHPay} + incent=${newIncentive} + comm=${newCommission} + trade=${newTradeCommission} + outstation=${newOutstation} + bonus=${newBonus} + claims=${item.claims_amount || 0} - unpaid=${item.unpaid_leave_deduction || 0} = ${grossSalary}`);
 
-    // Recalculate statutory
-    const statutory = calculateAllStatutory(grossSalary, item, item.month, null);
+    // IMPORTANT: Statutory deductions only apply to: basic + commission + bonus
+    // OT, allowance, outstation, incentive are NOT subject to EPF, SOCSO, EIS, PCB
+    const statutoryBase = newBasic + newCommission + newTradeCommission + newBonus;
+    console.log(`Statutory base (basic + commission + bonus): ${statutoryBase}`);
+
+    // Recalculate statutory on the statutory base only
+    const statutory = calculateAllStatutory(statutoryBase, item, item.month, null);
 
     // Total deductions
     const totalDeductions = (
@@ -451,22 +521,27 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     // Update item
     const result = await pool.query(`
       UPDATE payroll_items SET
-        basic_salary = $1, fixed_allowance = $2, ot_amount = $3,
-        incentive_amount = $4, commission_amount = $5,
-        outstation_amount = $6, bonus = $7,
-        other_deductions = $8, deduction_remarks = $9,
-        gross_salary = $10,
-        epf_employee = $11, epf_employer = $12,
-        socso_employee = $13, socso_employer = $14,
-        eis_employee = $15, eis_employer = $16,
-        pcb = $17,
-        total_deductions = $18, net_pay = $19, employer_total_cost = $20,
-        notes = $21, updated_at = NOW()
-      WHERE id = $22
+        basic_salary = $1, fixed_allowance = $2,
+        ot_hours = $3, ot_amount = $4,
+        ph_days_worked = $5, ph_pay = $6,
+        incentive_amount = $7, commission_amount = $8,
+        trade_commission_amount = $9, outstation_amount = $10, bonus = $11,
+        other_deductions = $12, deduction_remarks = $13,
+        gross_salary = $14,
+        epf_employee = $15, epf_employer = $16,
+        socso_employee = $17, socso_employer = $18,
+        eis_employee = $19, eis_employer = $20,
+        pcb = $21,
+        total_deductions = $22, net_pay = $23, employer_total_cost = $24,
+        notes = $25, updated_at = NOW()
+      WHERE id = $26
       RETURNING *
     `, [
-      newBasic, newAllowance, newOT, newIncentive, newCommission,
-      newOutstation, newBonus,
+      newBasic, newAllowance,
+      newOTHours, newOT,
+      newPHDays, newPHPay,
+      newIncentive, newCommission,
+      newTradeCommission, newOutstation, newBonus,
       newOtherDeductions, deduction_remarks,
       grossSalary,
       statutory.epf.employee, statutory.epf.employer,
@@ -631,9 +706,13 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
       earnings: {
         basic_salary: parseFloat(item.basic_salary) || 0,
         fixed_allowance: parseFloat(item.fixed_allowance) || 0,
+        ot_hours: parseFloat(item.ot_hours) || 0,
         ot_amount: parseFloat(item.ot_amount) || 0,
+        ph_days_worked: parseFloat(item.ph_days_worked) || 0,
+        ph_pay: parseFloat(item.ph_pay) || 0,
         incentive_amount: parseFloat(item.incentive_amount) || 0,
         commission_amount: parseFloat(item.commission_amount) || 0,
+        trade_commission_amount: parseFloat(item.trade_commission_amount) || 0,
         outstation_amount: parseFloat(item.outstation_amount) || 0,
         claims_amount: parseFloat(item.claims_amount) || 0,
         bonus: parseFloat(item.bonus) || 0

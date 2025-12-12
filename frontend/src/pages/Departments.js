@@ -30,6 +30,20 @@ function Departments() {
     }
   };
 
+  const seedDepartments = async () => {
+    try {
+      setLoading(true);
+      await departmentApi.seed();
+      fetchDepartments();
+      alert('Departments created successfully!');
+    } catch (error) {
+      console.error('Error seeding departments:', error);
+      alert('Failed to create departments');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveConfig = async (e) => {
     e.preventDefault();
     try {
@@ -43,6 +57,12 @@ function Departments() {
 
   const getSalaryTypeLabel = (type) => {
     const labels = {
+      // New salary types
+      'basic_allowance_bonus_ot': 'Basic + Allowance + Bonus + OT',
+      'basic_commission': 'Basic + Commission',
+      'basic_commission_allowance_bonus': 'Basic + Commission + Allowance + Bonus',
+      'basic_upsell_outstation_ot_trip': 'Basic + Upsell Commission + Outstation + OT + Trip Commission',
+      // Legacy types (for backward compatibility)
       'fixed_bonus_commission_allowance': 'Fixed + Bonus + Commission + Allowance',
       'commission_only': 'Commission Only',
       'basic_allowance_commission': 'Basic + Allowance + Commission',
@@ -70,6 +90,13 @@ function Departments() {
 
         {loading ? (
           <div className="loading">☕ Loading...</div>
+        ) : departments.length === 0 ? (
+          <div className="no-departments">
+            <p>No departments found. Click the button below to create default departments.</p>
+            <button onClick={seedDepartments} className="seed-btn">
+              + Create Default Departments
+            </button>
+          </div>
         ) : (
           <div className="departments-grid">
             {departments.map(dept => (
