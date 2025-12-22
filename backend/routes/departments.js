@@ -7,22 +7,29 @@ const { getCompanyFilter } = require('../middleware/tenant');
 // Seed default departments (run once to initialize) - requires auth
 router.post('/seed', authenticateAdmin, async (req, res) => {
   try {
-    // Check if departments already exist
-    const existing = await pool.query('SELECT COUNT(*) FROM departments');
+    // Get user's company_id (or default to 1 for super_admin)
+    const companyId = req.companyId || req.admin?.company_id || 1;
+
+    // Check if departments already exist for this company
+    const existing = await pool.query(
+      'SELECT COUNT(*) FROM departments WHERE company_id = $1',
+      [companyId]
+    );
 
     if (parseInt(existing.rows[0].count) > 0) {
-      return res.json({ message: 'Departments already exist', count: existing.rows[0].count });
+      return res.json({ message: 'Departments already exist for this company', count: existing.rows[0].count });
     }
 
-    // Insert default departments
+    // Insert default departments for the user's company (AA Alive structure)
     const result = await pool.query(`
-      INSERT INTO departments (name, salary_type, company_id) VALUES
-        ('Office', 'basic_allowance_bonus_ot', 1),
-        ('Indoor Sales', 'basic_commission', 1),
-        ('Outdoor Sales', 'basic_commission_allowance_bonus', 1),
-        ('Driver', 'basic_upsell_outstation_ot_trip', 1)
+      INSERT INTO departments (name, salary_type, payroll_structure_code, company_id) VALUES
+        ('Office', 'basic_allowance_bonus_ot', 'office', $1),
+        ('Indoor Sales', 'basic_commission', 'indoor_sales', $1),
+        ('Outdoor Sales', 'basic_commission_allowance_bonus', 'outdoor_sales', $1),
+        ('Driver', 'basic_upsell_outstation_ot_trip', 'driver', $1),
+        ('Packer', 'basic_allowance_ot_bonus', 'packer', $1)
       RETURNING *
-    `);
+    `, [companyId]);
 
     res.json({ message: 'Departments seeded successfully', departments: result.rows });
   } catch (error) {
@@ -34,23 +41,33 @@ router.post('/seed', authenticateAdmin, async (req, res) => {
 // Public seed endpoint (for initial setup only - no auth required)
 router.get('/init-seed', async (req, res) => {
   try {
-    // Check if departments already exist
-    const existing = await pool.query('SELECT COUNT(*) FROM departments');
+    // Get company_id from query param or default to 1
+    const companyId = parseInt(req.query.company_id) || 1;
+
+    // Check if departments already exist for this company
+    const existing = await pool.query(
+      'SELECT COUNT(*) FROM departments WHERE company_id = $1',
+      [companyId]
+    );
 
     if (parseInt(existing.rows[0].count) > 0) {
-      const depts = await pool.query('SELECT * FROM departments ORDER BY name');
+      const depts = await pool.query(
+        'SELECT * FROM departments WHERE company_id = $1 ORDER BY name',
+        [companyId]
+      );
       return res.json({ message: 'Departments already exist', count: existing.rows[0].count, departments: depts.rows });
     }
 
-    // Insert default departments
+    // Insert default departments for the specified company
     const result = await pool.query(`
-      INSERT INTO departments (name, salary_type, company_id) VALUES
-        ('Office', 'basic_allowance_bonus_ot', 1),
-        ('Indoor Sales', 'basic_commission', 1),
-        ('Outdoor Sales', 'basic_commission_allowance_bonus', 1),
-        ('Driver', 'basic_upsell_outstation_ot_trip', 1)
+      INSERT INTO departments (name, salary_type, payroll_structure_code, company_id) VALUES
+        ('Office', 'basic_allowance_bonus_ot', 'office', $1),
+        ('Indoor Sales', 'basic_commission', 'indoor_sales', $1),
+        ('Outdoor Sales', 'basic_commission_allowance_bonus', 'outdoor_sales', $1),
+        ('Driver', 'basic_upsell_outstation_ot_trip', 'driver', $1),
+        ('Packer', 'basic_allowance_ot_bonus', 'packer', $1)
       RETURNING *
-    `);
+    `, [companyId]);
 
     res.json({ message: 'Departments seeded successfully', departments: result.rows });
   } catch (error) {
@@ -78,6 +95,87 @@ router.get('/', authenticateAdmin, async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching departments:', error);
+    res.status(500).json({ error: 'Failed to fetch departments' });
+  }
+});
+
+// Get department payroll components
+router.get('/:id/payroll-components', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = getCompanyFilter(req);
+
+    // First verify the department belongs to the user's company
+    let deptQuery = 'SELECT * FROM departments WHERE id = $1';
+    let params = [id];
+
+    if (companyId !== null) {
+      deptQuery += ' AND company_id = $2';
+      params.push(companyId);
+    }
+
+    const dept = await pool.query(deptQuery, params);
+    if (dept.rows.length === 0) {
+      return res.status(404).json({ error: 'Department not found' });
+    }
+
+    // Get payroll components for this department
+    const components = await pool.query(`
+      SELECT *
+      FROM department_payroll_components
+      WHERE department_id = $1
+      ORDER BY display_order
+    `, [id]);
+
+    res.json({
+      department: dept.rows[0],
+      components: components.rows
+    });
+  } catch (error) {
+    console.error('Error fetching department payroll components:', error);
+    res.status(500).json({ error: 'Failed to fetch payroll components' });
+  }
+});
+
+// Get all departments with their payroll components
+router.get('/with-components', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = getCompanyFilter(req);
+
+    let query = `
+      SELECT d.*,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', pc.id,
+              'component_name', pc.component_name,
+              'is_enabled', pc.is_enabled,
+              'is_required', pc.is_required,
+              'default_value', pc.default_value,
+              'calculation_type', pc.calculation_type,
+              'calculation_config', pc.calculation_config,
+              'display_order', pc.display_order
+            ) ORDER BY pc.display_order
+          ) FILTER (WHERE pc.id IS NOT NULL),
+          '[]'
+        ) as payroll_components
+      FROM departments d
+      LEFT JOIN department_payroll_components pc ON d.id = pc.department_id
+    `;
+
+    let params = [];
+
+    if (companyId !== null) {
+      query += ' WHERE d.company_id = $1';
+      params = [companyId];
+    }
+
+    query += ' GROUP BY d.id ORDER BY d.name';
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching departments with components:', error);
     res.status(500).json({ error: 'Failed to fetch departments' });
   }
 });

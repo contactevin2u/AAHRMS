@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import AnonymousFeedback from './pages/AnonymousFeedback';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
-import Employees from './pages/Employees';
+import Employees from './pages/Employees/index';
 import Payroll from './pages/Payroll';
 import PayrollV2 from './pages/PayrollV2';
 import SalaryEntry from './pages/SalaryEntry';
@@ -19,6 +19,8 @@ import UserManagement from './pages/UserManagement';
 import RoleManagement from './pages/RoleManagement';
 import MyProfile from './pages/MyProfile';
 import CompanyManagement from './pages/CompanyManagement';
+import Settings from './pages/Settings';
+import SalesEntry from './pages/SalesEntry';
 // Employee Self-Service (ESS) imports
 import EmployeeLogin from './pages/EmployeeLogin';
 import EmployeeDashboard from './pages/EmployeeDashboard';
@@ -179,6 +181,22 @@ function App() {
           element={
             <ProtectedRoute>
               <CompanyManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/sales-entry"
+          element={
+            <ProtectedRoute>
+              <SalesEntry />
             </ProtectedRoute>
           }
         />

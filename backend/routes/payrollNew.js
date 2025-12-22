@@ -138,7 +138,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       SELECT e.*,
              e.default_basic_salary as basic_salary,
              e.default_allowance as fixed_allowance,
-             d.name as department_name
+             d.name as department_name,
+             d.payroll_structure_code
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.id
       WHERE e.status = 'active'
@@ -151,6 +152,28 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     }
 
     const employees = await client.query(employeeQuery, employeeParams);
+
+    // Get company settings for Indoor Sales calculation
+    const companySettingsResult = await client.query(
+      'SELECT settings FROM companies WHERE id = $1',
+      [req.companyId || 1]
+    );
+    const companySettings = companySettingsResult.rows[0]?.settings || {};
+    const indoorSalesBasic = companySettings.indoor_sales_basic || 4000;
+    const indoorSalesCommissionRate = companySettings.indoor_sales_commission_rate || 6;
+
+    // Get sales data for Indoor Sales employees
+    const salesResult = await client.query(`
+      SELECT employee_id, SUM(total_sales) as total_monthly_sales
+      FROM sales_records
+      WHERE month = $1 AND year = $2
+      GROUP BY employee_id
+    `, [month, year]);
+
+    const salesMap = {};
+    salesResult.rows.forEach(r => {
+      salesMap[r.employee_id] = parseFloat(r.total_monthly_sales) || 0;
+    });
 
     console.log('Found active employees:', employees.rows.length);
     console.log('Employee names:', employees.rows.map(e => e.name));
@@ -286,17 +309,40 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     for (const emp of employees.rows) {
       // Salary carry-forward: Use previous month's salary if available, otherwise use employee default
       const prevSalary = prevSalaryMap[emp.id];
-      const basicSalary = prevSalary ? prevSalary.basic_salary : (parseFloat(emp.basic_salary) || 0);
+      let basicSalary = prevSalary ? prevSalary.basic_salary : (parseFloat(emp.basic_salary) || 0);
       const fixedAllowance = prevSalary ? prevSalary.fixed_allowance : (parseFloat(emp.fixed_allowance) || 0);
 
       // Get flexible commissions and allowances
       const flexCommissions = commissionsMap[emp.id] || { total: 0, details: [] };
       const flexAllowances = allowancesMap[emp.id] || { total: 0, details: [] };
-      const commissionAmount = flexCommissions.total; // Auto-populated from employee settings
+      let commissionAmount = flexCommissions.total; // Auto-populated from employee settings
       const flexAllowanceAmount = flexAllowances.total; // Additional allowances from settings
 
       const unpaidDays = unpaidLeaveMap[emp.id] || 0;
       const claimsAmount = claimsMap[emp.id] || 0;
+
+      // Indoor Sales special logic: compare basic vs commission, take higher
+      let salaryCalculationMethod = null;
+      let salesAmount = 0;
+
+      if (emp.payroll_structure_code === 'indoor_sales') {
+        salesAmount = salesMap[emp.id] || 0;
+        const calculatedCommission = salesAmount * (indoorSalesCommissionRate / 100);
+
+        if (calculatedCommission >= indoorSalesBasic) {
+          // Use commission (it's higher)
+          basicSalary = calculatedCommission;
+          commissionAmount = 0; // Already included in basic
+          salaryCalculationMethod = 'commission';
+          console.log(`${emp.name} (Indoor Sales): Using commission RM${calculatedCommission.toFixed(2)} (sales: RM${salesAmount})`);
+        } else {
+          // Use basic (it's higher)
+          basicSalary = indoorSalesBasic;
+          commissionAmount = 0; // Not applicable when using basic
+          salaryCalculationMethod = 'basic';
+          console.log(`${emp.name} (Indoor Sales): Using basic RM${indoorSalesBasic} (commission would be RM${calculatedCommission.toFixed(2)})`);
+        }
+      }
 
       // Track carry-forward
       if (prevSalary) {
@@ -357,8 +403,9 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           socso_employee, socso_employer,
           eis_employee, eis_employer,
           pcb,
-          total_deductions, net_pay, employer_total_cost
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+          total_deductions, net_pay, employer_total_cost,
+          sales_amount, salary_calculation_method
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       `, [
         runId, emp.id,
         basicSalary, totalAllowances, commissionAmount, claimsAmount,
@@ -368,7 +415,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         statutory.socso.employee, statutory.socso.employer,
         statutory.eis.employee, statutory.eis.employer,
         statutory.pcb,
-        totalDeductionsForEmp, netPay, employerCost
+        totalDeductionsForEmp, netPay, employerCost,
+        salesAmount, salaryCalculationMethod
       ]);
 
       totalGross += grossSalary;

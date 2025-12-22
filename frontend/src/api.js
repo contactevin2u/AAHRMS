@@ -74,6 +74,8 @@ export const departmentApi = {
   getOne: (id) => api.get(`/departments/${id}`),
   updateSalaryConfig: (id, data) => api.put(`/departments/${id}/salary-config`, data),
   seed: () => api.post('/departments/seed'),
+  getPayrollComponents: (id) => api.get(`/departments/${id}/payroll-components`),
+  getWithComponents: () => api.get('/departments/with-components'),
 };
 
 export const payrollApi = {
@@ -229,6 +231,43 @@ export const earningsApi = {
   updateEmployeeAllowance: (employeeId, allowanceId, data) => api.put(`/earnings/employees/${employeeId}/allowances/${allowanceId}`, data),
   removeEmployeeAllowance: (employeeId, allowanceId) => api.delete(`/earnings/employees/${employeeId}/allowances/${allowanceId}`),
   bulkSaveAllowances: (employeeId, allowances) => api.post(`/earnings/employees/${employeeId}/allowances/bulk`, { allowances }),
+};
+
+// Sales Records (for Indoor Sales commission calculation)
+export const salesApi = {
+  getAll: (params) => api.get('/sales', { params }),
+  getEmployeeMonthly: (employeeId, year, month) => api.get(`/sales/employee/${employeeId}/monthly/${year}/${month}`),
+  getIndoorSalesData: (year, month) => api.get(`/sales/indoor-sales/${year}/${month}`),
+  create: (data) => api.post('/sales', data),
+  bulkCreate: (records) => api.post('/sales/bulk', { records }),
+  update: (id, data) => api.put(`/sales/${id}`, data),
+  delete: (id) => api.delete(`/sales/${id}`),
+};
+
+// Clock In/Out Records
+export const clockInApi = {
+  getAll: (params) => api.get('/clock-in', { params }),
+  getEmployeeMonthly: (employeeId, year, month) => api.get(`/clock-in/employee/${employeeId}/monthly/${year}/${month}`),
+  getOTForPayroll: (year, month) => api.get(`/clock-in/ot-for-payroll/${year}/${month}`),
+  create: (data) => api.post('/clock-in', data),
+  clockOut: (id, data) => api.put(`/clock-in/${id}/clock-out`, data),
+  approve: (id) => api.post(`/clock-in/${id}/approve`),
+  reject: (id, notes) => api.post(`/clock-in/${id}/reject`, { notes }),
+  bulkApprove: (record_ids) => api.post('/clock-in/bulk-approve', { record_ids }),
+  delete: (id) => api.delete(`/clock-in/${id}`),
+};
+
+// Company Management
+export const companiesApi = {
+  getAll: () => api.get('/companies'),
+  getOne: (id) => api.get(`/companies/${id}`),
+  create: (data) => api.post('/companies', data),
+  update: (id, data) => api.put(`/companies/${id}`, data),
+  updateStatus: (id, status) => api.patch(`/companies/${id}/status`, { status }),
+  createAdmin: (id, data) => api.post(`/companies/${id}/admin`, data),
+  getAdmins: (id) => api.get(`/companies/${id}/admins`),
+  getStats: (id) => api.get(`/companies/${id}/stats`),
+  getCurrentInfo: () => api.get('/companies/current/info'),
 };
 
 // Admin User Management

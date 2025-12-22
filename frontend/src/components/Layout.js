@@ -89,6 +89,11 @@ function Layout({ children }) {
             <span>Payroll</span>
           </NavLink>
 
+          <NavLink to="/admin/sales-entry" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <span className="nav-icon">📈</span>
+            <span>Sales Entry</span>
+          </NavLink>
+
           <NavLink to="/admin/contributions" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             <span className="nav-icon">🏛️</span>
             <span>Contributions</span>
@@ -107,6 +112,11 @@ function Layout({ children }) {
           <NavLink to="/admin/departments" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             <span className="nav-icon">🏢</span>
             <span>Departments</span>
+          </NavLink>
+
+          <NavLink to="/admin/settings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <span className="nav-icon">⚙️</span>
+            <span>Settings</span>
           </NavLink>
 
           <NavLink to="/admin/feedback" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
