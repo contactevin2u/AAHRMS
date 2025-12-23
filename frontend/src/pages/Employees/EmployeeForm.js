@@ -59,24 +59,23 @@ const BANK_OPTIONS = [
 const DEPARTMENT_PAYROLL_INFO = {
   office: {
     name: 'Office',
-    components: ['Basic Salary', 'Allowance', 'Bonus', 'Commission'],
-    description: 'Basic + Allowance + Bonus + Commission'
+    components: ['Basic Salary', 'Allowance', 'Bonus'],
+    description: 'Basic + Allowance + Bonus'
   },
-  indoor_sales: {
+  'indoor sales': {
     name: 'Indoor Sales',
-    components: ['Basic Salary OR Commission (higher)'],
-    description: 'RM4000 Basic OR 6% Commission - whichever is higher',
-    special: true
+    components: ['Basic Salary', 'Commission'],
+    description: 'Basic + Commission'
   },
-  outdoor_sales: {
+  'outdoor sales': {
     name: 'Outdoor Sales',
-    components: ['Basic Salary', 'Commission', 'Allowance', 'Bonus', 'Benefits'],
-    description: 'Basic + Commission + Allowance + Bonus + Benefits'
+    components: ['Basic Salary', 'Commission', 'Allowance', 'Bonus'],
+    description: 'Basic + Commission + Allowance + Bonus'
   },
   driver: {
     name: 'Driver',
-    components: ['Basic Salary', 'Upsell Commission', 'Outstation Allowance', 'OT', 'Trip Commission'],
-    description: 'Basic + Upsell + Outstation + OT + Trip'
+    components: ['Basic Salary', 'Upsell Commission', 'Outstation', 'OT', 'Trip Commission'],
+    description: 'Basic + Upsell Commission + Outstation + OT + Trip Commission'
   },
   packer: {
     name: 'Packer',
@@ -106,10 +105,10 @@ const EmployeeForm = ({
   onSubmit,
   onCancel
 }) => {
-  // Get selected department's payroll structure code
+  // Get selected department's payroll structure based on name
   const selectedDept = departments.find(d => d.id === parseInt(form.department_id));
-  const payrollCode = selectedDept?.payroll_structure_code;
-  const payrollInfo = payrollCode ? DEPARTMENT_PAYROLL_INFO[payrollCode] : null;
+  const deptName = selectedDept?.name?.toLowerCase();
+  const payrollInfo = deptName ? DEPARTMENT_PAYROLL_INFO[deptName] : null;
   const handleSalaryChange = (field, value) => {
     const newForm = { ...form, [field]: value };
 
