@@ -1,4 +1,5 @@
 import React from 'react';
+import { getGenderFromIC } from './EmployeeForm';
 
 const EmployeeTable = ({
   employees,
@@ -29,6 +30,7 @@ const EmployeeTable = ({
             </th>
             <th>ID</th>
             <th>Name</th>
+            <th>Gender</th>
             <th>Department</th>
             <th>Position</th>
             <th>Employment</th>
@@ -39,7 +41,7 @@ const EmployeeTable = ({
         <tbody>
           {employees.length === 0 ? (
             <tr>
-              <td colSpan="8" className="no-data">No employees found</td>
+              <td colSpan="9" className="no-data">No employees found</td>
             </tr>
           ) : (
             employees.map(emp => {
@@ -61,6 +63,27 @@ const EmployeeTable = ({
                   </td>
                   <td><strong>{emp.employee_id}</strong></td>
                   <td>{emp.name}</td>
+                  <td>
+                    {(() => {
+                      const gender = getGenderFromIC(emp.ic_number);
+                      if (!gender) return <span style={{ color: '#999' }}>-</span>;
+                      return (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            backgroundColor: gender === 'male' ? '#e3f2fd' : '#fce4ec',
+                            color: gender === 'male' ? '#1565c0' : '#c2185b'
+                          }}
+                        >
+                          {gender === 'male' ? 'M' : 'F'}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td>
                     {emp.department_name ? (
                       <span

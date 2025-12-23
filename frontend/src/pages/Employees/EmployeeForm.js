@@ -1,5 +1,16 @@
 import React from 'react';
 
+// Helper function to extract gender from Malaysian IC number
+// Last digit: Odd (1,3,5,7,9) = Male, Even (0,2,4,6,8) = Female
+const getGenderFromIC = (icNumber) => {
+  if (!icNumber) return null;
+  const cleaned = icNumber.replace(/[-\s]/g, '');
+  if (cleaned.length < 12) return null;
+  const lastDigit = parseInt(cleaned.charAt(cleaned.length - 1));
+  if (isNaN(lastDigit)) return null;
+  return lastDigit % 2 === 1 ? 'male' : 'female';
+};
+
 const INITIAL_FORM_STATE = {
   employee_id: '',
   name: '',
@@ -192,9 +203,34 @@ const EmployeeForm = ({
             type="text"
             value={form.ic_number}
             onChange={(e) => setForm({ ...form, ic_number: e.target.value })}
-            placeholder="IC number"
+            placeholder="e.g. 901234-56-7890"
           />
         </div>
+        <div className="form-group">
+          <label>Gender</label>
+          <input
+            type="text"
+            value={
+              getGenderFromIC(form.ic_number)
+                ? getGenderFromIC(form.ic_number) === 'male' ? 'Male' : 'Female'
+                : 'Auto-detected from IC'
+            }
+            disabled
+            style={{
+              backgroundColor: getGenderFromIC(form.ic_number)
+                ? (getGenderFromIC(form.ic_number) === 'male' ? '#e3f2fd' : '#fce4ec')
+                : '#f5f5f5',
+              color: getGenderFromIC(form.ic_number) ? '#333' : '#999',
+              fontWeight: getGenderFromIC(form.ic_number) ? '500' : 'normal'
+            }}
+          />
+          <small style={{ color: '#666', fontSize: '11px' }}>
+            Based on IC last digit (odd=Male, even=Female)
+          </small>
+        </div>
+      </div>
+
+      <div className="form-row">
         <div className="form-group">
           <label>Join Date</label>
           <input
@@ -202,6 +238,17 @@ const EmployeeForm = ({
             value={form.join_date}
             onChange={(e) => setForm({ ...form, join_date: e.target.value })}
           />
+        </div>
+        <div className="form-group">
+          <label>Date of Birth</label>
+          <input
+            type="date"
+            value={form.date_of_birth}
+            onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
+          />
+          <small style={{ color: '#666', fontSize: '11px' }}>
+            Can also be extracted from IC (YYMMDD)
+          </small>
         </div>
       </div>
 
@@ -287,12 +334,16 @@ const EmployeeForm = ({
           />
         </div>
         <div className="form-group">
-          <label>Date of Birth</label>
-          <input
-            type="date"
-            value={form.date_of_birth}
-            onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
-          />
+          <label>EPF Contribution Type</label>
+          <select
+            value={form.epf_contribution_type}
+            onChange={(e) => setForm({ ...form, epf_contribution_type: e.target.value })}
+          >
+            <option value="normal">Normal (11%)</option>
+            <option value="reduced">Reduced (below 60 with EPF)</option>
+            <option value="above_60">Above 60 years old</option>
+            <option value="foreign">Foreign Worker</option>
+          </select>
         </div>
       </div>
 
@@ -713,5 +764,5 @@ const EmployeeForm = ({
   );
 };
 
-export { INITIAL_FORM_STATE, BANK_OPTIONS };
+export { INITIAL_FORM_STATE, BANK_OPTIONS, getGenderFromIC };
 export default EmployeeForm;
