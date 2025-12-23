@@ -468,15 +468,15 @@ const initDb = async () => {
 
       -- Insert default departments if not exists
       -- Payroll Structure:
-      -- Office: basic + allowance + bonus + OT
-      -- Indoor Sales: basic + commission
-      -- Outdoor Sales: basic + commission + allowance + bonus
-      -- Driver: basic + upsell commission + outstation + OT + trip commission
+      -- Driver: basic + trip commission (RM30) + upsell (10%) + outstation (RM100/day) + OT (1.0x)
+      -- Indoor Sales: basic RM4k OR 6% commission (whichever higher)
+      -- Office: basic + allowance + commission
+      -- Outdoor Sales: basic + allowance + commission (by tier)
       INSERT INTO departments (name, salary_type, payroll_structure_code, company_id) VALUES
-        ('Office', 'basic_allowance_bonus_ot', 'office', 1),
-        ('Indoor Sales', 'basic_commission', 'indoor_sales', 1),
-        ('Outdoor Sales', 'basic_commission_allowance_bonus', 'outdoor_sales', 1),
-        ('Driver', 'basic_upsell_outstation_ot_trip', 'driver', 1)
+        ('Driver', 'basic_trip_upsell_outstation_ot', 'driver', 1),
+        ('Indoor Sales', 'basic_or_commission_higher', 'indoor_sales', 1),
+        ('Office', 'basic_allowance_commission', 'office', 1),
+        ('Outdoor Sales', 'basic_allowance_commission_tier', 'outdoor_sales', 1)
       ON CONFLICT (name, company_id) DO NOTHING;
 
       -- =====================================================

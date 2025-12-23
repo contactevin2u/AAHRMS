@@ -24,11 +24,10 @@ router.post('/seed', authenticateAdmin, async (req, res) => {
     // Insert default departments for the user's company (AA Alive structure)
     const result = await pool.query(`
       INSERT INTO departments (name, salary_type, payroll_structure_code, company_id) VALUES
-        ('Office', 'basic_allowance_bonus_ot', 'office', $1),
-        ('Indoor Sales', 'basic_commission', 'indoor_sales', $1),
-        ('Outdoor Sales', 'basic_commission_allowance_bonus', 'outdoor_sales', $1),
-        ('Driver', 'basic_upsell_outstation_ot_trip', 'driver', $1),
-        ('Packer', 'basic_allowance_ot_bonus', 'packer', $1)
+        ('Driver', 'basic_trip_upsell_outstation_ot', 'driver', $1),
+        ('Indoor Sales', 'basic_or_commission_higher', 'indoor_sales', $1),
+        ('Office', 'basic_allowance_commission', 'office', $1),
+        ('Outdoor Sales', 'basic_allowance_commission_tier', 'outdoor_sales', $1)
       RETURNING *
     `, [companyId]);
 
@@ -62,11 +61,10 @@ router.get('/init-seed', async (req, res) => {
     // Insert default departments for the specified company
     const result = await pool.query(`
       INSERT INTO departments (name, salary_type, payroll_structure_code, company_id) VALUES
-        ('Office', 'basic_allowance_bonus_ot', 'office', $1),
-        ('Indoor Sales', 'basic_commission', 'indoor_sales', $1),
-        ('Outdoor Sales', 'basic_commission_allowance_bonus', 'outdoor_sales', $1),
-        ('Driver', 'basic_upsell_outstation_ot_trip', 'driver', $1),
-        ('Packer', 'basic_allowance_ot_bonus', 'packer', $1)
+        ('Driver', 'basic_trip_upsell_outstation_ot', 'driver', $1),
+        ('Indoor Sales', 'basic_or_commission_higher', 'indoor_sales', $1),
+        ('Office', 'basic_allowance_commission', 'office', $1),
+        ('Outdoor Sales', 'basic_allowance_commission_tier', 'outdoor_sales', $1)
       RETURNING *
     `, [companyId]);
 

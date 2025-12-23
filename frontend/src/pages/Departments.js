@@ -31,15 +31,18 @@ function Departments() {
 
   const getSalaryTypeLabel = (type) => {
     const labels = {
-      // New salary types
+      // Current payroll structures
+      'basic_trip_upsell_outstation_ot': 'Basic + Trip Commission (RM30) + Upsell (10%) + Outstation (RM100/day) + OT',
+      'basic_or_commission_higher': 'Basic RM4,000 OR 6% Commission (whichever higher)',
+      'basic_allowance_commission': 'Basic + Allowance + Commission',
+      'basic_allowance_commission_tier': 'Basic + Allowance + Commission (by tier)',
+      // Legacy types (for backward compatibility)
       'basic_allowance_bonus_ot': 'Basic + Allowance + Bonus + OT',
       'basic_commission': 'Basic + Commission',
       'basic_commission_allowance_bonus': 'Basic + Commission + Allowance + Bonus',
-      'basic_upsell_outstation_ot_trip': 'Basic + Upsell Commission + Outstation + OT + Trip Commission',
-      // Legacy types (for backward compatibility)
+      'basic_upsell_outstation_ot_trip': 'Basic + Upsell + Outstation + OT + Trip',
       'fixed_bonus_commission_allowance': 'Fixed + Bonus + Commission + Allowance',
       'commission_only': 'Commission Only',
-      'basic_allowance_commission': 'Basic + Allowance + Commission',
       'basic_trip_commission_outstation_ot': 'Basic + Trip + Commission + Outstation + OT'
     };
     return labels[type] || type;
