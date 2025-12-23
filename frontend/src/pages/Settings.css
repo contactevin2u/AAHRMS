@@ -1,0 +1,305 @@
+.settings-page {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.settings-page .page-header {
+  margin-bottom: 20px;
+}
+
+.settings-page .page-header h1 {
+  color: #6b5344;
+  margin: 0;
+  font-size: 24px;
+}
+
+.settings-page .page-header p {
+  color: #9a8072;
+  margin: 5px 0 0 0;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 25px;
+  border-bottom: 2px solid #e0d5cf;
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  color: #9a8072;
+  font-size: 15px;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: #6b5344;
+}
+
+.tab-btn.active {
+  color: #6b5344;
+  font-weight: 600;
+  border-bottom-color: #6b5344;
+}
+
+.settings-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 25px;
+}
+
+.type-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.type-section h2 {
+  margin: 0;
+  color: #6b5344;
+  font-size: 18px;
+}
+
+.section-desc {
+  color: #9a8072;
+  margin: 0 0 20px 0;
+  font-size: 14px;
+}
+
+.add-btn {
+  background: #6b5344;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.add-btn:hover {
+  background: #5a4439;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: #9a8072;
+  background: #f9f7f5;
+  border-radius: 8px;
+}
+
+.no-data p {
+  margin: 5px 0;
+}
+
+.types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.type-card {
+  background: #f9f7f5;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e0d5cf;
+}
+
+.type-card .type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.type-card h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #6b5344;
+}
+
+.type-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.type-badge.fixed {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.type-badge.percentage {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.type-badge.taxable {
+  background: #fce4ec;
+  color: #c2185b;
+}
+
+.type-badge.non-taxable {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.type-desc {
+  color: #7a6b62;
+  font-size: 13px;
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.type-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.type-actions button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.type-actions .edit-btn {
+  background: #6b5344;
+  color: white;
+}
+
+.type-actions .edit-btn:hover {
+  background: #5a4439;
+}
+
+.type-actions .delete-btn {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.type-actions .delete-btn:hover {
+  background: #ffcdd2;
+}
+
+/* Modal styles */
+.settings-page .modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.settings-page .modal {
+  background: white;
+  border-radius: 12px;
+  padding: 25px;
+  width: 100%;
+  max-width: 450px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.settings-page .modal h2 {
+  margin: 0 0 20px 0;
+  color: #6b5344;
+  font-size: 20px;
+}
+
+.settings-page .form-group {
+  margin-bottom: 18px;
+}
+
+.settings-page .form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: #6b5344;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.settings-page .form-group input,
+.settings-page .form-group select,
+.settings-page .form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.settings-page .form-group input:focus,
+.settings-page .form-group select:focus,
+.settings-page .form-group textarea:focus {
+  outline: none;
+  border-color: #6b5344;
+}
+
+.settings-page .help-text {
+  display: block;
+  margin-top: 6px;
+  color: #9a8072;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-page .modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 25px;
+}
+
+.settings-page .cancel-btn {
+  padding: 10px 20px;
+  background: #f0f0f0;
+  color: #666;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.settings-page .cancel-btn:hover {
+  background: #e0e0e0;
+}
+
+.settings-page .save-btn {
+  padding: 10px 20px;
+  background: #6b5344;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.settings-page .save-btn:hover {
+  background: #5a4439;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #9a8072;
+}
