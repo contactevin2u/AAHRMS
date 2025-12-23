@@ -48,7 +48,11 @@ function Layout({ children }) {
     <div className="layout">
       <nav className="sidebar">
         <div className="sidebar-header">
-          {!usesOutlets() && <img src="/logo.png" alt="AA HRMS" className="logo-img" />}
+          {usesOutlets() ? (
+            <img src="/mixue-logo.png" alt="Mixue" className="logo-img" style={{ maxHeight: '60px' }} />
+          ) : (
+            <img src="/logo.png" alt="AA HRMS" className="logo-img" />
+          )}
           <h2>{adminInfo?.company_name || 'HRMS'}</h2>
           {adminInfo && (
             <div className="admin-info">
@@ -94,25 +98,31 @@ function Layout({ children }) {
             <span>Payroll</span>
           </NavLink>
 
-          <NavLink to="/admin/sales-entry" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">📈</span>
-            <span>Sales Entry</span>
-          </NavLink>
+          {!usesOutlets() && (
+            <NavLink to="/admin/sales-entry" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">📈</span>
+              <span>Sales Entry</span>
+            </NavLink>
+          )}
 
           <NavLink to="/admin/contributions" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             <span className="nav-icon">🏛️</span>
             <span>Contributions</span>
           </NavLink>
 
-          <NavLink to="/admin/resignations" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">👋</span>
-            <span>Resignations</span>
-          </NavLink>
+          {!usesOutlets() && (
+            <NavLink to="/admin/resignations" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">👋</span>
+              <span>Resignations</span>
+            </NavLink>
+          )}
 
-          <NavLink to="/admin/letters" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">📋</span>
-            <span>HR Letters</span>
-          </NavLink>
+          {!usesOutlets() && (
+            <NavLink to="/admin/letters" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">📋</span>
+              <span>HR Letters</span>
+            </NavLink>
+          )}
 
           {usesOutlets() ? (
             <NavLink to="/admin/outlets" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
@@ -131,10 +141,12 @@ function Layout({ children }) {
             <span>Settings</span>
           </NavLink>
 
-          <NavLink to="/admin/feedback" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">💬</span>
-            <span>Feedback</span>
-          </NavLink>
+          {!usesOutlets() && (
+            <NavLink to="/admin/feedback" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">💬</span>
+              <span>Feedback</span>
+            </NavLink>
+          )}
 
           {canManageUsers() && (
             <NavLink to="/admin/users" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
