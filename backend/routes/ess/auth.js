@@ -1,0 +1,215 @@
+/**
+ * ESS Authentication Routes
+ * Handles employee login, password reset, and initial password setup
+ */
+
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const pool = require('../../db');
+const { asyncHandler, ValidationError, AuthenticationError } = require('../../middleware/errorHandler');
+
+// Employee Login
+router.post('/login', asyncHandler(async (req, res) => {
+  const { login, password } = req.body;
+
+  if (!login || !password) {
+    throw new ValidationError('Login and password are required');
+  }
+
+  // Find employee by email or employee_id, including company info
+  const result = await pool.query(
+    `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled, e.department_id, e.company_id,
+            c.name as company_name, c.code as company_code, c.logo_url as company_logo
+     FROM employees e
+     LEFT JOIN companies c ON e.company_id = c.id
+     WHERE (e.email = $1 OR e.employee_id = $1) AND e.status = 'active'`,
+    [login]
+  );
+
+  if (result.rows.length === 0) {
+    throw new AuthenticationError('Invalid credentials');
+  }
+
+  const employee = result.rows[0];
+
+  // Check if ESS is enabled for this employee
+  if (!employee.ess_enabled) {
+    throw new AuthenticationError('Self-service access is not enabled for your account. Please contact HR.');
+  }
+
+  // Check if password is set
+  if (!employee.password_hash) {
+    return res.status(401).json({
+      error: 'Password not set. Please use the password reset function or contact HR.',
+      requiresSetup: true
+    });
+  }
+
+  // Verify password
+  const isValidPassword = await bcrypt.compare(password, employee.password_hash);
+  if (!isValidPassword) {
+    throw new AuthenticationError('Invalid credentials');
+  }
+
+  // Update last login
+  await pool.query(
+    'UPDATE employees SET last_login = NOW() WHERE id = $1',
+    [employee.id]
+  );
+
+  // Generate JWT token with company context
+  const token = jwt.sign(
+    {
+      id: employee.id,
+      employee_id: employee.employee_id,
+      name: employee.name,
+      email: employee.email,
+      role: 'employee',
+      company_id: employee.company_id
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '8h' }
+  );
+
+  res.json({
+    token,
+    employee: {
+      id: employee.id,
+      employee_id: employee.employee_id,
+      name: employee.name,
+      email: employee.email,
+      company_id: employee.company_id,
+      company_name: employee.company_name,
+      company_code: employee.company_code,
+      company_logo: employee.company_logo
+    }
+  });
+}));
+
+// Request Password Reset
+router.post('/forgot-password', asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new ValidationError('Email is required');
+  }
+
+  // Find employee by email
+  const result = await pool.query(
+    'SELECT id, name, email FROM employees WHERE email = $1 AND status = $2',
+    [email, 'active']
+  );
+
+  // Always return success to prevent email enumeration
+  if (result.rows.length === 0) {
+    return res.json({ message: 'If an account exists with this email, a password reset link will be sent.' });
+  }
+
+  const employee = result.rows[0];
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  const resetExpires = new Date(Date.now() + 3600000); // 1 hour from now
+
+  // Save token to database
+  await pool.query(
+    'UPDATE employees SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3',
+    [resetToken, resetExpires, employee.id]
+  );
+
+  // In production, send email here
+  console.log(`Password reset token for ${email}: ${resetToken}`);
+
+  res.json({
+    message: 'If an account exists with this email, a password reset link will be sent.',
+    dev_token: process.env.NODE_ENV !== 'production' ? resetToken : undefined
+  });
+}));
+
+// Reset Password
+router.post('/reset-password', asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    throw new ValidationError('Token and new password are required');
+  }
+
+  if (newPassword.length < 6) {
+    throw new ValidationError('Password must be at least 6 characters long');
+  }
+
+  // Find employee with valid reset token
+  const result = await pool.query(
+    `SELECT id FROM employees
+     WHERE password_reset_token = $1
+     AND password_reset_expires > NOW()
+     AND status = 'active'`,
+    [token]
+  );
+
+  if (result.rows.length === 0) {
+    throw new ValidationError('Invalid or expired reset token');
+  }
+
+  const employee = result.rows[0];
+
+  // Hash new password
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  // Update password and clear reset token
+  await pool.query(
+    `UPDATE employees
+     SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL
+     WHERE id = $2`,
+    [passwordHash, employee.id]
+  );
+
+  res.json({ message: 'Password reset successfully. You can now login.' });
+}));
+
+// Set Initial Password (for first-time login)
+router.post('/set-password', asyncHandler(async (req, res) => {
+  const { employee_id, ic_number, newPassword } = req.body;
+
+  if (!employee_id || !ic_number || !newPassword) {
+    throw new ValidationError('Employee ID, IC number, and new password are required');
+  }
+
+  if (newPassword.length < 6) {
+    throw new ValidationError('Password must be at least 6 characters long');
+  }
+
+  // Find employee and verify IC number
+  const result = await pool.query(
+    `SELECT id, password_hash FROM employees
+     WHERE employee_id = $1 AND ic_number = $2 AND status = 'active'`,
+    [employee_id, ic_number]
+  );
+
+  if (result.rows.length === 0) {
+    throw new ValidationError('Employee not found or IC number does not match');
+  }
+
+  const employee = result.rows[0];
+
+  // Check if password is already set
+  if (employee.password_hash) {
+    throw new ValidationError('Password already set. Use forgot password if you need to reset.');
+  }
+
+  // Hash password
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  // Set password
+  await pool.query(
+    'UPDATE employees SET password_hash = $1 WHERE id = $2',
+    [passwordHash, employee.id]
+  );
+
+  res.json({ message: 'Password set successfully. You can now login.' });
+}));
+
+module.exports = router;
