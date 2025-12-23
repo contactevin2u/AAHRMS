@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter } = require('../middleware/tenant');
+// Updated: Include employee count in department listing
 
 // Seed default departments (run once to initialize) - requires auth
 router.post('/seed', authenticateAdmin, async (req, res) => {
