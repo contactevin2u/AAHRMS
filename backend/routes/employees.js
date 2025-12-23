@@ -779,4 +779,119 @@ router.get('/stats/overview', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Clear all test/seed data (public endpoint with key protection)
+router.post('/init-clear-all-data', async (req, res) => {
+  const client = await pool.connect();
+
+  // Security key to prevent accidental calls
+  const { confirmKey } = req.body;
+  if (confirmKey !== 'CLEAR_ALL_DATA_2024') {
+    return res.status(403).json({ error: 'Invalid confirmation key' });
+  }
+
+  try {
+    await client.query('BEGIN');
+
+    const deletedCounts = {};
+
+    // Delete in order respecting foreign key constraints
+    // 1. Delete payroll items first (depends on payroll_runs)
+    const payrollItems = await client.query('DELETE FROM payroll_items RETURNING id');
+    deletedCounts.payroll_items = payrollItems.rowCount;
+
+    // 2. Delete payroll runs
+    const payrollRuns = await client.query('DELETE FROM payroll_runs RETURNING id');
+    deletedCounts.payroll_runs = payrollRuns.rowCount;
+
+    // 3. Delete old payroll records
+    const payroll = await client.query('DELETE FROM payroll RETURNING id');
+    deletedCounts.payroll = payroll.rowCount;
+
+    // 4. Delete leave requests
+    const leaveRequests = await client.query('DELETE FROM leave_requests RETURNING id');
+    deletedCounts.leave_requests = leaveRequests.rowCount;
+
+    // 5. Delete leave balances
+    const leaveBalances = await client.query('DELETE FROM leave_balances RETURNING id');
+    deletedCounts.leave_balances = leaveBalances.rowCount;
+
+    // 6. Delete claims
+    const claims = await client.query('DELETE FROM claims RETURNING id');
+    deletedCounts.claims = claims.rowCount;
+
+    // 7. Delete resignations
+    const resignations = await client.query('DELETE FROM resignations RETURNING id');
+    deletedCounts.resignations = resignations.rowCount;
+
+    // 8. Delete letters
+    const letters = await client.query('DELETE FROM letters RETURNING id');
+    deletedCounts.letters = letters.rowCount;
+
+    // 9. Delete employee commissions
+    const empCommissions = await client.query('DELETE FROM employee_commissions RETURNING id');
+    deletedCounts.employee_commissions = empCommissions.rowCount;
+
+    // 10. Delete employee allowances
+    const empAllowances = await client.query('DELETE FROM employee_allowances RETURNING id');
+    deletedCounts.employee_allowances = empAllowances.rowCount;
+
+    // 11. Delete sales records
+    const sales = await client.query('DELETE FROM sales_records RETURNING id');
+    deletedCounts.sales_records = sales.rowCount;
+
+    // 12. Delete clock in records
+    const clockIn = await client.query('DELETE FROM clock_in_records RETURNING id');
+    deletedCounts.clock_in_records = clockIn.rowCount;
+
+    // 13. Delete feedback
+    const feedback = await client.query('DELETE FROM feedback RETURNING id');
+    deletedCounts.feedback = feedback.rowCount;
+
+    // 14. Delete notifications
+    const notifications = await client.query('DELETE FROM notifications RETURNING id');
+    deletedCounts.notifications = notifications.rowCount;
+
+    // 15. Delete employees
+    const employees = await client.query('DELETE FROM employees RETURNING id');
+    deletedCounts.employees = employees.rowCount;
+
+    // 16. Delete commission types
+    const commTypes = await client.query('DELETE FROM commission_types RETURNING id');
+    deletedCounts.commission_types = commTypes.rowCount;
+
+    // 17. Delete allowance types
+    const allowTypes = await client.query('DELETE FROM allowance_types RETURNING id');
+    deletedCounts.allowance_types = allowTypes.rowCount;
+
+    // 18. Delete departments
+    const departments = await client.query('DELETE FROM departments RETURNING id');
+    deletedCounts.departments = departments.rowCount;
+
+    // 19. Delete admin users (except super admin)
+    const adminUsers = await client.query("DELETE FROM admin_users WHERE role != 'super_admin' RETURNING id");
+    deletedCounts.admin_users = adminUsers.rowCount;
+
+    // 20. Delete companies (except default)
+    const companies = await client.query('DELETE FROM companies WHERE id > 1 RETURNING id');
+    deletedCounts.companies = companies.rowCount;
+
+    await client.query('COMMIT');
+
+    // Calculate total
+    const totalDeleted = Object.values(deletedCounts).reduce((a, b) => a + b, 0);
+
+    res.json({
+      message: 'All test data cleared successfully',
+      totalDeleted,
+      details: deletedCounts
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error clearing data:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
