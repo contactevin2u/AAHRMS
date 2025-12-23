@@ -6,9 +6,6 @@ const EmployeeTable = ({
   selectedEmployees,
   onSelectAll,
   onSelectEmployee,
-  onEdit,
-  onDelete,
-  onProbationReview,
   goToDepartments,
   loading
 }) => {
@@ -35,24 +32,19 @@ const EmployeeTable = ({
             <th>Position</th>
             <th>Employment</th>
             <th>Status</th>
-            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {employees.length === 0 ? (
             <tr>
-              <td colSpan="9" className="no-data">No employees found</td>
+              <td colSpan="8" className="no-data">No employees found</td>
             </tr>
           ) : (
             employees.map(emp => {
-              const isPendingReview = emp.employment_type === 'probation' &&
-                emp.probation_end_date &&
-                new Date(emp.probation_end_date) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
               return (
                 <tr
                   key={emp.id}
-                  className={`${selectedEmployees.includes(emp.id) ? 'selected' : ''} ${isPendingReview ? 'pending-review' : ''}`}
+                  className={selectedEmployees.includes(emp.id) ? 'selected' : ''}
                 >
                   <td className="checkbox-col">
                     <input
@@ -101,26 +93,11 @@ const EmployeeTable = ({
                       {emp.employment_type === 'confirmed' ? 'Confirmed' :
                        emp.employment_type === 'contract' ? 'Contract' : 'Probation'}
                     </span>
-                    {isPendingReview && (
-                      <button
-                        className="review-btn"
-                        onClick={() => onProbationReview(emp)}
-                        title="Review probation"
-                      >
-                        Review
-                      </button>
-                    )}
                   </td>
                   <td>
                     <span className={`status-badge ${emp.status}`}>
                       {emp.status}
                     </span>
-                  </td>
-                  <td>
-                    <button onClick={() => onEdit(emp)} className="edit-btn">Edit</button>
-                    {emp.status === 'active' && (
-                      <button onClick={() => onDelete(emp.id)} className="delete-btn">Delete</button>
-                    )}
                   </td>
                 </tr>
               );
