@@ -17,6 +17,7 @@ const claimsRoutes = require('./claims');
 const notificationsRoutes = require('./notifications');
 const lettersRoutes = require('./letters');
 const dashboardRoutes = require('./dashboard');
+const clockinRoutes = require('./clockin');
 
 // Mount sub-routes
 // Auth routes (login, password reset, etc.) - no prefix needed
@@ -42,5 +43,8 @@ router.use('/letters', lettersRoutes);
 
 // Dashboard routes
 router.use('/dashboard', dashboardRoutes);
+
+// Clock-in routes
+router.use('/clockin', clockinRoutes);
 
 module.exports = router;

@@ -170,6 +170,87 @@ router.post('/reset-password', asyncHandler(async (req, res) => {
   res.json({ message: 'Password reset successfully. You can now login.' });
 }));
 
+// Login with Employee ID and IC Number (for Mimix/outlet-based companies)
+router.post('/login-ic', asyncHandler(async (req, res) => {
+  const { employee_id, ic_number } = req.body;
+
+  if (!employee_id || !ic_number) {
+    throw new ValidationError('Employee ID and IC number are required');
+  }
+
+  // Clean IC number - remove dashes
+  const cleanIC = ic_number.replace(/-/g, '');
+
+  // Find employee by employee_id and verify IC, including company info
+  const result = await pool.query(
+    `SELECT e.id, e.employee_id, e.name, e.email, e.ic_number, e.status, e.ess_enabled,
+            e.department_id, e.outlet_id, e.company_id,
+            c.name as company_name, c.code as company_code, c.logo_url as company_logo,
+            c.grouping_type as company_grouping_type,
+            o.name as outlet_name
+     FROM employees e
+     LEFT JOIN companies c ON e.company_id = c.id
+     LEFT JOIN outlets o ON e.outlet_id = o.id
+     WHERE e.employee_id = $1 AND e.status = 'active'`,
+    [employee_id]
+  );
+
+  if (result.rows.length === 0) {
+    throw new AuthenticationError('Invalid employee ID');
+  }
+
+  const employee = result.rows[0];
+
+  // Verify IC number (compare without dashes)
+  const storedIC = (employee.ic_number || '').replace(/-/g, '');
+  if (storedIC !== cleanIC) {
+    throw new AuthenticationError('Invalid IC number');
+  }
+
+  // Check if ESS is enabled for this employee
+  if (!employee.ess_enabled) {
+    throw new AuthenticationError('Self-service access is not enabled for your account. Please contact HR.');
+  }
+
+  // Update last login
+  await pool.query(
+    'UPDATE employees SET last_login = NOW() WHERE id = $1',
+    [employee.id]
+  );
+
+  // Generate JWT token with company context
+  const token = jwt.sign(
+    {
+      id: employee.id,
+      employee_id: employee.employee_id,
+      name: employee.name,
+      email: employee.email,
+      role: 'employee',
+      company_id: employee.company_id,
+      outlet_id: employee.outlet_id
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '8h' }
+  );
+
+  res.json({
+    token,
+    employee: {
+      id: employee.id,
+      employee_id: employee.employee_id,
+      name: employee.name,
+      email: employee.email,
+      company_id: employee.company_id,
+      company_name: employee.company_name,
+      company_code: employee.company_code,
+      company_logo: employee.company_logo,
+      company_grouping_type: employee.company_grouping_type,
+      outlet_id: employee.outlet_id,
+      outlet_name: employee.outlet_name
+    }
+  });
+}));
+
 // Set Initial Password (for first-time login)
 router.post('/set-password', asyncHandler(async (req, res) => {
   const { employee_id, ic_number, newPassword } = req.body;

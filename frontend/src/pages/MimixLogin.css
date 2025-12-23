@@ -1,0 +1,146 @@
+.mimix-login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e91e63 0%, #ff5722 100%);
+  padding: 20px;
+}
+
+.mimix-login-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.mimix-login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.mimix-logo {
+  height: 80px;
+  margin-bottom: 16px;
+}
+
+.mimix-login-header h1 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.mimix-login-header p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.mimix-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.error-message {
+  background: #ffebee;
+  color: #c62828;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.form-group input {
+  padding: 14px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #e91e63;
+}
+
+.form-group input:disabled {
+  background: #f5f5f5;
+}
+
+.form-group small {
+  color: #888;
+  font-size: 12px;
+}
+
+.login-button {
+  background: linear-gradient(135deg, #e91e63 0%, #ff5722 100%);
+  color: white;
+  border: none;
+  padding: 16px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+  margin-top: 8px;
+}
+
+.login-button:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.login-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.mimix-login-footer {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.admin-link {
+  color: #666;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.admin-link:hover {
+  color: #e91e63;
+  text-decoration: underline;
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  .mimix-login-container {
+    padding: 16px;
+  }
+
+  .mimix-login-card {
+    padding: 24px;
+  }
+
+  .mimix-logo {
+    height: 60px;
+  }
+
+  .mimix-login-header h1 {
+    font-size: 20px;
+  }
+}

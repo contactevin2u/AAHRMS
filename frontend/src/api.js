@@ -312,12 +312,19 @@ export const adminUsersApi = {
 export const essApi = {
   // Authentication
   login: (credentials) => api.post('/ess/login', credentials),
+  loginIC: (employee_id, ic_number) => api.post('/ess/login-ic', { employee_id, ic_number }),
   forgotPassword: (email) => api.post('/ess/forgot-password', { email }),
   resetPassword: (token, newPassword) => api.post('/ess/reset-password', { token, newPassword }),
   setPassword: (data) => api.post('/ess/set-password', data),
 
   // Dashboard
   getDashboard: () => api.get('/ess/dashboard'),
+
+  // Clock-in
+  clockIn: (data) => api.post('/ess/clockin/in', data),
+  clockOut: (data) => api.post('/ess/clockin/out', data),
+  getClockInStatus: () => api.get('/ess/clockin/status'),
+  getClockInHistory: (params) => api.get('/ess/clockin/history', { params }),
 
   // Profile
   getProfile: () => api.get('/ess/profile'),

@@ -1076,6 +1076,63 @@ Human Resources Department
         ('Parking Allowance', 'Parking fees', TRUE, 1),
         ('Housing Allowance', 'Housing assistance', TRUE, 1)
       ON CONFLICT DO NOTHING;
+
+      -- =====================================================
+      -- OUTLETS TABLE (for outlet-based companies like Mimix)
+      -- =====================================================
+      CREATE TABLE IF NOT EXISTS outlets (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER REFERENCES companies(id),
+        name VARCHAR(100) NOT NULL,
+        address TEXT,
+        latitude DECIMAL(10, 8),
+        longitude DECIMAL(11, 8),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_outlets_company ON outlets(company_id);
+
+      -- Add outlet_id to employees for outlet-based companies
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='outlet_id') THEN
+          ALTER TABLE employees ADD COLUMN outlet_id INTEGER REFERENCES outlets(id);
+        END IF;
+      END $$;
+
+      -- Add grouping_type to companies (department or outlet)
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='grouping_type') THEN
+          ALTER TABLE companies ADD COLUMN grouping_type VARCHAR(20) DEFAULT 'department';
+        END IF;
+      END $$;
+
+      -- =====================================================
+      -- CLOCK-IN RECORDS TABLE (for attendance)
+      -- =====================================================
+      CREATE TABLE IF NOT EXISTS clock_in_records (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        company_id INTEGER REFERENCES companies(id),
+        outlet_id INTEGER REFERENCES outlets(id),
+        clock_in_time TIMESTAMP NOT NULL,
+        clock_out_time TIMESTAMP,
+        photo_url TEXT,
+        latitude DECIMAL(10, 8),
+        longitude DECIMAL(11, 8),
+        location_address TEXT,
+        status VARCHAR(20) DEFAULT 'clocked_in',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_clock_in_employee ON clock_in_records(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_clock_in_company ON clock_in_records(company_id);
+      CREATE INDEX IF NOT EXISTS idx_clock_in_outlet ON clock_in_records(outlet_id);
+      CREATE INDEX IF NOT EXISTS idx_clock_in_time ON clock_in_records(clock_in_time);
+      CREATE INDEX IF NOT EXISTS idx_clock_in_date ON clock_in_records(DATE(clock_in_time));
     `);
     console.log('Database tables initialized');
   } catch (err) {

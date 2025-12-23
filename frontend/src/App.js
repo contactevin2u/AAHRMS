@@ -31,6 +31,9 @@ import EmployeeLeave from './pages/EmployeeLeave';
 import EmployeeClaims from './pages/EmployeeClaims';
 import EmployeeNotifications from './pages/EmployeeNotifications';
 import EmployeeLetters from './pages/EmployeeLetters';
+// Mimix Staff Portal
+import MimixLogin from './pages/MimixLogin';
+import StaffClockIn from './pages/StaffClockIn';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -41,6 +44,11 @@ function ProtectedRoute({ children }) {
 function EmployeeProtectedRoute({ children }) {
   const token = localStorage.getItem('employeeToken');
   return token ? children : <Navigate to="/employee/login" replace />;
+}
+
+function StaffProtectedRoute({ children }) {
+  const token = localStorage.getItem('employeeToken');
+  return token ? children : <Navigate to="/staff/login" replace />;
 }
 
 function App() {
@@ -266,6 +274,17 @@ function App() {
             <EmployeeProtectedRoute>
               <EmployeeLetters />
             </EmployeeProtectedRoute>
+          }
+        />
+
+        {/* Mimix Staff Portal Routes */}
+        <Route path="/staff/login" element={<MimixLogin />} />
+        <Route
+          path="/staff/clockin"
+          element={
+            <StaffProtectedRoute>
+              <StaffClockIn />
+            </StaffProtectedRoute>
           }
         />
 
