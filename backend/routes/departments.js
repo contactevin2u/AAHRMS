@@ -76,23 +76,56 @@ router.get('/init-seed', async (req, res) => {
   }
 });
 
-// Get all departments (filtered by company)
+// Get all departments (filtered by company) with employee count
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
     const companyId = getCompanyFilter(req);
 
-    let query = 'SELECT * FROM departments';
+    let query = `
+      SELECT d.*,
+        COUNT(e.id) as employee_count,
+        sc.basic_salary, sc.has_commission, sc.commission_rate,
+        sc.has_allowance, sc.allowance_amount, sc.has_per_trip, sc.per_trip_rate,
+        sc.has_ot, sc.ot_rate, sc.has_outstation, sc.outstation_rate
+      FROM departments d
+      LEFT JOIN employees e ON d.id = e.department_id AND e.status = 'active'
+      LEFT JOIN salary_configs sc ON d.id = sc.department_id
+    `;
     let params = [];
 
     if (companyId !== null) {
-      query += ' WHERE company_id = $1';
+      query += ' WHERE d.company_id = $1';
       params = [companyId];
     }
 
-    query += ' ORDER BY name';
+    query += ' GROUP BY d.id, sc.id ORDER BY d.name';
 
     const result = await pool.query(query, params);
-    res.json(result.rows);
+
+    // Format the response to include salary_config as nested object
+    const departments = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      salary_type: row.salary_type,
+      company_id: row.company_id,
+      created_at: row.created_at,
+      employee_count: parseInt(row.employee_count) || 0,
+      salary_config: row.basic_salary !== null ? {
+        basic_salary: row.basic_salary,
+        has_commission: row.has_commission,
+        commission_rate: row.commission_rate,
+        has_allowance: row.has_allowance,
+        allowance_amount: row.allowance_amount,
+        has_per_trip: row.has_per_trip,
+        per_trip_rate: row.per_trip_rate,
+        has_ot: row.has_ot,
+        ot_rate: row.ot_rate,
+        has_outstation: row.has_outstation,
+        outstation_rate: row.outstation_rate
+      } : null
+    }));
+
+    res.json(departments);
   } catch (error) {
     console.error('Error fetching departments:', error);
     res.status(500).json({ error: 'Failed to fetch departments' });
