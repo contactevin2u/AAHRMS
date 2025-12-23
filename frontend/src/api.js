@@ -257,6 +257,16 @@ export const clockInApi = {
   delete: (id) => api.delete(`/clock-in/${id}`),
 };
 
+// Outlets (for Mimix A)
+export const outletsApi = {
+  getAll: () => api.get('/outlets'),
+  getOne: (id) => api.get(`/outlets/${id}`),
+  create: (data) => api.post('/outlets', data),
+  update: (id, data) => api.put(`/outlets/${id}`, data),
+  delete: (id) => api.delete(`/outlets/${id}`),
+  seed: () => api.post('/outlets/seed'),
+};
+
 // Company Management
 export const companiesApi = {
   getAll: () => api.get('/companies'),

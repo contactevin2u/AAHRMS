@@ -16,7 +16,8 @@ router.post('/login', async (req, res) => {
     // Get user with role, permissions, and company info
     const result = await pool.query(`
       SELECT au.*, ar.permissions, ar.display_name as role_display_name,
-             c.id as company_id, c.name as company_name, c.code as company_code, c.logo_url as company_logo
+             c.id as company_id, c.name as company_name, c.code as company_code,
+             c.logo_url as company_logo, c.grouping_type as company_grouping_type
       FROM admin_users au
       LEFT JOIN admin_roles ar ON au.role = ar.name
       LEFT JOIN companies c ON au.company_id = c.id
@@ -72,7 +73,8 @@ router.post('/login', async (req, res) => {
         company_id: admin.company_id,
         company_name: admin.company_name,
         company_code: admin.company_code,
-        company_logo: admin.company_logo
+        company_logo: admin.company_logo,
+        company_grouping_type: admin.company_grouping_type || 'department'
       },
     });
   } catch (error) {

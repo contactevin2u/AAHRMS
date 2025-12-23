@@ -9,6 +9,7 @@ import PayrollV2 from './pages/PayrollV2';
 import SalaryEntry from './pages/SalaryEntry';
 import Payslip from './pages/Payslip';
 import Departments from './pages/Departments';
+import Outlets from './pages/Outlets';
 import Feedback from './pages/Feedback';
 import Leave from './pages/Leave';
 import Claims from './pages/Claims';
@@ -93,6 +94,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Departments />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/outlets"
+          element={
+            <ProtectedRoute>
+              <Outlets />
             </ProtectedRoute>
           }
         />

@@ -39,12 +39,17 @@ function Layout({ children }) {
     return adminInfo.role === 'super_admin';
   };
 
+  // Check if company uses outlets instead of departments
+  const usesOutlets = () => {
+    return adminInfo?.company_grouping_type === 'outlet';
+  };
+
   return (
     <div className="layout">
       <nav className="sidebar">
         <div className="sidebar-header">
-          <img src="/logo.png" alt="AA HRMS" className="logo-img" />
-          <h2>AA HRMS</h2>
+          {!usesOutlets() && <img src="/logo.png" alt="AA HRMS" className="logo-img" />}
+          <h2>{adminInfo?.company_name || 'HRMS'}</h2>
           {adminInfo && (
             <div className="admin-info">
               <span className="admin-name">{adminInfo.name || adminInfo.username}</span>
@@ -109,10 +114,17 @@ function Layout({ children }) {
             <span>HR Letters</span>
           </NavLink>
 
-          <NavLink to="/admin/departments" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">🏢</span>
-            <span>Departments</span>
-          </NavLink>
+          {usesOutlets() ? (
+            <NavLink to="/admin/outlets" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">🏪</span>
+              <span>Outlets</span>
+            </NavLink>
+          ) : (
+            <NavLink to="/admin/departments" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">🏢</span>
+              <span>Departments</span>
+            </NavLink>
+          )}
 
           <NavLink to="/admin/settings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             <span className="nav-icon">⚙️</span>
