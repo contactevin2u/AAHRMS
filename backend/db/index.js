@@ -157,8 +157,17 @@ const initDb = async () => {
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         salary_type VARCHAR(50) NOT NULL,
+        payroll_structure_code VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- Add payroll_structure_code column if not exists
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='departments' AND column_name='payroll_structure_code') THEN
+          ALTER TABLE departments ADD COLUMN payroll_structure_code VARCHAR(50);
+        END IF;
+      END $$;
 
       -- Add company_id to departments
       DO $$
@@ -463,11 +472,11 @@ const initDb = async () => {
       -- Indoor Sales: basic + commission
       -- Outdoor Sales: basic + commission + allowance + bonus
       -- Driver: basic + upsell commission + outstation + OT + trip commission
-      INSERT INTO departments (name, salary_type, company_id) VALUES
-        ('Office', 'basic_allowance_bonus_ot', 1),
-        ('Indoor Sales', 'basic_commission', 1),
-        ('Outdoor Sales', 'basic_commission_allowance_bonus', 1),
-        ('Driver', 'basic_upsell_outstation_ot_trip', 1)
+      INSERT INTO departments (name, salary_type, payroll_structure_code, company_id) VALUES
+        ('Office', 'basic_allowance_bonus_ot', 'office', 1),
+        ('Indoor Sales', 'basic_commission', 'indoor_sales', 1),
+        ('Outdoor Sales', 'basic_commission_allowance_bonus', 'outdoor_sales', 1),
+        ('Driver', 'basic_upsell_outstation_ot_trip', 'driver', 1)
       ON CONFLICT (name, company_id) DO NOTHING;
 
       -- =====================================================
