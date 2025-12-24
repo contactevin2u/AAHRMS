@@ -433,6 +433,122 @@
   line-height: 1.5;
 }
 
+/* Receipt Capture Section */
+.receipt-capture-section {
+  margin-top: 8px;
+}
+
+.scan-receipt-btn {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #4a6eb0 0%, #3d5a8c 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.scan-receipt-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 110, 176, 0.3);
+}
+
+.camera-preview {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+}
+
+.camera-preview video {
+  width: 100%;
+  display: block;
+}
+
+.camera-controls {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.6);
+  justify-content: center;
+}
+
+.camera-controls .capture-btn {
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.camera-controls .capture-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.camera-controls .cancel-camera-btn {
+  background: #666;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.receipt-preview {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #dce6f0;
+}
+
+.receipt-preview img {
+  width: 100%;
+  display: block;
+}
+
+.receipt-actions {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #f5f8fc;
+  justify-content: center;
+}
+
+.receipt-actions .retake-btn {
+  background: #ff9800;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.receipt-actions .remove-btn {
+  background: #f44336;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 8px;
+  color: #7a8a9a;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
   .claims-summary {
     grid-template-columns: 1fr;

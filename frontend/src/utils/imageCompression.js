@@ -4,7 +4,8 @@
  *
  * Compression Settings:
  * - Attendance selfie: 640px width, 60% quality (~30-50 KB)
- * - Claim receipt: 1200px width, 70% quality (~80-150 KB)
+ * - Claim receipt (document scan): 1200px width, 70% quality (~80-150 KB)
+ *   with contrast/sharpness enhancement for text clarity
  */
 
 /**
@@ -13,12 +14,14 @@
  * @param {Object} options - Compression options
  * @param {number} options.maxWidth - Maximum width in pixels
  * @param {number} options.quality - JPEG quality (0-1)
+ * @param {boolean} options.enhanceDocument - Apply document enhancement for text clarity
  * @returns {Promise<string>} - Compressed base64 data URL
  */
 export const compressImage = (dataUrl, options = {}) => {
   const {
     maxWidth = 640,
-    quality = 0.6
+    quality = 0.6,
+    enhanceDocument = false
   } = options;
 
   return new Promise((resolve, reject) => {
@@ -42,6 +45,27 @@ export const compressImage = (dataUrl, options = {}) => {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
 
+      // Apply document enhancement for better text clarity
+      if (enhanceDocument) {
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+
+        // Apply contrast and brightness enhancement
+        const contrast = 1.3;  // Increase contrast
+        const brightness = 10; // Slight brightness boost
+
+        for (let i = 0; i < data.length; i += 4) {
+          // Apply contrast and brightness
+          data[i] = Math.min(255, Math.max(0, ((data[i] - 128) * contrast) + 128 + brightness));     // Red
+          data[i + 1] = Math.min(255, Math.max(0, ((data[i + 1] - 128) * contrast) + 128 + brightness)); // Green
+          data[i + 2] = Math.min(255, Math.max(0, ((data[i + 2] - 128) * contrast) + 128 + brightness)); // Blue
+        }
+
+        // Apply simple sharpening
+        const sharpenedData = applySharpen(imageData, width, height);
+        ctx.putImageData(sharpenedData, 0, 0);
+      }
+
       // Convert to JPEG with compression
       const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
       resolve(compressedDataUrl);
@@ -54,6 +78,39 @@ export const compressImage = (dataUrl, options = {}) => {
     img.src = dataUrl;
   });
 };
+
+/**
+ * Apply sharpening filter for document text clarity
+ */
+function applySharpen(imageData, width, height) {
+  const data = imageData.data;
+  const output = new Uint8ClampedArray(data);
+
+  // Sharpening kernel (unsharp mask)
+  const kernel = [
+    0, -0.5, 0,
+    -0.5, 3, -0.5,
+    0, -0.5, 0
+  ];
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      for (let c = 0; c < 3; c++) {
+        let val = 0;
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            const idx = ((y + ky) * width + (x + kx)) * 4 + c;
+            val += data[idx] * kernel[(ky + 1) * 3 + (kx + 1)];
+          }
+        }
+        const idx = (y * width + x) * 4 + c;
+        output[idx] = Math.min(255, Math.max(0, val));
+      }
+    }
+  }
+
+  return new ImageData(output, width, height);
+}
 
 /**
  * Compress an attendance selfie photo
@@ -69,15 +126,31 @@ export const compressAttendancePhoto = (dataUrl) => {
 };
 
 /**
- * Compress a claim receipt photo
+ * Compress a claim receipt photo (document scan mode)
  * Settings: 1200px width, 70% quality (~80-150 KB)
+ * Applies contrast and sharpening for clear text
  * @param {string} dataUrl - Base64 data URL of the image
  * @returns {Promise<string>} - Compressed base64 data URL
  */
 export const compressReceiptPhoto = (dataUrl) => {
   return compressImage(dataUrl, {
     maxWidth: 1200,
-    quality: 0.7
+    quality: 0.7,
+    enhanceDocument: true  // Enable document enhancement for text clarity
+  });
+};
+
+/**
+ * Scan document - higher quality for important documents
+ * Settings: 1500px width, 80% quality with full enhancement
+ * @param {string} dataUrl - Base64 data URL of the image
+ * @returns {Promise<string>} - Compressed base64 data URL
+ */
+export const scanDocument = (dataUrl) => {
+  return compressImage(dataUrl, {
+    maxWidth: 1500,
+    quality: 0.8,
+    enhanceDocument: true
   });
 };
 
@@ -98,5 +171,6 @@ export default {
   compressImage,
   compressAttendancePhoto,
   compressReceiptPhoto,
+  scanDocument,
   getBase64SizeKB
 };

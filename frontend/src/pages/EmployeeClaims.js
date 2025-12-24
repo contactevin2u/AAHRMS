@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { essApi } from '../api';
 import EmployeeLayout from '../components/EmployeeLayout';
+import { compressReceiptPhoto, getBase64SizeKB } from '../utils/imageCompression';
 import './EmployeeClaims.css';
 
 function EmployeeClaims() {
@@ -11,11 +12,20 @@ function EmployeeClaims() {
   const [selectedClaim, setSelectedClaim] = useState(null);
   const [filter, setFilter] = useState('all');
 
+  // Camera states
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [capturedReceipt, setCapturedReceipt] = useState(null);
+  const [processingImage, setProcessingImage] = useState(false);
+
   const [form, setForm] = useState({
     claim_type: '',
     amount: '',
     description: '',
-    receipt_date: ''
+    receipt_date: '',
+    receipt_url: ''
   });
 
   const claimTypes = [
@@ -32,6 +42,13 @@ function EmployeeClaims() {
     fetchClaims();
   }, [filter]);
 
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
   const fetchClaims = async () => {
     try {
       setLoading(true);
@@ -45,6 +62,85 @@ function EmployeeClaims() {
     }
   };
 
+  // Camera functions for receipt scanning
+  const startCamera = async () => {
+    try {
+      // Use back camera for document scanning
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },  // Back camera for documents
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setCameraActive(true);
+    } catch (err) {
+      console.error('Camera error:', err);
+      alert('Unable to access camera. Please allow camera permission.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  };
+
+  const captureReceipt = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    setProcessingImage(true);
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+
+    // Set canvas size to video size
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Draw video frame to canvas
+    ctx.drawImage(video, 0, 0);
+
+    // Get raw image data
+    const rawDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+    try {
+      // Compress with document enhancement (1200px, 70%, with sharpening)
+      const compressedDataUrl = await compressReceiptPhoto(rawDataUrl);
+      const sizeKB = getBase64SizeKB(compressedDataUrl);
+      console.log(`Receipt scanned: ${sizeKB} KB`);
+
+      setCapturedReceipt(compressedDataUrl);
+      setForm(prev => ({ ...prev, receipt_url: compressedDataUrl }));
+      stopCamera();
+    } catch (err) {
+      console.error('Compression error:', err);
+      setCapturedReceipt(rawDataUrl);
+      setForm(prev => ({ ...prev, receipt_url: rawDataUrl }));
+      stopCamera();
+    } finally {
+      setProcessingImage(false);
+    }
+  };
+
+  const retakeReceipt = () => {
+    setCapturedReceipt(null);
+    setForm(prev => ({ ...prev, receipt_url: '' }));
+    startCamera();
+  };
+
+  const removeReceipt = () => {
+    setCapturedReceipt(null);
+    setForm(prev => ({ ...prev, receipt_url: '' }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -52,7 +148,9 @@ function EmployeeClaims() {
     try {
       await essApi.submitClaim(form);
       setShowSubmitModal(false);
-      setForm({ claim_type: '', amount: '', description: '', receipt_date: '' });
+      setForm({ claim_type: '', amount: '', description: '', receipt_date: '', receipt_url: '' });
+      setCapturedReceipt(null);
+      stopCamera();
       fetchClaims();
       alert('Claim submitted successfully!');
     } catch (error) {
@@ -249,8 +347,55 @@ function EmployeeClaims() {
                     />
                   </div>
 
-                  <div className="form-note">
-                    <p>Please keep your receipts for verification. You may be asked to provide supporting documents.</p>
+                  {/* Receipt Photo Section */}
+                  <div className="form-group">
+                    <label>Receipt Photo</label>
+                    <div className="receipt-capture-section">
+                      {!cameraActive && !capturedReceipt && (
+                        <button type="button" onClick={startCamera} className="scan-receipt-btn">
+                          Scan Receipt
+                        </button>
+                      )}
+
+                      {cameraActive && (
+                        <div className="camera-preview">
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                          />
+                          <div className="camera-controls">
+                            <button
+                              type="button"
+                              onClick={captureReceipt}
+                              className="capture-btn"
+                              disabled={processingImage}
+                            >
+                              {processingImage ? 'Processing...' : 'Capture'}
+                            </button>
+                            <button type="button" onClick={stopCamera} className="cancel-camera-btn">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {capturedReceipt && (
+                        <div className="receipt-preview">
+                          <img src={capturedReceipt} alt="Receipt" />
+                          <div className="receipt-actions">
+                            <button type="button" onClick={retakeReceipt} className="retake-btn">
+                              Retake
+                            </button>
+                            <button type="button" onClick={removeReceipt} className="remove-btn">
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <small className="form-hint">Use back camera to scan receipt. Image will be enhanced for text clarity.</small>
                   </div>
                 </div>
 
@@ -312,6 +457,8 @@ function EmployeeClaims() {
             </div>
           </div>
         )}
+        {/* Hidden canvas for capturing photos */}
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
     </EmployeeLayout>
   );
