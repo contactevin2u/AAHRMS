@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { calculateAllStatutory, calculateOT, calculatePublicHolidayPay, getPublicHolidaysInMonth } = require('../utils/statutory');
+const { calculateOTFromClockIn, calculatePHDaysWorked } = require('../utils/otCalculation');
 
 // =====================================================
 // PAYROLL RUNS
@@ -124,12 +125,30 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       }
     }
 
-    // Create payroll run with department info
+    // Get company ID
+    const companyId = req.companyId || 1;
+
+    // Get payroll period configuration
+    const periodConfig = await getPayrollPeriodConfig(companyId, department_id, month, year);
+    console.log(`Payroll period: ${periodConfig.period.label}`);
+    console.log(`Period dates: ${periodConfig.period.start.toISOString().split('T')[0]} to ${periodConfig.period.end.toISOString().split('T')[0]}`);
+
+    // Create payroll run with department info and period dates
     const runResult = await client.query(`
-      INSERT INTO payroll_runs (month, year, status, notes, department_id)
-      VALUES ($1, $2, 'draft', $3, $4)
+      INSERT INTO payroll_runs (month, year, status, notes, department_id, company_id,
+                                period_start_date, period_end_date, payment_due_date, period_label)
+      VALUES ($1, $2, 'draft', $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
-    `, [month, year, notes || (departmentName ? `${departmentName} Department` : null), department_id || null]);
+    `, [
+      month, year,
+      notes || (departmentName ? `${departmentName} Department` : null),
+      department_id || null,
+      companyId,
+      periodConfig.period.start.toISOString().split('T')[0],
+      periodConfig.period.end.toISOString().split('T')[0],
+      periodConfig.payment.date.toISOString().split('T')[0],
+      periodConfig.period.label
+    ]);
 
     const runId = runResult.rows[0].id;
 
@@ -353,18 +372,66 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const salarySource = prevSalary ? 'previous month' : 'employee default';
       console.log(`Processing ${emp.name}: basic=${basicSalary}, allowance=${fixedAllowance} (from ${salarySource})`);
 
+      // =====================================================
+      // AUTO-CALCULATE OT FROM CLOCK-IN RECORDS
+      // =====================================================
+      let otHours = 0;
+      let otAmount = 0;
+      let phDaysWorked = 0;
+      let phPay = 0;
+
+      try {
+        // Get employee-specific period config (may differ by department)
+        const empPeriodConfig = await getPayrollPeriodConfig(companyId, emp.department_id, month, year);
+
+        // Calculate OT from clock-in records
+        const otResult = await calculateOTFromClockIn(
+          emp.id,
+          companyId,
+          emp.department_id,
+          empPeriodConfig.period.start.toISOString().split('T')[0],
+          empPeriodConfig.period.end.toISOString().split('T')[0],
+          basicSalary
+        );
+
+        otHours = otResult.total_ot_hours || 0;
+        otAmount = otResult.total_ot_amount || 0;
+
+        // Calculate PH days worked and PH pay
+        phDaysWorked = await calculatePHDaysWorked(
+          emp.id,
+          companyId,
+          empPeriodConfig.period.start.toISOString().split('T')[0],
+          empPeriodConfig.period.end.toISOString().split('T')[0]
+        );
+
+        if (phDaysWorked > 0 && basicSalary > 0) {
+          // PH pay = extra 1.0x daily rate for working on PH (on top of normal pay)
+          const dailyRateForPH = basicSalary / 22;
+          phPay = phDaysWorked * dailyRateForPH;
+        }
+
+        if (otHours > 0 || phDaysWorked > 0) {
+          console.log(`${emp.name}: OT ${otHours}hrs = RM${otAmount}, PH ${phDaysWorked}days = RM${phPay}`);
+        }
+      } catch (otError) {
+        console.error(`Error calculating OT for ${emp.name}:`, otError.message);
+        // Continue without OT if calculation fails
+      }
+
       // Calculate unpaid leave deduction (based on basic salary only)
       const dailyRate = basicSalary > 0 ? basicSalary / workingDaysInMonth : 0;
       const unpaidDeduction = dailyRate * unpaidDays;
 
-      // Gross salary = basic + allowance + flex allowances + commission + claims - unpaid leave
+      // Gross salary = basic + allowance + flex allowances + OT + PH pay + commission + claims - unpaid leave
       // Commission and flexible allowances are auto-populated from employee settings
+      // OT and PH pay are auto-calculated from clock-in records
       const totalAllowances = fixedAllowance + flexAllowanceAmount;
-      const grossBeforeUnpaid = basicSalary + totalAllowances + commissionAmount + claimsAmount;
+      const grossBeforeUnpaid = basicSalary + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount;
       const grossSalary = Math.max(0, grossBeforeUnpaid - unpaidDeduction);
 
       // DEBUG: Log gross calculation
-      console.log(`${emp.name}: gross=${grossSalary} (basic:${basicSalary} + allow:${fixedAllowance} + flexAllow:${flexAllowanceAmount} + comm:${commissionAmount} + claims:${claimsAmount} - unpaid:${unpaidDeduction})`);
+      console.log(`${emp.name}: gross=${grossSalary} (basic:${basicSalary} + allow:${totalAllowances} + OT:${otAmount} + PH:${phPay} + comm:${commissionAmount} + claims:${claimsAmount} - unpaid:${unpaidDeduction})`);
 
       // IMPORTANT: Statutory deductions only apply to: basic + commission + bonus
       // OT, allowance, outstation, incentive are NOT subject to EPF, SOCSO, EIS, PCB
@@ -393,10 +460,12 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const employerCost = grossSalary + statutory.epf.employer + statutory.socso.employer + statutory.eis.employer;
 
       // Insert payroll item (fixed_allowance now includes flex allowances combined)
+      // OT and PH pay are auto-calculated from clock-in records
       await client.query(`
         INSERT INTO payroll_items (
           payroll_run_id, employee_id,
           basic_salary, fixed_allowance, commission_amount, claims_amount,
+          ot_hours, ot_amount, ph_days_worked, ph_pay,
           unpaid_leave_days, unpaid_leave_deduction,
           gross_salary,
           epf_employee, epf_employer,
@@ -405,10 +474,11 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           pcb,
           total_deductions, net_pay, employer_total_cost,
           sales_amount, salary_calculation_method
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
       `, [
         runId, emp.id,
         basicSalary, totalAllowances, commissionAmount, claimsAmount,
+        otHours, otAmount, phDaysWorked, phPay,
         unpaidDays, unpaidDeduction,
         grossSalary,
         statutory.epf.employee, statutory.epf.employer,
@@ -842,6 +912,107 @@ function getWorkingDaysInMonth(year, month) {
   }
 
   return workingDays;
+}
+
+/**
+ * Get payroll period configuration for a company/department
+ * Returns period start/end dates and payment date
+ */
+async function getPayrollPeriodConfig(companyId, departmentId, month, year) {
+  // Try to get department-specific config first, then company default
+  const result = await pool.query(`
+    SELECT * FROM payroll_period_configs
+    WHERE company_id = $1
+      AND (department_id = $2 OR department_id IS NULL)
+      AND is_active = TRUE
+    ORDER BY department_id NULLS LAST
+    LIMIT 1
+  `, [companyId, departmentId]);
+
+  const config = result.rows[0] || {
+    period_type: 'calendar_month',
+    period_start_day: 1,
+    period_end_day: 0,
+    payment_day: 5,
+    payment_month_offset: 1,
+    commission_period_offset: 0
+  };
+
+  // Calculate actual period dates
+  let periodStart, periodEnd, periodLabel;
+
+  switch (config.period_type) {
+    case 'mid_month':
+      // 15th of previous month to 14th of current month
+      const prevMonth = month === 1 ? 12 : month - 1;
+      const prevYear = month === 1 ? year - 1 : year;
+      periodStart = new Date(prevYear, prevMonth - 1, config.period_start_day);
+      periodEnd = new Date(year, month - 1, config.period_end_day);
+      periodLabel = `${getMonthName(prevMonth)} ${config.period_start_day} - ${getMonthName(month)} ${config.period_end_day}, ${year}`;
+      break;
+
+    case 'calendar_month':
+    default:
+      periodStart = new Date(year, month - 1, 1);
+      periodEnd = new Date(year, month, 0); // Last day of month
+      periodLabel = `${getMonthName(month)} ${year}`;
+      break;
+  }
+
+  // Calculate payment date
+  let payMonth = month + (config.payment_month_offset || 0);
+  let payYear = year;
+  if (payMonth > 12) {
+    payMonth -= 12;
+    payYear += 1;
+  }
+  const paymentDate = new Date(payYear, payMonth - 1, config.payment_day);
+
+  // Calculate commission period (may be different from salary period)
+  let commPeriodStart = periodStart;
+  let commPeriodEnd = periodEnd;
+  let commPeriodLabel = periodLabel;
+
+  if (config.commission_period_offset && config.commission_period_offset !== 0) {
+    let commMonth = month + config.commission_period_offset;
+    let commYear = year;
+    if (commMonth < 1) {
+      commMonth += 12;
+      commYear -= 1;
+    } else if (commMonth > 12) {
+      commMonth -= 12;
+      commYear += 1;
+    }
+    commPeriodStart = new Date(commYear, commMonth - 1, 1);
+    commPeriodEnd = new Date(commYear, commMonth, 0);
+    commPeriodLabel = `${getMonthName(commMonth)} ${commYear}`;
+  }
+
+  return {
+    config,
+    period: {
+      start: periodStart,
+      end: periodEnd,
+      label: periodLabel
+    },
+    payment: {
+      date: paymentDate,
+      day: config.payment_day,
+      month_offset: config.payment_month_offset
+    },
+    commission_period: {
+      start: commPeriodStart,
+      end: commPeriodEnd,
+      label: commPeriodLabel,
+      offset: config.commission_period_offset || 0
+    }
+  };
+}
+
+function getMonthName(month) {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  return months[month - 1] || '';
 }
 
 async function updateRunTotals(runId) {
