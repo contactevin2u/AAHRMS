@@ -4,6 +4,7 @@ const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter, isSuperAdmin } = require('../middleware/tenant');
 const { initializeLeaveBalances } = require('../utils/leaveProration');
+const { initializeProbation } = require('../utils/probationReminder');
 
 // Get all employees (filtered by company)
 router.get('/', authenticateAdmin, async (req, res) => {
@@ -178,6 +179,16 @@ router.post('/', authenticateAdmin, async (req, res) => {
       } catch (leaveError) {
         console.error('Error initializing leave balances:', leaveError);
         // Don't fail employee creation if leave init fails
+      }
+
+      // Initialize probation tracking if on probation
+      if (empType === 'probation') {
+        try {
+          await initializeProbation(newEmployee.id, companyId, join_date, probMonths);
+        } catch (probError) {
+          console.error('Error initializing probation tracking:', probError);
+          // Don't fail employee creation if probation init fails
+        }
       }
     }
 

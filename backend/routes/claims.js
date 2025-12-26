@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
+const { processClaimAutoApproval, manualApproveClaim, rejectClaim } = require('../utils/claimsAutomation');
+const { logClaimAction } = require('../utils/auditLog');
 
 // Get all claims
 router.get('/', authenticateAdmin, async (req, res) => {
@@ -153,7 +155,28 @@ router.post('/', authenticateAdmin, async (req, res) => {
       RETURNING *
     `, [employee_id, claim_date, category, description, amount, receipt_url]);
 
-    res.status(201).json(result.rows[0]);
+    const claim = result.rows[0];
+
+    // Try auto-approval processing
+    let autoApprovalResult = null;
+    try {
+      autoApprovalResult = await processClaimAutoApproval(claim.id);
+      if (autoApprovalResult.autoApproved) {
+        // Re-fetch the claim to get updated status
+        const updatedClaim = await pool.query('SELECT * FROM claims WHERE id = $1', [claim.id]);
+        return res.status(201).json({
+          ...updatedClaim.rows[0],
+          auto_approval_result: autoApprovalResult
+        });
+      }
+    } catch (autoErr) {
+      console.log('Auto-approval check failed (non-critical):', autoErr.message);
+    }
+
+    res.status(201).json({
+      ...claim,
+      auto_approval_result: autoApprovalResult
+    });
   } catch (error) {
     console.error('Error creating claim:', error);
     res.status(500).json({ error: 'Failed to create claim' });
@@ -184,47 +207,42 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Approve claim
+// Approve claim (with audit logging)
 router.post('/:id/approve', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const { notes } = req.body;
 
-    const result = await pool.query(`
-      UPDATE claims
-      SET status = 'approved', approved_at = NOW(), updated_at = NOW()
-      WHERE id = $1 AND status = 'pending'
-      RETURNING *
-    `, [id]);
+    const result = await manualApproveClaim(id, req.admin.id, notes);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Claim not found or not pending' });
+    if (!result.success) {
+      return res.status(404).json({ error: result.reason });
     }
 
-    res.json({ message: 'Claim approved', claim: result.rows[0] });
+    res.json({ message: 'Claim approved', claim: result.claim });
   } catch (error) {
     console.error('Error approving claim:', error);
     res.status(500).json({ error: 'Failed to approve claim' });
   }
 });
 
-// Reject claim
+// Reject claim (with audit logging)
 router.post('/:id/reject', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { rejection_reason } = req.body;
 
-    const result = await pool.query(`
-      UPDATE claims
-      SET status = 'rejected', rejection_reason = $1, updated_at = NOW()
-      WHERE id = $2 AND status = 'pending'
-      RETURNING *
-    `, [rejection_reason, id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Claim not found or not pending' });
+    if (!rejection_reason) {
+      return res.status(400).json({ error: 'Rejection reason is required' });
     }
 
-    res.json({ message: 'Claim rejected', claim: result.rows[0] });
+    const result = await rejectClaim(id, req.admin.id, rejection_reason);
+
+    if (!result.success) {
+      return res.status(404).json({ error: result.reason });
+    }
+
+    res.json({ message: 'Claim rejected', claim: result.claim });
   } catch (error) {
     console.error('Error rejecting claim:', error);
     res.status(500).json({ error: 'Failed to reject claim' });

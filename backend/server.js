@@ -24,6 +24,7 @@ const earningsRoutes = require('./routes/earnings');
 const salesRoutes = require('./routes/sales');
 const clockInRoutes = require('./routes/clockIn');
 const outletsRoutes = require('./routes/outlets');
+const automationRoutes = require('./routes/automation');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -61,6 +62,7 @@ app.use('/api/earnings', earningsRoutes);  // Commission & Allowance Types
 app.use('/api/sales', salesRoutes);  // Sales Records (for Indoor Sales commission)
 app.use('/api/clock-in', clockInRoutes);  // Clock In/Out Records
 app.use('/api/outlets', outletsRoutes);  // Outlets (for Mimix A)
+app.use('/api/automation', automationRoutes);  // Automation & Scheduling
 
 // Health check
 app.get('/api/health', (req, res) => {
