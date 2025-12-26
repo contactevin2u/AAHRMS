@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
+const { escapeHtml } = require('../middleware/sanitize');
 
 // PUBLIC: Submit anonymous feedback (no auth required)
 router.post('/submit', async (req, res) => {
@@ -16,10 +17,14 @@ router.post('/submit', async (req, res) => {
       return res.status(400).json({ error: 'Message must be at least 10 characters' });
     }
 
+    // Sanitize inputs to prevent XSS
+    const sanitizedCategory = escapeHtml(category);
+    const sanitizedMessage = escapeHtml(message);
+
     // No user identification stored - completely anonymous
     const result = await pool.query(
       'INSERT INTO anonymous_feedback (category, message) VALUES ($1, $2) RETURNING id, created_at',
-      [category, message]
+      [sanitizedCategory, sanitizedMessage]
     );
 
     res.status(201).json({

@@ -5,6 +5,7 @@ const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter, isSuperAdmin } = require('../middleware/tenant');
 const { initializeLeaveBalances } = require('../utils/leaveProration');
 const { initializeProbation } = require('../utils/probationReminder');
+const { sanitizeEmployeeData, escapeHtml } = require('../middleware/sanitize');
 
 // Get all employees (filtered by company)
 router.get('/', authenticateAdmin, async (req, res) => {
@@ -106,6 +107,9 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 // Create employee (with company_id)
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
+    // Sanitize text inputs to prevent XSS
+    const sanitizedBody = sanitizeEmployeeData(req.body);
+
     const {
       employee_id, name, email, phone, ic_number, department_id, position, join_date,
       address, bank_name, bank_account_no, bank_account_holder,
@@ -117,7 +121,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
       default_bonus, default_incentive,
       // Probation fields
       employment_type, probation_months, salary_before_confirmation, salary_after_confirmation, increment_amount
-    } = req.body;
+    } = { ...req.body, ...sanitizedBody };
 
     // Get company_id from authenticated user (or default to 1 for super_admin)
     const companyId = req.companyId || 1;
@@ -206,6 +210,10 @@ router.post('/', authenticateAdmin, async (req, res) => {
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Sanitize text inputs to prevent XSS
+    const sanitizedBody = sanitizeEmployeeData(req.body);
+
     const {
       employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
       address, bank_name, bank_account_no, bank_account_holder,
@@ -218,7 +226,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       // Probation fields
       employment_type, probation_months, salary_before_confirmation, salary_after_confirmation, increment_amount,
       probation_notes
-    } = req.body;
+    } = { ...req.body, ...sanitizedBody };
 
     // Get current employee data to check if we need to recalculate probation_end_date
     const currentEmp = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
@@ -284,13 +292,37 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
 });
 
 // Delete employee (soft delete - change status to inactive)
+// Only Super Admin and Owner roles can delete employees
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
-      `UPDATE employees SET status = 'inactive', updated_at = NOW() WHERE id = $1 RETURNING *`,
-      [id]
-    );
+
+    // Check if user has delete permission (Super Admin or Owner only)
+    const adminRole = req.admin?.role;
+    const allowedRoles = ['super_admin', 'owner', 'admin'];
+
+    if (!allowedRoles.includes(adminRole)) {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'Only Super Admin, Owner, or Admin can delete/deactivate employees'
+      });
+    }
+
+    // Get company filter for tenant isolation
+    const companyId = getCompanyFilter(req);
+
+    let query = `UPDATE employees SET status = 'inactive', updated_at = NOW() WHERE id = $1`;
+    let params = [id];
+
+    // Non-super-admin can only delete employees from their company
+    if (companyId !== null) {
+      query += ` AND company_id = $2`;
+      params.push(companyId);
+    }
+
+    query += ' RETURNING *';
+
+    const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Employee not found' });
