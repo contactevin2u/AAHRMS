@@ -48,7 +48,7 @@
   border: 1px solid #e2e8f0;
 }
 
-.card-header {
+.dashboard-page .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -56,7 +56,7 @@
   background: #1e293b;
 }
 
-.card-header h3 {
+.dashboard-page .card-header h3 {
   color: white;
   margin: 0;
   font-size: 14px;
