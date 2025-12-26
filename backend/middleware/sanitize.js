@@ -70,60 +70,28 @@ function sanitizeBody(req, res, next) {
 /**
  * Validate and sanitize employee data
  * @param {object} data - Employee data to validate
- * @returns {object} - Sanitized data or throws error
+ * @returns {object} - Sanitized data with only string fields sanitized
  */
 function sanitizeEmployeeData(data) {
+  if (!data || typeof data !== 'object') return {};
+
   const sanitized = {};
 
-  // Required string fields
+  // String fields that need XSS sanitization
   const stringFields = [
     'name', 'email', 'employee_id', 'ic_number', 'phone',
-    'address', 'bank_name', 'bank_account', 'position',
-    'emergency_contact_name', 'emergency_contact_phone', 'notes'
+    'address', 'bank_name', 'bank_account_no', 'bank_account_holder', 'position',
+    'epf_number', 'socso_number', 'tax_number', 'epf_contribution_type',
+    'marital_status', 'probation_notes', 'notes'
   ];
 
   stringFields.forEach(field => {
-    if (data[field] !== undefined) {
+    if (data[field] !== undefined && data[field] !== null) {
       sanitized[field] = typeof data[field] === 'string'
         ? escapeHtml(data[field].trim())
         : data[field];
     }
   });
-
-  // Numeric fields - ensure they're numbers
-  const numericFields = [
-    'basic_salary', 'department_id', 'company_id', 'outlet_id',
-    'epf_employee_rate', 'epf_employer_rate'
-  ];
-
-  numericFields.forEach(field => {
-    if (data[field] !== undefined) {
-      sanitized[field] = data[field];
-    }
-  });
-
-  // Boolean fields
-  const booleanFields = ['is_resident', 'epf_employee_fixed', 'epf_employer_fixed'];
-
-  booleanFields.forEach(field => {
-    if (data[field] !== undefined) {
-      sanitized[field] = data[field];
-    }
-  });
-
-  // Date fields
-  const dateFields = ['join_date', 'probation_end_date', 'resignation_date', 'last_working_date'];
-
-  dateFields.forEach(field => {
-    if (data[field] !== undefined) {
-      sanitized[field] = data[field];
-    }
-  });
-
-  // Enum fields
-  if (data.status) sanitized.status = data.status;
-  if (data.employment_type) sanitized.employment_type = data.employment_type;
-  if (data.pay_type) sanitized.pay_type = data.pay_type;
 
   return sanitized;
 }
