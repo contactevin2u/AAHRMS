@@ -1,3 +1,7 @@
+/* =====================================================
+   GLOBAL STYLES - Clean & Modern HRMS
+   ===================================================== */
+
 * {
   margin: 0;
   padding: 0;
@@ -5,13 +9,13 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(160deg, #fff9f0 0%, #fff4e8 50%, #ffefe0 100%);
-  color: #5a4a3e;
-  line-height: 1.6;
+  background: #f8f9fa;
+  color: #1a1a2e;
+  line-height: 1.5;
+  font-size: 14px;
 }
 
 a {
@@ -26,17 +30,160 @@ button {
 
 input, textarea, select {
   font-family: inherit;
+  font-size: inherit;
 }
 
-/* Maillard Color Variables */
+/* CSS Variables - Modern Color Palette */
 :root {
-  --maillard-dark: #6b5344;
-  --maillard-medium: #9a8072;
-  --maillard-light: #f5e6dc;
-  --maillard-cream: #fffbf8;
-  --maillard-accent: #e8a87c;
-  --maillard-accent-dark: #d4886a;
-  --maillard-success: #8ec787;
-  --maillard-warning: #ffe4a0;
-  --maillard-error: #e57373;
+  /* Primary Colors */
+  --primary: #3498db;
+  --primary-dark: #2980b9;
+  --primary-light: #5dade2;
+
+  /* Neutral Colors */
+  --dark: #1a1a2e;
+  --gray-900: #212529;
+  --gray-700: #495057;
+  --gray-600: #6c757d;
+  --gray-400: #ced4da;
+  --gray-200: #e9ecef;
+  --gray-100: #f8f9fa;
+  --white: #ffffff;
+
+  /* Semantic Colors */
+  --success: #27ae60;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --info: #17a2b8;
+
+  /* Sidebar */
+  --sidebar-bg: #2c3e50;
+  --sidebar-text: rgba(255, 255, 255, 0.8);
+  --sidebar-active: #3498db;
+}
+
+/* Common Utility Classes */
+.page-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border: 1px solid var(--gray-200);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  border: none;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-dark);
+}
+
+.btn-secondary {
+  background: var(--gray-200);
+  color: var(--gray-700);
+}
+
+.btn-secondary:hover {
+  background: var(--gray-400);
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+/* Form Elements */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-weight: 500;
+  color: var(--gray-700);
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--gray-400);
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* Tables */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.table th {
+  background: var(--gray-100);
+  font-weight: 600;
+  color: var(--gray-700);
+  font-size: 13px;
+}
+
+.table tr:hover {
+  background: var(--gray-100);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--gray-100);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gray-400);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-600);
 }

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import './Layout.css';
 
 function Layout({ children }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [adminInfo, setAdminInfo] = useState(null);
+  const [expandedSection, setExpandedSection] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const storedInfo = localStorage.getItem('adminInfo');
@@ -13,170 +16,226 @@ function Layout({ children }) {
     }
   }, []);
 
+  // Auto-expand section based on current route
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes('/employees') || path.includes('/leave') || path.includes('/claims')) {
+      setExpandedSection('people');
+    } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales')) {
+      setExpandedSection('payroll');
+    } else if (path.includes('/resignations') || path.includes('/letters') || path.includes('/departments') || path.includes('/outlets')) {
+      setExpandedSection('hr');
+    } else if (path.includes('/users') || path.includes('/roles') || path.includes('/companies') || path.includes('/settings')) {
+      setExpandedSection('system');
+    }
+  }, [location.pathname]);
+
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminInfo');
     navigate('/');
   };
 
-  // Check if user has permission to see a menu item
-  const hasPermission = (permission) => {
-    if (!adminInfo) return true; // Show all if no info (fallback)
-    if (adminInfo.role === 'super_admin') return true;
-    if (adminInfo.permissions?.all === true) return true;
-    return adminInfo.permissions?.[permission] === true;
+  const toggleSection = (section) => {
+    setExpandedSection(expandedSection === section ? null : section);
   };
 
-  // Check if user can access user management (super_admin, boss, director only)
+  // Permission checks
   const canManageUsers = () => {
     if (!adminInfo) return false;
     return ['super_admin', 'boss', 'director'].includes(adminInfo.role);
   };
 
-  // Check if user is super admin (for role management)
   const isSuperAdmin = () => {
     if (!adminInfo) return false;
     return adminInfo.role === 'super_admin';
   };
 
-  // Check if company uses outlets instead of departments
   const usesOutlets = () => {
     return adminInfo?.company_grouping_type === 'outlet';
   };
 
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
   return (
     <div className="layout">
-      <nav className="sidebar">
+      {/* Mobile Header */}
+      <div className="mobile-header">
+        <button className="menu-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? '✕' : '☰'}
+        </button>
+        <span className="mobile-title">{adminInfo?.company_name || 'HRMS'}</span>
+      </div>
+
+      {/* Overlay for mobile */}
+      {mobileMenuOpen && <div className="sidebar-overlay" onClick={() => setMobileMenuOpen(false)} />}
+
+      <nav className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
+        {/* Header */}
         <div className="sidebar-header">
-          {usesOutlets() ? (
-            <img src="/mixue-logo.png" alt="Mixue" className="logo-img" style={{ maxHeight: '60px' }} />
-          ) : (
-            <img src="/logo.png" alt="AA HRMS" className="logo-img" />
-          )}
-          <h2>{adminInfo?.company_name || 'HRMS'}</h2>
-          {adminInfo && (
-            <div className="admin-info">
-              <span className="admin-name">{adminInfo.name || adminInfo.username}</span>
-              <span className="admin-role">{adminInfo.role_display_name || adminInfo.role}</span>
-              {adminInfo.company_name && (
-                <span className="admin-company" style={{ fontSize: '11px', color: '#90caf9', marginTop: '4px', display: 'block' }}>
-                  {adminInfo.company_name}
-                </span>
-              )}
-              {isSuperAdmin() && !adminInfo.company_id && (
-                <span className="admin-company" style={{ fontSize: '11px', color: '#ffd54f', marginTop: '4px', display: 'block' }}>
-                  System Admin
-                </span>
-              )}
+          <div className="brand">
+            {usesOutlets() ? (
+              <img src="/mixue-logo.png" alt="Mixue" className="logo-img" />
+            ) : (
+              <img src="/logo.png" alt="AA HRMS" className="logo-img" />
+            )}
+            <div className="brand-text">
+              <h2>{adminInfo?.company_name || 'HRMS'}</h2>
             </div>
-          )}
+          </div>
         </div>
 
-        <div className="nav-links">
-          <NavLink to="/admin/dashboard" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+        {/* User Info */}
+        <div className="user-card">
+          <div className="user-avatar">{getInitials(adminInfo?.name)}</div>
+          <div className="user-details">
+            <span className="user-name">{adminInfo?.name || 'Admin'}</span>
+            <span className="user-role">{adminInfo?.role_display_name || adminInfo?.role}</span>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <div className="nav-container">
+          {/* Dashboard - Always visible */}
+          <NavLink to="/admin/dashboard" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
             <span className="nav-icon">📊</span>
             <span>Dashboard</span>
           </NavLink>
 
-          <NavLink to="/admin/employees" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">👥</span>
-            <span>Employees</span>
-          </NavLink>
+          {/* PEOPLE SECTION */}
+          <div className="nav-section">
+            <button className={`section-header ${expandedSection === 'people' ? 'expanded' : ''}`} onClick={() => toggleSection('people')}>
+              <span className="section-icon">👥</span>
+              <span>People</span>
+              <span className="expand-icon">{expandedSection === 'people' ? '−' : '+'}</span>
+            </button>
+            {expandedSection === 'people' && (
+              <div className="section-items">
+                <NavLink to="/admin/employees" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Employees
+                </NavLink>
+                <NavLink to="/admin/leave" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Leave
+                </NavLink>
+                <NavLink to="/admin/claims" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Claims
+                </NavLink>
+              </div>
+            )}
+          </div>
 
-          <NavLink to="/admin/leave" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">📅</span>
-            <span>Leave</span>
-          </NavLink>
+          {/* PAYROLL SECTION */}
+          <div className="nav-section">
+            <button className={`section-header ${expandedSection === 'payroll' ? 'expanded' : ''}`} onClick={() => toggleSection('payroll')}>
+              <span className="section-icon">💰</span>
+              <span>Payroll</span>
+              <span className="expand-icon">{expandedSection === 'payroll' ? '−' : '+'}</span>
+            </button>
+            {expandedSection === 'payroll' && (
+              <div className="section-items">
+                <NavLink to="/admin/payroll-v2" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Run Payroll
+                </NavLink>
+                <NavLink to="/admin/contributions" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Contributions
+                </NavLink>
+                {!usesOutlets() && (
+                  <NavLink to="/admin/sales-entry" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Sales Entry
+                  </NavLink>
+                )}
+              </div>
+            )}
+          </div>
 
-          <NavLink to="/admin/claims" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">📝</span>
-            <span>Claims</span>
-          </NavLink>
-
-          <NavLink to="/admin/payroll-v2" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">💰</span>
-            <span>Payroll</span>
-          </NavLink>
-
+          {/* HR ADMIN SECTION */}
           {!usesOutlets() && (
-            <NavLink to="/admin/sales-entry" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-              <span className="nav-icon">📈</span>
-              <span>Sales Entry</span>
-            </NavLink>
+            <div className="nav-section">
+              <button className={`section-header ${expandedSection === 'hr' ? 'expanded' : ''}`} onClick={() => toggleSection('hr')}>
+                <span className="section-icon">📋</span>
+                <span>HR Admin</span>
+                <span className="expand-icon">{expandedSection === 'hr' ? '−' : '+'}</span>
+              </button>
+              {expandedSection === 'hr' && (
+                <div className="section-items">
+                  <NavLink to="/admin/resignations" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Resignations
+                  </NavLink>
+                  <NavLink to="/admin/letters" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    HR Letters
+                  </NavLink>
+                  <NavLink to="/admin/departments" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Departments
+                  </NavLink>
+                  <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Feedback
+                  </NavLink>
+                </div>
+              )}
+            </div>
           )}
 
-          <NavLink to="/admin/contributions" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">🏛️</span>
-            <span>Contributions</span>
-          </NavLink>
-
-          {!usesOutlets() && (
-            <NavLink to="/admin/resignations" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-              <span className="nav-icon">👋</span>
-              <span>Resignations</span>
-            </NavLink>
-          )}
-
-          {!usesOutlets() && (
-            <NavLink to="/admin/letters" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-              <span className="nav-icon">📋</span>
-              <span>HR Letters</span>
-            </NavLink>
-          )}
-
-          {usesOutlets() ? (
-            <NavLink to="/admin/outlets" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          {/* Outlets for Mimix */}
+          {usesOutlets() && (
+            <NavLink to="/admin/outlets" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
               <span className="nav-icon">🏪</span>
               <span>Outlets</span>
             </NavLink>
-          ) : (
-            <NavLink to="/admin/departments" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-              <span className="nav-icon">🏢</span>
-              <span>Departments</span>
-            </NavLink>
           )}
 
-          <NavLink to="/admin/settings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">⚙️</span>
-            <span>Settings</span>
-          </NavLink>
-
-          {!usesOutlets() && (
-            <NavLink to="/admin/feedback" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-              <span className="nav-icon">💬</span>
-              <span>Feedback</span>
-            </NavLink>
+          {/* SYSTEM SECTION - Only for authorized users */}
+          {(canManageUsers() || isSuperAdmin()) && (
+            <div className="nav-section">
+              <button className={`section-header ${expandedSection === 'system' ? 'expanded' : ''}`} onClick={() => toggleSection('system')}>
+                <span className="section-icon">⚙️</span>
+                <span>System</span>
+                <span className="expand-icon">{expandedSection === 'system' ? '−' : '+'}</span>
+              </button>
+              {expandedSection === 'system' && (
+                <div className="section-items">
+                  <NavLink to="/admin/settings" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Settings
+                  </NavLink>
+                  {canManageUsers() && (
+                    <NavLink to="/admin/users" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                      Users
+                    </NavLink>
+                  )}
+                  {isSuperAdmin() && (
+                    <>
+                      <NavLink to="/admin/roles" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                        Roles
+                      </NavLink>
+                      <NavLink to="/admin/companies" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                        Companies
+                      </NavLink>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
-          {canManageUsers() && (
-            <NavLink to="/admin/users" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-              <span className="nav-icon">👤</span>
-              <span>User Management</span>
-            </NavLink>
-          )}
-
-          {isSuperAdmin() && (
-            <NavLink to="/admin/roles" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-              <span className="nav-icon">🔐</span>
-              <span>Role Management</span>
-            </NavLink>
-          )}
-
-          {isSuperAdmin() && (
-            <NavLink to="/admin/companies" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-              <span className="nav-icon">🏬</span>
-              <span>Companies</span>
+          {/* Settings for non-admin users */}
+          {!canManageUsers() && !isSuperAdmin() && (
+            <NavLink to="/admin/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              <span className="nav-icon">⚙️</span>
+              <span>Settings</span>
             </NavLink>
           )}
         </div>
 
+        {/* Footer */}
         <div className="sidebar-footer">
-          <NavLink to="/admin/profile" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            <span className="nav-icon">⚙️</span>
+          <NavLink to="/admin/profile" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+            <span className="nav-icon">👤</span>
             <span>My Profile</span>
           </NavLink>
-          <button onClick={handleLogout} className="logout-link">
-            <span className="nav-icon">👋</span>
+          <button onClick={handleLogout} className="logout-btn">
+            <span className="nav-icon">🚪</span>
             <span>Logout</span>
           </button>
         </div>
