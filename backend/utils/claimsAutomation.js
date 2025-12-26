@@ -40,6 +40,71 @@ async function getCompanyClaimTypes(companyId) {
 }
 
 /**
+ * Get department claim restrictions
+ */
+async function getDepartmentClaimRestrictions(companyId, departmentId) {
+  const result = await pool.query(
+    'SELECT * FROM department_claim_restrictions WHERE company_id = $1 AND department_id = $2',
+    [companyId, departmentId]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Get allowed claim types for an employee based on their department
+ * Returns null if no restrictions (all types allowed)
+ */
+async function getAllowedClaimTypesForEmployee(employeeId) {
+  const result = await pool.query(`
+    SELECT dcr.allowed_claim_types, dcr.restriction_type, d.name as department_name
+    FROM employees e
+    JOIN departments d ON e.department_id = d.id
+    LEFT JOIN department_claim_restrictions dcr ON dcr.department_id = e.department_id AND dcr.company_id = e.company_id
+    WHERE e.id = $1
+  `, [employeeId]);
+
+  if (result.rows.length === 0) {
+    return { restricted: false, allowedTypes: null, departmentName: null };
+  }
+
+  const row = result.rows[0];
+  if (!row.allowed_claim_types) {
+    return { restricted: false, allowedTypes: null, departmentName: row.department_name };
+  }
+
+  return {
+    restricted: true,
+    allowedTypes: row.allowed_claim_types,
+    restrictionType: row.restriction_type,
+    departmentName: row.department_name
+  };
+}
+
+/**
+ * Validate if employee can submit a claim for given category
+ */
+async function validateClaimCategory(employeeId, categoryCode) {
+  const restrictions = await getAllowedClaimTypesForEmployee(employeeId);
+
+  if (!restrictions.restricted) {
+    return { valid: true };
+  }
+
+  const upperCategory = categoryCode.toUpperCase();
+  const isAllowed = restrictions.allowedTypes.includes(upperCategory);
+
+  if (!isAllowed) {
+    return {
+      valid: false,
+      reason: `${restrictions.departmentName} employees can only claim: ${restrictions.allowedTypes.join(', ')}`,
+      allowedTypes: restrictions.allowedTypes
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
  * Check if a claim can be auto-approved
  *
  * @param {Object} claim - Claim details
@@ -361,6 +426,9 @@ module.exports = {
   getClaimType,
   getClaimTypeByCategory,
   getCompanyClaimTypes,
+  getDepartmentClaimRestrictions,
+  getAllowedClaimTypesForEmployee,
+  validateClaimCategory,
   canAutoApproveClaim,
   processClaimAutoApproval,
   manualApproveClaim,

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
-const { processClaimAutoApproval, manualApproveClaim, rejectClaim } = require('../utils/claimsAutomation');
+const { processClaimAutoApproval, manualApproveClaim, rejectClaim, validateClaimCategory, getAllowedClaimTypesForEmployee } = require('../utils/claimsAutomation');
 const { logClaimAction } = require('../utils/auditLog');
 
 // Get all claims
@@ -140,6 +140,18 @@ router.get('/for-payroll', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get allowed claim types for an employee (for dropdown filtering)
+router.get('/allowed-types/:employeeId', authenticateAdmin, async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const restrictions = await getAllowedClaimTypesForEmployee(employeeId);
+    res.json(restrictions);
+  } catch (error) {
+    console.error('Error fetching allowed claim types:', error);
+    res.status(500).json({ error: 'Failed to fetch allowed claim types' });
+  }
+});
+
 // Create claim
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
@@ -149,11 +161,20 @@ router.post('/', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Employee, date, category, and amount are required' });
     }
 
+    // Validate claim category against department restrictions
+    const validation = await validateClaimCategory(employee_id, category);
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: validation.reason,
+        allowedTypes: validation.allowedTypes
+      });
+    }
+
     const result = await pool.query(`
       INSERT INTO claims (employee_id, claim_date, category, description, amount, receipt_url)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
-    `, [employee_id, claim_date, category, description, amount, receipt_url]);
+    `, [employee_id, claim_date, category.toUpperCase(), description, amount, receipt_url]);
 
     const claim = result.rows[0];
 
