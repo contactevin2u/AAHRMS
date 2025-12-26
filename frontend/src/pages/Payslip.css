@@ -12,35 +12,35 @@
 
 .back-btn {
   padding: 10px 20px;
-  border: 2px solid #f5e6dc;
+  border: 2px solid #e2e8f0;
   border-radius: 10px;
   background: white;
-  color: #6b5344;
+  color: #1e293b;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.25s ease;
 }
 
 .back-btn:hover {
-  background: #fff8f2;
-  border-color: #e8c4ae;
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .print-btn {
   padding: 10px 20px;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
+  background: #3b82f6;
   color: white;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.25s ease;
-  box-shadow: 0 4px 12px rgba(212, 136, 106, 0.3);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
 .print-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(212, 136, 106, 0.4);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
 }
 
 .download-btn {
@@ -63,9 +63,9 @@
 .payslip-container {
   background: white;
   border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.1);
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
   padding: 40px;
-  border: 1px solid #f5e6dc;
+  border: 1px solid #e2e8f0;
 }
 
 /* Letterhead */
@@ -93,7 +93,7 @@
 .letterhead-info h1 {
   margin: 0 0 5px 0;
   font-size: 1.5rem;
-  color: #8B4513;
+  color: #1e293b;
   font-weight: 700;
 }
 
@@ -113,7 +113,7 @@
 
 .letter-divider {
   height: 3px;
-  background: linear-gradient(90deg, #8B4513 0%, #D2691E 50%, #8B4513 100%);
+  background: linear-gradient(90deg, #1e293b 0%, #3b82f6 50%, #1e293b 100%);
   margin-bottom: 25px;
 }
 
@@ -131,20 +131,20 @@
 
 .payslip-title h2 {
   font-size: 1.5rem;
-  color: #8B4513;
+  color: #1e293b;
   margin: 0 0 5px 0;
   letter-spacing: 2px;
 }
 
 .payslip-title p {
-  color: #6b5344;
+  color: #1e293b;
   margin: 0;
   font-weight: 600;
   font-size: 1.1rem;
 }
 
 .employee-section {
-  background: #fffbf8;
+  background: #f8fafc;
   padding: 20px;
   border-radius: 12px;
   margin-bottom: 25px;
@@ -162,13 +162,13 @@
 }
 
 .info-row .label {
-  color: #9a8072;
+  color: #64748b;
   min-width: 100px;
   font-size: 0.9rem;
 }
 
 .info-row .value {
-  color: #6b5344;
+  color: #1e293b;
   font-weight: 500;
   font-size: 0.9rem;
 }
@@ -182,14 +182,14 @@
 
 .earnings-section,
 .deductions-section {
-  border: 1px solid #f5e6dc;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   overflow: hidden;
 }
 
 .earnings-section h3,
 .deductions-section h3 {
-  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  background: #1e293b;
   color: white;
   padding: 12px 16px;
   margin: 0;
@@ -197,7 +197,7 @@
 }
 
 .deductions-section h3 {
-  background: linear-gradient(135deg, #c47d5a 0%, #a86548 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #a86548 100%);
 }
 
 .earnings-section table,
@@ -209,8 +209,8 @@
 .earnings-section td,
 .deductions-section td {
   padding: 10px 16px;
-  border-bottom: 1px solid #f5e6dc;
-  color: #6b5344;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
   font-size: 0.9rem;
 }
 
@@ -223,7 +223,7 @@
 
 .earnings-section tfoot td,
 .deductions-section tfoot td {
-  background: #fffbf8;
+  background: #f8fafc;
   border-bottom: none;
 }
 
@@ -239,7 +239,7 @@
 }
 
 .employer-section h3 {
-  color: #9a8072;
+  color: #64748b;
   font-size: 0.9rem;
   margin: 0 0 12px 0;
   font-weight: 600;
@@ -255,15 +255,15 @@
   display: flex;
   gap: 10px;
   font-size: 0.85rem;
-  color: #6b5344;
+  color: #1e293b;
 }
 
 .contribution-item span:first-child {
-  color: #9a8072;
+  color: #64748b;
 }
 
 .net-pay-section {
-  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
+  background: #3b82f6;
   padding: 20px 30px;
   border-radius: 12px;
   margin-bottom: 25px;
@@ -288,20 +288,20 @@
 }
 
 .bank-section {
-  background: #fffbf8;
+  background: #f8fafc;
   padding: 15px 20px;
   border-radius: 12px;
   margin-bottom: 25px;
 }
 
 .bank-section h3 {
-  color: #6b5344;
+  color: #1e293b;
   font-size: 0.95rem;
   margin: 0 0 10px 0;
 }
 
 .bank-section p {
-  color: #6b5344;
+  color: #1e293b;
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.6;
@@ -310,11 +310,11 @@
 .payslip-footer {
   text-align: center;
   padding-top: 20px;
-  border-top: 1px dashed #e8c4ae;
+  border-top: 1px dashed #cbd5e1;
 }
 
 .payslip-footer p {
-  color: #9a8072;
+  color: #64748b;
   font-size: 0.8rem;
   margin: 5px 0;
 }

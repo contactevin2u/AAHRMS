@@ -1,5 +1,5 @@
 /* =====================================================
-   SIMPLIFIED DASHBOARD - Clean & Modern
+   DASHBOARD - Clean & Modern
    ===================================================== */
 
 .dashboard-page {
@@ -13,14 +13,14 @@
 }
 
 .page-header h1 {
-  font-size: 24px;
-  color: #1a1a2e;
+  font-size: 22px;
+  color: #1e293b;
   margin: 0 0 4px 0;
   font-weight: 600;
 }
 
 .page-header p {
-  color: #6c757d;
+  color: #64748b;
   margin: 0;
   font-size: 14px;
 }
@@ -28,8 +28,8 @@
 .loading {
   text-align: center;
   padding: 60px;
-  color: #6c757d;
-  font-size: 16px;
+  color: #64748b;
+  font-size: 14px;
 }
 
 /* Dashboard Grid */
@@ -44,8 +44,8 @@
   background: white;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-  border: 1px solid #e9ecef;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
 }
 
 .card-header {
@@ -53,13 +53,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: #2c3e50;
+  background: #1e293b;
 }
 
 .card-header h3 {
   color: white;
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -68,7 +68,7 @@
 }
 
 .view-all-btn {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.12);
   border: none;
   color: white;
   font-weight: 500;
@@ -76,11 +76,11 @@
   font-size: 13px;
   padding: 6px 12px;
   border-radius: 6px;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
 }
 
 .view-all-btn:hover {
-  background: rgba(255,255,255,0.25);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Stats Row */
@@ -92,14 +92,16 @@
 
 .stat-item {
   flex: 1;
-  background: #f8f9fa;
+  background: #f8fafc;
   padding: 16px;
   border-radius: 8px;
   text-align: center;
+  border: 1px solid #e2e8f0;
 }
 
 .stat-item.highlight {
-  background: #3498db;
+  background: #3b82f6;
+  border-color: #3b82f6;
 }
 
 .stat-item.highlight .stat-value,
@@ -111,53 +113,55 @@
   display: block;
   font-size: 28px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: #1e293b;
+  line-height: 1.2;
 }
 
 .stat-label {
   font-size: 12px;
-  color: #6c757d;
+  color: #64748b;
   margin-top: 4px;
 }
 
 /* Department Breakdown */
 .department-breakdown {
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid #e2e8f0;
   padding-top: 16px;
 }
 
 .department-breakdown h4 {
-  color: #6c757d;
-  font-size: 12px;
+  color: #64748b;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
   margin: 0 0 12px 0;
 }
 
 .dept-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dept-item {
   display: flex;
   justify-content: space-between;
   padding: 10px 12px;
-  background: #f8f9fa;
+  background: #f8fafc;
   border-radius: 6px;
   font-size: 14px;
-  color: #495057;
+  color: #475569;
 }
 
 .dept-count {
   font-weight: 600;
-  color: #3498db;
+  color: #3b82f6;
 }
 
 /* Payroll Card */
 .payroll-total {
-  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  background: #3b82f6;
   border-radius: 10px;
   padding: 20px;
   text-align: center;
@@ -166,7 +170,7 @@
 
 .total-label {
   display: block;
-  color: rgba(255,255,255,0.9);
+  color: rgba(255, 255, 255, 0.85);
   font-size: 13px;
   margin-bottom: 4px;
 }
@@ -188,7 +192,7 @@
   display: flex;
   justify-content: space-between;
   padding: 10px 0;
-  border-bottom: 1px solid #f1f3f4;
+  border-bottom: 1px solid #f1f5f9;
   font-size: 14px;
 }
 
@@ -197,11 +201,11 @@
 }
 
 .breakdown-item span:first-child {
-  color: #6c757d;
+  color: #64748b;
 }
 
 .breakdown-item span:last-child {
-  color: #1a1a2e;
+  color: #1e293b;
   font-weight: 600;
 }
 
@@ -211,75 +215,79 @@
 }
 
 .no-payroll p {
-  color: #6c757d;
+  color: #64748b;
   margin: 0 0 16px 0;
+  font-size: 14px;
 }
 
 .generate-btn {
-  background: #3498db;
+  background: #3b82f6;
   color: white;
   border: none;
   padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
 }
 
 .generate-btn:hover {
-  background: #2980b9;
+  background: #2563eb;
 }
 
 /* Feedback Card */
 .recent-feedback {
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid #e2e8f0;
   padding-top: 16px;
 }
 
 .recent-feedback h4 {
-  color: #6c757d;
-  font-size: 12px;
+  color: #64748b;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
   margin: 0 0 12px 0;
 }
 
 .feedback-item {
   padding: 12px;
-  background: #f8f9fa;
+  background: #f8fafc;
   border-radius: 8px;
   margin-bottom: 8px;
   border-left: 3px solid transparent;
 }
 
 .feedback-item.unread {
-  border-left-color: #3498db;
-  background: #f0f7ff;
+  border-left-color: #3b82f6;
+  background: #eff6ff;
 }
 
 .feedback-item p {
   margin: 0 0 6px 0;
-  color: #495057;
+  color: #475569;
   font-size: 14px;
   line-height: 1.5;
 }
 
 .feedback-date {
   font-size: 12px;
-  color: #6c757d;
+  color: #94a3b8;
 }
 
 /* Probation Card */
 .probation-card.has-alerts {
-  border-color: #f39c12;
+  border-color: #f59e0b;
 }
 
 .probation-card.has-alerts .card-header {
-  background: #e67e22;
+  background: #f59e0b;
 }
 
 .stat-item.highlight-warning {
-  background: #f39c12;
+  background: #f59e0b;
+  border-color: #f59e0b;
 }
 
 .stat-item.highlight-warning .stat-value,
@@ -288,15 +296,16 @@
 }
 
 .probation-list {
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid #e2e8f0;
   padding-top: 16px;
 }
 
 .probation-list h4 {
-  color: #6c757d;
-  font-size: 12px;
+  color: #64748b;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
   margin: 0 0 12px 0;
 }
 
@@ -305,10 +314,10 @@
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: #fef9e7;
+  background: #fffbeb;
   border-radius: 8px;
   margin-bottom: 8px;
-  border-left: 3px solid #f39c12;
+  border-left: 3px solid #f59e0b;
 }
 
 .probation-item .emp-info {
@@ -319,24 +328,24 @@
 .probation-item .emp-name {
   display: block;
   font-weight: 600;
-  color: #1a1a2e;
+  color: #1e293b;
   font-size: 14px;
 }
 
 .probation-item .emp-dept {
   display: block;
   font-size: 12px;
-  color: #6c757d;
+  color: #64748b;
 }
 
 .probation-item .probation-date {
   font-size: 13px;
-  color: #e67e22;
+  color: #d97706;
   font-weight: 600;
 }
 
 .probation-item .review-btn {
-  background: #e67e22;
+  background: #f59e0b;
   color: white;
   border: none;
   padding: 6px 14px;
@@ -344,11 +353,11 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
 }
 
 .probation-item .review-btn:hover {
-  background: #d35400;
+  background: #d97706;
 }
 
 .no-alerts {
@@ -357,8 +366,9 @@
 }
 
 .no-alerts p {
-  color: #6c757d;
+  color: #64748b;
   margin: 0;
+  font-size: 14px;
 }
 
 /* Quick Actions */
@@ -374,24 +384,24 @@
   align-items: center;
   gap: 8px;
   padding: 20px;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
 }
 
 .action-btn:hover {
-  background: #e9ecef;
-  transform: translateY(-2px);
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 .action-icon {
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .action-btn span:last-child {
-  color: #495057;
+  color: #475569;
   font-weight: 500;
   font-size: 13px;
 }

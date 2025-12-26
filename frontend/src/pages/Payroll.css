@@ -1,41 +1,47 @@
+/* =====================================================
+   PAYROLL PAGE - Clean & Modern
+   ===================================================== */
+
 .payroll-page {
-  padding: 30px;
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
+  margin-bottom: 24px;
 }
 
 .page-header h1 {
-  font-size: 1.8rem;
-  color: #6b5344;
-  margin: 0 0 5px 0;
+  font-size: 22px;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+  font-weight: 600;
 }
 
 .page-header p {
-  color: #9a8072;
+  color: #64748b;
   margin: 0;
+  font-size: 14px;
 }
 
 .generate-btn {
-  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
+  background: #3b82f6;
   color: white;
   border: none;
-  padding: 14px 24px;
-  border-radius: 14px;
+  padding: 12px 20px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.25s ease;
-  box-shadow: 0 4px 12px rgba(212, 136, 106, 0.3);
+  transition: all 0.15s ease;
 }
 
 .generate-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(212, 136, 106, 0.4);
+  background: #2563eb;
 }
 
 .filters-row {
@@ -46,50 +52,50 @@
 }
 
 .filters-row select {
-  padding: 12px 16px;
-  border: 2px solid #f5e6dc;
-  border-radius: 12px;
-  font-size: 0.95rem;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
   background: white;
-  color: #6b5344;
-  transition: all 0.25s ease;
+  color: #1e293b;
+  transition: all 0.15s ease;
   min-width: 150px;
 }
 
 .filters-row select:focus {
   outline: none;
-  border-color: #d4a088;
-  box-shadow: 0 4px 12px rgba(180, 120, 80, 0.1);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .summary-row {
   display: flex;
-  gap: 15px;
-  margin-bottom: 25px;
+  gap: 12px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
 }
 
 .summary-box {
-  background: rgba(255, 255, 255, 0.85);
-  padding: 18px 22px;
-  border-radius: 16px;
+  background: white;
+  padding: 16px 20px;
+  border-radius: 10px;
   text-align: center;
   min-width: 120px;
-  box-shadow: 0 4px 12px rgba(180, 120, 80, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
 }
 
 .summary-box.total {
-  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
-  color: white;
-  min-width: 180px;
+  background: #3b82f6;
+  border-color: #3b82f6;
+  min-width: 160px;
 }
 
 .sum-label {
   display: block;
-  font-size: 0.85rem;
-  color: #9a8072;
-  margin-bottom: 5px;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
 }
 
 .summary-box.total .sum-label {
@@ -98,29 +104,29 @@
 
 .sum-value {
   display: block;
-  font-size: 1.3rem;
+  font-size: 20px;
   font-weight: 700;
-  color: #6b5344;
+  color: #1e293b;
 }
 
 .summary-box.total .sum-value {
   color: white;
-  font-size: 1.5rem;
+  font-size: 22px;
 }
 
 .loading {
   text-align: center;
-  padding: 50px;
-  color: #9a8072;
-  font-size: 1.1rem;
+  padding: 48px;
+  color: #64748b;
+  font-size: 14px;
 }
 
 .payroll-table {
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 20px;
+  background: white;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
   overflow-x: auto;
 }
 
@@ -131,71 +137,74 @@ table {
 }
 
 th {
-  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
-  color: white;
-  padding: 14px 16px;
+  background: #f8fafc;
+  color: #475569;
+  padding: 12px 14px;
   text-align: left;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e2e8f0;
   white-space: nowrap;
 }
 
 td {
-  padding: 14px 16px;
-  border-bottom: 1px solid #f5e6dc;
-  color: #6b5344;
-  font-size: 0.9rem;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  font-size: 14px;
 }
 
 tr:hover {
-  background: #fff8f2;
+  background: #f8fafc;
 }
 
 .no-data {
   text-align: center;
-  color: #9a8072;
+  color: #64748b;
   padding: 40px !important;
 }
 
 .deduction {
-  color: #e57373;
+  color: #ef4444;
 }
 
 .total-col {
-  color: #6b5344;
+  color: #1e293b;
   font-weight: 700;
 }
 
 .status-badge {
-  padding: 5px 10px;
+  padding: 4px 10px;
   border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   text-transform: capitalize;
 }
 
 .status-badge.draft {
-  background: #f5e6dc;
-  color: #9a8072;
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 .status-badge.confirmed {
-  background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%);
-  color: #e65100;
+  background: #fffbeb;
+  color: #d97706;
 }
 
 .status-badge.paid {
-  background: linear-gradient(135deg, #a8d5a2 0%, #8ec787 100%);
-  color: white;
+  background: #f0fdf4;
+  color: #16a34a;
 }
 
 .gross-col {
-  color: #6b5344;
+  color: #1e293b;
   font-weight: 600;
 }
 
 .net-col {
-  color: #4a7c35;
+  color: #16a34a;
   font-weight: 700;
 }
 
@@ -207,83 +216,84 @@ tr:hover {
 .payslip-btn {
   background: none;
   border: none;
-  font-size: 1.1rem;
+  font-size: 16px;
   cursor: pointer;
-  padding: 5px 8px;
-  border-radius: 8px;
-  transition: background 0.2s ease;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
 }
 
 .edit-btn:hover {
-  background: #fff0e6;
+  background: #f1f5f9;
 }
 
 .payslip-btn:hover {
-  background: #e8f5e0;
+  background: #f0fdf4;
 }
 
 /* Statutory Summary */
 .statutory-summary {
-  margin-top: -15px;
-  margin-bottom: 25px;
+  margin-top: -12px;
+  margin-bottom: 20px;
 }
 
 .summary-box.statutory {
-  background: #f8f9fa;
-  border: 1px solid #e8e8e8;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
 }
 
 .summary-box.statutory .sum-label {
-  color: #666;
+  color: #64748b;
 }
 
 .summary-box.statutory .sum-value {
-  color: #e57373;
-  font-size: 1.1rem;
+  color: #ef4444;
+  font-size: 18px;
 }
 
 /* Statutory Info in Modal */
 .statutory-info {
-  background: #f8f9fa;
-  border-radius: 12px;
-  padding: 15px 20px;
-  margin: 20px 0;
-  border: 1px solid #e8e8e8;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 16px 0;
+  border: 1px solid #e2e8f0;
 }
 
 .statutory-info h4 {
-  color: #6b5344;
+  color: #1e293b;
   margin: 0 0 12px 0;
-  font-size: 0.95rem;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .statutory-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 15px;
+  gap: 12px;
 }
 
 .stat-item {
   display: flex;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 8px 10px;
   background: white;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  border-radius: 6px;
+  font-size: 13px;
 }
 
 .stat-item span:first-child {
-  color: #9a8072;
+  color: #64748b;
 }
 
 .stat-item span:last-child {
-  color: #e57373;
+  color: #ef4444;
   font-weight: 600;
 }
 
 .stat-note {
-  color: #9a8072;
-  font-size: 0.75rem;
+  color: #64748b;
+  font-size: 12px;
   margin: 10px 0 0 0;
   font-style: italic;
 }
@@ -305,8 +315,8 @@ tr:hover {
 
 .modal {
   background: white;
-  border-radius: 24px;
-  padding: 35px;
+  border-radius: 16px;
+  padding: 28px;
   max-width: 650px;
   width: 100%;
   max-height: 90vh;
@@ -315,21 +325,22 @@ tr:hover {
 }
 
 .modal h2 {
-  color: #6b5344;
-  margin: 0 0 8px 0;
-  font-size: 1.5rem;
+  color: #1e293b;
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .modal-subtitle {
-  color: #9a8072;
-  margin: 0 0 25px 0;
-  font-size: 0.95rem;
+  color: #64748b;
+  margin: 0 0 20px 0;
+  font-size: 14px;
 }
 
 .form-row {
   display: flex;
-  gap: 15px;
-  margin-bottom: 15px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .form-row .form-group {
@@ -337,28 +348,28 @@ tr:hover {
 }
 
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .form-group label {
   display: block;
-  font-weight: 600;
-  color: #6b5344;
-  margin-bottom: 8px;
-  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+  font-size: 13px;
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
   width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #f5e6dc;
-  border-radius: 12px;
-  font-size: 1rem;
-  transition: all 0.25s ease;
-  background: #fffbf8;
-  color: #5a4a3e;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  background: #f8fafc;
+  color: #1e293b;
   box-sizing: border-box;
 }
 
@@ -371,53 +382,59 @@ tr:hover {
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #d4a088;
+  border-color: #3b82f6;
   background: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .modal-actions {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
-  margin-top: 25px;
-  padding-top: 20px;
-  border-top: 2px solid #f5e6dc;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .cancel-btn {
-  padding: 12px 24px;
-  border: 2px solid #f5e6dc;
-  border-radius: 12px;
+  padding: 10px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   background: white;
-  color: #9a8072;
-  font-weight: 600;
+  color: #64748b;
+  font-weight: 500;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.15s ease;
 }
 
 .cancel-btn:hover {
-  border-color: #e8c4ae;
-  background: #fff8f2;
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .save-btn {
-  padding: 12px 24px;
+  padding: 10px 20px;
   border: none;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
+  border-radius: 8px;
+  background: #3b82f6;
   color: white;
   font-weight: 600;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.25s ease;
-  box-shadow: 0 4px 12px rgba(212, 136, 106, 0.3);
+  transition: all 0.15s ease;
 }
 
 .save-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(212, 136, 106, 0.4);
+  background: #2563eb;
 }
 
+/* Responsive */
 @media (max-width: 768px) {
+  .payroll-page {
+    padding: 16px;
+  }
+
   .form-row {
     flex-direction: column;
     gap: 0;
@@ -425,7 +442,7 @@ tr:hover {
 
   .page-header {
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
     align-items: flex-start;
   }
 

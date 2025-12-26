@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { employeeApi, departmentApi, probationApi } from '../api';
+import { employeeApi, departmentApi, probationApi, earningsApi } from '../api';
 import Layout from '../components/Layout';
 import * as XLSX from 'xlsx';
 import './Employees.css';
@@ -34,6 +34,12 @@ function Employees() {
   const [importing, setImporting] = useState(false);
   const [salaryAutoPopulated, setSalaryAutoPopulated] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Commission & Allowance state
+  const [commissionTypes, setCommissionTypes] = useState([]);
+  const [allowanceTypes, setAllowanceTypes] = useState([]);
+  const [employeeCommissions, setEmployeeCommissions] = useState([]);
+  const [employeeAllowances, setEmployeeAllowances] = useState([]);
 
   // Bulk selection state
   const [selectedEmployees, setSelectedEmployees] = useState([]);
@@ -135,14 +141,18 @@ function Employees() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [empRes, deptRes, statsRes] = await Promise.all([
+      const [empRes, deptRes, statsRes, commTypesRes, allowTypesRes] = await Promise.all([
         employeeApi.getAll(filter),
         departmentApi.getAll(),
-        employeeApi.getStats()
+        employeeApi.getStats(),
+        earningsApi.getCommissionTypes(),
+        earningsApi.getAllowanceTypes()
       ]);
       setEmployees(empRes.data);
       setDepartments(deptRes.data);
       setStats(statsRes.data);
+      setCommissionTypes(commTypesRes.data);
+      setAllowanceTypes(allowTypesRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -153,11 +163,26 @@ function Employees() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      let employeeId;
       if (editingEmployee) {
         await employeeApi.update(editingEmployee.id, form);
+        employeeId = editingEmployee.id;
       } else {
-        await employeeApi.create(form);
+        const res = await employeeApi.create(form);
+        employeeId = res.data.id;
       }
+
+      // Save commissions and allowances
+      if (employeeId) {
+        const validCommissions = employeeCommissions.filter(c => c.commission_type_id && c.amount > 0);
+        const validAllowances = employeeAllowances.filter(a => a.allowance_type_id && a.amount > 0);
+
+        await Promise.all([
+          earningsApi.bulkSaveCommissions(employeeId, validCommissions),
+          earningsApi.bulkSaveAllowances(employeeId, validAllowances)
+        ]);
+      }
+
       setShowModal(false);
       resetForm();
       fetchData();
@@ -166,7 +191,7 @@ function Employees() {
     }
   };
 
-  const handleEdit = (emp) => {
+  const handleEdit = async (emp) => {
     setEditingEmployee(emp);
     setForm({
       employee_id: emp.employee_id,
@@ -208,6 +233,29 @@ function Employees() {
       increment_amount: emp.increment_amount || '',
       probation_notes: emp.probation_notes || ''
     });
+
+    // Fetch employee commissions and allowances
+    try {
+      const [commRes, allowRes] = await Promise.all([
+        earningsApi.getEmployeeCommissions(emp.id),
+        earningsApi.getEmployeeAllowances(emp.id)
+      ]);
+      setEmployeeCommissions(commRes.data.map(c => ({
+        commission_type_id: c.commission_type_id,
+        amount: c.amount,
+        commission_name: c.commission_name
+      })));
+      setEmployeeAllowances(allowRes.data.map(a => ({
+        allowance_type_id: a.allowance_type_id,
+        amount: a.amount,
+        allowance_name: a.allowance_name
+      })));
+    } catch (error) {
+      console.error('Error fetching employee earnings:', error);
+      setEmployeeCommissions([]);
+      setEmployeeAllowances([]);
+    }
+
     setShowModal(true);
   };
 
@@ -225,6 +273,8 @@ function Employees() {
   const resetForm = () => {
     setEditingEmployee(null);
     setSalaryAutoPopulated(false);
+    setEmployeeCommissions([]);
+    setEmployeeAllowances([]);
     setForm({
       employee_id: '',
       name: '',
@@ -1170,6 +1220,132 @@ function Employees() {
                     />
                   </div>
                 </div>
+
+                {/* Commissions Section */}
+                <div className="form-section-title">
+                  💵 Commissions
+                  <button
+                    type="button"
+                    className="btn-add-small"
+                    onClick={() => setEmployeeCommissions([...employeeCommissions, { commission_type_id: '', amount: '' }])}
+                    style={{ marginLeft: '10px', padding: '2px 8px', fontSize: '12px' }}
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {employeeCommissions.length === 0 ? (
+                  <p style={{ color: '#666', fontSize: '13px', marginBottom: '15px' }}>No commissions assigned. Click "+ Add" to add commission types.</p>
+                ) : (
+                  employeeCommissions.map((comm, index) => (
+                    <div className="form-row" key={index} style={{ alignItems: 'flex-end' }}>
+                      <div className="form-group" style={{ flex: 2 }}>
+                        <label>Commission Type</label>
+                        <select
+                          value={comm.commission_type_id}
+                          onChange={(e) => {
+                            const updated = [...employeeCommissions];
+                            updated[index].commission_type_id = e.target.value;
+                            setEmployeeCommissions(updated);
+                          }}
+                        >
+                          <option value="">Select Type</option>
+                          {commissionTypes.map(ct => (
+                            <option key={ct.id} value={ct.id}>{ct.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label>Amount (RM)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={comm.amount}
+                          onChange={(e) => {
+                            const updated = [...employeeCommissions];
+                            updated[index].amount = e.target.value;
+                            setEmployeeCommissions(updated);
+                          }}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = employeeCommissions.filter((_, i) => i !== index);
+                          setEmployeeCommissions(updated);
+                        }}
+                        style={{ padding: '8px 12px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginBottom: '15px' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
+
+                {/* Allowances Section */}
+                <div className="form-section-title">
+                  🎯 Allowances
+                  <button
+                    type="button"
+                    className="btn-add-small"
+                    onClick={() => setEmployeeAllowances([...employeeAllowances, { allowance_type_id: '', amount: '' }])}
+                    style={{ marginLeft: '10px', padding: '2px 8px', fontSize: '12px' }}
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {employeeAllowances.length === 0 ? (
+                  <p style={{ color: '#666', fontSize: '13px', marginBottom: '15px' }}>No allowances assigned. Click "+ Add" to add allowance types.</p>
+                ) : (
+                  employeeAllowances.map((allow, index) => (
+                    <div className="form-row" key={index} style={{ alignItems: 'flex-end' }}>
+                      <div className="form-group" style={{ flex: 2 }}>
+                        <label>Allowance Type</label>
+                        <select
+                          value={allow.allowance_type_id}
+                          onChange={(e) => {
+                            const updated = [...employeeAllowances];
+                            updated[index].allowance_type_id = e.target.value;
+                            setEmployeeAllowances(updated);
+                          }}
+                        >
+                          <option value="">Select Type</option>
+                          {allowanceTypes.map(at => (
+                            <option key={at.id} value={at.id}>{at.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label>Amount (RM)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={allow.amount}
+                          onChange={(e) => {
+                            const updated = [...employeeAllowances];
+                            updated[index].amount = e.target.value;
+                            setEmployeeAllowances(updated);
+                          }}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = employeeAllowances.filter((_, i) => i !== index);
+                          setEmployeeAllowances(updated);
+                        }}
+                        style={{ padding: '8px 12px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginBottom: '15px' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
 
                 <div className="form-section-title">📋 Probation & Confirmation</div>
 

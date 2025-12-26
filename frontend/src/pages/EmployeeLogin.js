@@ -140,9 +140,9 @@ function EmployeeLogin() {
     <div className="employee-login">
       <div className="login-container">
         <div className="login-header">
-          <img src="/logo.png" alt="AA HRMS" className="login-logo" />
-          <h1>Employee Portal</h1>
-          <p>AA HRMS Self-Service</p>
+          <img src="/logo.png" alt="HRMS" className="login-logo" />
+          <h1>HRMS</h1>
+          <p>Employee Portal</p>
         </div>
 
         {view === 'login' && (

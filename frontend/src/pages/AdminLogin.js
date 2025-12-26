@@ -42,14 +42,14 @@ function AdminLogin() {
     <div className="admin-login">
       <div className="login-container">
         <div className="login-header">
-          <img src="/logo.png" alt="AA HRMS" className="login-logo" />
-          <h1>Welcome Back!</h1>
-          <p>AA HRMS Dashboard</p>
+          <img src="/logo.png" alt="HRMS" className="login-logo" />
+          <h1>HRMS</h1>
+          <p>Admin Portal</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="username">👤 Username</label>
+            <label htmlFor="username">Username</label>
             <input
               type="text"
               id="username"
@@ -61,7 +61,7 @@ function AdminLogin() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">🔑 Password</label>
+            <label htmlFor="password">Password</label>
             <input
               type="password"
               id="password"
@@ -75,13 +75,13 @@ function AdminLogin() {
           {error && <div className="error-message">{error}</div>}
 
           <button type="submit" className="login-btn" disabled={isLoading}>
-            {isLoading ? '✨ Logging in...' : '🚀 Let\'s Go!'}
+            {isLoading ? 'Logging in...' : 'Login'}
           </button>
         </form>
 
         <div className="login-footer">
-          <a href="/employee/login" className="employee-link">👤 Employee Portal Login</a>
-          <a href="/feedback" className="feedback-link">📝 Submit Anonymous Feedback</a>
+          <a href="/employee/login" className="employee-link">Employee Portal</a>
+          <a href="/feedback" className="feedback-link">Submit Feedback</a>
         </div>
       </div>
     </div>

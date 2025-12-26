@@ -26,7 +26,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);
+  background: #3b82f6;
   color: white;
   border: none;
   padding: 12px 24px;
@@ -55,7 +55,7 @@
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  border-left: 4px solid #8B4513;
+  border-left: 4px solid #1e293b;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -105,7 +105,7 @@
 
 .filters-bar select:focus {
   outline: none;
-  border-color: #8B4513;
+  border-color: #1e293b;
 }
 
 /* Loading and No Data */
@@ -336,7 +336,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #8B4513;
+  border-color: #1e293b;
 }
 
 .form-group textarea {
@@ -387,13 +387,13 @@
 }
 
 .template-btn:hover {
-  border-color: #8B4513;
-  color: #8B4513;
+  border-color: #1e293b;
+  color: #1e293b;
 }
 
 .template-btn.active {
-  background: #8B4513;
-  border-color: #8B4513;
+  background: #1e293b;
+  border-color: #1e293b;
   color: white;
 }
 
@@ -423,7 +423,7 @@
 }
 
 .btn-submit {
-  background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);
+  background: #3b82f6;
   color: white;
   border: none;
   padding: 12px 24px;
@@ -588,7 +588,7 @@
 .letterhead-info h1 {
   margin: 0 0 5px 0;
   font-size: 1.5rem;
-  color: #8B4513;
+  color: #1e293b;
   font-weight: 700;
 }
 
@@ -608,7 +608,7 @@
 
 .letter-divider {
   height: 3px;
-  background: linear-gradient(90deg, #8B4513 0%, #D2691E 50%, #8B4513 100%);
+  background: linear-gradient(90deg, #1e293b 0%, #3b82f6 50%, #1e293b 100%);
   margin-bottom: 30px;
 }
 

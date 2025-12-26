@@ -275,20 +275,20 @@ function PayrollV2() {
         <title>Payslip - ${emp.name}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #6b5344; padding-bottom: 20px; }
-          .header h1 { color: #6b5344; margin: 0; }
-          .header p { color: #9a8072; margin: 5px 0; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1e293b; padding-bottom: 20px; }
+          .header h1 { color: #1e293b; margin: 0; }
+          .header p { color: #64748b; margin: 5px 0; }
           .employee-info { display: flex; justify-content: space-between; margin-bottom: 30px; }
           .info-block { }
-          .info-block h3 { margin: 0 0 10px 0; color: #6b5344; }
+          .info-block h3 { margin: 0 0 10px 0; color: #1e293b; }
           .info-block p { margin: 5px 0; color: #555; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
           th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-          th { background: #f5e6dc; color: #6b5344; }
-          .section-title { background: #6b5344; color: white; font-weight: bold; }
+          th { background: #f1f5f9; color: #1e293b; }
+          .section-title { background: #1e293b; color: white; font-weight: bold; }
           .total-row { font-weight: bold; background: #f5f5f5; }
           .amount { text-align: right; }
-          .footer { margin-top: 40px; text-align: center; color: #9a8072; font-size: 12px; }
+          .footer { margin-top: 40px; text-align: center; color: #64748b; font-size: 12px; }
           @media print { body { padding: 20px; } }
         </style>
       </head>
@@ -350,7 +350,7 @@ function PayrollV2() {
         </table>
 
         <table>
-          <tr style="background: #6b5344; color: white;"><td><strong>NET PAY</strong></td><td class="amount" style="font-size: 1.3em;"><strong>RM ${formatNum(totals.net_pay)}</strong></td></tr>
+          <tr style="background: #1e293b; color: white;"><td><strong>NET PAY</strong></td><td class="amount" style="font-size: 1.3em;"><strong>RM ${formatNum(totals.net_pay)}</strong></td></tr>
         </table>
 
         <div class="footer">

@@ -1,118 +1,128 @@
+/* =====================================================
+   FEEDBACK PAGE - Clean & Modern
+   ===================================================== */
+
 .feedback-page {
-  padding: 30px;
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
+  margin-bottom: 24px;
 }
 
 .page-header h1 {
-  font-size: 1.8rem;
-  color: #6b5344;
-  margin: 0 0 5px 0;
+  font-size: 22px;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+  font-weight: 600;
 }
 
 .page-header p {
-  color: #9a8072;
+  color: #64748b;
   margin: 0;
+  font-size: 14px;
 }
 
 .unread-badge {
-  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
+  background: #3b82f6;
   color: white;
-  padding: 10px 20px;
+  padding: 8px 16px;
   border-radius: 20px;
   font-weight: 600;
-  font-size: 0.95rem;
-  box-shadow: 0 4px 12px rgba(212, 136, 106, 0.3);
+  font-size: 14px;
 }
 
 .filters-row {
   display: flex;
-  gap: 10px;
-  margin-bottom: 25px;
+  gap: 8px;
+  margin-bottom: 20px;
 }
 
 .filter-btn {
-  padding: 10px 20px;
-  border: 2px solid #f5e6dc;
-  border-radius: 12px;
+  padding: 10px 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   background: white;
-  color: #9a8072;
+  color: #64748b;
   font-weight: 500;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.15s ease;
 }
 
 .filter-btn:hover {
-  border-color: #e8c4ae;
-  background: #fff8f2;
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .filter-btn.active {
-  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  background: #1e293b;
   color: white;
-  border-color: transparent;
+  border-color: #1e293b;
 }
 
 .loading {
   text-align: center;
-  padding: 50px;
-  color: #9a8072;
-  font-size: 1.1rem;
+  padding: 48px;
+  color: #64748b;
+  font-size: 14px;
 }
 
 .no-feedback {
   text-align: center;
   padding: 60px 20px;
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.08);
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
 }
 
 .no-icon {
-  font-size: 4rem;
+  font-size: 48px;
   display: block;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .no-feedback p {
-  color: #6b5344;
-  font-size: 1.2rem;
-  margin: 0 0 10px 0;
+  color: #1e293b;
+  font-size: 16px;
+  margin: 0 0 8px 0;
   font-weight: 600;
 }
 
 .no-feedback small {
-  color: #9a8072;
+  color: #64748b;
+  font-size: 14px;
 }
 
 .feedback-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 12px;
 }
 
 .feedback-card {
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 16px;
-  padding: 20px 25px;
-  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: white;
+  border-radius: 12px;
+  padding: 18px 22px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
   position: relative;
-  transition: all 0.25s ease;
+  transition: all 0.15s ease;
 }
 
 .feedback-card:hover {
-  box-shadow: 0 6px 25px rgba(180, 120, 80, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .feedback-card.unread {
-  border-left: 4px solid #e8a87c;
-  background: #fffcf9;
+  border-left: 3px solid #3b82f6;
+  background: #f8fafc;
 }
 
 .feedback-card.read {
@@ -121,25 +131,24 @@
 
 .unread-indicator {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 10px;
-  height: 10px;
-  background: linear-gradient(135deg, #e8a87c 0%, #d4886a 100%);
+  top: 18px;
+  right: 18px;
+  width: 8px;
+  height: 8px;
+  background: #3b82f6;
   border-radius: 50%;
-  box-shadow: 0 2px 6px rgba(212, 136, 106, 0.4);
 }
 
 .feedback-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .feedback-date {
-  color: #9a8072;
-  font-size: 0.85rem;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .feedback-actions {
@@ -148,52 +157,56 @@
 }
 
 .mark-read-btn {
-  padding: 6px 14px;
-  background: linear-gradient(135deg, #a8d5a2 0%, #8ec787 100%);
+  padding: 6px 12px;
+  background: #22c55e;
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.15s ease;
 }
 
 .mark-read-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(142, 199, 135, 0.3);
+  background: #16a34a;
 }
 
 .delete-btn {
   background: none;
   border: none;
-  font-size: 1.1rem;
+  font-size: 16px;
   cursor: pointer;
-  padding: 5px 8px;
-  border-radius: 8px;
-  transition: background 0.2s ease;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
 }
 
 .delete-btn:hover {
-  background: #ffe8e8;
+  background: #fef2f2;
 }
 
 .feedback-content {
-  padding-right: 30px;
+  padding-right: 24px;
 }
 
 .feedback-content p {
-  color: #5a4a3e;
-  line-height: 1.7;
+  color: #1e293b;
+  line-height: 1.6;
   margin: 0;
-  font-size: 1rem;
+  font-size: 14px;
   white-space: pre-wrap;
 }
 
+/* Responsive */
 @media (max-width: 768px) {
+  .feedback-page {
+    padding: 16px;
+  }
+
   .page-header {
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
     align-items: flex-start;
   }
 

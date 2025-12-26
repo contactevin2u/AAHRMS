@@ -1,15 +1,15 @@
 /* =====================================================
-   SIMPLIFIED HRMS LAYOUT - Clean & Modern
+   LAYOUT - Clean & Modern Sidebar
    ===================================================== */
 
 /* Base Layout */
 .layout {
   display: flex;
   min-height: 100vh;
-  background: #f8f9fa;
+  background: #f5f7fa;
 }
 
-/* Mobile Header - Hidden on desktop */
+/* Mobile Header */
 .mobile-header {
   display: none;
   position: fixed;
@@ -17,54 +17,59 @@
   left: 0;
   right: 0;
   height: 56px;
-  background: #2c3e50;
+  background: #1e293b;
   color: white;
   align-items: center;
   padding: 0 16px;
   z-index: 1001;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .menu-toggle {
   background: none;
   border: none;
   color: white;
-  font-size: 24px;
+  font-size: 20px;
   cursor: pointer;
   padding: 8px;
   margin-right: 12px;
+  border-radius: 6px;
+}
+
+.menu-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .mobile-title {
   font-weight: 600;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .sidebar-overlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, 0.5);
   z-index: 999;
 }
 
 /* Sidebar */
 .sidebar {
   width: 240px;
-  background: #2c3e50;
+  background: #1e293b;
   color: white;
   display: flex;
   flex-direction: column;
   position: fixed;
   height: 100vh;
   z-index: 1000;
-  transition: transform 0.3s ease;
+  transition: transform 0.2s ease;
 }
 
 /* Sidebar Header */
 .sidebar-header {
   padding: 20px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .brand {
@@ -74,8 +79,8 @@
 }
 
 .logo-img {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
   border-radius: 8px;
   background: white;
@@ -83,7 +88,7 @@
 }
 
 .brand-text h2 {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   margin: 0;
   color: white;
@@ -94,37 +99,43 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
+  padding: 14px 16px;
   margin: 12px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
 }
 
 .user-avatar {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #3498db, #2980b9);
+  width: 36px;
+  height: 36px;
+  background: #3b82f6;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
+  color: white;
 }
 
 .user-details {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .user-name {
   font-size: 14px;
   font-weight: 500;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .user-role {
   font-size: 12px;
-  color: rgba(255,255,255,0.6);
+  color: #94a3b8;
   text-transform: capitalize;
 }
 
@@ -132,67 +143,68 @@
 .nav-container {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 12px;
+  padding: 8px;
 }
 
 /* Navigation Items */
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  color: rgba(255,255,255,0.8);
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: #94a3b8;
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
-  transition: all 0.2s ease;
-  margin-bottom: 4px;
+  transition: all 0.15s ease;
+  margin-bottom: 2px;
 }
 
 .nav-item:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.06);
   color: white;
 }
 
 .nav-item.active {
-  background: #3498db;
+  background: #3b82f6;
   color: white;
 }
 
 .nav-item.sub {
-  padding-left: 44px;
+  padding-left: 40px;
   font-size: 13px;
 }
 
 .nav-icon {
-  font-size: 18px;
-  width: 24px;
+  font-size: 16px;
+  width: 20px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 /* Navigation Sections */
 .nav-section {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: none;
   background: none;
-  color: rgba(255,255,255,0.8);
+  color: #94a3b8;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  border-radius: 6px;
+  transition: all 0.15s ease;
 }
 
 .section-header:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.06);
   color: white;
 }
 
@@ -201,49 +213,49 @@
 }
 
 .section-icon {
-  font-size: 18px;
-  width: 24px;
+  font-size: 16px;
+  width: 20px;
   text-align: center;
-  margin-right: 12px;
+  margin-right: 10px;
+  flex-shrink: 0;
 }
 
 .expand-icon {
   margin-left: auto;
-  font-size: 16px;
-  font-weight: 600;
-  opacity: 0.6;
+  font-size: 14px;
+  opacity: 0.5;
 }
 
 .section-items {
-  padding-left: 8px;
-  margin-top: 4px;
+  padding-left: 4px;
+  margin-top: 2px;
 }
 
 /* Sidebar Footer */
 .sidebar-footer {
-  padding: 12px;
-  border-top: 1px solid rgba(255,255,255,0.1);
+  padding: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logout-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: none;
   background: none;
-  color: rgba(255,255,255,0.8);
+  color: #94a3b8;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  border-radius: 6px;
+  transition: all 0.15s ease;
 }
 
 .logout-btn:hover {
-  background: rgba(231, 76, 60, 0.2);
-  color: #e74c3c;
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
 }
 
 /* Main Content */
@@ -251,11 +263,11 @@
   flex: 1;
   margin-left: 240px;
   min-height: 100vh;
-  background: #f8f9fa;
+  background: #f5f7fa;
 }
 
 /* =====================================================
-   RESPONSIVE - Mobile First
+   RESPONSIVE
    ===================================================== */
 
 @media (max-width: 768px) {
@@ -282,7 +294,7 @@
 }
 
 /* =====================================================
-   SCROLLBAR STYLING
+   SCROLLBAR
    ===================================================== */
 
 .nav-container::-webkit-scrollbar {
@@ -294,10 +306,10 @@
 }
 
 .nav-container::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 4px;
 }
 
 .nav-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.25);
 }

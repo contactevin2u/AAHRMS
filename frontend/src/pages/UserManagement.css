@@ -22,7 +22,7 @@
 }
 
 .user-management-page .btn-primary {
-  background: #8B4513;
+  background: #1e293b;
   color: white;
   border: none;
   padding: 10px 20px;
@@ -34,7 +34,7 @@
 }
 
 .user-management-page .btn-primary:hover {
-  background: #6d360f;
+  background: #0f172a;
 }
 
 /* Stats Row */
@@ -58,7 +58,7 @@
 .user-management-page .stat-value {
   font-size: 28px;
   font-weight: 600;
-  color: #8B4513;
+  color: #1e293b;
 }
 
 .user-management-page .stat-label {
@@ -82,7 +82,7 @@
 }
 
 .user-management-page .users-table th {
-  background: #8B4513;
+  background: #1e293b;
   color: white;
   padding: 12px 16px;
   text-align: left;
@@ -399,7 +399,7 @@
 .user-management-page .form-group input:focus,
 .user-management-page .form-group select:focus {
   outline: none;
-  border-color: #8B4513;
+  border-color: #1e293b;
 }
 
 .user-management-page .form-group input:disabled {
@@ -442,7 +442,7 @@
 }
 
 .user-management-page .btn-submit {
-  background: #8B4513;
+  background: #1e293b;
   color: white;
   border: none;
   padding: 10px 20px;
@@ -453,7 +453,7 @@
 }
 
 .user-management-page .btn-submit:hover {
-  background: #6d360f;
+  background: #0f172a;
 }
 
 .user-management-page .btn-submit:disabled {

@@ -9,13 +9,13 @@
 }
 
 .settings-page .page-header h1 {
-  color: #6b5344;
+  color: #1e293b;
   margin: 0;
   font-size: 24px;
 }
 
 .settings-page .page-header p {
-  color: #9a8072;
+  color: #64748b;
   margin: 5px 0 0 0;
 }
 
@@ -31,7 +31,7 @@
   padding: 12px 24px;
   background: none;
   border: none;
-  color: #9a8072;
+  color: #64748b;
   font-size: 15px;
   cursor: pointer;
   border-bottom: 3px solid transparent;
@@ -40,13 +40,13 @@
 }
 
 .tab-btn:hover {
-  color: #6b5344;
+  color: #1e293b;
 }
 
 .tab-btn.active {
-  color: #6b5344;
+  color: #1e293b;
   font-weight: 600;
-  border-bottom-color: #6b5344;
+  border-bottom-color: #1e293b;
 }
 
 .settings-content {
@@ -65,18 +65,18 @@
 
 .type-section h2 {
   margin: 0;
-  color: #6b5344;
+  color: #1e293b;
   font-size: 18px;
 }
 
 .section-desc {
-  color: #9a8072;
+  color: #64748b;
   margin: 0 0 20px 0;
   font-size: 14px;
 }
 
 .add-btn {
-  background: #6b5344;
+  background: #1e293b;
   color: white;
   border: none;
   padding: 10px 18px;
@@ -93,7 +93,7 @@
 .no-data {
   text-align: center;
   padding: 40px;
-  color: #9a8072;
+  color: #64748b;
   background: #f9f7f5;
   border-radius: 8px;
 }
@@ -125,7 +125,7 @@
 .type-card h3 {
   margin: 0;
   font-size: 16px;
-  color: #6b5344;
+  color: #1e293b;
 }
 
 .type-badge {
@@ -178,7 +178,7 @@
 }
 
 .type-actions .edit-btn {
-  background: #6b5344;
+  background: #1e293b;
   color: white;
 }
 
@@ -221,7 +221,7 @@
 
 .settings-page .modal h2 {
   margin: 0 0 20px 0;
-  color: #6b5344;
+  color: #1e293b;
   font-size: 20px;
 }
 
@@ -232,7 +232,7 @@
 .settings-page .form-group label {
   display: block;
   margin-bottom: 6px;
-  color: #6b5344;
+  color: #1e293b;
   font-weight: 500;
   font-size: 14px;
 }
@@ -252,13 +252,13 @@
 .settings-page .form-group select:focus,
 .settings-page .form-group textarea:focus {
   outline: none;
-  border-color: #6b5344;
+  border-color: #1e293b;
 }
 
 .settings-page .help-text {
   display: block;
   margin-top: 6px;
-  color: #9a8072;
+  color: #64748b;
   font-size: 12px;
   line-height: 1.4;
 }
@@ -286,7 +286,7 @@
 
 .settings-page .save-btn {
   padding: 10px 20px;
-  background: #6b5344;
+  background: #1e293b;
   color: white;
   border: none;
   border-radius: 6px;
@@ -301,5 +301,5 @@
 .loading {
   text-align: center;
   padding: 40px;
-  color: #9a8072;
+  color: #64748b;
 }

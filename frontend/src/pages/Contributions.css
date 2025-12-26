@@ -11,12 +11,12 @@
 
 .page-header h1 {
   font-size: 1.8rem;
-  color: #6b5344;
+  color: #1e293b;
   margin: 0 0 5px 0;
 }
 
 .page-header p {
-  color: #9a8072;
+  color: #64748b;
   margin: 0;
 }
 
@@ -27,24 +27,24 @@
 
 .toggle-btn {
   padding: 10px 20px;
-  border: 2px solid #f5e6dc;
+  border: 2px solid #e2e8f0;
   border-radius: 10px;
   background: white;
-  color: #9a8072;
+  color: #64748b;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .toggle-btn.active {
-  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
-  border-color: #6b5344;
+  background: #1e293b;
+  border-color: #1e293b;
   color: white;
 }
 
 .toggle-btn:hover:not(.active) {
-  border-color: #d4886a;
-  color: #6b5344;
+  border-color: #3b82f6;
+  color: #1e293b;
 }
 
 /* Layout */
@@ -60,13 +60,13 @@
   background: rgba(255, 255, 255, 0.85);
   border-radius: 20px;
   padding: 20px;
-  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .runs-panel h3 {
   margin: 0 0 20px 0;
-  color: #6b5344;
+  color: #1e293b;
   font-size: 1.1rem;
 }
 
@@ -78,7 +78,7 @@
 
 .run-card {
   padding: 15px;
-  background: #fffbf8;
+  background: #f8fafc;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -86,23 +86,23 @@
 }
 
 .run-card:hover {
-  background: #fff8f2;
+  background: #f8fafc;
 }
 
 .run-card.selected {
-  border-color: #d4886a;
-  background: #fff0e6;
+  border-color: #3b82f6;
+  background: #eff6ff;
 }
 
 .run-period {
   font-weight: 700;
-  color: #6b5344;
+  color: #1e293b;
   margin-bottom: 5px;
 }
 
 .run-dept {
   font-weight: 500;
-  color: #9a8072;
+  color: #64748b;
   font-size: 0.9em;
 }
 
@@ -114,7 +114,7 @@
 
 .run-count {
   font-size: 0.85rem;
-  color: #9a8072;
+  color: #64748b;
 }
 
 /* Summary Panel */
@@ -122,7 +122,7 @@
   background: rgba(255, 255, 255, 0.85);
   border-radius: 20px;
   padding: 25px;
-  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
@@ -132,17 +132,17 @@
   align-items: center;
   margin-bottom: 25px;
   padding-bottom: 20px;
-  border-bottom: 2px solid #f5e6dc;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .summary-header h2 {
   margin: 0;
-  color: #6b5344;
+  color: #1e293b;
 }
 
 .employee-count {
-  background: #f5e6dc;
-  color: #6b5344;
+  background: #e2e8f0;
+  color: #1e293b;
   padding: 6px 14px;
   border-radius: 20px;
   font-weight: 600;
@@ -217,12 +217,12 @@
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
-  color: #6b5344;
+  color: #1e293b;
   font-size: 0.9rem;
 }
 
 .contrib-row.total {
-  border-top: 1px dashed #f5e6dc;
+  border-top: 1px dashed #e2e8f0;
   margin-top: 8px;
   padding-top: 12px;
   font-weight: 700;
@@ -234,7 +234,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  background: #1e293b;
   padding: 25px 30px;
   border-radius: 16px;
   color: white;
@@ -257,7 +257,7 @@
 }
 
 .details-section h3 {
-  color: #6b5344;
+  color: #1e293b;
   margin-bottom: 15px;
 }
 
@@ -265,7 +265,7 @@
   background: white;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #f5e6dc;
+  border: 1px solid #e2e8f0;
 }
 
 .details-table table {
@@ -274,7 +274,7 @@
 }
 
 .details-table th {
-  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  background: #1e293b;
   color: white;
   padding: 14px 10px;
   text-align: left;
@@ -284,17 +284,17 @@
 
 .details-table td {
   padding: 12px 10px;
-  border-bottom: 1px solid #f5e6dc;
-  color: #6b5344;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
   font-size: 0.85rem;
 }
 
 .details-table tr:hover {
-  background: #fff8f2;
+  background: #f8fafc;
 }
 
 .details-table td small {
-  color: #9a8072;
+  color: #64748b;
 }
 
 /* No Selection */
@@ -303,14 +303,14 @@
   align-items: center;
   justify-content: center;
   height: 300px;
-  color: #9a8072;
+  color: #64748b;
 }
 
 .no-data,
 .loading {
   text-align: center;
   padding: 30px;
-  color: #9a8072;
+  color: #64748b;
 }
 
 /* Yearly Report */
@@ -318,7 +318,7 @@
   background: rgba(255, 255, 255, 0.85);
   border-radius: 20px;
   padding: 25px;
-  box-shadow: 0 4px 20px rgba(180, 120, 80, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
@@ -331,15 +331,15 @@
 
 .year-selector label {
   font-weight: 600;
-  color: #6b5344;
+  color: #1e293b;
 }
 
 .year-selector select {
   padding: 10px 16px;
-  border: 2px solid #f5e6dc;
+  border: 2px solid #e2e8f0;
   border-radius: 10px;
   font-size: 1rem;
-  color: #6b5344;
+  color: #1e293b;
   background: white;
 }
 
@@ -395,7 +395,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  background: #1e293b;
   padding: 25px 30px;
   border-radius: 16px;
   color: white;
@@ -417,7 +417,7 @@
 }
 
 .monthly-breakdown h3 {
-  color: #6b5344;
+  color: #1e293b;
   margin-bottom: 15px;
 }
 
@@ -427,11 +427,11 @@
   background: white;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #f5e6dc;
+  border: 1px solid #e2e8f0;
 }
 
 .monthly-breakdown th {
-  background: linear-gradient(135deg, #6b5344 0%, #5a4538 100%);
+  background: #1e293b;
   color: white;
   padding: 14px 12px;
   text-align: left;
@@ -441,12 +441,12 @@
 
 .monthly-breakdown td {
   padding: 14px 12px;
-  border-bottom: 1px solid #f5e6dc;
-  color: #6b5344;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
 }
 
 .monthly-breakdown tr:hover {
-  background: #fff8f2;
+  background: #f8fafc;
 }
 
 /* Responsive */

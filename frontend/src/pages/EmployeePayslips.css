@@ -210,7 +210,7 @@
 .letterhead-info h1 {
   margin: 0 0 5px 0;
   font-size: 1.5rem;
-  color: #8B4513;
+  color: #1e293b;
   font-weight: 700;
 }
 
@@ -230,7 +230,7 @@
 
 .letter-divider {
   height: 3px;
-  background: linear-gradient(90deg, #8B4513 0%, #D2691E 50%, #8B4513 100%);
+  background: linear-gradient(90deg, #1e293b 0%, #3b82f6 50%, #1e293b 100%);
   margin-bottom: 25px;
 }
 
@@ -243,14 +243,14 @@
 .payslip-title-section h2 {
   margin: 0 0 5px 0;
   font-size: 1.4rem;
-  color: #8B4513;
+  color: #1e293b;
   letter-spacing: 2px;
 }
 
 .payslip-title-section p {
   margin: 0;
   font-size: 1.1rem;
-  color: #6b5344;
+  color: #1e293b;
   font-weight: 600;
 }
 

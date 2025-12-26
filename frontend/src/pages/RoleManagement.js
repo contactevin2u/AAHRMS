@@ -149,7 +149,7 @@ function RoleManagement() {
 
   const getRoleColor = (roleName) => {
     const colors = {
-      super_admin: '#8B4513',
+      super_admin: '#1e293b',
       boss: '#c0392b',
       director: '#2980b9',
       hr: '#27ae60',
