@@ -46,7 +46,10 @@ function EmployeeLogin() {
         setError('');
         setView('setup');
       } else {
-        setError(error.response?.data?.error || 'Login failed. Please try again.');
+        // Handle error object with {message, code, timestamp} structure
+        const errorData = error.response?.data?.error;
+        const errorMsg = typeof errorData === 'object' ? errorData?.message : errorData;
+        setError(errorMsg || error.response?.data?.message || 'Login failed. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -63,7 +66,9 @@ function EmployeeLogin() {
       await essApi.forgotPassword(email);
       setSuccess('If an account exists with this email, a password reset link will be sent.');
     } catch (error) {
-      setError(error.response?.data?.error || 'Failed to process request.');
+      const errorData = error.response?.data?.error;
+      const errorMsg = typeof errorData === 'object' ? errorData?.message : errorData;
+      setError(errorMsg || error.response?.data?.message || 'Failed to process request.');
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +99,9 @@ function EmployeeLogin() {
         setSuccess('');
       }, 2000);
     } catch (error) {
-      setError(error.response?.data?.error || 'Failed to reset password.');
+      const errorData = error.response?.data?.error;
+      const errorMsg = typeof errorData === 'object' ? errorData?.message : errorData;
+      setError(errorMsg || error.response?.data?.message || 'Failed to reset password.');
     } finally {
       setIsLoading(false);
     }
@@ -130,7 +137,9 @@ function EmployeeLogin() {
         setLogin(employeeId);
       }, 2000);
     } catch (error) {
-      setError(error.response?.data?.error || 'Failed to set password.');
+      const errorData = error.response?.data?.error;
+      const errorMsg = typeof errorData === 'object' ? errorData?.message : errorData;
+      setError(errorMsg || error.response?.data?.message || 'Failed to set password.');
     } finally {
       setIsLoading(false);
     }
