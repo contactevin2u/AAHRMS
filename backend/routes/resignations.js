@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
+const { calculateFinalSettlement, saveFinalSettlement } = require('../utils/finalSettlement');
 
 // Get all resignations
 router.get('/', authenticateAdmin, async (req, res) => {
@@ -234,6 +235,48 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
     res.status(500).json({ error: 'Failed to process resignation' });
   } finally {
     client.release();
+  }
+});
+
+// Calculate final settlement
+// Returns detailed breakdown without saving
+router.get('/:id/settlement', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const settlement = await calculateFinalSettlement(id);
+    res.json(settlement);
+  } catch (error) {
+    console.error('Error calculating settlement:', error);
+    if (error.message === 'Resignation not found') {
+      return res.status(404).json({ error: 'Resignation not found' });
+    }
+    res.status(500).json({ error: 'Failed to calculate settlement' });
+  }
+});
+
+// Calculate and save final settlement
+router.post('/:id/settlement', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Calculate settlement
+    const settlement = await calculateFinalSettlement(id);
+
+    // Save to resignation record
+    const updated = await saveFinalSettlement(id, settlement);
+
+    res.json({
+      message: 'Settlement calculated and saved',
+      settlement,
+      resignation: updated
+    });
+  } catch (error) {
+    console.error('Error saving settlement:', error);
+    if (error.message === 'Resignation not found') {
+      return res.status(404).json({ error: 'Resignation not found' });
+    }
+    res.status(500).json({ error: 'Failed to save settlement' });
   }
 });
 

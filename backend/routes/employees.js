@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter, isSuperAdmin } = require('../middleware/tenant');
+const { initializeLeaveBalances } = require('../utils/leaveProration');
 
 // Get all employees (filtered by company)
 router.get('/', authenticateAdmin, async (req, res) => {
@@ -168,7 +169,19 @@ router.post('/', authenticateAdmin, async (req, res) => {
       ]
     );
 
-    res.status(201).json(result.rows[0]);
+    const newEmployee = result.rows[0];
+
+    // Initialize leave balances for the new employee (with proration for mid-year joiners)
+    if (join_date) {
+      try {
+        await initializeLeaveBalances(newEmployee.id, companyId, join_date);
+      } catch (leaveError) {
+        console.error('Error initializing leave balances:', leaveError);
+        // Don't fail employee creation if leave init fails
+      }
+    }
+
+    res.status(201).json(newEmployee);
   } catch (error) {
     console.error('Error creating employee:', error);
     if (error.code === '23505') {
