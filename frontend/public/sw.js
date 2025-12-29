@@ -3,7 +3,7 @@
  * Handles caching and offline functionality
  */
 
-const CACHE_NAME = 'mimix-clockin-v1';
+const CACHE_NAME = 'mimix-clockin-v2';
 const OFFLINE_URL = '/staff/offline.html';
 
 // Assets to cache immediately on install
