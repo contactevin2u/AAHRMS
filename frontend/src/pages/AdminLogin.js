@@ -42,7 +42,7 @@ function AdminLogin() {
     <div className="admin-login">
       <div className="login-container">
         <div className="login-header">
-          <img src="/logo.png" alt="HRMS" className="login-logo" />
+          <img src="/logos/hr-default.png" alt="HRMS" className="login-logo" />
           <h1>HRMS</h1>
           <p>Admin Portal</p>
         </div>

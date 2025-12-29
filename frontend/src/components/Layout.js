@@ -55,6 +55,25 @@ function Layout({ children }) {
     return adminInfo?.company_grouping_type === 'outlet';
   };
 
+  // Get company-specific logo
+  const getCompanyLogo = () => {
+    if (!adminInfo?.company_id) return '/logos/hr-default.png';
+
+    // Map company IDs to logos
+    // TODO: Add /logos/aa-alive.png when logo is provided
+    const companyLogos = {
+      1: '/logos/aa-alive.png',    // AA Alive Sdn Bhd
+      2: '/logos/mixue.png'        // Mimix A Sdn Bhd
+    };
+
+    return companyLogos[adminInfo.company_id] || '/logos/hr-default.png';
+  };
+
+  // Handle logo load error - fallback to default
+  const handleLogoError = (e) => {
+    e.target.src = '/logos/hr-default.png';
+  };
+
   const getInitials = (name) => {
     if (!name) return 'U';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -77,11 +96,7 @@ function Layout({ children }) {
         {/* Header */}
         <div className="sidebar-header">
           <div className="brand">
-            {usesOutlets() ? (
-              <img src="/mixue-logo.png" alt="Mixue" className="logo-img" />
-            ) : (
-              <img src="/logo.png" alt="AA HRMS" className="logo-img" />
-            )}
+            <img src={getCompanyLogo()} alt={adminInfo?.company_name || 'HRMS'} className="logo-img" onError={handleLogoError} />
             <div className="brand-text">
               <h2>{adminInfo?.company_name || 'HRMS'}</h2>
             </div>

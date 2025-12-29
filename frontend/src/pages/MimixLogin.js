@@ -134,7 +134,7 @@ function MimixLogin() {
 
       <div className="mimix-login-card">
         <div className="mimix-login-header">
-          <img src="/mixue-logo.png" alt="Mixue" className="mimix-logo" />
+          <img src="/logos/mixue.png" alt="Mixue" className="mimix-logo" />
           <h1>Staff Clock In</h1>
           <p>Enter your Employee ID and IC Number</p>
         </div>
