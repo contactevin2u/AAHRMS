@@ -182,11 +182,21 @@ function StaffClockIn() {
       setLocation(null);
       fetchClockStatus();
 
+      // Haptic feedback on success
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Clock action error:', err);
       setError(err.response?.data?.error || 'Action failed');
+
+      // Haptic feedback on error
+      if (navigator.vibrate) {
+        navigator.vibrate([50, 50, 50]);
+      }
     } finally {
       setSubmitting(false);
     }
