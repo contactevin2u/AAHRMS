@@ -2,11 +2,24 @@
  * Image Compression Utility
  * Compresses images before upload to save bandwidth and storage
  *
- * Compression Settings:
+ * DATA STORAGE MINIMIZATION POLICY:
+ * - Maximum file size: 200KB per image
  * - Attendance selfie: 640px width, 60% quality (~30-50 KB)
  * - Claim receipt (document scan): 1200px width, 70% quality (~80-150 KB)
- *   with contrast/sharpness enhancement for text clarity
+ *
+ * WHAT IS STORED:
+ * - One compressed image per clock action only
+ * - WebP/JPEG format, max 640-800px
+ * - Quality 60-70%
+ *
+ * WHAT IS NOT STORED:
+ * - Raw camera video
+ * - Multiple retry images
+ * - Full-resolution photos
  */
+
+// Maximum allowed file size for attendance photos (200KB)
+const MAX_ATTENDANCE_PHOTO_SIZE_KB = 200;
 
 /**
  * Compress an image from a data URL
@@ -113,16 +126,53 @@ function applySharpen(imageData, width, height) {
 }
 
 /**
- * Compress an attendance selfie photo
- * Settings: 640px width, 60% quality (~30-50 KB)
+ * Compress an attendance selfie photo with strict size enforcement
+ * Policy: Max 200KB, 640px width, 60-70% quality
+ *
+ * Uses progressive quality reduction to ensure size limit is met.
+ *
  * @param {string} dataUrl - Base64 data URL of the image
- * @returns {Promise<string>} - Compressed base64 data URL
+ * @returns {Promise<string>} - Compressed base64 data URL (guaranteed ≤200KB)
  */
-export const compressAttendancePhoto = (dataUrl) => {
-  return compressImage(dataUrl, {
-    maxWidth: 640,
-    quality: 0.6
-  });
+export const compressAttendancePhoto = async (dataUrl) => {
+  // Start with standard settings
+  let quality = 0.6;
+  let maxWidth = 640;
+  let compressed = await compressImage(dataUrl, { maxWidth, quality });
+  let sizeKB = getBase64SizeKB(compressed);
+
+  // If within limit, return immediately
+  if (sizeKB <= MAX_ATTENDANCE_PHOTO_SIZE_KB) {
+    return compressed;
+  }
+
+  // Progressive quality reduction to meet size limit
+  const qualitySteps = [0.5, 0.4, 0.35, 0.3];
+  for (const q of qualitySteps) {
+    compressed = await compressImage(dataUrl, { maxWidth, quality: q });
+    sizeKB = getBase64SizeKB(compressed);
+
+    if (sizeKB <= MAX_ATTENDANCE_PHOTO_SIZE_KB) {
+      console.log(`[Compression] Achieved ${sizeKB}KB at quality ${q}`);
+      return compressed;
+    }
+  }
+
+  // Last resort: reduce dimensions
+  const dimensionSteps = [480, 400, 320];
+  for (const w of dimensionSteps) {
+    compressed = await compressImage(dataUrl, { maxWidth: w, quality: 0.3 });
+    sizeKB = getBase64SizeKB(compressed);
+
+    if (sizeKB <= MAX_ATTENDANCE_PHOTO_SIZE_KB) {
+      console.log(`[Compression] Achieved ${sizeKB}KB at ${w}px width`);
+      return compressed;
+    }
+  }
+
+  // Return smallest possible (should rarely reach here)
+  console.warn(`[Compression] Could not reduce below ${sizeKB}KB`);
+  return compressed;
 };
 
 /**

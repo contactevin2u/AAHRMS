@@ -2,11 +2,46 @@
  * ESS Clock-in Routes
  * Handles employee attendance clock-in/out with 4-action structure.
  *
- * MANDATORY REQUIREMENTS FOR ALL CLOCK ACTIONS:
- * - System timestamp (auto-captured from server)
- * - GPS location (latitude + longitude + address)
- * - Live selfie photo
- * - Face detection validation
+ * =============================================================================
+ * DATA STORAGE MINIMIZATION POLICY
+ * =============================================================================
+ *
+ * WHAT IS STORED (Minimum Required):
+ * - employee_id, company_id, outlet_id, date
+ * - clock_action_type (clock_in_1, clock_out_1, clock_in_2, clock_out_2)
+ * - server_timestamp (UTC) - NEVER client timestamp
+ * - total_work_hours, ot_hours (calculated)
+ * - status, approved_by, approved_at
+ *
+ * LOCATION (Minimal):
+ * - latitude (decimal)
+ * - longitude (decimal)
+ * - address (optional, resolved text)
+ *
+ * SELFIE (Optimized):
+ * - One compressed image per clock action (≤200KB)
+ * - JPEG format, max 640px, quality 60-70%
+ *
+ * FACE DETECTION (Not Biometric):
+ * - face_detected (boolean)
+ * - faces_count (integer, must be 1)
+ * - detection_confidence (decimal, optional)
+ *
+ * WHAT IS NOT STORED:
+ * - Full-resolution selfies
+ * - Video recordings
+ * - GPS traces / movement history
+ * - Face recognition / biometric vectors
+ * - Facial landmarks / templates
+ * - Historical retry images
+ * - Client-side timestamps
+ *
+ * RETENTION POLICY:
+ * - Attendance records: 7 years (audit / payroll requirement)
+ * - Selfie images: 6-12 months, then auto-delete
+ * - Location data: Same as selfie retention
+ *
+ * =============================================================================
  *
  * Actions:
  * - clock_in_1: Start work
@@ -22,6 +57,9 @@ const { asyncHandler, ValidationError } = require('../../middleware/errorHandler
 
 // Standard work time: 8.5 hours = 510 minutes
 const STANDARD_WORK_MINUTES = 510;
+
+// Maximum allowed photo size (200KB as per storage minimization policy)
+const MAX_PHOTO_SIZE_KB = 200;
 
 // Middleware to verify employee token
 const authenticateEmployee = async (req, res, next) => {
@@ -105,8 +143,22 @@ function getCurrentDate() {
 }
 
 /**
+ * Calculate base64 image size in KB
+ * @param {string} base64 - Base64 string (with or without data URL prefix)
+ * @returns {number} - Size in KB
+ */
+function getBase64SizeKB(base64) {
+  if (!base64) return 0;
+  const base64Data = base64.split(',').pop();
+  const sizeInBytes = (base64Data.length * 3) / 4;
+  return Math.round(sizeInBytes / 1024);
+}
+
+/**
  * Validate mandatory clock data
  * ALL clock actions require: photo, GPS location, and face detection
+ *
+ * STORAGE MINIMIZATION: Photo must be ≤200KB
  */
 function validateClockData(data, action) {
   const errors = [];
@@ -114,6 +166,12 @@ function validateClockData(data, action) {
   // Photo is mandatory for ALL actions
   if (!data.photo_base64) {
     errors.push('Photo is required');
+  } else {
+    // Validate photo size (storage minimization policy)
+    const photoSizeKB = getBase64SizeKB(data.photo_base64);
+    if (photoSizeKB > MAX_PHOTO_SIZE_KB) {
+      errors.push(`Photo size (${photoSizeKB}KB) exceeds maximum allowed (${MAX_PHOTO_SIZE_KB}KB). Please compress the image.`);
+    }
   }
 
   // GPS location is mandatory for ALL actions
