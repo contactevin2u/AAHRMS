@@ -335,13 +335,12 @@ async function manualApproveClaim(claimId, adminId, notes = null) {
     UPDATE claims SET
       status = 'approved',
       approval_type = 'manual',
-      approved_by = $2,
+      approver_id = $2,
       approved_at = NOW(),
-      remarks = COALESCE($3, remarks),
       updated_at = NOW()
     WHERE id = $1 AND status = 'pending'
     RETURNING *
-  `, [claimId, adminId, notes]);
+  `, [claimId, adminId]);
 
   if (result.rows.length === 0) {
     return { success: false, reason: 'Claim not found or not pending' };
@@ -371,8 +370,7 @@ async function rejectClaim(claimId, adminId, reason) {
   const result = await pool.query(`
     UPDATE claims SET
       status = 'rejected',
-      rejected_by = $2,
-      rejected_at = NOW(),
+      approver_id = $2,
       rejection_reason = $3,
       updated_at = NOW()
     WHERE id = $1 AND status = 'pending'
