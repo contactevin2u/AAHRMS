@@ -2,8 +2,19 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { essApi } from '../api';
 import { compressAttendancePhoto, getBase64SizeKB } from '../utils/imageCompression';
+import { preloadFaceDetection } from '../utils/faceDetection';
+import ClockConfirmation from '../components/ClockConfirmation';
 import './StaffClockIn.css';
 
+/**
+ * Staff Clock In Page
+ *
+ * ALL clock actions require:
+ * - System timestamp (auto-captured)
+ * - GPS location with address
+ * - Live selfie photo
+ * - Face detection validation
+ */
 function StaffClockIn() {
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -13,15 +24,26 @@ function StaffClockIn() {
   const [employeeInfo, setEmployeeInfo] = useState(null);
   const [clockStatus, setClockStatus] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Camera and photo state
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
+
+  // Location state
   const [location, setLocation] = useState(null);
   const [locationError, setLocationError] = useState('');
   const [gettingLocation, setGettingLocation] = useState(false);
+
+  // Confirmation modal state
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+
+  // Preload face detection models on component mount
+  useEffect(() => {
+    preloadFaceDetection();
+  }, []);
 
   // Load employee info and status
   useEffect(() => {
@@ -142,44 +164,50 @@ function StaffClockIn() {
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 15000,
         maximumAge: 0
       }
     );
   };
 
-  // Handle clock action (unified for all 4 actions)
-  const handleClockAction = async (action) => {
-    // First clock-in requires photo and GPS
-    if (action === 'clock_in_1') {
-      if (!capturedPhoto) {
-        setError('Please capture a photo first');
-        return;
-      }
-      if (!location) {
-        setError('Please get your GPS location first');
-        return;
-      }
+  // Initiate clock action - opens confirmation modal
+  const initiateClockAction = (action) => {
+    // Validate required data before showing confirmation
+    if (!capturedPhoto) {
+      setError('Please capture a selfie photo first');
+      return;
+    }
+    if (!location) {
+      setError('Please get your GPS location first');
+      return;
     }
 
-    setSubmitting(true);
     setError('');
-    setSuccess('');
+    setPendingAction(action);
+    setShowConfirmation(true);
+  };
 
+  // Handle confirmed clock action
+  const handleConfirmedAction = async (confirmationData) => {
     try {
-      const payload = { action };
-
-      if (action === 'clock_in_1') {
-        payload.photo_base64 = capturedPhoto;
-        payload.latitude = location.latitude;
-        payload.longitude = location.longitude;
-      }
+      const payload = {
+        action: pendingAction,
+        photo_base64: confirmationData.photo,
+        latitude: confirmationData.location.latitude,
+        longitude: confirmationData.location.longitude,
+        address: confirmationData.location.address,
+        face_detected: confirmationData.faceDetected,
+        face_confidence: confirmationData.faceConfidence,
+        timestamp: confirmationData.timestamp
+      };
 
       const response = await essApi.clockAction(payload);
 
       setSuccess(response.data.message);
       setCapturedPhoto(null);
       setLocation(null);
+      setShowConfirmation(false);
+      setPendingAction(null);
       fetchClockStatus();
 
       // Haptic feedback on success
@@ -191,15 +219,27 @@ function StaffClockIn() {
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Clock action error:', err);
-      setError(err.response?.data?.error || 'Action failed');
+      setError(err.response?.data?.error || 'Action failed. Please try again.');
+      setShowConfirmation(false);
 
       // Haptic feedback on error
       if (navigator.vibrate) {
         navigator.vibrate([50, 50, 50]);
       }
-    } finally {
-      setSubmitting(false);
     }
+  };
+
+  // Cancel confirmation
+  const handleCancelConfirmation = () => {
+    setShowConfirmation(false);
+    setPendingAction(null);
+  };
+
+  // Handle retake from confirmation modal
+  const handleRetakeFromConfirmation = () => {
+    setShowConfirmation(false);
+    setPendingAction(null);
+    retakePhoto();
   };
 
   // Logout
@@ -235,12 +275,8 @@ function StaffClockIn() {
     clock_out_2: 'End Work'
   };
 
-  const actionIcons = {
-    clock_in_1: '9:00',
-    clock_out_1: '12:30',
-    clock_in_2: '13:30',
-    clock_out_2: '18:00'
-  };
+  // Check if capture section should be shown
+  const showCaptureSection = nextAction && status !== 'completed';
 
   return (
     <div className="staff-clockin-container">
@@ -313,22 +349,29 @@ function StaffClockIn() {
           )}
         </div>
 
-        {/* Clock In Section (requires photo + GPS) */}
-        {nextAction === 'clock_in_1' && (
+        {/* Capture Section - Required for ALL clock actions */}
+        {showCaptureSection && (
           <div className="action-card">
-            <h3>Clock In - Start Work</h3>
+            <h3>{actionLabels[nextAction] || 'Clock Action'}</h3>
+            <p className="mandatory-note">
+              Photo, GPS location, and face verification are required for all clock actions.
+            </p>
 
             {/* Camera Section */}
             <div className="camera-section">
               {!cameraActive && !capturedPhoto && (
                 <button onClick={startCamera} className="action-btn camera-btn">
-                  Open Camera
+                  Open Camera for Selfie
                 </button>
               )}
 
               {cameraActive && (
                 <div className="camera-preview">
                   <video ref={videoRef} autoPlay playsInline muted />
+                  <div className="camera-overlay">
+                    <div className="face-guide"></div>
+                    <p className="camera-hint">Position your face in the circle</p>
+                  </div>
                   <button onClick={capturePhoto} className="capture-btn">
                     Capture Photo
                   </button>
@@ -338,8 +381,11 @@ function StaffClockIn() {
               {capturedPhoto && (
                 <div className="photo-preview">
                   <img src={capturedPhoto} alt="Captured" />
+                  <div className="photo-status">
+                    <span className="check-mark">&#10003;</span> Photo captured
+                  </div>
                   <button onClick={retakePhoto} className="retake-btn">
-                    Retake
+                    Retake Photo
                   </button>
                 </div>
               )}
@@ -353,12 +399,24 @@ function StaffClockIn() {
                   className="action-btn gps-btn"
                   disabled={gettingLocation}
                 >
-                  {gettingLocation ? 'Getting Location...' : 'Get GPS Location'}
+                  {gettingLocation ? (
+                    <>
+                      <span className="spinner"></span>
+                      Getting Location...
+                    </>
+                  ) : (
+                    'Get GPS Location'
+                  )}
                 </button>
               ) : (
                 <div className="location-info">
-                  <span className="location-icon">GPS</span>
-                  <span>Location captured</span>
+                  <span className="location-icon">&#128205;</span>
+                  <div className="location-details">
+                    <span className="location-text">Location captured</span>
+                    <span className="location-coords">
+                      {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                    </span>
+                  </div>
                   <button onClick={getLocation} className="refresh-location">
                     Refresh
                   </button>
@@ -369,74 +427,28 @@ function StaffClockIn() {
 
             {/* Submit Button */}
             <button
-              onClick={() => handleClockAction('clock_in_1')}
-              className="submit-btn clock-in-btn"
-              disabled={submitting || !capturedPhoto || !location}
+              onClick={() => initiateClockAction(nextAction)}
+              className={`submit-btn ${nextAction === 'clock_in_1' ? 'clock-in-btn' : nextAction === 'clock_out_1' ? 'break-btn' : nextAction === 'clock_in_2' ? 'return-btn' : 'end-btn'}`}
+              disabled={!capturedPhoto || !location}
             >
-              {submitting ? 'Submitting...' : 'Start Work'}
+              {actionLabels[nextAction]}
             </button>
-          </div>
-        )}
 
-        {/* Break Button */}
-        {nextAction === 'clock_out_1' && (
-          <div className="action-card">
-            <h3>Going on Break?</h3>
-            <p className="action-note">
-              Started at {formatTime(record?.clock_in_1)}
-            </p>
-            <button
-              onClick={() => handleClockAction('clock_out_1')}
-              className="submit-btn break-btn"
-              disabled={submitting}
-            >
-              {submitting ? 'Processing...' : 'Go on Break'}
-            </button>
-            <p className="skip-note">
-              Or skip break and <button
-                className="link-btn"
-                onClick={() => handleClockAction('clock_out_2')}
-                disabled={submitting}
-              >
-                End Work directly
-              </button>
-            </p>
-          </div>
-        )}
-
-        {/* Return from Break */}
-        {nextAction === 'clock_in_2' && (
-          <div className="action-card">
-            <h3>Back from Break?</h3>
-            <p className="action-note">
-              Break started at {formatTime(record?.clock_out_1)}
-            </p>
-            <button
-              onClick={() => handleClockAction('clock_in_2')}
-              className="submit-btn return-btn"
-              disabled={submitting}
-            >
-              {submitting ? 'Processing...' : 'Return from Break'}
-            </button>
-          </div>
-        )}
-
-        {/* End Work */}
-        {nextAction === 'clock_out_2' && (
-          <div className="action-card">
-            <h3>End Your Work Day</h3>
-            <p className="action-note">
-              {record?.clock_in_2
-                ? `Returned at ${formatTime(record.clock_in_2)}`
-                : `Started at ${formatTime(record?.clock_in_1)}`}
-            </p>
-            <button
-              onClick={() => handleClockAction('clock_out_2')}
-              className="submit-btn end-btn"
-              disabled={submitting}
-            >
-              {submitting ? 'Processing...' : 'End Work'}
-            </button>
+            {/* Requirements Checklist */}
+            <div className="requirements-checklist">
+              <div className={`requirement ${capturedPhoto ? 'met' : ''}`}>
+                <span className="req-icon">{capturedPhoto ? '&#10003;' : '&#9675;'}</span>
+                <span>Selfie captured</span>
+              </div>
+              <div className={`requirement ${location ? 'met' : ''}`}>
+                <span className="req-icon">{location ? '&#10003;' : '&#9675;'}</span>
+                <span>GPS location</span>
+              </div>
+              <div className="requirement pending">
+                <span className="req-icon">&#9675;</span>
+                <span>Face verification (on confirm)</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -444,13 +456,24 @@ function StaffClockIn() {
         {status === 'completed' && (
           <div className="action-card completed">
             <h3>Great job today!</h3>
-            <p className="action-note">Your attendance has been recorded.</p>
+            <p className="action-note">Your attendance has been recorded and verified.</p>
           </div>
         )}
       </main>
 
       {/* Hidden canvas for capturing photos */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+      {/* Confirmation Modal */}
+      <ClockConfirmation
+        isOpen={showConfirmation}
+        action={pendingAction}
+        photo={capturedPhoto}
+        location={location}
+        onConfirm={handleConfirmedAction}
+        onCancel={handleCancelConfirmation}
+        onRetakePhoto={handleRetakeFromConfirmation}
+      />
     </div>
   );
 }

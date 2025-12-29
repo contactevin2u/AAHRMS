@@ -1,10 +1,18 @@
 /**
  * ESS Clock-in Routes
- * Handles employee attendance clock-in/out with 4-action structure:
- * - clock_in_1: Start work (requires photo + GPS)
- * - clock_out_1: Break (optional)
- * - clock_in_2: Return from break (optional)
- * - clock_out_2: End work (optional photo + GPS)
+ * Handles employee attendance clock-in/out with 4-action structure.
+ *
+ * MANDATORY REQUIREMENTS FOR ALL CLOCK ACTIONS:
+ * - System timestamp (auto-captured from server)
+ * - GPS location (latitude + longitude + address)
+ * - Live selfie photo
+ * - Face detection validation
+ *
+ * Actions:
+ * - clock_in_1: Start work
+ * - clock_out_1: Break
+ * - clock_in_2: Return from break
+ * - clock_out_2: End work
  */
 
 const express = require('express');
@@ -96,6 +104,34 @@ function getCurrentDate() {
   return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 }
 
+/**
+ * Validate mandatory clock data
+ * ALL clock actions require: photo, GPS location, and face detection
+ */
+function validateClockData(data, action) {
+  const errors = [];
+
+  // Photo is mandatory for ALL actions
+  if (!data.photo_base64) {
+    errors.push('Photo is required');
+  }
+
+  // GPS location is mandatory for ALL actions
+  if (data.latitude === undefined || data.latitude === null) {
+    errors.push('GPS latitude is required');
+  }
+  if (data.longitude === undefined || data.longitude === null) {
+    errors.push('GPS longitude is required');
+  }
+
+  // Face detection is mandatory for ALL actions
+  if (data.face_detected !== true) {
+    errors.push('Face detection validation is required. Please retake your photo with your face clearly visible.');
+  }
+
+  return errors;
+}
+
 // Get today's status (supports 4-action structure)
 router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   const employeeId = req.employee.id;
@@ -104,8 +140,10 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   const result = await pool.query(
     `SELECT id, work_date,
             clock_in_1, clock_out_1, clock_in_2, clock_out_2,
-            location_in_1, location_out_2,
-            photo_in_1, photo_out_2,
+            location_in_1, location_out_1, location_in_2, location_out_2,
+            address_in_1, address_out_1, address_in_2, address_out_2,
+            photo_in_1, photo_out_1, photo_in_2, photo_out_2,
+            face_detected_in_1, face_detected_out_1, face_detected_in_2, face_detected_out_2,
             total_work_minutes, ot_minutes, ot_rate,
             status, approval_status
      FROM clock_in_records
@@ -152,14 +190,32 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
 }));
 
 // Clock action (unified endpoint for all 4 actions)
+// ALL ACTIONS NOW REQUIRE: photo, GPS, face detection
 router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
-  const { action, photo_base64, latitude, longitude } = req.body;
+  const {
+    action,
+    photo_base64,
+    latitude,
+    longitude,
+    address,
+    face_detected,
+    face_confidence,
+    timestamp
+  } = req.body;
+
   const employeeId = req.employee.id;
   const today = getCurrentDate();
   const currentTime = getCurrentTime();
 
+  // Validate action type
   if (!['clock_in_1', 'clock_out_1', 'clock_in_2', 'clock_out_2'].includes(action)) {
     throw new ValidationError('Invalid action. Must be one of: clock_in_1, clock_out_1, clock_in_2, clock_out_2');
+  }
+
+  // Validate mandatory data for ALL actions
+  const validationErrors = validateClockData(req.body, action);
+  if (validationErrors.length > 0) {
+    throw new ValidationError(validationErrors.join('. '));
   }
 
   // Get employee info
@@ -181,39 +237,39 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
   );
 
   let record;
+  const locationStr = `${latitude},${longitude}`;
+
+  // Map action to field names
+  const actionSuffix = action.split('_').pop(); // '1' or '2'
+  const actionType = action.startsWith('clock_in') ? 'in' : 'out';
+  const fieldSuffix = `${actionType}_${actionSuffix}`;
 
   if (action === 'clock_in_1') {
-    // First clock-in of the day - requires photo and GPS
-    if (!photo_base64) {
-      throw new ValidationError('Photo is required for clock-in');
-    }
-    if (!latitude || !longitude) {
-      throw new ValidationError('GPS location is required for clock-in');
-    }
-
+    // First clock-in of the day
     if (existingRecord.rows.length > 0 && existingRecord.rows[0].clock_in_1) {
       throw new ValidationError('You have already clocked in for today');
     }
-
-    const locationStr = `${latitude},${longitude}`;
 
     if (existingRecord.rows.length === 0) {
       // Create new record
       record = await pool.query(
         `INSERT INTO clock_in_records
-         (employee_id, company_id, outlet_id, work_date, clock_in_1, photo_in_1, location_in_1, status, approval_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'in_progress', 'pending')
+         (employee_id, company_id, outlet_id, work_date,
+          clock_in_1, photo_in_1, location_in_1, address_in_1, face_detected_in_1, face_confidence_in_1,
+          status, approval_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'in_progress', 'pending')
          RETURNING *`,
-        [employeeId, company_id, outlet_id, today, currentTime, photo_base64, locationStr]
+        [employeeId, company_id, outlet_id, today, currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0]
       );
     } else {
       // Update existing record
       record = await pool.query(
         `UPDATE clock_in_records SET
-           clock_in_1 = $1, photo_in_1 = $2, location_in_1 = $3, status = 'in_progress'
-         WHERE employee_id = $4 AND work_date = $5
+           clock_in_1 = $1, photo_in_1 = $2, location_in_1 = $3, address_in_1 = $4,
+           face_detected_in_1 = $5, face_confidence_in_1 = $6, status = 'in_progress'
+         WHERE employee_id = $7 AND work_date = $8
          RETURNING *`,
-        [currentTime, photo_base64, locationStr, employeeId, today]
+        [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
       );
     }
 
@@ -234,10 +290,12 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     }
 
     record = await pool.query(
-      `UPDATE clock_in_records SET clock_out_1 = $1
-       WHERE employee_id = $2 AND work_date = $3
+      `UPDATE clock_in_records SET
+         clock_out_1 = $1, photo_out_1 = $2, location_out_1 = $3, address_out_1 = $4,
+         face_detected_out_1 = $5, face_confidence_out_1 = $6
+       WHERE employee_id = $7 AND work_date = $8
        RETURNING *`,
-      [currentTime, employeeId, today]
+      [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
     );
 
     res.json({
@@ -257,10 +315,12 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     }
 
     record = await pool.query(
-      `UPDATE clock_in_records SET clock_in_2 = $1
-       WHERE employee_id = $2 AND work_date = $3
+      `UPDATE clock_in_records SET
+         clock_in_2 = $1, photo_in_2 = $2, location_in_2 = $3, address_in_2 = $4,
+         face_detected_in_2 = $5, face_confidence_in_2 = $6
+       WHERE employee_id = $7 AND work_date = $8
        RETURNING *`,
-      [currentTime, employeeId, today]
+      [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
     );
 
     res.json({
@@ -279,8 +339,6 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       throw new ValidationError('You have already clocked out for the day');
     }
 
-    const locationStr = (latitude && longitude) ? `${latitude},${longitude}` : null;
-
     // Calculate work time
     const updatedRecord = {
       ...existingRecord.rows[0],
@@ -290,15 +348,12 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
 
     record = await pool.query(
       `UPDATE clock_in_records SET
-         clock_out_2 = $1,
-         photo_out_2 = $2,
-         location_out_2 = $3,
-         total_work_minutes = $4,
-         ot_minutes = $5,
-         status = 'completed'
-       WHERE employee_id = $6 AND work_date = $7
+         clock_out_2 = $1, photo_out_2 = $2, location_out_2 = $3, address_out_2 = $4,
+         face_detected_out_2 = $5, face_confidence_out_2 = $6,
+         total_work_minutes = $7, ot_minutes = $8, status = 'completed'
+       WHERE employee_id = $9 AND work_date = $10
        RETURNING *`,
-      [currentTime, photo_base64 || null, locationStr, totalMinutes, otMinutes, employeeId, today]
+      [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, employeeId, today]
     );
 
     res.json({
@@ -312,21 +367,20 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
   }
 }));
 
-// Legacy clock-in endpoint (backwards compatibility)
+// Legacy clock-in endpoint (backwards compatibility) - now requires all fields
 router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
   req.body.action = 'clock_in_1';
-  // Forward to the action endpoint
-  const { photo_base64, latitude, longitude } = req.body;
+
+  // Validate mandatory data
+  const validationErrors = validateClockData(req.body, 'clock_in_1');
+  if (validationErrors.length > 0) {
+    throw new ValidationError(validationErrors.join('. '));
+  }
+
+  const { photo_base64, latitude, longitude, address, face_detected, face_confidence } = req.body;
   const employeeId = req.employee.id;
   const today = getCurrentDate();
   const currentTime = getCurrentTime();
-
-  if (!photo_base64) {
-    throw new ValidationError('Photo is required for clock-in');
-  }
-  if (!latitude || !longitude) {
-    throw new ValidationError('GPS location is required for clock-in');
-  }
 
   const empResult = await pool.query(
     'SELECT company_id, outlet_id FROM employees WHERE id = $1',
@@ -353,15 +407,20 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
 
   const record = await pool.query(
     `INSERT INTO clock_in_records
-     (employee_id, company_id, outlet_id, work_date, clock_in_1, photo_in_1, location_in_1, status, approval_status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'in_progress', 'pending')
+     (employee_id, company_id, outlet_id, work_date,
+      clock_in_1, photo_in_1, location_in_1, address_in_1, face_detected_in_1, face_confidence_in_1,
+      status, approval_status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'in_progress', 'pending')
      ON CONFLICT (employee_id, work_date) DO UPDATE SET
        clock_in_1 = EXCLUDED.clock_in_1,
        photo_in_1 = EXCLUDED.photo_in_1,
        location_in_1 = EXCLUDED.location_in_1,
+       address_in_1 = EXCLUDED.address_in_1,
+       face_detected_in_1 = EXCLUDED.face_detected_in_1,
+       face_confidence_in_1 = EXCLUDED.face_confidence_in_1,
        status = 'in_progress'
      RETURNING *`,
-    [employeeId, company_id, outlet_id, today, currentTime, photo_base64, locationStr]
+    [employeeId, company_id, outlet_id, today, currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0]
   );
 
   res.json({
@@ -370,8 +429,15 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
   });
 }));
 
-// Legacy clock-out endpoint (backwards compatibility)
+// Legacy clock-out endpoint (backwards compatibility) - now requires all fields
 router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
+  // Validate mandatory data
+  const validationErrors = validateClockData(req.body, 'clock_out_2');
+  if (validationErrors.length > 0) {
+    throw new ValidationError(validationErrors.join('. '));
+  }
+
+  const { photo_base64, latitude, longitude, address, face_detected, face_confidence } = req.body;
   const employeeId = req.employee.id;
   const today = getCurrentDate();
   const currentTime = getCurrentTime();
@@ -389,6 +455,8 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError('You have already clocked out for the day');
   }
 
+  const locationStr = `${latitude},${longitude}`;
+
   // Calculate work time
   const updatedRecord = {
     ...existingRecord.rows[0],
@@ -399,12 +467,17 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
   const record = await pool.query(
     `UPDATE clock_in_records SET
        clock_out_2 = $1,
-       total_work_minutes = $2,
-       ot_minutes = $3,
+       photo_out_2 = $2,
+       location_out_2 = $3,
+       address_out_2 = $4,
+       face_detected_out_2 = $5,
+       face_confidence_out_2 = $6,
+       total_work_minutes = $7,
+       ot_minutes = $8,
        status = 'completed'
-     WHERE employee_id = $4 AND work_date = $5
+     WHERE employee_id = $9 AND work_date = $10
      RETURNING *`,
-    [currentTime, totalMinutes, otMinutes, employeeId, today]
+    [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, employeeId, today]
   );
 
   res.json({
@@ -428,6 +501,9 @@ router.get('/history', authenticateEmployee, asyncHandler(async (req, res) => {
   const result = await pool.query(
     `SELECT id, work_date,
             clock_in_1, clock_out_1, clock_in_2, clock_out_2,
+            location_in_1, location_out_1, location_in_2, location_out_2,
+            address_in_1, address_out_1, address_in_2, address_out_2,
+            face_detected_in_1, face_detected_out_1, face_detected_in_2, face_detected_out_2,
             total_work_minutes, ot_minutes,
             status, approval_status
      FROM clock_in_records
