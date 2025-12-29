@@ -92,19 +92,23 @@ export const payrollApi = {
   getPayslips: (year, month) => api.get(`/payroll/payslips/${year}/${month}`),
 };
 
-// New Payroll System (v2)
+// Unified Payroll System (merged V1+V2)
 export const payrollV2Api = {
+  // Company payroll settings
+  getSettings: () => api.get('/payroll/settings'),
+  updateSettings: (data) => api.put('/payroll/settings', data),
+
   // Payroll Runs
-  getRuns: (params) => api.get('/payroll-v2/runs', { params }),
-  getRun: (id) => api.get(`/payroll-v2/runs/${id}`),
-  createRun: (data) => api.post('/payroll-v2/runs', data),
-  deleteRun: (id) => api.delete(`/payroll-v2/runs/${id}`),
-  finalizeRun: (id) => api.post(`/payroll-v2/runs/${id}/finalize`),
-  getBankFile: (id) => api.get(`/payroll-v2/runs/${id}/bank-file`, { responseType: 'blob' }),
+  getRuns: (params) => api.get('/payroll/runs', { params }),
+  getRun: (id) => api.get(`/payroll/runs/${id}`),
+  createRun: (data) => api.post('/payroll/runs', data),
+  deleteRun: (id) => api.delete(`/payroll/runs/${id}`),
+  finalizeRun: (id) => api.post(`/payroll/runs/${id}/finalize`),
+  getBankFile: (id) => api.get(`/payroll/runs/${id}/bank-file`, { responseType: 'blob' }),
 
   // Payroll Items
-  updateItem: (id, data) => api.put(`/payroll-v2/items/${id}`, data),
-  getItemPayslip: (id) => api.get(`/payroll-v2/items/${id}/payslip`),
+  updateItem: (id, data) => api.put(`/payroll/items/${id}`, data),
+  getItemPayslip: (id) => api.get(`/payroll/items/${id}/payslip`),
 };
 
 // Leave Management

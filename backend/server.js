@@ -9,8 +9,7 @@ const feedbackRoutes = require('./routes/feedback');
 const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employees');
 const departmentRoutes = require('./routes/departments');
-const payrollRoutes = require('./routes/payroll');
-const payrollNewRoutes = require('./routes/payrollNew');
+const payrollUnifiedRoutes = require('./routes/payrollUnified');  // Unified payroll engine
 const contributionsRoutes = require('./routes/contributions');
 const leaveRoutes = require('./routes/leave');
 const claimsRoutes = require('./routes/claims');
@@ -49,8 +48,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
-app.use('/api/payroll', payrollRoutes);
-app.use('/api/payroll-v2', payrollNewRoutes);  // New payroll system
+app.use('/api/payroll', payrollUnifiedRoutes);  // Unified payroll engine (merged V1+V2)
 app.use('/api/contributions', contributionsRoutes);  // Government contributions
 app.use('/api/leave', leaveRoutes);
 app.use('/api/claims', claimsRoutes);
