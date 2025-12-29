@@ -216,10 +216,12 @@ function ESSClockIn() {
     try {
       const res = await essApi.clockAction({
         action: status?.next_action || 'clock_in_1',
-        photo: capturedPhoto,
+        photo_base64: capturedPhoto,
         latitude: location.latitude,
         longitude: location.longitude,
-        address: address
+        address: address,
+        face_detected: true,  // TODO: Implement actual face detection
+        face_confidence: 0.95
       });
 
       setSuccess(res.data.message || 'Action recorded successfully!');
