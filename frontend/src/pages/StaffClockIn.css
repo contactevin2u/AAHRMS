@@ -695,3 +695,69 @@
   margin-right: 8px;
   vertical-align: middle;
 }
+
+/* Liveness Indicator */
+.liveness-indicator {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  z-index: 20;
+  backdrop-filter: blur(8px);
+}
+
+.liveness-indicator.waiting {
+  background: rgba(255, 152, 0, 0.9);
+  color: white;
+  animation: pulse-warning 1s ease-in-out infinite;
+}
+
+.liveness-indicator.ready {
+  background: rgba(76, 175, 80, 0.9);
+  color: white;
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Capture button disabled state */
+.capture-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.capture-btn.disabled::after {
+  background: #999;
+}
+
+/* Security Notice */
+.security-notice {
+  text-align: center;
+  margin-top: 16px;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  color: #666;
+}
+
+.security-notice small {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Location accuracy */
+.location-accuracy {
+  font-size: 11px;
+  color: #666;
+}

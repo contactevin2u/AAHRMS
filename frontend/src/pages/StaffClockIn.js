@@ -2,18 +2,28 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { essApi } from '../api';
 import { compressAttendancePhoto, getBase64SizeKB } from '../utils/imageCompression';
-import { preloadFaceDetection } from '../utils/faceDetection';
+import { preloadFaceDetection, getLivenessDelay } from '../utils/faceDetection';
 import ClockConfirmation from '../components/ClockConfirmation';
 import './StaffClockIn.css';
 
 /**
- * Staff Clock In Page
+ * Staff Clock In Page with Anti-Cheating Controls
  *
- * ALL clock actions require:
- * - System timestamp (auto-captured)
- * - GPS location with address
- * - Live selfie photo
- * - Face detection validation
+ * MANDATORY REQUIREMENTS FOR ALL CLOCK ACTIONS:
+ * - System timestamp (server-side only)
+ * - GPS location (latitude + longitude + address)
+ * - Live selfie photo (camera capture only, NO gallery uploads)
+ * - Face detection validation (single face, landmarks detected)
+ * - Image quality validation (not blurred, proper exposure)
+ * - Liveness check (minimum capture delay)
+ *
+ * ANTI-CHEATING CONTROLS:
+ * - Camera-only capture (no file input)
+ * - Minimum delay before capture allowed (liveness check)
+ * - Server-side timestamp (no client override)
+ * - GPS permission enforced
+ * - Single face only (prevent proxy clock-in)
+ * - All records are immutable after submission
  */
 function StaffClockIn() {
   const navigate = useNavigate();
@@ -30,6 +40,9 @@ function StaffClockIn() {
   // Camera and photo state
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const [cameraStartTime, setCameraStartTime] = useState(null);
+  const [canCapture, setCanCapture] = useState(false);
+  const [captureCountdown, setCaptureCountdown] = useState(0);
 
   // Location state
   const [location, setLocation] = useState(null);
@@ -39,6 +52,17 @@ function StaffClockIn() {
   // Confirmation modal state
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
+
+  // Capture metadata for validation
+  const [captureMetadata, setCaptureMetadata] = useState({
+    captureSource: 'camera',
+    fromCamera: true,
+    captureTime: null,
+    cameraActiveTime: 0
+  });
+
+  // Liveness delay (milliseconds)
+  const LIVENESS_DELAY = getLivenessDelay();
 
   // Preload face detection models on component mount
   useEffect(() => {
@@ -56,6 +80,29 @@ function StaffClockIn() {
     fetchClockStatus();
   }, [navigate]);
 
+  // Liveness countdown timer
+  useEffect(() => {
+    if (!cameraActive || !cameraStartTime) return;
+
+    const checkLiveness = () => {
+      const elapsed = Date.now() - cameraStartTime;
+      const remaining = Math.max(0, LIVENESS_DELAY - elapsed);
+
+      if (remaining === 0) {
+        setCanCapture(true);
+        setCaptureCountdown(0);
+      } else {
+        setCanCapture(false);
+        setCaptureCountdown(Math.ceil(remaining / 1000));
+      }
+    };
+
+    checkLiveness();
+    const interval = setInterval(checkLiveness, 100);
+
+    return () => clearInterval(interval);
+  }, [cameraActive, cameraStartTime, LIVENESS_DELAY]);
+
   const fetchClockStatus = async () => {
     try {
       const response = await essApi.getClockInStatus();
@@ -71,6 +118,9 @@ function StaffClockIn() {
   const startCamera = useCallback(async () => {
     try {
       setError('');
+      setCapturedPhoto(null);
+      setCanCapture(false);
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
@@ -78,16 +128,27 @@ function StaffClockIn() {
           height: { ideal: 480 }
         }
       });
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
+
       setCameraActive(true);
+      setCameraStartTime(Date.now());
+      setCaptureCountdown(Math.ceil(LIVENESS_DELAY / 1000));
+
     } catch (err) {
       console.error('Camera error:', err);
-      setError('Unable to access camera. Please allow camera permission.');
+      if (err.name === 'NotAllowedError') {
+        setError('Camera permission denied. Please allow camera access to clock in.');
+      } else if (err.name === 'NotFoundError') {
+        setError('No camera found. Please ensure your device has a camera.');
+      } else {
+        setError('Unable to access camera. Please allow camera permission.');
+      }
     }
-  }, []);
+  }, [LIVENESS_DELAY]);
 
   // Stop camera
   const stopCamera = useCallback(() => {
@@ -96,6 +157,8 @@ function StaffClockIn() {
       streamRef.current = null;
     }
     setCameraActive(false);
+    setCameraStartTime(null);
+    setCanCapture(false);
   }, []);
 
   // Cleanup on unmount
@@ -105,9 +168,15 @@ function StaffClockIn() {
     };
   }, [stopCamera]);
 
-  // Capture photo
+  // Capture photo with liveness check
   const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current) return;
+
+    // Enforce liveness delay
+    if (!canCapture) {
+      setError('Please wait before capturing. This prevents photo replay attacks.');
+      return;
+    }
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -118,13 +187,29 @@ function StaffClockIn() {
     ctx.drawImage(video, 0, 0);
 
     const rawDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    const captureTime = Date.now();
+    const cameraActiveTime = captureTime - cameraStartTime;
 
     try {
       const compressedDataUrl = await compressAttendancePhoto(rawDataUrl);
       const sizeKB = getBase64SizeKB(compressedDataUrl);
       console.log(`Photo compressed to ${sizeKB} KB`);
+
+      // Set capture metadata for validation
+      setCaptureMetadata({
+        captureSource: 'camera',
+        fromCamera: true,
+        captureTime: captureTime,
+        cameraActiveTime: cameraActiveTime
+      });
+
       setCapturedPhoto(compressedDataUrl);
       stopCamera();
+
+      // Haptic feedback on capture
+      if (navigator.vibrate) {
+        navigator.vibrate(30);
+      }
     } catch (err) {
       console.error('Compression error:', err);
       setCapturedPhoto(rawDataUrl);
@@ -135,13 +220,19 @@ function StaffClockIn() {
   // Retake photo
   const retakePhoto = () => {
     setCapturedPhoto(null);
+    setCaptureMetadata({
+      captureSource: null,
+      fromCamera: false,
+      captureTime: null,
+      cameraActiveTime: 0
+    });
     startCamera();
   };
 
-  // Get GPS location
+  // Get GPS location (mandatory)
   const getLocation = () => {
     if (!navigator.geolocation) {
-      setLocationError('Geolocation is not supported by your browser');
+      setLocationError('Geolocation is not supported by your browser. Clock-in requires GPS.');
       return;
     }
 
@@ -153,13 +244,35 @@ function StaffClockIn() {
         setLocation({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
+          accuracy: position.coords.accuracy,
+          timestamp: position.timestamp
         });
         setGettingLocation(false);
+
+        // Haptic feedback
+        if (navigator.vibrate) {
+          navigator.vibrate(30);
+        }
       },
       (err) => {
         console.error('Location error:', err);
-        setLocationError('Unable to get location. Please enable GPS.');
+        let errorMessage = 'Unable to get location. ';
+
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            errorMessage += 'Location permission denied. GPS is required for clock-in.';
+            break;
+          case err.POSITION_UNAVAILABLE:
+            errorMessage += 'Location unavailable. Please enable GPS.';
+            break;
+          case err.TIMEOUT:
+            errorMessage += 'Location request timed out. Please try again.';
+            break;
+          default:
+            errorMessage += 'Please enable GPS and try again.';
+        }
+
+        setLocationError(errorMessage);
         setGettingLocation(false);
       },
       {
@@ -174,11 +287,26 @@ function StaffClockIn() {
   const initiateClockAction = (action) => {
     // Validate required data before showing confirmation
     if (!capturedPhoto) {
-      setError('Please capture a selfie photo first');
+      setError('Please capture a selfie photo first. Gallery uploads are not allowed.');
       return;
     }
+
+    // Validate capture is from camera
+    if (!captureMetadata.fromCamera) {
+      setError('Photo must be captured from camera. Gallery uploads are not allowed.');
+      setCapturedPhoto(null);
+      return;
+    }
+
+    // Validate liveness (minimum camera active time)
+    if (captureMetadata.cameraActiveTime < LIVENESS_DELAY) {
+      setError('Photo capture too fast. Please retake with camera open longer.');
+      setCapturedPhoto(null);
+      return;
+    }
+
     if (!location) {
-      setError('Please get your GPS location first');
+      setError('GPS location is required. Please get your location first.');
       return;
     }
 
@@ -198,7 +326,10 @@ function StaffClockIn() {
         address: confirmationData.location.address,
         face_detected: confirmationData.faceDetected,
         face_confidence: confirmationData.faceConfidence,
-        timestamp: confirmationData.timestamp
+        timestamp: confirmationData.timestamp,
+        // Anti-cheating metadata
+        capture_source: 'camera',
+        liveness_verified: captureMetadata.cameraActiveTime >= LIVENESS_DELAY
       };
 
       const response = await essApi.clockAction(payload);
@@ -208,6 +339,12 @@ function StaffClockIn() {
       setLocation(null);
       setShowConfirmation(false);
       setPendingAction(null);
+      setCaptureMetadata({
+        captureSource: null,
+        fromCamera: false,
+        captureTime: null,
+        cameraActiveTime: 0
+      });
       fetchClockStatus();
 
       // Haptic feedback on success
@@ -353,14 +490,17 @@ function StaffClockIn() {
         {showCaptureSection && (
           <div className="action-card">
             <h3>{actionLabels[nextAction] || 'Clock Action'}</h3>
-            <p className="mandatory-note">
-              Photo, GPS location, and face verification are required for all clock actions.
-            </p>
+            <div className="mandatory-note">
+              <strong>Required:</strong> Live selfie with face verification + GPS location.
+              <br />
+              <small>Gallery uploads not allowed. Single face only.</small>
+            </div>
 
             {/* Camera Section */}
             <div className="camera-section">
               {!cameraActive && !capturedPhoto && (
                 <button onClick={startCamera} className="action-btn camera-btn">
+                  <span className="btn-icon">&#128247;</span>
                   Open Camera for Selfie
                 </button>
               )}
@@ -370,10 +510,28 @@ function StaffClockIn() {
                   <video ref={videoRef} autoPlay playsInline muted />
                   <div className="camera-overlay">
                     <div className="face-guide"></div>
-                    <p className="camera-hint">Position your face in the circle</p>
+                    <p className="camera-hint">
+                      {canCapture
+                        ? 'Position your face and tap capture'
+                        : `Hold steady... ${captureCountdown}s`}
+                    </p>
                   </div>
-                  <button onClick={capturePhoto} className="capture-btn">
-                    Capture Photo
+
+                  {/* Liveness indicator */}
+                  <div className={`liveness-indicator ${canCapture ? 'ready' : 'waiting'}`}>
+                    {canCapture ? (
+                      <span>&#10003; Ready to capture</span>
+                    ) : (
+                      <span>&#9201; Verifying live camera... {captureCountdown}s</span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={capturePhoto}
+                    className={`capture-btn ${canCapture ? '' : 'disabled'}`}
+                    disabled={!canCapture}
+                  >
+                    {canCapture ? 'Capture' : captureCountdown}
                   </button>
                 </div>
               )}
@@ -382,7 +540,7 @@ function StaffClockIn() {
                 <div className="photo-preview">
                   <img src={capturedPhoto} alt="Captured" />
                   <div className="photo-status">
-                    <span className="check-mark">&#10003;</span> Photo captured
+                    <span className="check-mark">&#10003;</span> Live photo captured
                   </div>
                   <button onClick={retakePhoto} className="retake-btn">
                     Retake Photo
@@ -405,7 +563,10 @@ function StaffClockIn() {
                       Getting Location...
                     </>
                   ) : (
-                    'Get GPS Location'
+                    <>
+                      <span className="btn-icon">&#128205;</span>
+                      Get GPS Location
+                    </>
                   )}
                 </button>
               ) : (
@@ -416,6 +577,11 @@ function StaffClockIn() {
                     <span className="location-coords">
                       {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
                     </span>
+                    {location.accuracy && (
+                      <span className="location-accuracy">
+                        Accuracy: {Math.round(location.accuracy)}m
+                      </span>
+                    )}
                   </div>
                   <button onClick={getLocation} className="refresh-location">
                     Refresh
@@ -438,7 +604,7 @@ function StaffClockIn() {
             <div className="requirements-checklist">
               <div className={`requirement ${capturedPhoto ? 'met' : ''}`}>
                 <span className="req-icon">{capturedPhoto ? '&#10003;' : '&#9675;'}</span>
-                <span>Selfie captured</span>
+                <span>Live selfie (camera only)</span>
               </div>
               <div className={`requirement ${location ? 'met' : ''}`}>
                 <span className="req-icon">{location ? '&#10003;' : '&#9675;'}</span>
@@ -446,8 +612,19 @@ function StaffClockIn() {
               </div>
               <div className="requirement pending">
                 <span className="req-icon">&#9675;</span>
-                <span>Face verification (on confirm)</span>
+                <span>Face verification</span>
               </div>
+              <div className="requirement pending">
+                <span className="req-icon">&#9675;</span>
+                <span>Image quality check</span>
+              </div>
+            </div>
+
+            {/* Anti-cheating notice */}
+            <div className="security-notice">
+              <small>
+                &#128274; Anti-cheating: Server timestamp, single face only, no gallery uploads
+              </small>
             </div>
           </div>
         )}
@@ -470,6 +647,7 @@ function StaffClockIn() {
         action={pendingAction}
         photo={capturedPhoto}
         location={location}
+        captureMetadata={captureMetadata}
         onConfirm={handleConfirmedAction}
         onCancel={handleCancelConfirmation}
         onRetakePhoto={handleRetakeFromConfirmation}
