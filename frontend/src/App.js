@@ -24,7 +24,7 @@ import Settings from './pages/Settings';
 import SalesEntry from './pages/SalesEntry';
 import Attendance from './pages/Attendance';
 import BenefitsInKind from './pages/BenefitsInKind';
-// Employee Self-Service (ESS) imports
+// Employee Self-Service (ESS) imports - Legacy
 import EmployeeLogin from './pages/EmployeeLogin';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import EmployeeProfile from './pages/EmployeeProfile';
@@ -33,9 +33,11 @@ import EmployeeLeave from './pages/EmployeeLeave';
 import EmployeeClaims from './pages/EmployeeClaims';
 import EmployeeNotifications from './pages/EmployeeNotifications';
 import EmployeeLetters from './pages/EmployeeLetters';
-// Mimix Staff Portal
+// Mimix Staff Portal - Legacy
 import MimixLogin from './pages/MimixLogin';
 import StaffClockIn from './pages/StaffClockIn';
+// New Unified ESS PWA
+import { ESSLogin, ESSDashboard, ESSClockIn, ESSBenefits } from './pages/ess';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -51,6 +53,12 @@ function EmployeeProtectedRoute({ children }) {
 function StaffProtectedRoute({ children }) {
   const token = localStorage.getItem('employeeToken');
   return token ? children : <Navigate to="/staff/login" replace />;
+}
+
+// ESS Protected Route (unified)
+function ESSProtectedRoute({ children }) {
+  const token = localStorage.getItem('employeeToken');
+  return token ? children : <Navigate to="/ess/login" replace />;
 }
 
 function App() {
@@ -295,7 +303,7 @@ function App() {
           }
         />
 
-        {/* Mimix Staff Portal Routes */}
+        {/* Mimix Staff Portal Routes - Legacy */}
         <Route path="/staff/login" element={<MimixLogin />} />
         <Route
           path="/staff/clockin"
@@ -303,6 +311,81 @@ function App() {
             <StaffProtectedRoute>
               <StaffClockIn />
             </StaffProtectedRoute>
+          }
+        />
+
+        {/* Unified ESS PWA Routes */}
+        <Route path="/ess/login" element={<ESSLogin />} />
+        <Route
+          path="/ess/dashboard"
+          element={
+            <ESSProtectedRoute>
+              <ESSDashboard />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/profile"
+          element={
+            <ESSProtectedRoute>
+              <EmployeeProfile />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/payslips"
+          element={
+            <ESSProtectedRoute>
+              <EmployeePayslips />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/leave"
+          element={
+            <ESSProtectedRoute>
+              <EmployeeLeave />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/claims"
+          element={
+            <ESSProtectedRoute>
+              <EmployeeClaims />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/notifications"
+          element={
+            <ESSProtectedRoute>
+              <EmployeeNotifications />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/letters"
+          element={
+            <ESSProtectedRoute>
+              <EmployeeLetters />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/clock-in"
+          element={
+            <ESSProtectedRoute>
+              <ESSClockIn />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/benefits"
+          element={
+            <ESSProtectedRoute>
+              <ESSBenefits />
+            </ESSProtectedRoute>
           }
         />
 

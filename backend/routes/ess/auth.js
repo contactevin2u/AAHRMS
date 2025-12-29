@@ -1,6 +1,7 @@
 /**
  * ESS Authentication Routes
  * Handles employee login, password reset, and initial password setup
+ * Features HttpOnly cookie authentication for security
  */
 
 const express = require('express');
@@ -10,8 +11,44 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../../db');
 const { asyncHandler, ValidationError, AuthenticationError } = require('../../middleware/errorHandler');
+const { authenticateEmployee } = require('../../middleware/auth');
 
-// Employee Login
+// Cookie configuration
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+  maxAge: 8 * 60 * 60 * 1000, // 8 hours
+  path: '/'
+};
+
+/**
+ * Build feature flags based on company settings
+ */
+function buildFeatureFlags(employee, company) {
+  const groupingType = company?.grouping_type || 'department';
+  const companyId = employee.company_id;
+
+  return {
+    // Core features (all companies)
+    profile: true,
+    leave: true,
+    payslips: true,
+    notifications: true,
+    claims: true,
+    letters: true,
+
+    // Company-specific features
+    clockIn: groupingType === 'outlet',           // Mimix only (outlet-based)
+    clockInRequiresGPS: true,
+    clockInRequiresPhoto: true,
+    clockInRequiresFace: true,
+    benefitsInKind: companyId === 1,              // AA Alive only
+    lettersWithPDF: companyId === 1               // AA Alive only (has letterhead)
+  };
+}
+
+// Employee Login (email/password)
 router.post('/login', asyncHandler(async (req, res) => {
   const { login, password } = req.body;
 
@@ -21,8 +58,10 @@ router.post('/login', asyncHandler(async (req, res) => {
 
   // Find employee by email or employee_id, including company info
   const result = await pool.query(
-    `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled, e.department_id, e.company_id,
-            c.name as company_name, c.code as company_code, c.logo_url as company_logo
+    `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled,
+            e.department_id, e.company_id, e.outlet_id,
+            c.name as company_name, c.code as company_code, c.logo_url as company_logo,
+            c.grouping_type as company_grouping_type, c.settings as company_settings
      FROM employees e
      LEFT JOIN companies c ON e.company_id = c.id
      WHERE (e.email = $1 OR e.employee_id = $1) AND e.status = 'active'`,
@@ -60,7 +99,13 @@ router.post('/login', asyncHandler(async (req, res) => {
     [employee.id]
   );
 
-  // Generate JWT token with company context
+  // Build feature flags based on company
+  const features = buildFeatureFlags(employee, {
+    grouping_type: employee.company_grouping_type,
+    settings: employee.company_settings
+  });
+
+  // Generate JWT token with company context and features
   const token = jwt.sign(
     {
       id: employee.id,
@@ -68,14 +113,19 @@ router.post('/login', asyncHandler(async (req, res) => {
       name: employee.name,
       email: employee.email,
       role: 'employee',
-      company_id: employee.company_id
+      company_id: employee.company_id,
+      outlet_id: employee.outlet_id,
+      features
     },
     process.env.JWT_SECRET,
     { expiresIn: '8h' }
   );
 
+  // Set HttpOnly cookie
+  res.cookie('ess_token', token, COOKIE_OPTIONS);
+
   res.json({
-    token,
+    token, // Also return token for backward compatibility
     employee: {
       id: employee.id,
       employee_id: employee.employee_id,
@@ -84,7 +134,10 @@ router.post('/login', asyncHandler(async (req, res) => {
       company_id: employee.company_id,
       company_name: employee.company_name,
       company_code: employee.company_code,
-      company_logo: employee.company_logo
+      company_logo: employee.company_logo,
+      company_grouping_type: employee.company_grouping_type,
+      outlet_id: employee.outlet_id,
+      features
     }
   });
 }));
@@ -170,7 +223,7 @@ router.post('/reset-password', asyncHandler(async (req, res) => {
   res.json({ message: 'Password reset successfully. You can now login.' });
 }));
 
-// Login with Employee ID and IC Number (for Mimix/outlet-based companies)
+// Login with Employee ID and IC Number (available for all companies)
 router.post('/login-ic', asyncHandler(async (req, res) => {
   const { employee_id, ic_number } = req.body;
 
@@ -186,7 +239,7 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
     `SELECT e.id, e.employee_id, e.name, e.email, e.ic_number, e.status, e.ess_enabled,
             e.department_id, e.outlet_id, e.company_id,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
-            c.grouping_type as company_grouping_type,
+            c.grouping_type as company_grouping_type, c.settings as company_settings,
             o.name as outlet_name
      FROM employees e
      LEFT JOIN companies c ON e.company_id = c.id
@@ -218,7 +271,13 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
     [employee.id]
   );
 
-  // Generate JWT token with company context
+  // Build feature flags based on company
+  const features = buildFeatureFlags(employee, {
+    grouping_type: employee.company_grouping_type,
+    settings: employee.company_settings
+  });
+
+  // Generate JWT token with company context and features
   const token = jwt.sign(
     {
       id: employee.id,
@@ -227,14 +286,18 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
       email: employee.email,
       role: 'employee',
       company_id: employee.company_id,
-      outlet_id: employee.outlet_id
+      outlet_id: employee.outlet_id,
+      features
     },
     process.env.JWT_SECRET,
     { expiresIn: '8h' }
   );
 
+  // Set HttpOnly cookie
+  res.cookie('ess_token', token, COOKIE_OPTIONS);
+
   res.json({
-    token,
+    token, // Also return token for backward compatibility
     employee: {
       id: employee.id,
       employee_id: employee.employee_id,
@@ -246,7 +309,8 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
       company_logo: employee.company_logo,
       company_grouping_type: employee.company_grouping_type,
       outlet_id: employee.outlet_id,
-      outlet_name: employee.outlet_name
+      outlet_name: employee.outlet_name,
+      features
     }
   });
 }));
@@ -292,5 +356,61 @@ router.post('/set-password', asyncHandler(async (req, res) => {
 
   res.json({ message: 'Password set successfully. You can now login.' });
 }));
+
+// Get current authenticated employee (session check)
+router.get('/me', authenticateEmployee, asyncHandler(async (req, res) => {
+  // Fetch fresh employee data
+  const result = await pool.query(
+    `SELECT e.id, e.employee_id, e.name, e.email, e.status, e.department_id, e.outlet_id, e.company_id,
+            c.name as company_name, c.code as company_code, c.logo_url as company_logo,
+            c.grouping_type as company_grouping_type, c.settings as company_settings,
+            o.name as outlet_name
+     FROM employees e
+     LEFT JOIN companies c ON e.company_id = c.id
+     LEFT JOIN outlets o ON e.outlet_id = o.id
+     WHERE e.id = $1 AND e.status = 'active'`,
+    [req.employee.id]
+  );
+
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'Employee not found or inactive' });
+  }
+
+  const employee = result.rows[0];
+
+  // Build fresh feature flags
+  const features = buildFeatureFlags(employee, {
+    grouping_type: employee.company_grouping_type,
+    settings: employee.company_settings
+  });
+
+  res.json({
+    employee: {
+      id: employee.id,
+      employee_id: employee.employee_id,
+      name: employee.name,
+      email: employee.email,
+      company_id: employee.company_id,
+      company_name: employee.company_name,
+      company_code: employee.company_code,
+      company_logo: employee.company_logo,
+      company_grouping_type: employee.company_grouping_type,
+      outlet_id: employee.outlet_id,
+      outlet_name: employee.outlet_name,
+      features
+    }
+  });
+}));
+
+// Logout (clear HttpOnly cookie)
+router.post('/logout', (req, res) => {
+  res.clearCookie('ess_token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/'
+  });
+  res.json({ message: 'Logged out successfully' });
+});
 
 module.exports = router;

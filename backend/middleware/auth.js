@@ -110,15 +110,25 @@ const requireRole = (...allowedRoles) => {
   };
 };
 
-// Employee Self-Service authentication
+// Employee Self-Service authentication (supports both cookie and header)
 const authenticateEmployee = (req, res, next) => {
-  const authHeader = req.headers.authorization;
+  let token = null;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
+  // First, try to get token from HttpOnly cookie
+  if (req.cookies && req.cookies.ess_token) {
+    token = req.cookies.ess_token;
+  }
+  // Fallback to Authorization header for backward compatibility
+  else {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
   }
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'Access denied. No token provided.' });
+  }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -131,6 +141,8 @@ const authenticateEmployee = (req, res, next) => {
     req.employee = decoded;
     // Extract company_id for tenant isolation
     req.companyId = decoded.company_id;
+    // Extract features for feature-gating
+    req.features = decoded.features || {};
     next();
   } catch (error) {
     return res.status(403).json({ error: 'Invalid or expired token.' });

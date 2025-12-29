@@ -354,51 +354,61 @@ export const adminUsersApi = {
 // EMPLOYEE SELF-SERVICE (ESS) API
 // =====================================================
 
+// ESS API with cookie credentials for HttpOnly token
+const essApiConfig = { withCredentials: true };
+
 export const essApi = {
   // Authentication
-  login: (credentials) => api.post('/ess/login', credentials),
-  loginIC: (employee_id, ic_number) => api.post('/ess/login-ic', { employee_id, ic_number }),
+  login: (login, password) => api.post('/ess/login', { login, password }, essApiConfig),
+  loginIC: (employee_id, ic_number) => api.post('/ess/login-ic', { employee_id, ic_number }, essApiConfig),
+  logout: () => api.post('/ess/logout', {}, essApiConfig),
+  me: () => api.get('/ess/me', essApiConfig),
   forgotPassword: (email) => api.post('/ess/forgot-password', { email }),
   resetPassword: (token, newPassword) => api.post('/ess/reset-password', { token, newPassword }),
   setPassword: (data) => api.post('/ess/set-password', data),
 
   // Dashboard
-  getDashboard: () => api.get('/ess/dashboard'),
+  getDashboard: () => api.get('/ess/dashboard', essApiConfig),
 
   // Clock-in (4-action structure)
-  clockIn: (data) => api.post('/ess/clockin/in', data),
-  clockOut: (data) => api.post('/ess/clockin/out', data),
-  clockAction: (data) => api.post('/ess/clockin/action', data),
-  getClockInStatus: () => api.get('/ess/clockin/status'),
-  getClockInHistory: (params) => api.get('/ess/clockin/history', { params }),
+  clockIn: (data) => api.post('/ess/clockin/in', data, essApiConfig),
+  clockOut: (data) => api.post('/ess/clockin/out', data, essApiConfig),
+  clockAction: (data) => api.post('/ess/clockin/action', data, essApiConfig),
+  getClockInStatus: () => api.get('/ess/clockin/status', essApiConfig),
+  getClockInHistory: (params) => api.get('/ess/clockin/history', { params, ...essApiConfig }),
 
   // Profile
-  getProfile: () => api.get('/ess/profile'),
+  getProfile: () => api.get('/ess/profile', essApiConfig),
 
   // Payslips
-  getPayslips: (params) => api.get('/ess/payslips', { params }),
-  getPayslip: (id) => api.get(`/ess/payslips/${id}`),
+  getPayslips: (params) => api.get('/ess/payslips', { params, ...essApiConfig }),
+  getPayslip: (id) => api.get(`/ess/payslips/${id}`, essApiConfig),
 
   // Leave
-  getLeaveBalance: () => api.get('/ess/leave/balance'),
-  getLeaveHistory: (params) => api.get('/ess/leave/history', { params }),
-  getLeaveTypes: () => api.get('/ess/leave/types'),
-  applyLeave: (data) => api.post('/ess/leave/apply', data),
+  getLeaveBalance: () => api.get('/ess/leave/balance', essApiConfig),
+  getLeaveHistory: (params) => api.get('/ess/leave/history', { params, ...essApiConfig }),
+  getLeaveTypes: () => api.get('/ess/leave/types', essApiConfig),
+  applyLeave: (data) => api.post('/ess/leave/apply', data, essApiConfig),
 
   // Claims
-  getClaims: (params) => api.get('/ess/claims', { params }),
-  submitClaim: (data) => api.post('/ess/claims', data),
+  getClaims: (params) => api.get('/ess/claims', { params, ...essApiConfig }),
+  submitClaim: (data) => api.post('/ess/claims', data, essApiConfig),
 
   // Notifications
-  getNotifications: (params) => api.get('/ess/notifications', { params }),
-  markNotificationRead: (id) => api.put(`/ess/notifications/${id}/read`),
-  markAllNotificationsRead: () => api.put('/ess/notifications/read-all'),
-  getUnreadCount: () => api.get('/ess/notifications/unread-count'),
+  getNotifications: (params) => api.get('/ess/notifications', { params, ...essApiConfig }),
+  markNotificationRead: (id) => api.put(`/ess/notifications/${id}/read`, {}, essApiConfig),
+  markAllNotificationsRead: () => api.put('/ess/notifications/read-all', {}, essApiConfig),
+  getUnreadCount: () => api.get('/ess/notifications/unread-count', essApiConfig),
 
   // Letters / HR Documents
-  getLetters: (params) => api.get('/ess/letters', { params }),
-  getLetter: (id) => api.get(`/ess/letters/${id}`),
-  getUnreadLettersCount: () => api.get('/ess/letters/unread/count'),
+  getLetters: (params) => api.get('/ess/letters', { params, ...essApiConfig }),
+  getLetter: (id) => api.get(`/ess/letters/${id}`, essApiConfig),
+  getUnreadLettersCount: () => api.get('/ess/letters/unread/count', essApiConfig),
+  getLetterPDF: (id) => `${API_URL}/ess/letters/${id}/pdf`, // Returns URL for direct download
+
+  // Benefits In Kind (AA Alive only)
+  getBenefits: () => api.get('/ess/benefits', essApiConfig),
+  getBenefitsHistory: (params) => api.get('/ess/benefits/history', { params, ...essApiConfig }),
 };
 
 export default api;
