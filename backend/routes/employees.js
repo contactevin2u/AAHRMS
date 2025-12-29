@@ -2,21 +2,23 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
-const { getCompanyFilter, isSuperAdmin } = require('../middleware/tenant');
+const { getCompanyFilter, isSuperAdmin, getOutletFilter, isSupervisor } = require('../middleware/tenant');
 const { initializeLeaveBalances } = require('../utils/leaveProration');
 const { initializeProbation } = require('../utils/probationReminder');
 const { sanitizeEmployeeData, escapeHtml } = require('../middleware/sanitize');
 
-// Get all employees (filtered by company)
+// Get all employees (filtered by company and outlet for supervisors)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { department_id, status, search, employment_type, probation_status } = req.query;
+    const { department_id, status, search, employment_type, probation_status, outlet_id } = req.query;
     const companyId = getCompanyFilter(req);
+    const outletId = getOutletFilter(req);
 
     let query = `
-      SELECT e.*, d.name as department_name, d.payroll_structure_code
+      SELECT e.*, d.name as department_name, d.payroll_structure_code, o.name as outlet_name
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
       WHERE 1=1
     `;
     const params = [];
@@ -27,6 +29,18 @@ router.get('/', authenticateAdmin, async (req, res) => {
       paramCount++;
       query += ` AND e.company_id = $${paramCount}`;
       params.push(companyId);
+    }
+
+    // Outlet filter (for supervisors - they can ONLY see their outlet)
+    if (outletId !== null) {
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outletId);
+    } else if (outlet_id) {
+      // Allow admins to filter by specific outlet via query param
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
     }
 
     if (department_id) {
@@ -332,6 +346,107 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error deleting employee:', error);
     res.status(500).json({ error: 'Failed to delete employee' });
+  }
+});
+
+// Update employee role and reporting structure
+router.put('/:id/role', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { employee_role, reports_to } = req.body;
+
+    // Validate role
+    const validRoles = ['staff', 'supervisor', 'manager', 'director'];
+    if (employee_role && !validRoles.includes(employee_role)) {
+      return res.status(400).json({
+        error: 'Invalid role',
+        valid_roles: validRoles
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE employees
+       SET employee_role = COALESCE($1, employee_role),
+           reports_to = $2,
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, employee_id, name, employee_role, reports_to`,
+      [employee_role, reports_to, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    res.json({
+      message: 'Employee role updated',
+      employee: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error updating employee role:', error);
+    res.status(500).json({ error: 'Failed to update employee role' });
+  }
+});
+
+// Get employees by role (for dropdowns)
+router.get('/by-role/:role', authenticateAdmin, async (req, res) => {
+  try {
+    const { role } = req.params;
+    const companyId = getCompanyFilter(req);
+
+    let query = `
+      SELECT id, employee_id, name, employee_role, department_id
+      FROM employees
+      WHERE employee_role = $1 AND status = 'active'
+    `;
+    const params = [role];
+
+    if (companyId !== null) {
+      query += ` AND company_id = $2`;
+      params.push(companyId);
+    }
+
+    query += ' ORDER BY name';
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching employees by role:', error);
+    res.status(500).json({ error: 'Failed to fetch employees' });
+  }
+});
+
+// Bulk update employee roles
+router.put('/bulk-role', authenticateAdmin, async (req, res) => {
+  try {
+    const { employee_ids, employee_role, reports_to } = req.body;
+
+    if (!employee_ids || !Array.isArray(employee_ids) || employee_ids.length === 0) {
+      return res.status(400).json({ error: 'No employees selected' });
+    }
+
+    const validRoles = ['staff', 'supervisor', 'manager', 'director'];
+    if (employee_role && !validRoles.includes(employee_role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    const result = await pool.query(
+      `UPDATE employees
+       SET employee_role = COALESCE($1, employee_role),
+           reports_to = COALESCE($2, reports_to),
+           updated_at = NOW()
+       WHERE id = ANY($3)
+       RETURNING id`,
+      [employee_role, reports_to, employee_ids]
+    );
+
+    res.json({
+      message: `Updated ${result.rowCount} employees`,
+      updated: result.rowCount
+    });
+  } catch (error) {
+    console.error('Error bulk updating roles:', error);
+    res.status(500).json({ error: 'Failed to update roles' });
   }
 });
 

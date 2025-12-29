@@ -44,6 +44,7 @@ function Employees() {
   // Bulk selection state
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [viewMode, setViewMode] = useState('simple'); // 'simple' or 'detailed'
   const [bulkEditForm, setBulkEditForm] = useState({
     department_id: '',
     position: '',
@@ -693,6 +694,20 @@ function Employees() {
               accept=".xlsx,.xls,.csv"
               style={{ display: 'none' }}
             />
+            <div className="view-toggle">
+              <button
+                onClick={() => setViewMode('simple')}
+                className={`toggle-btn ${viewMode === 'simple' ? 'active' : ''}`}
+              >
+                Simple
+              </button>
+              <button
+                onClick={() => setViewMode('detailed')}
+                className={`toggle-btn ${viewMode === 'detailed' ? 'active' : ''}`}
+              >
+                Detailed
+              </button>
+            </div>
             <button onClick={downloadTemplate} className="template-btn">
               Download Template
             </button>
@@ -785,7 +800,7 @@ function Employees() {
 
         {loading ? (
           <div className="loading">☕ Loading...</div>
-        ) : (
+        ) : viewMode === 'simple' ? (
           <div className="employees-table">
             <table>
               <thead>
@@ -872,6 +887,88 @@ function Employees() {
                 )}
               </tbody>
             </table>
+          </div>
+        ) : (
+          <div className="employees-table detailed-view">
+            <div className="table-scroll-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="checkbox-col sticky-col">
+                      <input
+                        type="checkbox"
+                        checked={employees.length > 0 && selectedEmployees.length === employees.length}
+                        onChange={handleSelectAll}
+                      />
+                    </th>
+                    <th className="sticky-col">ID</th>
+                    <th className="sticky-col">Name</th>
+                    <th>IC Number</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                    <th>Department</th>
+                    <th>Position</th>
+                    <th>Join Date</th>
+                    <th>Basic Salary</th>
+                    <th>Allowance</th>
+                    <th>Bank</th>
+                    <th>Account No</th>
+                    <th>EPF No</th>
+                    <th>SOCSO No</th>
+                    <th>Tax No</th>
+                    <th>Marital</th>
+                    <th>Status</th>
+                    <th className="sticky-col-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.length === 0 ? (
+                    <tr>
+                      <td colSpan="19" className="no-data">No employees found</td>
+                    </tr>
+                  ) : (
+                    employees.map(emp => (
+                      <tr key={emp.id} className={selectedEmployees.includes(emp.id) ? 'selected' : ''}>
+                        <td className="checkbox-col sticky-col">
+                          <input
+                            type="checkbox"
+                            checked={selectedEmployees.includes(emp.id)}
+                            onChange={() => handleSelectEmployee(emp.id)}
+                          />
+                        </td>
+                        <td className="sticky-col"><strong>{emp.employee_id}</strong></td>
+                        <td className="sticky-col name-col">{emp.name}</td>
+                        <td>{emp.ic_number || '-'}</td>
+                        <td>{emp.phone || '-'}</td>
+                        <td>{emp.email || '-'}</td>
+                        <td>{emp.department_name || '-'}</td>
+                        <td>{emp.position || '-'}</td>
+                        <td>{emp.join_date ? new Date(emp.join_date).toLocaleDateString('en-MY') : '-'}</td>
+                        <td className="money-col">RM {parseFloat(emp.default_basic_salary || 0).toFixed(2)}</td>
+                        <td className="money-col">RM {parseFloat(emp.default_allowance || 0).toFixed(2)}</td>
+                        <td>{emp.bank_name || '-'}</td>
+                        <td>{emp.bank_account_no || '-'}</td>
+                        <td>{emp.epf_number || '-'}</td>
+                        <td>{emp.socso_number || '-'}</td>
+                        <td>{emp.tax_number || '-'}</td>
+                        <td>{emp.marital_status || '-'}</td>
+                        <td>
+                          <span className={`status-badge ${emp.status}`}>
+                            {emp.status}
+                          </span>
+                        </td>
+                        <td className="sticky-col-right">
+                          <button onClick={() => handleEdit(emp)} className="edit-btn">✏️</button>
+                          {emp.status === 'active' && (
+                            <button onClick={() => handleDelete(emp.id)} className="delete-btn">🗑️</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

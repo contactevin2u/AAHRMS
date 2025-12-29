@@ -25,6 +25,7 @@ const salesRoutes = require('./routes/sales');
 const clockInRoutes = require('./routes/clockIn');
 const outletsRoutes = require('./routes/outlets');
 const automationRoutes = require('./routes/automation');
+const bikRoutes = require('./routes/benefitsInKind');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -63,6 +64,7 @@ app.use('/api/sales', salesRoutes);  // Sales Records (for Indoor Sales commissi
 app.use('/api/clock-in', clockInRoutes);  // Clock In/Out Records
 app.use('/api/outlets', outletsRoutes);  // Outlets (for Mimix A)
 app.use('/api/automation', automationRoutes);  // Automation & Scheduling
+app.use('/api/benefits-in-kind', bikRoutes);  // Benefits In Kind (AA Alive)
 
 // Health check
 app.get('/api/health', (req, res) => {

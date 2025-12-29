@@ -160,7 +160,7 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Seed default outlets for Mimix A
+// Seed 11 Mimix A outlets
 router.post('/seed', authenticateAdmin, async (req, res) => {
   try {
     const companyId = req.companyId || req.admin?.company_id;
@@ -169,26 +169,52 @@ router.post('/seed', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Company ID required' });
     }
 
-    // Check if outlets already exist
+    // Define the 11 Mimix A outlets
+    const mimixOutlets = [
+      { name: 'Mimix A IOI Mall Putrajaya', address: 'IOI Mall Putrajaya, Putrajaya' },
+      { name: 'Mimix A IOI City Mall', address: 'IOI City Mall, Putrajaya' },
+      { name: 'Mimix A Mid Valley', address: 'Mid Valley Megamall, Kuala Lumpur' },
+      { name: 'Mimix A Sunway Pyramid', address: 'Sunway Pyramid, Bandar Sunway, Selangor' },
+      { name: 'Mimix A One Utama', address: '1 Utama Shopping Centre, Petaling Jaya, Selangor' },
+      { name: 'Mimix A KLCC', address: 'Suria KLCC, Kuala Lumpur' },
+      { name: 'Mimix A Pavilion KL', address: 'Pavilion Kuala Lumpur, Bukit Bintang' },
+      { name: 'Mimix A Johor Bahru', address: 'Johor Bahru City Centre, Johor' },
+      { name: 'Mimix A Penang', address: 'Gurney Plaza, George Town, Penang' },
+      { name: 'Mimix A Ipoh', address: 'Ipoh Parade, Ipoh, Perak' },
+      { name: 'Mimix A Kota Kinabalu', address: 'Imago Shopping Mall, Kota Kinabalu, Sabah' }
+    ];
+
+    // Get existing outlet names
     const existing = await pool.query(
-      'SELECT COUNT(*) FROM outlets WHERE company_id = $1',
+      'SELECT name FROM outlets WHERE company_id = $1',
       [companyId]
     );
+    const existingNames = new Set(existing.rows.map(o => o.name));
 
-    if (parseInt(existing.rows[0].count) > 0) {
-      return res.json({ message: 'Outlets already exist', count: existing.rows[0].count });
+    // Filter out already existing outlets
+    const newOutlets = mimixOutlets.filter(o => !existingNames.has(o.name));
+
+    if (newOutlets.length === 0) {
+      return res.json({
+        message: 'All 11 outlets already exist',
+        count: existing.rows.length
+      });
     }
 
-    // Insert sample outlets
-    const result = await pool.query(`
-      INSERT INTO outlets (company_id, name, address) VALUES
-        ($1, 'Outlet Ampang', 'Ampang, Selangor'),
-        ($1, 'Outlet Cheras', 'Cheras, Kuala Lumpur'),
-        ($1, 'Outlet Kepong', 'Kepong, Kuala Lumpur')
-      RETURNING *
-    `, [companyId]);
+    // Insert new outlets
+    const values = newOutlets.map((o, i) => `($1, $${i * 2 + 2}, $${i * 2 + 3})`).join(', ');
+    const params = [companyId, ...newOutlets.flatMap(o => [o.name, o.address])];
 
-    res.json({ message: 'Outlets seeded successfully', outlets: result.rows });
+    const result = await pool.query(
+      `INSERT INTO outlets (company_id, name, address) VALUES ${values} RETURNING *`,
+      params
+    );
+
+    res.json({
+      message: `Created ${result.rows.length} outlets`,
+      created: result.rows,
+      total: existing.rows.length + result.rows.length
+    });
   } catch (error) {
     console.error('Error seeding outlets:', error);
     res.status(500).json({ error: 'Failed to seed outlets' });

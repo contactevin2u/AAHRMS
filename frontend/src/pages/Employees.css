@@ -831,6 +831,135 @@ tr:hover {
   background: #d97706 !important;
 }
 
+/* View Toggle */
+.view-toggle {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.view-toggle .toggle-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.view-toggle .toggle-btn:hover {
+  color: #1e293b;
+}
+
+.view-toggle .toggle-btn.active {
+  background: white;
+  color: #3b82f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Detailed View Table */
+.employees-table.detailed-view {
+  max-width: 100%;
+}
+
+.table-scroll-wrapper {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.detailed-view table {
+  min-width: 1800px;
+}
+
+.detailed-view th,
+.detailed-view td {
+  white-space: nowrap;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.detailed-view th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Sticky columns for detailed view */
+.detailed-view .sticky-col {
+  position: sticky;
+  background: inherit;
+  z-index: 5;
+}
+
+.detailed-view th.sticky-col:nth-child(1),
+.detailed-view td.sticky-col:nth-child(1) {
+  left: 0;
+  background: #f8fafc;
+}
+
+.detailed-view th.sticky-col:nth-child(2),
+.detailed-view td.sticky-col:nth-child(2) {
+  left: 40px;
+  background: #f8fafc;
+}
+
+.detailed-view th.sticky-col:nth-child(3),
+.detailed-view td.sticky-col:nth-child(3) {
+  left: 120px;
+  background: #f8fafc;
+  min-width: 180px;
+}
+
+.detailed-view tbody tr td.sticky-col {
+  background: white;
+}
+
+.detailed-view tbody tr:hover td.sticky-col,
+.detailed-view tbody tr.selected td.sticky-col {
+  background: #f8fafc;
+}
+
+.detailed-view tbody tr.selected td.sticky-col {
+  background: #eff6ff;
+}
+
+/* Sticky right column for actions */
+.detailed-view .sticky-col-right {
+  position: sticky;
+  right: 0;
+  background: white;
+  z-index: 5;
+  box-shadow: -3px 0 6px rgba(0, 0, 0, 0.05);
+}
+
+.detailed-view th.sticky-col-right {
+  background: #f8fafc;
+}
+
+.detailed-view tbody tr:hover .sticky-col-right {
+  background: #f8fafc;
+}
+
+.detailed-view tbody tr.selected .sticky-col-right {
+  background: #eff6ff;
+}
+
+/* Money column styling */
+.money-col {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-weight: 500;
+  color: #059669;
+}
+
+/* Name column min width */
+.name-col {
+  min-width: 180px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .employees-page {

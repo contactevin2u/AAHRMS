@@ -214,20 +214,25 @@ router.put('/balances/:id', authenticateAdmin, async (req, res) => {
 // Get all leave requests
 router.get('/requests', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, status, month, year } = req.query;
+    const { employee_id, status, month, year, pending_approval } = req.query;
 
     let query = `
       SELECT lr.*,
              e.name as employee_name,
              e.employee_id as emp_code,
+             e.employee_role,
              d.name as department_name,
              lt.code as leave_type_code,
              lt.name as leave_type_name,
-             lt.is_paid
+             lt.is_paid,
+             sup.name as supervisor_name,
+             dir.name as director_name
       FROM leave_requests lr
       JOIN employees e ON lr.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
       JOIN leave_types lt ON lr.leave_type_id = lt.id
+      LEFT JOIN employees sup ON lr.supervisor_id = sup.id
+      LEFT JOIN employees dir ON lr.director_id = dir.id
       WHERE 1=1
     `;
     const params = [];
@@ -243,6 +248,16 @@ router.get('/requests', authenticateAdmin, async (req, res) => {
       paramCount++;
       query += ` AND lr.status = $${paramCount}`;
       params.push(status);
+    }
+
+    // Filter for pending supervisor approval
+    if (pending_approval === 'supervisor') {
+      query += ` AND lr.status = 'pending' AND lr.supervisor_approved = FALSE`;
+    }
+
+    // Filter for pending director approval
+    if (pending_approval === 'director') {
+      query += ` AND lr.status = 'pending' AND lr.supervisor_approved = TRUE AND lr.director_approved = FALSE`;
     }
 
     if (month && year) {
@@ -344,12 +359,165 @@ router.post('/requests', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Approve leave request
+// Approve leave request (multi-level approval)
 router.post('/requests/:id/approve', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const { approval_level } = req.body; // 'supervisor' or 'director'
+    const approverId = req.admin?.id;
 
-    // Get the leave request
+    // Get the leave request with employee role info
+    const request = await pool.query(
+      `SELECT lr.*, lt.is_paid, e.employee_role, e.reports_to
+       FROM leave_requests lr
+       JOIN leave_types lt ON lr.leave_type_id = lt.id
+       JOIN employees e ON lr.employee_id = e.id
+       WHERE lr.id = $1`,
+      [id]
+    );
+
+    if (request.rows.length === 0) {
+      return res.status(404).json({ error: 'Leave request not found' });
+    }
+
+    const lr = request.rows[0];
+
+    if (lr.status === 'approved') {
+      return res.status(400).json({ error: 'Leave request already approved' });
+    }
+
+    if (lr.status === 'rejected') {
+      return res.status(400).json({ error: 'Leave request was rejected' });
+    }
+
+    // Determine approval flow based on employee role
+    const employeeRole = lr.employee_role || 'staff';
+    let finalApproval = false;
+
+    if (employeeRole === 'supervisor') {
+      // Supervisor leave: Only needs manager/director approval
+      await pool.query(
+        `UPDATE leave_requests
+         SET director_approved = TRUE,
+             director_approved_at = NOW(),
+             status = 'approved',
+             approved_at = NOW(),
+             approver_id = $2,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [id, approverId]
+      );
+      finalApproval = true;
+    } else if (approval_level === 'supervisor' || !lr.supervisor_approved) {
+      // Supervisor approval (first level)
+      await pool.query(
+        `UPDATE leave_requests
+         SET supervisor_approved = TRUE,
+             supervisor_approved_at = NOW(),
+             supervisor_id = $2,
+             approval_level = 2,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [id, approverId]
+      );
+
+      // Check if director approval is required
+      if (!lr.requires_director_approval) {
+        // No director approval needed - finalize
+        await pool.query(
+          `UPDATE leave_requests
+           SET status = 'approved', approved_at = NOW(), approver_id = $2
+           WHERE id = $1`,
+          [id, approverId]
+        );
+        finalApproval = true;
+      }
+    } else if (approval_level === 'director' || (lr.supervisor_approved && !lr.director_approved)) {
+      // Director approval (final level)
+      await pool.query(
+        `UPDATE leave_requests
+         SET director_approved = TRUE,
+             director_approved_at = NOW(),
+             director_id = $2,
+             status = 'approved',
+             approved_at = NOW(),
+             approver_id = $2,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [id, approverId]
+      );
+      finalApproval = true;
+    }
+
+    // If final approval, update leave balance for paid leave
+    if (finalApproval && lr.is_paid) {
+      const year = new Date(lr.start_date).getFullYear();
+      await pool.query(
+        `UPDATE leave_balances
+         SET used_days = used_days + $1, updated_at = NOW()
+         WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4`,
+        [lr.total_days, lr.employee_id, lr.leave_type_id, year]
+      );
+    }
+
+    const status = finalApproval ? 'approved' : 'pending_director_approval';
+    res.json({
+      message: finalApproval ? 'Leave request fully approved' : 'Supervisor approved. Pending director approval.',
+      status: status,
+      supervisor_approved: true,
+      director_approved: finalApproval
+    });
+  } catch (error) {
+    console.error('Error approving leave request:', error);
+    res.status(500).json({ error: 'Failed to approve leave request' });
+  }
+});
+
+// Supervisor approve leave request
+router.post('/requests/:id/supervisor-approve', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const approverId = req.admin?.id;
+
+    const request = await pool.query(
+      `SELECT lr.*, e.employee_role
+       FROM leave_requests lr
+       JOIN employees e ON lr.employee_id = e.id
+       WHERE lr.id = $1 AND lr.status = 'pending'`,
+      [id]
+    );
+
+    if (request.rows.length === 0) {
+      return res.status(404).json({ error: 'Leave request not found or not pending' });
+    }
+
+    await pool.query(
+      `UPDATE leave_requests
+       SET supervisor_approved = TRUE,
+           supervisor_approved_at = NOW(),
+           supervisor_id = $2,
+           approval_level = 2,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [id, approverId]
+    );
+
+    res.json({
+      message: 'Supervisor approved. Pending director approval.',
+      next_step: 'director_approval'
+    });
+  } catch (error) {
+    console.error('Error in supervisor approval:', error);
+    res.status(500).json({ error: 'Failed to approve' });
+  }
+});
+
+// Director approve leave request (final approval)
+router.post('/requests/:id/director-approve', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const approverId = req.admin?.id;
+
     const request = await pool.query(
       `SELECT lr.*, lt.is_paid
        FROM leave_requests lr
@@ -364,18 +532,21 @@ router.post('/requests/:id/approve', authenticateAdmin, async (req, res) => {
 
     const lr = request.rows[0];
 
-    if (lr.status !== 'pending') {
-      return res.status(400).json({ error: 'Leave request is not pending' });
-    }
-
-    // Update request status
+    // Update to fully approved
     await pool.query(
-      `UPDATE leave_requests SET status = 'approved', approved_at = NOW(), updated_at = NOW()
+      `UPDATE leave_requests
+       SET director_approved = TRUE,
+           director_approved_at = NOW(),
+           director_id = $2,
+           status = 'approved',
+           approved_at = NOW(),
+           approver_id = $2,
+           updated_at = NOW()
        WHERE id = $1`,
-      [id]
+      [id, approverId]
     );
 
-    // If paid leave, update leave balance
+    // Update leave balance for paid leave
     if (lr.is_paid) {
       const year = new Date(lr.start_date).getFullYear();
       await pool.query(
@@ -386,10 +557,10 @@ router.post('/requests/:id/approve', authenticateAdmin, async (req, res) => {
       );
     }
 
-    res.json({ message: 'Leave request approved' });
+    res.json({ message: 'Leave request fully approved by director' });
   } catch (error) {
-    console.error('Error approving leave request:', error);
-    res.status(500).json({ error: 'Failed to approve leave request' });
+    console.error('Error in director approval:', error);
+    res.status(500).json({ error: 'Failed to approve' });
   }
 });
 

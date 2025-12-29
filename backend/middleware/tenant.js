@@ -1,7 +1,42 @@
 /**
  * Tenant Isolation Middleware
- * Ensures data is properly scoped to the user's company
+ * Ensures data is properly scoped to the user's company and outlet
+ *
+ * Hierarchy:
+ * - super_admin: Can see all companies and outlets
+ * - owner/admin: Can see all outlets in their company
+ * - supervisor: Can ONLY see their assigned outlet
+ * - hr: Can see all outlets in their company
  */
+
+// Check if user is a supervisor (outlet-level access only)
+const isSupervisor = (req) => {
+  return req.admin && req.admin.role === 'supervisor';
+};
+
+// Get outlet filter for supervisor
+// Returns outlet_id for supervisors, null for others (can see all outlets in company)
+const getOutletFilter = (req) => {
+  if (isSupervisor(req) && req.admin.outlet_id) {
+    return req.admin.outlet_id;
+  }
+  // Check query param for outlet filter (for admins filtering by outlet)
+  if (req.query.outlet_id) {
+    return parseInt(req.query.outlet_id);
+  }
+  return null; // null means no outlet filter
+};
+
+// Middleware to require outlet context for supervisors
+const requireOutletContext = (req, res, next) => {
+  if (isSupervisor(req) && !req.admin.outlet_id) {
+    return res.status(403).json({
+      error: 'Outlet assignment required',
+      message: 'Supervisors must be assigned to an outlet to access this resource'
+    });
+  }
+  next();
+};
 
 // Middleware to require company context (blocks system-level super_admin from accessing company-specific routes)
 const requireCompanyContext = (req, res, next) => {
@@ -101,5 +136,9 @@ module.exports = {
   buildCompanyFilter,
   allowCompanyOverride,
   isSuperAdmin,
-  requireSystemAdmin
+  requireSystemAdmin,
+  // Outlet-level filtering for supervisors
+  isSupervisor,
+  getOutletFilter,
+  requireOutletContext
 };

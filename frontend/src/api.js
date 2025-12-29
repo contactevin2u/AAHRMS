@@ -119,11 +119,13 @@ export const leaveApi = {
   initializeBalances: (employeeId, data) => api.post(`/leave/balances/initialize/${employeeId}`, data),
   updateBalance: (id, data) => api.put(`/leave/balances/${id}`, data),
 
-  // Leave Requests
+  // Leave Requests (with multi-level approval)
   getRequests: (params) => api.get('/leave/requests', { params }),
   getPendingCount: () => api.get('/leave/requests/pending-count'),
   createRequest: (data) => api.post('/leave/requests', data),
-  approveRequest: (id) => api.post(`/leave/requests/${id}/approve`),
+  approveRequest: (id, data) => api.post(`/leave/requests/${id}/approve`, data),
+  supervisorApprove: (id) => api.post(`/leave/requests/${id}/supervisor-approve`),
+  directorApprove: (id) => api.post(`/leave/requests/${id}/director-approve`),
   rejectRequest: (id, data) => api.post(`/leave/requests/${id}/reject`, data),
   cancelRequest: (id) => api.post(`/leave/requests/${id}/cancel`),
   deleteRequest: (id) => api.delete(`/leave/requests/${id}`),
@@ -244,7 +246,7 @@ export const salesApi = {
   delete: (id) => api.delete(`/sales/${id}`),
 };
 
-// Clock In/Out Records
+// Clock In/Out Records (4-action per day: clock_in_1, clock_out_1, clock_in_2, clock_out_2)
 export const clockInApi = {
   getAll: (params) => api.get('/clock-in', { params }),
   getEmployeeMonthly: (employeeId, year, month) => api.get(`/clock-in/employee/${employeeId}/monthly/${year}/${month}`),
@@ -255,6 +257,33 @@ export const clockInApi = {
   reject: (id, notes) => api.post(`/clock-in/${id}/reject`, { notes }),
   bulkApprove: (record_ids) => api.post('/clock-in/bulk-approve', { record_ids }),
   delete: (id) => api.delete(`/clock-in/${id}`),
+};
+
+// Attendance API (alias for clockInApi with additional methods)
+export const attendanceApi = {
+  getAll: (params) => api.get('/clock-in', { params }),
+  getEmployeeMonthly: (employeeId, year, month) => api.get(`/clock-in/employee/${employeeId}/monthly/${year}/${month}`),
+  getOTForPayroll: (year, month) => api.get(`/clock-in/ot-for-payroll/${year}/${month}`),
+  approve: (id) => api.post(`/clock-in/${id}/approve`),
+  reject: (id, reason) => api.post(`/clock-in/${id}/reject`, { notes: reason }),
+  bulkApprove: (record_ids) => api.post('/clock-in/bulk-approve', { record_ids }),
+  delete: (id) => api.delete(`/clock-in/${id}`),
+};
+
+// Benefits In Kind (BIK) - for AA Alive
+export const benefitsApi = {
+  getAll: (params) => api.get('/benefits-in-kind', { params }),
+  getByEmployee: (employeeId) => api.get(`/benefits-in-kind/employee/${employeeId}`),
+  getOne: (id) => api.get(`/benefits-in-kind/${id}`),
+  create: (data) => api.post('/benefits-in-kind', data),
+  update: (id, data) => api.put(`/benefits-in-kind/${id}`, data),
+  returnBenefit: (id, data) => api.post(`/benefits-in-kind/${id}/return`, data),
+  delete: (id) => api.delete(`/benefits-in-kind/${id}`),
+  getPayrollSummary: (year) => api.get(`/benefits-in-kind/summary/payroll/${year}`),
+
+  // Benefit Types
+  getTypes: () => api.get('/benefits-in-kind/types/all'),
+  createType: (data) => api.post('/benefits-in-kind/types', data),
 };
 
 // Outlets (for Mimix A)
@@ -320,9 +349,10 @@ export const essApi = {
   // Dashboard
   getDashboard: () => api.get('/ess/dashboard'),
 
-  // Clock-in
+  // Clock-in (4-action structure)
   clockIn: (data) => api.post('/ess/clockin/in', data),
   clockOut: (data) => api.post('/ess/clockin/out', data),
+  clockAction: (data) => api.post('/ess/clockin/action', data),
   getClockInStatus: () => api.get('/ess/clockin/status'),
   getClockInHistory: (params) => api.get('/ess/clockin/history', { params }),
 

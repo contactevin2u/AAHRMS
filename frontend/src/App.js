@@ -22,6 +22,8 @@ import MyProfile from './pages/MyProfile';
 import CompanyManagement from './pages/CompanyManagement';
 import Settings from './pages/Settings';
 import SalesEntry from './pages/SalesEntry';
+import Attendance from './pages/Attendance';
+import BenefitsInKind from './pages/BenefitsInKind';
 // Employee Self-Service (ESS) imports
 import EmployeeLogin from './pages/EmployeeLogin';
 import EmployeeDashboard from './pages/EmployeeDashboard';
@@ -214,6 +216,22 @@ function App() {
           element={
             <ProtectedRoute>
               <SalesEntry />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/attendance"
+          element={
+            <ProtectedRoute>
+              <Attendance />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/benefits-in-kind"
+          element={
+            <ProtectedRoute>
+              <BenefitsInKind />
             </ProtectedRoute>
           }
         />

@@ -13,14 +13,16 @@ router.get('/', authenticateAdmin, async (req, res) => {
     let query = `
       SELECT
         au.id, au.username, au.name, au.email, au.role, au.status,
-        au.last_login, au.created_at, au.updated_at, au.company_id,
+        au.last_login, au.created_at, au.updated_at, au.company_id, au.outlet_id,
         ar.display_name as role_display_name,
         creator.username as created_by_name,
-        c.name as company_name
+        c.name as company_name,
+        o.name as outlet_name
       FROM admin_users au
       LEFT JOIN admin_roles ar ON au.role = ar.name
       LEFT JOIN admin_users creator ON au.created_by = creator.id
       LEFT JOIN companies c ON au.company_id = c.id
+      LEFT JOIN outlets o ON au.outlet_id = o.id
     `;
 
     let params = [];
@@ -76,7 +78,7 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 // Create new admin user
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
-    const { username, password, name, email, role } = req.body;
+    const { username, password, name, email, role, company_id, outlet_id } = req.body;
 
     // Check if current user has permission to create users
     const currentUser = await pool.query(
@@ -116,12 +118,15 @@ router.post('/', authenticateAdmin, async (req, res) => {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Determine company_id - use provided one or current user's company
+    const userCompanyId = company_id || req.companyId || null;
+
     // Create user
     const result = await pool.query(`
-      INSERT INTO admin_users (username, password_hash, name, email, role, status, created_by)
-      VALUES ($1, $2, $3, $4, $5, 'active', $6)
-      RETURNING id, username, name, email, role, status, created_at
-    `, [username, passwordHash, name || null, email || null, role || 'hr', req.admin.id]);
+      INSERT INTO admin_users (username, password_hash, name, email, role, status, created_by, company_id, outlet_id)
+      VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8)
+      RETURNING id, username, name, email, role, status, created_at, company_id, outlet_id
+    `, [username, passwordHash, name || null, email || null, role || 'hr', req.admin.id, userCompanyId, outlet_id || null]);
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -134,7 +139,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, status } = req.body;
+    const { name, email, role, status, outlet_id } = req.body;
 
     // Check permissions
     const currentUser = await pool.query(
@@ -173,10 +178,11 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
           email = COALESCE($2, email),
           role = COALESCE($3, role),
           status = COALESCE($4, status),
+          outlet_id = $5,
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5
-      RETURNING id, username, name, email, role, status, updated_at
-    `, [name, email, role, status, id]);
+      WHERE id = $6
+      RETURNING id, username, name, email, role, status, outlet_id, updated_at
+    `, [name, email, role, status, outlet_id, id]);
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -625,6 +631,88 @@ router.delete('/roles/:id', authenticateAdmin, requireSuperAdmin, async (req, re
   } catch (error) {
     console.error('Error deleting role:', error);
     res.status(500).json({ error: 'Failed to delete role' });
+  }
+});
+
+// Assign supervisor to outlet
+router.put('/:id/assign-outlet', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { outlet_id } = req.body;
+
+    // Check permissions
+    const currentUser = await pool.query(
+      'SELECT role, company_id FROM admin_users WHERE id = $1',
+      [req.admin.id]
+    );
+
+    const currentRole = currentUser.rows[0]?.role;
+    if (!['super_admin', 'owner', 'admin', 'director'].includes(currentRole)) {
+      return res.status(403).json({ error: 'You do not have permission to assign outlets' });
+    }
+
+    // Verify outlet exists and belongs to same company (if not super_admin)
+    if (outlet_id) {
+      let outletQuery = 'SELECT id, name, company_id FROM outlets WHERE id = $1';
+      const outlet = await pool.query(outletQuery, [outlet_id]);
+
+      if (outlet.rows.length === 0) {
+        return res.status(404).json({ error: 'Outlet not found' });
+      }
+
+      // Non-super_admin can only assign outlets from their own company
+      if (currentRole !== 'super_admin' && outlet.rows[0].company_id !== currentUser.rows[0].company_id) {
+        return res.status(403).json({ error: 'Cannot assign outlet from different company' });
+      }
+    }
+
+    const result = await pool.query(`
+      UPDATE admin_users
+      SET outlet_id = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, username, name, role, outlet_id
+    `, [outlet_id || null, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get outlet name
+    let outletName = null;
+    if (outlet_id) {
+      const outlet = await pool.query('SELECT name FROM outlets WHERE id = $1', [outlet_id]);
+      outletName = outlet.rows[0]?.name;
+    }
+
+    res.json({
+      message: outlet_id ? `User assigned to outlet: ${outletName}` : 'User unassigned from outlet',
+      user: {
+        ...result.rows[0],
+        outlet_name: outletName
+      }
+    });
+  } catch (error) {
+    console.error('Error assigning outlet:', error);
+    res.status(500).json({ error: 'Failed to assign outlet' });
+  }
+});
+
+// Get supervisors for an outlet
+router.get('/outlet/:outletId/supervisors', authenticateAdmin, async (req, res) => {
+  try {
+    const { outletId } = req.params;
+
+    const result = await pool.query(`
+      SELECT au.id, au.username, au.name, au.email, au.role, au.status
+      FROM admin_users au
+      WHERE au.outlet_id = $1 AND au.role = 'supervisor' AND au.status = 'active'
+      ORDER BY au.name
+    `, [outletId]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching outlet supervisors:', error);
+    res.status(500).json({ error: 'Failed to fetch supervisors' });
   }
 });
 

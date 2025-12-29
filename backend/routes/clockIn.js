@@ -2,32 +2,102 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
-const { getCompanyFilter } = require('../middleware/tenant');
+const { getCompanyFilter, getOutletFilter, isSupervisor } = require('../middleware/tenant');
 
 /**
- * Clock In/Out Routes
- * Database structure only - full implementation to be added later
+ * Clock In/Out Routes - 4 Actions Per Day
  *
- * This module provides API endpoints for:
- * - Recording employee clock in/out times
- * - GPS location capture
- * - OT calculation based on clock records
+ * Structure (one record per employee per day):
+ * - clock_in_1: Start work (morning check-in)
+ * - clock_out_1: Break start
+ * - clock_in_2: After break (return)
+ * - clock_out_2: End work (check-out)
+ *
+ * Standard work hours: 8.5 hours (510 minutes)
+ * OT = Total hours - 8.5 hours
  */
 
-// Get clock-in records (filtered by company)
+const STANDARD_WORK_MINUTES = 510; // 8.5 hours
+
+/**
+ * Calculate total work time and OT
+ * @param {Object} record - Clock record with all 4 time slots
+ * @returns {Object} - { totalMinutes, breakMinutes, workMinutes, otMinutes }
+ */
+function calculateWorkTime(record) {
+  const { clock_in_1, clock_out_1, clock_in_2, clock_out_2 } = record;
+
+  let totalMinutes = 0;
+  let breakMinutes = 0;
+
+  // Parse times (format: HH:MM:SS or HH:MM)
+  const parseTime = (timeStr) => {
+    if (!timeStr) return null;
+    const parts = timeStr.toString().split(':');
+    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+  };
+
+  const t1_in = parseTime(clock_in_1);
+  const t1_out = parseTime(clock_out_1);
+  const t2_in = parseTime(clock_in_2);
+  const t2_out = parseTime(clock_out_2);
+
+  // Morning session: clock_in_1 to clock_out_1
+  if (t1_in !== null && t1_out !== null) {
+    totalMinutes += Math.max(0, t1_out - t1_in);
+  }
+
+  // Break time: clock_out_1 to clock_in_2
+  if (t1_out !== null && t2_in !== null) {
+    breakMinutes = Math.max(0, t2_in - t1_out);
+  }
+
+  // Afternoon session: clock_in_2 to clock_out_2
+  if (t2_in !== null && t2_out !== null) {
+    totalMinutes += Math.max(0, t2_out - t2_in);
+  }
+
+  // If only clock_in_1 and clock_out_2 exist (no break recorded)
+  if (t1_in !== null && t2_out !== null && t1_out === null && t2_in === null) {
+    totalMinutes = Math.max(0, t2_out - t1_in);
+  }
+
+  // Calculate OT (anything above 8.5 hours)
+  const otMinutes = Math.max(0, totalMinutes - STANDARD_WORK_MINUTES);
+
+  return {
+    totalMinutes,
+    breakMinutes,
+    workMinutes: totalMinutes,
+    otMinutes,
+    totalHours: Math.round(totalMinutes / 60 * 100) / 100,
+    otHours: Math.round(otMinutes / 60 * 100) / 100
+  };
+}
+
+// =====================================================
+// ADMIN ROUTES
+// =====================================================
+
+// Get all attendance records (filtered by company/outlet)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, month, year, status, start_date, end_date } = req.query;
+    const { employee_id, outlet_id, month, year, status, start_date, end_date } = req.query;
     const companyId = getCompanyFilter(req);
+    const supervisorOutletId = getOutletFilter(req);
 
     let query = `
       SELECT cr.*,
              e.name as employee_name,
              e.employee_id as emp_code,
-             d.name as department_name
+             d.name as department_name,
+             o.name as outlet_name,
+             approver.name as approved_by_name
       FROM clock_in_records cr
       JOIN employees e ON cr.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON cr.outlet_id = o.id
+      LEFT JOIN admin_users approver ON cr.approved_by = approver.id
       WHERE 1=1
     `;
     const params = [];
@@ -37,6 +107,18 @@ router.get('/', authenticateAdmin, async (req, res) => {
       paramCount++;
       query += ` AND cr.company_id = $${paramCount}`;
       params.push(companyId);
+    }
+
+    // Supervisor can ONLY see their outlet's records
+    if (supervisorOutletId !== null) {
+      paramCount++;
+      query += ` AND cr.outlet_id = $${paramCount}`;
+      params.push(supervisorOutletId);
+    } else if (outlet_id) {
+      // Allow admins to filter by specific outlet
+      paramCount++;
+      query += ` AND cr.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
     }
 
     if (employee_id) {
@@ -72,24 +154,64 @@ router.get('/', authenticateAdmin, async (req, res) => {
       params.push(end_date);
     }
 
-    query += ' ORDER BY cr.work_date DESC, cr.clock_in_time DESC';
+    query += ' ORDER BY cr.work_date DESC, e.name';
 
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching clock-in records:', error);
-    res.status(500).json({ error: 'Failed to fetch clock-in records' });
+    console.error('Error fetching attendance records:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance records' });
   }
 });
 
-// Get monthly clock-in summary for an employee
+// Get single day attendance for an employee
+router.get('/employee/:employeeId/date/:date', authenticateAdmin, async (req, res) => {
+  try {
+    const { employeeId, date } = req.params;
+    const companyId = getCompanyFilter(req);
+
+    let query = `
+      SELECT cr.*, e.name as employee_name, e.employee_id as emp_code
+      FROM clock_in_records cr
+      JOIN employees e ON cr.employee_id = e.id
+      WHERE cr.employee_id = $1 AND cr.work_date = $2
+    `;
+    const params = [employeeId, date];
+
+    if (companyId !== null) {
+      query += ` AND cr.company_id = $3`;
+      params.push(companyId);
+    }
+
+    const result = await pool.query(query, params);
+
+    if (result.rows.length === 0) {
+      return res.json({
+        employee_id: employeeId,
+        work_date: date,
+        clock_in_1: null,
+        clock_out_1: null,
+        clock_in_2: null,
+        clock_out_2: null,
+        status: 'no_record'
+      });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching attendance:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance record' });
+  }
+});
+
+// Get monthly summary for an employee
 router.get('/employee/:employeeId/monthly/:year/:month', authenticateAdmin, async (req, res) => {
   try {
     const { employeeId, year, month } = req.params;
     const companyId = getCompanyFilter(req);
 
-    // Verify employee belongs to user's company
-    let empQuery = 'SELECT id, name, department_id FROM employees WHERE id = $1';
+    // Verify employee
+    let empQuery = 'SELECT id, name, employee_id, default_basic_salary FROM employees WHERE id = $1';
     let empParams = [employeeId];
 
     if (companyId !== null) {
@@ -102,135 +224,191 @@ router.get('/employee/:employeeId/monthly/:year/:month', authenticateAdmin, asyn
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    // Get monthly clock-in summary
-    const result = await pool.query(`
-      SELECT
-        COUNT(*) as total_records,
-        COUNT(*) FILTER (WHERE status = 'approved') as approved_records,
-        COUNT(*) FILTER (WHERE status = 'pending') as pending_records,
-        COALESCE(SUM(total_hours) FILTER (WHERE status = 'approved'), 0) as total_work_hours,
-        COALESCE(SUM(ot_hours) FILTER (WHERE status = 'approved'), 0) as total_ot_hours
-      FROM clock_in_records
+    // Get all records for the month
+    const records = await pool.query(`
+      SELECT * FROM clock_in_records
       WHERE employee_id = $1
         AND EXTRACT(MONTH FROM work_date) = $2
         AND EXTRACT(YEAR FROM work_date) = $3
+      ORDER BY work_date
     `, [employeeId, month, year]);
 
+    // Calculate summary
+    const summary = {
+      total_days: records.rows.length,
+      approved_days: 0,
+      pending_days: 0,
+      rejected_days: 0,
+      total_work_hours: 0,
+      total_ot_hours: 0,
+      total_break_hours: 0
+    };
+
+    records.rows.forEach(r => {
+      if (r.status === 'approved') {
+        summary.approved_days++;
+        summary.total_work_hours += parseFloat(r.total_hours || 0);
+        summary.total_ot_hours += parseFloat(r.ot_hours || 0);
+      } else if (r.status === 'pending') {
+        summary.pending_days++;
+      } else if (r.status === 'rejected') {
+        summary.rejected_days++;
+      }
+      summary.total_break_hours += parseFloat(r.total_break_minutes || 0) / 60;
+    });
+
+    // Round values
+    summary.total_work_hours = Math.round(summary.total_work_hours * 100) / 100;
+    summary.total_ot_hours = Math.round(summary.total_ot_hours * 100) / 100;
+    summary.total_break_hours = Math.round(summary.total_break_hours * 100) / 100;
+
     res.json({
-      employee_id: employeeId,
-      employee_name: employee.rows[0].name,
+      employee: employee.rows[0],
       month: parseInt(month),
       year: parseInt(year),
-      summary: result.rows[0]
+      summary,
+      records: records.rows
     });
   } catch (error) {
-    console.error('Error fetching monthly clock-in summary:', error);
-    res.status(500).json({ error: 'Failed to fetch clock-in summary' });
+    console.error('Error fetching monthly summary:', error);
+    res.status(500).json({ error: 'Failed to fetch monthly summary' });
   }
 });
 
-// Create clock-in record (placeholder for mobile app integration)
+// Create or update attendance record (admin)
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
     const {
       employee_id,
-      clock_in_time,
-      clock_in_location,
       work_date,
+      clock_in_1,
+      clock_out_1,
+      clock_in_2,
+      clock_out_2,
+      outlet_id,
       notes
     } = req.body;
-    const companyId = req.companyId || 1;
 
-    if (!employee_id || !clock_in_time || !work_date) {
-      return res.status(400).json({ error: 'Employee ID, clock-in time, and work date are required' });
+    const companyId = req.companyId || req.admin?.company_id || 1;
+
+    if (!employee_id || !work_date) {
+      return res.status(400).json({ error: 'Employee ID and work date are required' });
     }
 
-    // Verify employee belongs to user's company
-    const employee = await pool.query(
-      'SELECT id FROM employees WHERE id = $1 AND company_id = $2',
-      [employee_id, companyId]
+    // Check if record exists for this employee/date
+    const existing = await pool.query(
+      'SELECT id FROM clock_in_records WHERE employee_id = $1 AND work_date = $2',
+      [employee_id, work_date]
     );
 
-    if (employee.rows.length === 0) {
-      return res.status(404).json({ error: 'Employee not found' });
-    }
+    let result;
 
-    const result = await pool.query(`
-      INSERT INTO clock_in_records
-      (employee_id, company_id, clock_in_time, clock_in_location, work_date, notes, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-      RETURNING *
-    `, [employee_id, companyId, clock_in_time, clock_in_location, work_date, notes]);
-
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('Error creating clock-in record:', error);
-    res.status(500).json({ error: 'Failed to create clock-in record' });
-  }
-});
-
-// Update clock-out (complete the record)
-router.put('/:id/clock-out', authenticateAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { clock_out_time, clock_out_location } = req.body;
-    const companyId = getCompanyFilter(req);
-
-    if (!clock_out_time) {
-      return res.status(400).json({ error: 'Clock-out time is required' });
-    }
-
-    // Get clock-in record to calculate hours
-    let getQuery = 'SELECT * FROM clock_in_records WHERE id = $1';
-    let getParams = [id];
-
-    if (companyId !== null) {
-      getQuery += ' AND company_id = $2';
-      getParams.push(companyId);
-    }
-
-    const record = await pool.query(getQuery, getParams);
-
-    if (record.rows.length === 0) {
-      return res.status(404).json({ error: 'Clock-in record not found' });
-    }
-
-    const clockIn = new Date(record.rows[0].clock_in_time);
-    const clockOut = new Date(clock_out_time);
-    const totalHours = (clockOut - clockIn) / (1000 * 60 * 60); // Convert ms to hours
-
-    // Calculate OT hours (assuming 8 hours is standard work day)
-    const standardHours = 8;
-    const otHours = Math.max(0, totalHours - standardHours);
-
-    const result = await pool.query(`
-      UPDATE clock_in_records
-      SET clock_out_time = $1,
-          clock_out_location = $2,
-          total_hours = $3,
-          ot_hours = $4,
+    if (existing.rows.length > 0) {
+      // Update existing record
+      result = await pool.query(`
+        UPDATE clock_in_records SET
+          clock_in_1 = COALESCE($1, clock_in_1),
+          clock_out_1 = COALESCE($2, clock_out_1),
+          clock_in_2 = COALESCE($3, clock_in_2),
+          clock_out_2 = COALESCE($4, clock_out_2),
+          outlet_id = COALESCE($5, outlet_id),
+          notes = COALESCE($6, notes),
           updated_at = NOW()
-      WHERE id = $5
-      RETURNING *
-    `, [clock_out_time, clock_out_location, totalHours.toFixed(2), otHours.toFixed(2), id]);
+        WHERE id = $7
+        RETURNING *
+      `, [clock_in_1, clock_out_1, clock_in_2, clock_out_2, outlet_id, notes, existing.rows[0].id]);
+    } else {
+      // Create new record
+      result = await pool.query(`
+        INSERT INTO clock_in_records
+        (employee_id, company_id, outlet_id, work_date, clock_in_1, clock_out_1, clock_in_2, clock_out_2, notes, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+        RETURNING *
+      `, [employee_id, companyId, outlet_id, work_date, clock_in_1, clock_out_1, clock_in_2, clock_out_2, notes]);
+    }
 
-    res.json(result.rows[0]);
+    const record = result.rows[0];
+
+    // Calculate and update work time
+    const calc = calculateWorkTime(record);
+    await pool.query(`
+      UPDATE clock_in_records SET
+        total_work_minutes = $1,
+        total_break_minutes = $2,
+        ot_minutes = $3,
+        total_hours = $4,
+        ot_hours = $5
+      WHERE id = $6
+    `, [calc.workMinutes, calc.breakMinutes, calc.otMinutes, calc.totalHours, calc.otHours, record.id]);
+
+    // Return updated record
+    const updated = await pool.query('SELECT * FROM clock_in_records WHERE id = $1', [record.id]);
+    res.status(existing.rows.length > 0 ? 200 : 201).json(updated.rows[0]);
   } catch (error) {
-    console.error('Error updating clock-out:', error);
-    res.status(500).json({ error: 'Failed to update clock-out' });
+    console.error('Error saving attendance:', error);
+    res.status(500).json({ error: 'Failed to save attendance record' });
   }
 });
 
-// Approve clock-in record
+// Update specific clock action (admin)
+router.put('/:id/action/:action', authenticateAdmin, async (req, res) => {
+  try {
+    const { id, action } = req.params;
+    const { time, location, photo } = req.body;
+
+    const validActions = ['clock_in_1', 'clock_out_1', 'clock_in_2', 'clock_out_2'];
+    if (!validActions.includes(action)) {
+      return res.status(400).json({ error: 'Invalid action. Use: clock_in_1, clock_out_1, clock_in_2, clock_out_2' });
+    }
+
+    const locationField = action.replace('clock', 'location');
+    const photoField = action.replace('clock', 'photo');
+
+    const result = await pool.query(`
+      UPDATE clock_in_records SET
+        ${action} = $1,
+        ${locationField} = COALESCE($2, ${locationField}),
+        ${photoField} = COALESCE($3, ${photoField}),
+        updated_at = NOW()
+      WHERE id = $4
+      RETURNING *
+    `, [time, location, photo, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+
+    // Recalculate work time
+    const record = result.rows[0];
+    const calc = calculateWorkTime(record);
+    await pool.query(`
+      UPDATE clock_in_records SET
+        total_work_minutes = $1,
+        total_break_minutes = $2,
+        ot_minutes = $3,
+        total_hours = $4,
+        ot_hours = $5
+      WHERE id = $6
+    `, [calc.workMinutes, calc.breakMinutes, calc.otMinutes, calc.totalHours, calc.otHours, record.id]);
+
+    const updated = await pool.query('SELECT * FROM clock_in_records WHERE id = $1', [record.id]);
+    res.json(updated.rows[0]);
+  } catch (error) {
+    console.error('Error updating clock action:', error);
+    res.status(500).json({ error: 'Failed to update clock action' });
+  }
+});
+
+// Approve attendance record
 router.post('/:id/approve', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const companyId = getCompanyFilter(req);
     const adminId = req.admin?.id;
+    const companyId = getCompanyFilter(req);
 
     let query = `
       UPDATE clock_in_records
-      SET status = 'approved', approved_by = $1, updated_at = NOW()
+      SET status = 'approved', approved_by = $1, approved_at = NOW(), updated_at = NOW()
       WHERE id = $2 AND status = 'pending'
     `;
     let params = [adminId, id];
@@ -245,30 +423,33 @@ router.post('/:id/approve', authenticateAdmin, async (req, res) => {
     const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Clock-in record not found or already processed' });
+      return res.status(404).json({ error: 'Record not found or already processed' });
     }
 
     res.json(result.rows[0]);
   } catch (error) {
-    console.error('Error approving clock-in:', error);
-    res.status(500).json({ error: 'Failed to approve clock-in record' });
+    console.error('Error approving attendance:', error);
+    res.status(500).json({ error: 'Failed to approve attendance' });
   }
 });
 
-// Reject clock-in record
+// Reject attendance record
 router.post('/:id/reject', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { notes } = req.body;
-    const companyId = getCompanyFilter(req);
+    const { rejection_reason } = req.body;
     const adminId = req.admin?.id;
+    const companyId = getCompanyFilter(req);
 
     let query = `
       UPDATE clock_in_records
-      SET status = 'rejected', approved_by = $1, notes = COALESCE($2, notes), updated_at = NOW()
+      SET status = 'rejected',
+          approved_by = $1,
+          rejection_reason = $2,
+          updated_at = NOW()
       WHERE id = $3 AND status = 'pending'
     `;
-    let params = [adminId, notes, id];
+    let params = [adminId, rejection_reason, id];
 
     if (companyId !== null) {
       query += ' AND company_id = $4';
@@ -280,23 +461,23 @@ router.post('/:id/reject', authenticateAdmin, async (req, res) => {
     const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Clock-in record not found or already processed' });
+      return res.status(404).json({ error: 'Record not found or already processed' });
     }
 
     res.json(result.rows[0]);
   } catch (error) {
-    console.error('Error rejecting clock-in:', error);
-    res.status(500).json({ error: 'Failed to reject clock-in record' });
+    console.error('Error rejecting attendance:', error);
+    res.status(500).json({ error: 'Failed to reject attendance' });
   }
 });
 
-// Bulk approve clock-in records
+// Bulk approve attendance records
 router.post('/bulk-approve', authenticateAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     const { record_ids } = req.body;
-    const companyId = getCompanyFilter(req);
     const adminId = req.admin?.id;
+    const companyId = getCompanyFilter(req);
 
     if (!record_ids || !Array.isArray(record_ids) || record_ids.length === 0) {
       return res.status(400).json({ error: 'Record IDs array is required' });
@@ -306,7 +487,7 @@ router.post('/bulk-approve', authenticateAdmin, async (req, res) => {
 
     let query = `
       UPDATE clock_in_records
-      SET status = 'approved', approved_by = $1, updated_at = NOW()
+      SET status = 'approved', approved_by = $1, approved_at = NOW(), updated_at = NOW()
       WHERE id = ANY($2) AND status = 'pending'
     `;
     let params = [adminId, record_ids];
@@ -319,23 +500,22 @@ router.post('/bulk-approve', authenticateAdmin, async (req, res) => {
     query += ' RETURNING id';
 
     const result = await client.query(query, params);
-
     await client.query('COMMIT');
 
     res.json({
-      message: `Approved ${result.rowCount} clock-in records`,
+      message: `Approved ${result.rowCount} attendance records`,
       approved_count: result.rowCount
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Error bulk approving clock-in records:', error);
+    console.error('Error bulk approving:', error);
     res.status(500).json({ error: 'Failed to bulk approve records' });
   } finally {
     client.release();
   }
 });
 
-// Delete clock-in record
+// Delete attendance record
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -354,17 +534,17 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
     const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Clock-in record not found' });
+      return res.status(404).json({ error: 'Record not found' });
     }
 
-    res.json({ message: 'Clock-in record deleted successfully' });
+    res.json({ message: 'Attendance record deleted' });
   } catch (error) {
-    console.error('Error deleting clock-in record:', error);
-    res.status(500).json({ error: 'Failed to delete clock-in record' });
+    console.error('Error deleting attendance:', error);
+    res.status(500).json({ error: 'Failed to delete record' });
   }
 });
 
-// Get OT summary for payroll (approved records only)
+// Get OT summary for payroll
 router.get('/ot-for-payroll/:year/:month', authenticateAdmin, async (req, res) => {
   try {
     const { year, month } = req.params;
@@ -375,10 +555,13 @@ router.get('/ot-for-payroll/:year/:month', authenticateAdmin, async (req, res) =
         cr.employee_id,
         e.name as employee_name,
         e.employee_id as emp_code,
+        e.default_basic_salary as basic_salary,
+        e.ot_rate as employee_ot_rate,
         d.name as department_name,
+        COUNT(*) as work_days,
         SUM(cr.total_hours) as total_work_hours,
         SUM(cr.ot_hours) as total_ot_hours,
-        COUNT(*) as work_days
+        SUM(cr.total_break_minutes) / 60.0 as total_break_hours
       FROM clock_in_records cr
       JOIN employees e ON cr.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
@@ -393,14 +576,300 @@ router.get('/ot-for-payroll/:year/:month', authenticateAdmin, async (req, res) =
       params.push(companyId);
     }
 
-    query += ' GROUP BY cr.employee_id, e.name, e.employee_id, d.name';
+    query += ' GROUP BY cr.employee_id, e.name, e.employee_id, e.default_basic_salary, e.ot_rate, d.name';
     query += ' ORDER BY e.name';
 
     const result = await pool.query(query, params);
-    res.json(result.rows);
+
+    // Calculate OT pay for each employee
+    const withOTCalc = result.rows.map(r => {
+      const basicSalary = parseFloat(r.basic_salary) || 0;
+      const otHours = parseFloat(r.total_ot_hours) || 0;
+      const otRate = parseFloat(r.employee_ot_rate) || 1.0;
+
+      // OT pay = (basic salary / 26 days / 8 hours) * OT hours * OT rate
+      const hourlyRate = basicSalary / 26 / 8;
+      const otPay = Math.round(hourlyRate * otHours * otRate * 100) / 100;
+
+      return {
+        ...r,
+        hourly_rate: Math.round(hourlyRate * 100) / 100,
+        ot_rate: otRate,
+        ot_pay: otPay
+      };
+    });
+
+    res.json(withOTCalc);
   } catch (error) {
     console.error('Error fetching OT for payroll:', error);
     res.status(500).json({ error: 'Failed to fetch OT data' });
+  }
+});
+
+// =====================================================
+// EMPLOYEE CLOCK-IN (Using Employee ID + IC)
+// =====================================================
+
+// Employee clock action (no password required, uses Employee ID + IC)
+router.post('/employee/clock', async (req, res) => {
+  try {
+    const {
+      employee_id,  // Employee ID (e.g., "EMP001")
+      ic_number,    // IC number for verification
+      action,       // 'clock_in_1', 'clock_out_1', 'clock_in_2', 'clock_out_2'
+      latitude,
+      longitude,
+      photo,        // Base64 photo
+      outlet_id
+    } = req.body;
+
+    if (!employee_id || !ic_number) {
+      return res.status(400).json({ error: 'Employee ID and IC number are required' });
+    }
+
+    const validActions = ['clock_in_1', 'clock_out_1', 'clock_in_2', 'clock_out_2'];
+    if (!action || !validActions.includes(action)) {
+      return res.status(400).json({
+        error: 'Invalid action',
+        valid_actions: validActions,
+        action_meanings: {
+          clock_in_1: 'Start work (morning)',
+          clock_out_1: 'Break start',
+          clock_in_2: 'After break',
+          clock_out_2: 'End work'
+        }
+      });
+    }
+
+    // Verify employee by Employee ID + IC
+    const empResult = await pool.query(
+      `SELECT id, name, employee_id, company_id, outlet_id
+       FROM employees
+       WHERE employee_id = $1 AND ic_number = $2 AND status = 'active'`,
+      [employee_id, ic_number.replace(/[-\s]/g, '')]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid Employee ID or IC number' });
+    }
+
+    const employee = empResult.rows[0];
+    const today = new Date().toISOString().split('T')[0];
+    const currentTime = new Date().toTimeString().split(' ')[0]; // HH:MM:SS
+
+    // Build location string
+    const location = (latitude && longitude) ? `${latitude},${longitude}` : null;
+    const locationField = action.replace('clock', 'location');
+    const photoField = action.replace('clock', 'photo');
+
+    // Check if record exists for today
+    const existing = await pool.query(
+      'SELECT * FROM clock_in_records WHERE employee_id = $1 AND work_date = $2',
+      [employee.id, today]
+    );
+
+    let result;
+
+    if (existing.rows.length > 0) {
+      // Update existing record
+      const record = existing.rows[0];
+
+      // Check if this action already done
+      if (record[action]) {
+        return res.status(400).json({
+          error: `${action} already recorded for today`,
+          time: record[action]
+        });
+      }
+
+      result = await pool.query(`
+        UPDATE clock_in_records SET
+          ${action} = $1,
+          ${locationField} = $2,
+          ${photoField} = $3,
+          updated_at = NOW()
+        WHERE id = $4
+        RETURNING *
+      `, [currentTime, location, photo, record.id]);
+    } else {
+      // Only allow clock_in_1 for new record
+      if (action !== 'clock_in_1') {
+        return res.status(400).json({
+          error: 'Must clock in first (clock_in_1) before other actions'
+        });
+      }
+
+      result = await pool.query(`
+        INSERT INTO clock_in_records
+        (employee_id, company_id, outlet_id, work_date, ${action}, ${locationField}, ${photoField}, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+        RETURNING *
+      `, [employee.id, employee.company_id, outlet_id || employee.outlet_id, today, currentTime, location, photo]);
+    }
+
+    const record = result.rows[0];
+
+    // Recalculate work time
+    const calc = calculateWorkTime(record);
+    await pool.query(`
+      UPDATE clock_in_records SET
+        total_work_minutes = $1,
+        total_break_minutes = $2,
+        ot_minutes = $3,
+        total_hours = $4,
+        ot_hours = $5
+      WHERE id = $6
+    `, [calc.workMinutes, calc.breakMinutes, calc.otMinutes, calc.totalHours, calc.otHours, record.id]);
+
+    // Get updated record
+    const updated = await pool.query('SELECT * FROM clock_in_records WHERE id = $1', [record.id]);
+
+    res.json({
+      success: true,
+      action,
+      action_meaning: {
+        clock_in_1: 'Start work',
+        clock_out_1: 'Break start',
+        clock_in_2: 'After break',
+        clock_out_2: 'End work'
+      }[action],
+      time: currentTime,
+      employee_name: employee.name,
+      record: updated.rows[0]
+    });
+  } catch (error) {
+    console.error('Error processing clock action:', error);
+    res.status(500).json({ error: 'Failed to process clock action' });
+  }
+});
+
+// Get employee's today attendance (using Employee ID + IC)
+router.post('/employee/today', async (req, res) => {
+  try {
+    const { employee_id, ic_number } = req.body;
+
+    if (!employee_id || !ic_number) {
+      return res.status(400).json({ error: 'Employee ID and IC number are required' });
+    }
+
+    // Verify employee
+    const empResult = await pool.query(
+      `SELECT id, name, employee_id FROM employees
+       WHERE employee_id = $1 AND ic_number = $2 AND status = 'active'`,
+      [employee_id, ic_number.replace(/[-\s]/g, '')]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid Employee ID or IC number' });
+    }
+
+    const employee = empResult.rows[0];
+    const today = new Date().toISOString().split('T')[0];
+
+    const result = await pool.query(
+      'SELECT * FROM clock_in_records WHERE employee_id = $1 AND work_date = $2',
+      [employee.id, today]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        employee_name: employee.name,
+        employee_id: employee.employee_id,
+        work_date: today,
+        status: 'no_record',
+        next_action: 'clock_in_1',
+        message: 'No attendance record for today. Please clock in.'
+      });
+    }
+
+    const record = result.rows[0];
+
+    // Determine next action
+    let nextAction = null;
+    if (!record.clock_in_1) nextAction = 'clock_in_1';
+    else if (!record.clock_out_1) nextAction = 'clock_out_1';
+    else if (!record.clock_in_2) nextAction = 'clock_in_2';
+    else if (!record.clock_out_2) nextAction = 'clock_out_2';
+
+    res.json({
+      employee_name: employee.name,
+      employee_id: employee.employee_id,
+      record,
+      next_action: nextAction,
+      actions_completed: {
+        clock_in_1: !!record.clock_in_1,
+        clock_out_1: !!record.clock_out_1,
+        clock_in_2: !!record.clock_in_2,
+        clock_out_2: !!record.clock_out_2
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching today attendance:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance' });
+  }
+});
+
+// Get employee's attendance history (using Employee ID + IC)
+router.post('/employee/history', async (req, res) => {
+  try {
+    const { employee_id, ic_number, month, year } = req.body;
+
+    if (!employee_id || !ic_number) {
+      return res.status(400).json({ error: 'Employee ID and IC number are required' });
+    }
+
+    // Verify employee
+    const empResult = await pool.query(
+      `SELECT id, name, employee_id FROM employees
+       WHERE employee_id = $1 AND ic_number = $2 AND status = 'active'`,
+      [employee_id, ic_number.replace(/[-\s]/g, '')]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid Employee ID or IC number' });
+    }
+
+    const employee = empResult.rows[0];
+    const m = month || (new Date().getMonth() + 1);
+    const y = year || new Date().getFullYear();
+
+    const result = await pool.query(`
+      SELECT * FROM clock_in_records
+      WHERE employee_id = $1
+        AND EXTRACT(MONTH FROM work_date) = $2
+        AND EXTRACT(YEAR FROM work_date) = $3
+      ORDER BY work_date DESC
+    `, [employee.id, m, y]);
+
+    // Calculate summary
+    let totalHours = 0;
+    let totalOT = 0;
+    let approvedDays = 0;
+
+    result.rows.forEach(r => {
+      if (r.status === 'approved') {
+        approvedDays++;
+        totalHours += parseFloat(r.total_hours || 0);
+        totalOT += parseFloat(r.ot_hours || 0);
+      }
+    });
+
+    res.json({
+      employee_name: employee.name,
+      employee_id: employee.employee_id,
+      month: m,
+      year: y,
+      summary: {
+        total_days: result.rows.length,
+        approved_days: approvedDays,
+        total_work_hours: Math.round(totalHours * 100) / 100,
+        total_ot_hours: Math.round(totalOT * 100) / 100
+      },
+      records: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching history:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance history' });
   }
 });
 

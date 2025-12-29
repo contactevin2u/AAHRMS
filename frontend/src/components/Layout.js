@@ -19,7 +19,7 @@ function Layout({ children }) {
   // Auto-expand section based on current route
   useEffect(() => {
     const path = location.pathname;
-    if (path.includes('/employees') || path.includes('/leave') || path.includes('/claims')) {
+    if (path.includes('/employees') || path.includes('/leave') || path.includes('/claims') || path.includes('/attendance')) {
       setExpandedSection('people');
     } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales')) {
       setExpandedSection('payroll');
@@ -123,6 +123,9 @@ function Layout({ children }) {
                 <NavLink to="/admin/claims" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                   Claims
                 </NavLink>
+                <NavLink to="/admin/attendance" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Attendance
+                </NavLink>
               </div>
             )}
           </div>
@@ -172,6 +175,9 @@ function Layout({ children }) {
                   </NavLink>
                   <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                     Feedback
+                  </NavLink>
+                  <NavLink to="/admin/benefits-in-kind" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Benefits In Kind
                   </NavLink>
                 </div>
               )}

@@ -91,22 +91,16 @@ function StaffClockIn() {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    // Set canvas size to video size
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-
-    // Draw video frame to canvas
     ctx.drawImage(video, 0, 0);
 
-    // Get raw image data
     const rawDataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
-    // Compress the image (640px width, 60% quality)
     try {
       const compressedDataUrl = await compressAttendancePhoto(rawDataUrl);
       const sizeKB = getBase64SizeKB(compressedDataUrl);
       console.log(`Photo compressed to ${sizeKB} KB`);
-
       setCapturedPhoto(compressedDataUrl);
       stopCamera();
     } catch (err) {
@@ -154,52 +148,45 @@ function StaffClockIn() {
     );
   };
 
-  // Submit clock in
-  const handleClockIn = async () => {
-    if (!capturedPhoto) {
-      setError('Please capture a photo first');
-      return;
-    }
-    if (!location) {
-      setError('Please get your GPS location first');
-      return;
+  // Handle clock action (unified for all 4 actions)
+  const handleClockAction = async (action) => {
+    // First clock-in requires photo and GPS
+    if (action === 'clock_in_1') {
+      if (!capturedPhoto) {
+        setError('Please capture a photo first');
+        return;
+      }
+      if (!location) {
+        setError('Please get your GPS location first');
+        return;
+      }
     }
 
     setSubmitting(true);
     setError('');
+    setSuccess('');
 
     try {
-      const response = await essApi.clockIn({
-        photo_base64: capturedPhoto,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        location_address: `${location.latitude}, ${location.longitude}`
-      });
+      const payload = { action };
 
-      setSuccess('Clock-in successful!');
+      if (action === 'clock_in_1') {
+        payload.photo_base64 = capturedPhoto;
+        payload.latitude = location.latitude;
+        payload.longitude = location.longitude;
+      }
+
+      const response = await essApi.clockAction(payload);
+
+      setSuccess(response.data.message);
       setCapturedPhoto(null);
       setLocation(null);
       fetchClockStatus();
-    } catch (err) {
-      console.error('Clock-in error:', err);
-      setError(err.response?.data?.error || 'Clock-in failed');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  // Submit clock out
-  const handleClockOut = async () => {
-    setSubmitting(true);
-    setError('');
-
-    try {
-      const response = await essApi.clockOut({});
-      setSuccess(`Clock-out successful! Worked ${parseFloat(response.data.record.hours_worked).toFixed(2)} hours`);
-      fetchClockStatus();
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      console.error('Clock-out error:', err);
-      setError(err.response?.data?.error || 'Clock-out failed');
+      console.error('Clock action error:', err);
+      setError(err.response?.data?.error || 'Action failed');
     } finally {
       setSubmitting(false);
     }
@@ -213,12 +200,9 @@ function StaffClockIn() {
   };
 
   // Format time
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '-';
-    return new Date(timestamp).toLocaleTimeString('en-MY', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const formatTime = (time) => {
+    if (!time) return '-';
+    return time.substring(0, 5); // HH:MM
   };
 
   if (loading) {
@@ -229,7 +213,24 @@ function StaffClockIn() {
     );
   }
 
-  const isClockedIn = clockStatus?.status === 'clocked_in';
+  const status = clockStatus?.status || 'not_started';
+  const nextAction = clockStatus?.next_action;
+  const record = clockStatus?.record;
+
+  // Action button labels
+  const actionLabels = {
+    clock_in_1: 'Start Work',
+    clock_out_1: 'Go on Break',
+    clock_in_2: 'Return from Break',
+    clock_out_2: 'End Work'
+  };
+
+  const actionIcons = {
+    clock_in_1: '9:00',
+    clock_out_1: '12:30',
+    clock_in_2: '13:30',
+    clock_out_2: '18:00'
+  };
 
   return (
     <div className="staff-clockin-container">
@@ -250,32 +251,62 @@ function StaffClockIn() {
 
         {/* Current Status */}
         <div className="status-card">
-          <h2>Today's Status</h2>
+          <h2>Today's Attendance</h2>
           <div className="status-info">
-            <div className={`status-badge ${isClockedIn ? 'active' : 'inactive'}`}>
-              {isClockedIn ? 'Clocked In' : 'Not Clocked In'}
+            <div className={`status-badge ${status}`}>
+              {status === 'not_started' && 'Not Started'}
+              {status === 'working' && 'Working'}
+              {status === 'on_break' && 'On Break'}
+              {status === 'completed' && 'Day Complete'}
             </div>
-            {clockStatus?.record && (
-              <div className="time-info">
-                <div className="time-item">
-                  <span className="time-label">Clock In:</span>
-                  <span className="time-value">{formatTime(clockStatus.record.clock_in_time)}</span>
-                </div>
-                {clockStatus.record.clock_out_time && (
-                  <div className="time-item">
-                    <span className="time-label">Clock Out:</span>
-                    <span className="time-value">{formatTime(clockStatus.record.clock_out_time)}</span>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
+
+          {/* Time Timeline */}
+          {record && (
+            <div className="time-timeline">
+              <div className={`time-slot ${record.clock_in_1 ? 'done' : ''}`}>
+                <div className="time-label">Start</div>
+                <div className="time-value">{formatTime(record.clock_in_1)}</div>
+              </div>
+              <div className="time-connector"></div>
+              <div className={`time-slot ${record.clock_out_1 ? 'done' : ''}`}>
+                <div className="time-label">Break</div>
+                <div className="time-value">{formatTime(record.clock_out_1)}</div>
+              </div>
+              <div className="time-connector"></div>
+              <div className={`time-slot ${record.clock_in_2 ? 'done' : ''}`}>
+                <div className="time-label">Return</div>
+                <div className="time-value">{formatTime(record.clock_in_2)}</div>
+              </div>
+              <div className="time-connector"></div>
+              <div className={`time-slot ${record.clock_out_2 ? 'done' : ''}`}>
+                <div className="time-label">End</div>
+                <div className="time-value">{formatTime(record.clock_out_2)}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Summary for completed day */}
+          {status === 'completed' && record && (
+            <div className="day-summary">
+              <div className="summary-item">
+                <span className="summary-label">Total Hours</span>
+                <span className="summary-value">{record.total_hours || '0'}h</span>
+              </div>
+              {parseFloat(record.ot_hours || 0) > 0 && (
+                <div className="summary-item ot">
+                  <span className="summary-label">OT Hours</span>
+                  <span className="summary-value">{record.ot_hours}h</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Clock In Section */}
-        {!isClockedIn && (
+        {/* Clock In Section (requires photo + GPS) */}
+        {nextAction === 'clock_in_1' && (
           <div className="action-card">
-            <h3>Clock In</h3>
+            <h3>Clock In - Start Work</h3>
 
             {/* Camera Section */}
             <div className="camera-section">
@@ -287,12 +318,7 @@ function StaffClockIn() {
 
               {cameraActive && (
                 <div className="camera-preview">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                  />
+                  <video ref={videoRef} autoPlay playsInline muted />
                   <button onClick={capturePhoto} className="capture-btn">
                     Capture Photo
                   </button>
@@ -333,29 +359,82 @@ function StaffClockIn() {
 
             {/* Submit Button */}
             <button
-              onClick={handleClockIn}
+              onClick={() => handleClockAction('clock_in_1')}
               className="submit-btn clock-in-btn"
               disabled={submitting || !capturedPhoto || !location}
             >
-              {submitting ? 'Submitting...' : 'Clock In'}
+              {submitting ? 'Submitting...' : 'Start Work'}
             </button>
           </div>
         )}
 
-        {/* Clock Out Section */}
-        {isClockedIn && (
+        {/* Break Button */}
+        {nextAction === 'clock_out_1' && (
           <div className="action-card">
-            <h3>Clock Out</h3>
-            <p className="clock-out-note">
-              You have been working since {formatTime(clockStatus.record.clock_in_time)}
+            <h3>Going on Break?</h3>
+            <p className="action-note">
+              Started at {formatTime(record?.clock_in_1)}
             </p>
             <button
-              onClick={handleClockOut}
-              className="submit-btn clock-out-btn"
+              onClick={() => handleClockAction('clock_out_1')}
+              className="submit-btn break-btn"
               disabled={submitting}
             >
-              {submitting ? 'Submitting...' : 'Clock Out'}
+              {submitting ? 'Processing...' : 'Go on Break'}
             </button>
+            <p className="skip-note">
+              Or skip break and <button
+                className="link-btn"
+                onClick={() => handleClockAction('clock_out_2')}
+                disabled={submitting}
+              >
+                End Work directly
+              </button>
+            </p>
+          </div>
+        )}
+
+        {/* Return from Break */}
+        {nextAction === 'clock_in_2' && (
+          <div className="action-card">
+            <h3>Back from Break?</h3>
+            <p className="action-note">
+              Break started at {formatTime(record?.clock_out_1)}
+            </p>
+            <button
+              onClick={() => handleClockAction('clock_in_2')}
+              className="submit-btn return-btn"
+              disabled={submitting}
+            >
+              {submitting ? 'Processing...' : 'Return from Break'}
+            </button>
+          </div>
+        )}
+
+        {/* End Work */}
+        {nextAction === 'clock_out_2' && (
+          <div className="action-card">
+            <h3>End Your Work Day</h3>
+            <p className="action-note">
+              {record?.clock_in_2
+                ? `Returned at ${formatTime(record.clock_in_2)}`
+                : `Started at ${formatTime(record?.clock_in_1)}`}
+            </p>
+            <button
+              onClick={() => handleClockAction('clock_out_2')}
+              className="submit-btn end-btn"
+              disabled={submitting}
+            >
+              {submitting ? 'Processing...' : 'End Work'}
+            </button>
+          </div>
+        )}
+
+        {/* Day Complete */}
+        {status === 'completed' && (
+          <div className="action-card completed">
+            <h3>Great job today!</h3>
+            <p className="action-note">Your attendance has been recorded.</p>
           </div>
         )}
       </main>

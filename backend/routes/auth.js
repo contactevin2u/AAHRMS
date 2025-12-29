@@ -13,14 +13,16 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Get user with role, permissions, and company info
+    // Get user with role, permissions, company and outlet info
     const result = await pool.query(`
       SELECT au.*, ar.permissions, ar.display_name as role_display_name,
              c.id as company_id, c.name as company_name, c.code as company_code,
-             c.logo_url as company_logo, c.grouping_type as company_grouping_type
+             c.logo_url as company_logo, c.grouping_type as company_grouping_type,
+             o.id as outlet_id, o.name as outlet_name
       FROM admin_users au
       LEFT JOIN admin_roles ar ON au.role = ar.name
       LEFT JOIN companies c ON au.company_id = c.id
+      LEFT JOIN outlets o ON au.outlet_id = o.id
       WHERE au.username = $1
     `, [username]);
 
@@ -53,7 +55,8 @@ router.post('/login', async (req, res) => {
         username: admin.username,
         role: admin.role || 'admin',
         name: admin.name,
-        company_id: admin.company_id  // Include company_id in token (null for super_admin)
+        company_id: admin.company_id,  // Include company_id in token (null for super_admin)
+        outlet_id: admin.outlet_id     // Include outlet_id for supervisors
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -74,7 +77,9 @@ router.post('/login', async (req, res) => {
         company_name: admin.company_name,
         company_code: admin.company_code,
         company_logo: admin.company_logo,
-        company_grouping_type: admin.company_grouping_type || 'department'
+        company_grouping_type: admin.company_grouping_type || 'department',
+        outlet_id: admin.outlet_id,
+        outlet_name: admin.outlet_name
       },
     });
   } catch (error) {

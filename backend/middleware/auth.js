@@ -15,6 +15,8 @@ const authenticateAdmin = (req, res, next) => {
     req.admin = decoded;
     // Extract company_id for tenant isolation
     req.companyId = decoded.company_id;
+    // Extract outlet_id for supervisor outlet isolation
+    req.outletId = decoded.outlet_id;
     next();
   } catch (error) {
     return res.status(403).json({ error: 'Invalid or expired token.' });
