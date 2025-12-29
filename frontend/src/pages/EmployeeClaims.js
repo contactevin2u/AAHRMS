@@ -71,13 +71,42 @@ function EmployeeClaims() {
           facingMode: { ideal: 'environment' },  // Back camera for documents
           width: { ideal: 1920 },
           height: { ideal: 1080 }
-        }
+        },
+        audio: false
       });
       streamRef.current = stream;
       if (videoRef.current) {
+        // Clear any existing stream
+        if (videoRef.current.srcObject) {
+          videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        }
+
         videoRef.current.srcObject = stream;
+
+        // For iOS Safari compatibility
+        videoRef.current.setAttribute('autoplay', '');
+        videoRef.current.setAttribute('playsinline', '');
+        videoRef.current.setAttribute('muted', '');
+
+        // Wait for video to be ready then play
+        const playVideo = () => {
+          videoRef.current.play()
+            .then(() => {
+              setCameraActive(true);
+            })
+            .catch(err => {
+              console.error('Video play error:', err);
+              videoRef.current.play();
+              setCameraActive(true);
+            });
+        };
+
+        if (videoRef.current.readyState >= 2) {
+          playVideo();
+        } else {
+          videoRef.current.onloadeddata = playVideo;
+        }
       }
-      setCameraActive(true);
     } catch (err) {
       console.error('Camera error:', err);
       alert('Unable to access camera. Please allow camera permission.');
@@ -364,6 +393,8 @@ function EmployeeClaims() {
                             autoPlay
                             playsInline
                             muted
+                            webkit-playsinline="true"
+                            style={{ width: '100%', height: 'auto' }}
                           />
                           <div className="camera-controls">
                             <button

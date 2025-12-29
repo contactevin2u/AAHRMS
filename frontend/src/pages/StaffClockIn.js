@@ -126,17 +126,48 @@ function StaffClockIn() {
           facingMode: 'user',
           width: { ideal: 640 },
           height: { ideal: 480 }
-        }
+        },
+        audio: false
       });
 
       streamRef.current = stream;
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+        // Clear any existing stream
+        if (videoRef.current.srcObject) {
+          videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        }
 
-      setCameraActive(true);
-      setCameraStartTime(Date.now());
-      setCaptureCountdown(Math.ceil(LIVENESS_DELAY / 1000));
+        videoRef.current.srcObject = stream;
+
+        // For iOS Safari compatibility
+        videoRef.current.setAttribute('autoplay', '');
+        videoRef.current.setAttribute('playsinline', '');
+        videoRef.current.setAttribute('muted', '');
+
+        // Wait for video to be ready then play
+        const playVideo = () => {
+          videoRef.current.play()
+            .then(() => {
+              setCameraActive(true);
+              setCameraStartTime(Date.now());
+              setCaptureCountdown(Math.ceil(LIVENESS_DELAY / 1000));
+            })
+            .catch(err => {
+              console.error('Video play error:', err);
+              // Try again without promise
+              videoRef.current.play();
+              setCameraActive(true);
+              setCameraStartTime(Date.now());
+              setCaptureCountdown(Math.ceil(LIVENESS_DELAY / 1000));
+            });
+        };
+
+        if (videoRef.current.readyState >= 2) {
+          playVideo();
+        } else {
+          videoRef.current.onloadeddata = playVideo;
+        }
+      }
 
     } catch (err) {
       console.error('Camera error:', err);
@@ -507,7 +538,7 @@ function StaffClockIn() {
 
               {cameraActive && (
                 <div className="camera-preview">
-                  <video ref={videoRef} autoPlay playsInline muted />
+                  <video ref={videoRef} autoPlay playsInline muted webkit-playsinline="true" style={{ width: '100%', height: 'auto' }} />
                   <div className="camera-overlay">
                     <div className="face-guide"></div>
                     <p className="camera-hint">
