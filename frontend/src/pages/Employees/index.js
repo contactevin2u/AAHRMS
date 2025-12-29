@@ -7,6 +7,7 @@ import Layout from '../../components/Layout';
 import EmployeeTable from './EmployeeTable';
 import EmployeeStats from './EmployeeStats';
 import EmployeeFilters from './EmployeeFilters';
+import EmployeeDetailModal from './EmployeeDetailModal';
 
 import '../Employees.css';
 
@@ -30,6 +31,9 @@ function Employees() {
 
   // Selection state (for viewing purposes)
   const [selectedEmployees, setSelectedEmployees] = useState([]);
+
+  // View employee detail modal
+  const [viewEmployee, setViewEmployee] = useState(null);
 
   // Fetch all data
   const fetchData = useCallback(async () => {
@@ -97,9 +101,18 @@ function Employees() {
           selectedEmployees={selectedEmployees}
           onSelectAll={handleSelectAll}
           onSelectEmployee={handleSelectEmployee}
+          onViewEmployee={setViewEmployee}
           goToDepartments={goToDepartments}
           loading={loading}
         />
+
+        {/* Employee Detail Modal */}
+        {viewEmployee && (
+          <EmployeeDetailModal
+            employee={viewEmployee}
+            onClose={() => setViewEmployee(null)}
+          />
+        )}
       </div>
     </Layout>
   );

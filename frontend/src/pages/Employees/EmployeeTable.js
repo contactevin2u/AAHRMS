@@ -6,6 +6,7 @@ const EmployeeTable = ({
   selectedEmployees,
   onSelectAll,
   onSelectEmployee,
+  onViewEmployee,
   goToDepartments,
   loading
 }) => {
@@ -54,7 +55,15 @@ const EmployeeTable = ({
                     />
                   </td>
                   <td><strong>{emp.employee_id}</strong></td>
-                  <td>{emp.name}</td>
+                  <td>
+                    <span
+                      className="employee-name-link"
+                      onClick={() => onViewEmployee && onViewEmployee(emp)}
+                      style={{ cursor: 'pointer', color: '#1976d2', fontWeight: '500' }}
+                    >
+                      {emp.name}
+                    </span>
+                  </td>
                   <td>
                     {(() => {
                       const gender = getGenderFromIC(emp.ic_number);
