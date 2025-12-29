@@ -21,10 +21,10 @@ function EmployeeClaims() {
   const [processingImage, setProcessingImage] = useState(false);
 
   const [form, setForm] = useState({
-    claim_type: '',
+    category: '',
     amount: '',
     description: '',
-    receipt_date: '',
+    claim_date: '',
     receipt_url: ''
   });
 
@@ -177,7 +177,7 @@ function EmployeeClaims() {
     try {
       await essApi.submitClaim(form);
       setShowSubmitModal(false);
-      setForm({ claim_type: '', amount: '', description: '', receipt_date: '', receipt_url: '' });
+      setForm({ category: '', amount: '', description: '', claim_date: '', receipt_url: '' });
       setCapturedReceipt(null);
       stopCamera();
       fetchClaims();
@@ -296,11 +296,11 @@ function EmployeeClaims() {
               >
                 <div className="claim-main">
                   <div className="claim-type">
-                    <span className="type-badge">{getClaimTypeLabel(claim.claim_type)}</span>
+                    <span className="type-badge">{getClaimTypeLabel(claim.category)}</span>
                   </div>
                   <div className="claim-description">{claim.description || 'No description'}</div>
                   <div className="claim-date">
-                    Receipt Date: {formatDate(claim.receipt_date)}
+                    Receipt Date: {formatDate(claim.claim_date)}
                   </div>
                 </div>
                 <div className="claim-right">
@@ -327,8 +327,8 @@ function EmployeeClaims() {
                   <div className="form-group">
                     <label>Claim Type *</label>
                     <select
-                      value={form.claim_type}
-                      onChange={(e) => setForm({ ...form, claim_type: e.target.value })}
+                      value={form.category}
+                      onChange={(e) => setForm({ ...form, category: e.target.value })}
                       required
                     >
                       <option value="">Select claim type</option>
@@ -357,8 +357,8 @@ function EmployeeClaims() {
                       <label>Receipt Date *</label>
                       <input
                         type="date"
-                        value={form.receipt_date}
-                        onChange={(e) => setForm({ ...form, receipt_date: e.target.value })}
+                        value={form.claim_date}
+                        onChange={(e) => setForm({ ...form, claim_date: e.target.value })}
                         max={new Date().toISOString().split('T')[0]}
                         required
                       />
@@ -454,7 +454,7 @@ function EmployeeClaims() {
               <div className="modal-body">
                 <div className="detail-row">
                   <span className="detail-label">Claim Type</span>
-                  <span className="detail-value">{getClaimTypeLabel(selectedClaim.claim_type)}</span>
+                  <span className="detail-value">{getClaimTypeLabel(selectedClaim.category)}</span>
                 </div>
                 <div className="detail-row">
                   <span className="detail-label">Amount</span>
@@ -462,7 +462,7 @@ function EmployeeClaims() {
                 </div>
                 <div className="detail-row">
                   <span className="detail-label">Receipt Date</span>
-                  <span className="detail-value">{formatDate(selectedClaim.receipt_date)}</span>
+                  <span className="detail-value">{formatDate(selectedClaim.claim_date)}</span>
                 </div>
                 <div className="detail-row">
                   <span className="detail-label">Submitted On</span>
