@@ -110,6 +110,12 @@ function Layout({ children }) {
     return adminInfo?.company_grouping_type === 'outlet';
   };
 
+  // Check if current company is AA Alive (for feedback feature)
+  const isAAAlive = () => {
+    const companyId = adminInfo?.role === 'super_admin' ? selectedCompanyId : adminInfo?.company_id;
+    return companyId === 1;
+  };
+
   // Get company-specific logo
   const getCompanyLogo = () => {
     // Use selectedCompanyId for super_admin, otherwise use adminInfo.company_id
@@ -263,9 +269,11 @@ function Layout({ children }) {
                   <NavLink to="/admin/departments" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                     Departments
                   </NavLink>
-                  <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                    Feedback
-                  </NavLink>
+                  {isAAAlive() && (
+                    <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                      Feedback
+                    </NavLink>
+                  )}
                   <NavLink to="/admin/benefits-in-kind" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                     Benefits In Kind
                   </NavLink>
