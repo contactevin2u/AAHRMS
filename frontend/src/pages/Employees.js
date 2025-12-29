@@ -1027,33 +1027,35 @@ function Employees() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Email</label>
+                    <label>IC Number *</label>
                     <input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      placeholder="email@company.com"
+                      type="text"
+                      value={form.ic_number}
+                      onChange={(e) => setForm({ ...form, ic_number: e.target.value })}
+                      placeholder="e.g. 901234-56-7890"
+                      required
                     />
                   </div>
                   <div className="form-group">
-                    <label>Phone</label>
+                    <label>Phone Number *</label>
                     <input
                       type="text"
                       value={form.phone}
                       onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                      placeholder="Phone number"
+                      placeholder="e.g. 0123456789"
+                      required
                     />
                   </div>
                 </div>
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>IC Number</label>
+                    <label>Email</label>
                     <input
-                      type="text"
-                      value={form.ic_number}
-                      onChange={(e) => setForm({ ...form, ic_number: e.target.value })}
-                      placeholder="IC number"
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      placeholder="email@company.com"
                     />
                   </div>
                   <div className="form-group">
