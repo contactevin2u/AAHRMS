@@ -15,6 +15,18 @@ api.interceptors.request.use((config) => {
     token = localStorage.getItem('employeeToken');
   } else {
     token = localStorage.getItem('adminToken');
+
+    // For super_admin, add selected company header
+    const adminInfo = localStorage.getItem('adminInfo');
+    if (adminInfo) {
+      const info = JSON.parse(adminInfo);
+      if (info.role === 'super_admin') {
+        const selectedCompanyId = localStorage.getItem('selectedCompanyId');
+        if (selectedCompanyId) {
+          config.headers['X-Company-Id'] = selectedCompanyId;
+        }
+      }
+    }
   }
 
   if (token) {

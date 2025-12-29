@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { companiesApi } from '../api';
 import './Layout.css';
 
 function Layout({ children }) {
@@ -8,13 +9,67 @@ function Layout({ children }) {
   const [adminInfo, setAdminInfo] = useState(null);
   const [expandedSection, setExpandedSection] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(null);
 
   useEffect(() => {
     const storedInfo = localStorage.getItem('adminInfo');
     if (storedInfo) {
-      setAdminInfo(JSON.parse(storedInfo));
+      const info = JSON.parse(storedInfo);
+      setAdminInfo(info);
+
+      // For super_admin, load companies and selected company
+      if (info.role === 'super_admin') {
+        const savedCompanyId = localStorage.getItem('selectedCompanyId');
+        if (savedCompanyId) {
+          setSelectedCompanyId(parseInt(savedCompanyId));
+        }
+        fetchCompanies();
+      }
     }
   }, []);
+
+  const fetchCompanies = async () => {
+    try {
+      const res = await companiesApi.getAll();
+      setCompanies(res.data.filter(c => c.status === 'active'));
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+    }
+  };
+
+  const handleCompanyChange = (companyId) => {
+    const id = companyId ? parseInt(companyId) : null;
+    setSelectedCompanyId(id);
+    if (id) {
+      localStorage.setItem('selectedCompanyId', id.toString());
+      // Update adminInfo with selected company details
+      const company = companies.find(c => c.id === id);
+      if (company) {
+        const updatedInfo = {
+          ...adminInfo,
+          company_id: id,
+          company_name: company.name,
+          company_grouping_type: company.grouping_type
+        };
+        localStorage.setItem('adminInfo', JSON.stringify(updatedInfo));
+        setAdminInfo(updatedInfo);
+      }
+    } else {
+      localStorage.removeItem('selectedCompanyId');
+      // Reset to super_admin without company
+      const updatedInfo = {
+        ...adminInfo,
+        company_id: null,
+        company_name: null,
+        company_grouping_type: null
+      };
+      localStorage.setItem('adminInfo', JSON.stringify(updatedInfo));
+      setAdminInfo(updatedInfo);
+    }
+    // Reload page to refresh data with new company context
+    window.location.reload();
+  };
 
   // Auto-expand section based on current route
   useEffect(() => {
@@ -57,16 +112,19 @@ function Layout({ children }) {
 
   // Get company-specific logo
   const getCompanyLogo = () => {
-    if (!adminInfo?.company_id) return '/logos/hr-default.png';
+    // Use selectedCompanyId for super_admin, otherwise use adminInfo.company_id
+    const companyId = adminInfo?.role === 'super_admin' ? selectedCompanyId : adminInfo?.company_id;
+
+    if (!companyId) return '/logos/hr-default.png';
 
     // Map company IDs to logos
     // TODO: Add /logos/aa-alive.png when logo is provided
     const companyLogos = {
       1: '/logos/aa-alive.png',    // AA Alive Sdn Bhd
-      2: '/logos/mixue.png'        // Mimix A Sdn Bhd
+      3: '/logos/mixue.png'        // Mimix A Sdn Bhd (company_id = 3)
     };
 
-    return companyLogos[adminInfo.company_id] || '/logos/hr-default.png';
+    return companyLogos[companyId] || '/logos/hr-default.png';
   };
 
   // Handle logo load error - fallback to default
@@ -101,6 +159,23 @@ function Layout({ children }) {
               <h2>{adminInfo?.company_name || 'HRMS'}</h2>
             </div>
           </div>
+          {/* Company Selector for Super Admin */}
+          {adminInfo?.role === 'super_admin' && companies.length > 0 && (
+            <div className="company-selector">
+              <select
+                value={selectedCompanyId || ''}
+                onChange={(e) => handleCompanyChange(e.target.value)}
+                className="company-dropdown"
+              >
+                <option value="">-- Select Company --</option>
+                {companies.map(company => (
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* User Info */}

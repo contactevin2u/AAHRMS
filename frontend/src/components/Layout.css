@@ -72,6 +72,39 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Company Selector for Super Admin */
+.company-selector {
+  margin-top: 12px;
+}
+
+.company-dropdown {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.company-dropdown:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.company-dropdown:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.company-dropdown option {
+  background: #1e293b;
+  color: white;
+}
+
 .brand {
   display: flex;
   align-items: center;

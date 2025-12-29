@@ -13,8 +13,19 @@ const authenticateAdmin = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.admin = decoded;
+
     // Extract company_id for tenant isolation
-    req.companyId = decoded.company_id;
+    // Super admin (company_id = null) can specify company via header or query param
+    if (decoded.role === 'super_admin' && !decoded.company_id) {
+      // Allow super_admin to select company context via header or query
+      const selectedCompany = req.headers['x-company-id'] || req.query.company_id;
+      req.companyId = selectedCompany ? parseInt(selectedCompany) : null;
+      req.isSuperAdmin = true;
+    } else {
+      req.companyId = decoded.company_id;
+      req.isSuperAdmin = false;
+    }
+
     // Extract outlet_id for supervisor outlet isolation
     req.outletId = decoded.outlet_id;
     next();
