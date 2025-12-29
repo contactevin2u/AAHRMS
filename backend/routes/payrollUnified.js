@@ -226,7 +226,11 @@ async function updateRunTotals(runId) {
  */
 router.get('/settings', authenticateAdmin, async (req, res) => {
   try {
-    const companyId = req.companyId || 1;
+    const companyId = req.companyId;
+    // CRITICAL: Require company context - never default to company 1
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
     const settings = await getCompanySettings(companyId);
     res.json(settings);
   } catch (error) {
@@ -241,7 +245,10 @@ router.get('/settings', authenticateAdmin, async (req, res) => {
  */
 router.put('/settings', authenticateAdmin, async (req, res) => {
   try {
-    const companyId = req.companyId || 1;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
     const { features, rates, period, statutory } = req.body;
 
     const currentSettings = await getCompanySettings(companyId);
@@ -276,7 +283,10 @@ router.put('/settings', authenticateAdmin, async (req, res) => {
 router.get('/runs', authenticateAdmin, async (req, res) => {
   try {
     const { year, status, department_id } = req.query;
-    const companyId = req.companyId || 1;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     let query = `
       SELECT pr.*,
@@ -326,6 +336,10 @@ router.get('/runs', authenticateAdmin, async (req, res) => {
 router.get('/runs/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     const runResult = await pool.query(`
       SELECT pr.*, d.name as department_name
@@ -336,6 +350,11 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
 
     if (runResult.rows.length === 0) {
       return res.status(404).json({ error: 'Payroll run not found' });
+    }
+
+    // CRITICAL: Verify run belongs to this company
+    if (runResult.rows[0].company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied: payroll run belongs to another company' });
     }
 
     const itemsResult = await pool.query(`
@@ -371,13 +390,42 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
   try {
     const { month, year, department_id, notes, employee_ids } = req.body;
-    const companyId = req.companyId || 1;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     if (!month || !year) {
       return res.status(400).json({ error: 'Month and year are required' });
     }
 
     await client.query('BEGIN');
+
+    // CRITICAL: Use SELECT FOR UPDATE to prevent race conditions
+    // Lock existing runs for this period to prevent duplicates
+    const lockQuery = `
+      SELECT id FROM payroll_runs
+      WHERE month = $1 AND year = $2 AND company_id = $3
+      ${department_id ? 'AND department_id = $4' : 'AND department_id IS NULL'}
+      FOR UPDATE NOWAIT
+    `;
+    const lockParams = department_id
+      ? [month, year, companyId, department_id]
+      : [month, year, companyId];
+
+    try {
+      await client.query(lockQuery, lockParams);
+    } catch (lockErr) {
+      if (lockErr.code === '55P03') {
+        // Lock not available - another transaction is creating a run
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Another payroll run is being created for this period. Please wait and try again.'
+        });
+      }
+      // Re-throw other errors
+      throw lockErr;
+    }
 
     // Get company settings
     const settings = await getCompanySettings(companyId);
@@ -754,6 +802,10 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     // Get current item and settings
     const itemResult = await pool.query(`
@@ -770,6 +822,11 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     }
 
     const item = itemResult.rows[0];
+
+    // CRITICAL: Verify item belongs to this company
+    if (item.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied: payroll item belongs to another company' });
+    }
 
     if (item.run_status === 'finalized') {
       return res.status(400).json({ error: 'Cannot edit finalized payroll' });
@@ -878,6 +935,10 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
 
   try {
     const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     await client.query('BEGIN');
 
@@ -886,6 +947,12 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
     if (run.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Payroll run not found' });
+    }
+
+    // CRITICAL: Verify run belongs to this company
+    if (run.rows[0].company_id !== companyId) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Access denied: payroll run belongs to another company' });
     }
 
     if (run.rows[0].status === 'finalized') {
@@ -950,18 +1017,23 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
 router.post('/runs/:id/approve', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
+    // CRITICAL: Only approve runs belonging to this company
     const result = await pool.query(`
       UPDATE payroll_runs SET
         approved_by = $1,
         approved_at = NOW(),
         updated_at = NOW()
-      WHERE id = $2 AND status = 'draft'
+      WHERE id = $2 AND status = 'draft' AND company_id = $3
       RETURNING *
-    `, [req.admin.id, id]);
+    `, [req.admin.id, id, companyId]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Payroll run not found or already finalized' });
+      return res.status(404).json({ error: 'Payroll run not found, already finalized, or belongs to another company' });
     }
 
     res.json({ message: 'Payroll run approved', run: result.rows[0] });
@@ -978,14 +1050,19 @@ router.post('/runs/:id/approve', authenticateAdmin, async (req, res) => {
 router.delete('/runs/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
+    // CRITICAL: Only delete runs belonging to this company
     const result = await pool.query(
-      "DELETE FROM payroll_runs WHERE id = $1 AND status = 'draft' RETURNING *",
-      [id]
+      "DELETE FROM payroll_runs WHERE id = $1 AND status = 'draft' AND company_id = $2 RETURNING *",
+      [id, companyId]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Payroll run not found or already finalized' });
+      return res.status(404).json({ error: 'Payroll run not found, already finalized, or belongs to another company' });
     }
 
     res.json({ message: 'Payroll run deleted' });
@@ -1006,6 +1083,10 @@ router.delete('/runs/:id', authenticateAdmin, async (req, res) => {
 router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     const result = await pool.query(`
       SELECT
@@ -1036,6 +1117,18 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
     }
 
     const item = result.rows[0];
+
+    // CRITICAL: Verify payslip belongs to this company
+    // The query includes pr.company_id via the JOIN with companies
+    // We need to add pr.company_id to the select to check it
+    // For now, fetch it separately or add to query - let's check via the join
+    const companyCheck = await pool.query(
+      'SELECT pr.company_id FROM payroll_items pi JOIN payroll_runs pr ON pi.payroll_run_id = pr.id WHERE pi.id = $1',
+      [id]
+    );
+    if (companyCheck.rows[0]?.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied: payslip belongs to another company' });
+    }
 
     const payslip = {
       company: {
@@ -1114,6 +1207,22 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
 router.get('/runs/:id/bank-file', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // CRITICAL: Verify run belongs to this company
+    const runCheck = await pool.query(
+      'SELECT company_id FROM payroll_runs WHERE id = $1',
+      [id]
+    );
+    if (runCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll run not found' });
+    }
+    if (runCheck.rows[0].company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied: payroll run belongs to another company' });
+    }
 
     const result = await pool.query(`
       SELECT
@@ -1148,7 +1257,10 @@ router.get('/runs/:id/bank-file', authenticateAdmin, async (req, res) => {
 router.get('/summary/:year/:month', authenticateAdmin, async (req, res) => {
   try {
     const { year, month } = req.params;
-    const companyId = req.companyId || 1;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     const summary = await pool.query(`
       SELECT

@@ -9,6 +9,12 @@ const { logClaimAction } = require('../utils/auditLog');
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
     const { employee_id, status, month, year, unlinked_only } = req.query;
+    const companyId = req.companyId;
+
+    // CRITICAL: Tenant isolation - must have company context
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     let query = `
       SELECT c.*,
@@ -18,10 +24,10 @@ router.get('/', authenticateAdmin, async (req, res) => {
       FROM claims c
       JOIN employees e ON c.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
-      WHERE 1=1
+      WHERE e.company_id = $1
     `;
-    const params = [];
-    let paramCount = 0;
+    const params = [companyId];
+    let paramCount = 1;
 
     if (employee_id) {
       paramCount++;
@@ -61,9 +67,17 @@ router.get('/', authenticateAdmin, async (req, res) => {
 // Get pending claims count
 router.get('/pending-count', authenticateAdmin, async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT COUNT(*) as count FROM claims WHERE status = 'pending'"
-    );
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    const result = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM claims c
+      JOIN employees e ON c.employee_id = e.id
+      WHERE c.status = 'pending' AND e.company_id = $1
+    `, [companyId]);
     res.json({ count: parseInt(result.rows[0].count) });
   } catch (error) {
     console.error('Error fetching pending count:', error);
@@ -75,26 +89,31 @@ router.get('/pending-count', authenticateAdmin, async (req, res) => {
 router.get('/summary', authenticateAdmin, async (req, res) => {
   try {
     const { month, year } = req.query;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     let query = `
       SELECT
-        category,
+        c.category,
         COUNT(*) as count,
-        SUM(amount) as total_amount,
-        COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
-        COUNT(*) FILTER (WHERE status = 'approved') as approved_count,
-        COUNT(*) FILTER (WHERE status = 'rejected') as rejected_count
-      FROM claims
-      WHERE 1=1
+        SUM(c.amount) as total_amount,
+        COUNT(*) FILTER (WHERE c.status = 'pending') as pending_count,
+        COUNT(*) FILTER (WHERE c.status = 'approved') as approved_count,
+        COUNT(*) FILTER (WHERE c.status = 'rejected') as rejected_count
+      FROM claims c
+      JOIN employees e ON c.employee_id = e.id
+      WHERE e.company_id = $1
     `;
-    const params = [];
+    const params = [companyId];
 
     if (month && year) {
-      query += ` AND EXTRACT(MONTH FROM claim_date) = $1 AND EXTRACT(YEAR FROM claim_date) = $2`;
+      query += ` AND EXTRACT(MONTH FROM c.claim_date) = $2 AND EXTRACT(YEAR FROM c.claim_date) = $3`;
       params.push(month, year);
     }
 
-    query += ' GROUP BY category ORDER BY category';
+    query += ' GROUP BY c.category ORDER BY c.category';
 
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -108,6 +127,10 @@ router.get('/summary', authenticateAdmin, async (req, res) => {
 router.get('/for-payroll', authenticateAdmin, async (req, res) => {
   try {
     const { employee_id, month, year } = req.query;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     if (!month || !year) {
       return res.status(400).json({ error: 'Month and year are required' });
@@ -119,14 +142,16 @@ router.get('/for-payroll', authenticateAdmin, async (req, res) => {
     let query = `
       SELECT c.employee_id, SUM(c.amount) as total_claims
       FROM claims c
+      JOIN employees e ON c.employee_id = e.id
       WHERE c.status = 'approved'
         AND c.linked_payroll_item_id IS NULL
         AND c.claim_date BETWEEN $1 AND $2
+        AND e.company_id = $3
     `;
-    const params = [startOfMonth, endOfMonth];
+    const params = [startOfMonth, endOfMonth, companyId];
 
     if (employee_id) {
-      query += ` AND c.employee_id = $3`;
+      query += ` AND c.employee_id = $4`;
       params.push(employee_id);
     }
 
@@ -209,16 +234,27 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { claim_date, category, description, amount, receipt_url } = req.body;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
+    // CRITICAL: Only update claims belonging to this company
+    // Also prevent updating linked claims
     const result = await pool.query(`
-      UPDATE claims
+      UPDATE claims c
       SET claim_date = $1, category = $2, description = $3, amount = $4, receipt_url = $5, updated_at = NOW()
-      WHERE id = $6 AND status = 'pending'
-      RETURNING *
-    `, [claim_date, category, description, amount, receipt_url, id]);
+      FROM employees e
+      WHERE c.employee_id = e.id
+        AND e.company_id = $6
+        AND c.id = $7
+        AND c.status = 'pending'
+        AND c.linked_payroll_item_id IS NULL
+      RETURNING c.*
+    `, [claim_date, category, description, amount, receipt_url, companyId, id]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Claim not found or not pending' });
+      return res.status(404).json({ error: 'Claim not found, not pending, or already linked to payroll' });
     }
 
     res.json(result.rows[0]);
@@ -274,17 +310,28 @@ router.post('/:id/reject', authenticateAdmin, async (req, res) => {
 router.post('/bulk-approve', authenticateAdmin, async (req, res) => {
   try {
     const { claim_ids } = req.body;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     if (!claim_ids || !Array.isArray(claim_ids) || claim_ids.length === 0) {
       return res.status(400).json({ error: 'Claim IDs are required' });
     }
 
+    // CRITICAL: Only approve claims belonging to this company
+    // Also prevent approving already-linked claims
     const result = await pool.query(`
-      UPDATE claims
+      UPDATE claims c
       SET status = 'approved', approved_at = NOW(), updated_at = NOW()
-      WHERE id = ANY($1) AND status = 'pending'
-      RETURNING id
-    `, [claim_ids]);
+      FROM employees e
+      WHERE c.employee_id = e.id
+        AND e.company_id = $1
+        AND c.id = ANY($2)
+        AND c.status = 'pending'
+        AND c.linked_payroll_item_id IS NULL
+      RETURNING c.id
+    `, [companyId, claim_ids]);
 
     res.json({
       message: `${result.rows.length} claims approved`,
@@ -300,19 +347,27 @@ router.post('/bulk-approve', authenticateAdmin, async (req, res) => {
 router.post('/link-to-payroll', authenticateAdmin, async (req, res) => {
   try {
     const { employee_id, payroll_item_id, month, year } = req.body;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
     const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
     const endOfMonth = new Date(year, month, 0).toISOString().split('T')[0];
 
+    // CRITICAL: Only link claims for employees in this company
     const result = await pool.query(`
-      UPDATE claims
+      UPDATE claims c
       SET linked_payroll_item_id = $1, updated_at = NOW()
-      WHERE employee_id = $2
-        AND status = 'approved'
-        AND linked_payroll_item_id IS NULL
-        AND claim_date BETWEEN $3 AND $4
-      RETURNING id
-    `, [payroll_item_id, employee_id, startOfMonth, endOfMonth]);
+      FROM employees e
+      WHERE c.employee_id = e.id
+        AND e.company_id = $5
+        AND c.employee_id = $2
+        AND c.status = 'approved'
+        AND c.linked_payroll_item_id IS NULL
+        AND c.claim_date BETWEEN $3 AND $4
+      RETURNING c.id
+    `, [payroll_item_id, employee_id, startOfMonth, endOfMonth, companyId]);
 
     res.json({
       message: `${result.rows.length} claims linked to payroll`,
@@ -328,14 +383,26 @@ router.post('/link-to-payroll', authenticateAdmin, async (req, res) => {
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
 
-    const result = await pool.query(
-      'DELETE FROM claims WHERE id = $1 AND status = $2 RETURNING *',
-      [id, 'pending']
-    );
+    // CRITICAL: Only delete claims belonging to this company
+    // Also prevent deleting linked claims
+    const result = await pool.query(`
+      DELETE FROM claims c
+      USING employees e
+      WHERE c.employee_id = e.id
+        AND e.company_id = $1
+        AND c.id = $2
+        AND c.status = 'pending'
+        AND c.linked_payroll_item_id IS NULL
+      RETURNING c.*
+    `, [companyId, id]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Claim not found or cannot be deleted (not pending)' });
+      return res.status(404).json({ error: 'Claim not found, not pending, or already linked to payroll' });
     }
 
     res.json({ message: 'Claim deleted' });
