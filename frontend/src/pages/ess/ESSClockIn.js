@@ -415,7 +415,7 @@ function ESSClockIn() {
             <p>You've completed your attendance for today.</p>
             {status.record && (
               <p className="hours-worked">
-                Total: {status.record.total_hours?.toFixed(1) || 0} hours
+                Total: {status.record.total_hours || 0} hours
               </p>
             )}
           </div>
