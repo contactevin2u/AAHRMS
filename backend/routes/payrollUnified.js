@@ -560,14 +560,37 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // Get unpaid leave
+    // Get unpaid leave - FIXED: Calculate actual overlap days for cross-month leave
     let unpaidLeaveMap = {};
     if (features.unpaid_leave_deduction) {
       const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
       const endOfMonth = new Date(year, month, 0).toISOString().split('T')[0];
 
+      // Calculate overlap days: only count days that fall within this payroll month
+      // This fixes the cross-month leave double-deduction bug
+      // Example: Leave Dec 28 - Jan 5 (8 days total)
+      //   - December payroll: GREATEST(Dec28, Dec1)=Dec28 to LEAST(Jan5, Dec31)=Dec31 = 4 days
+      //   - January payroll: GREATEST(Dec28, Jan1)=Jan1 to LEAST(Jan5, Jan31)=Jan5 = 5 days
       const unpaidResult = await client.query(`
-        SELECT lr.employee_id, SUM(lr.total_days) as unpaid_days
+        SELECT
+          lr.employee_id,
+          SUM(
+            -- Calculate working days in the overlap period
+            -- Overlap start = MAX(leave_start, month_start)
+            -- Overlap end = MIN(leave_end, month_end)
+            GREATEST(0,
+              (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+              -- Subtract weekends in the overlap period (approximate)
+              - (
+                SELECT COUNT(*) FROM generate_series(
+                  GREATEST(lr.start_date, $2::date),
+                  LEAST(lr.end_date, $1::date),
+                  '1 day'::interval
+                ) d
+                WHERE EXTRACT(DOW FROM d) IN (0, 6)
+              )
+            )
+          ) as unpaid_days
         FROM leave_requests lr
         JOIN leave_types lt ON lr.leave_type_id = lt.id
         WHERE lt.is_paid = FALSE

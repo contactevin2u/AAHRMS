@@ -130,6 +130,7 @@ function Leave() {
       try {
         await leaveApi.approveRequest(id);
         fetchRequests();
+        fetchBalances(); // Refresh balances after approval (deducts from entitlement)
         fetchInitialData();
       } catch (error) {
         alert(error.response?.data?.error || 'Failed to approve request');

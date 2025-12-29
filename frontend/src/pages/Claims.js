@@ -184,11 +184,14 @@ function Claims() {
   };
 
   const toggleSelectAll = () => {
-    const pendingClaims = claims.filter(c => c.status === 'pending').map(c => c.id);
-    if (selectedClaims.length === pendingClaims.length) {
+    // Only select pending claims that are NOT linked to payroll
+    const selectableClaims = claims
+      .filter(c => c.status === 'pending' && !c.linked_payroll_item_id)
+      .map(c => c.id);
+    if (selectedClaims.length === selectableClaims.length) {
       setSelectedClaims([]);
     } else {
-      setSelectedClaims(pendingClaims);
+      setSelectedClaims(selectableClaims);
     }
   };
 
@@ -320,7 +323,7 @@ function Claims() {
                   <th>
                     <input
                       type="checkbox"
-                      checked={selectedClaims.length > 0 && selectedClaims.length === claims.filter(c => c.status === 'pending').length}
+                      checked={selectedClaims.length > 0 && selectedClaims.length === claims.filter(c => c.status === 'pending' && !c.linked_payroll_item_id).length}
                       onChange={toggleSelectAll}
                     />
                   </th>
@@ -343,7 +346,7 @@ function Claims() {
                   claims.map(claim => (
                     <tr key={claim.id}>
                       <td>
-                        {claim.status === 'pending' && (
+                        {claim.status === 'pending' && !claim.linked_payroll_item_id && (
                           <input
                             type="checkbox"
                             checked={selectedClaims.includes(claim.id)}
@@ -365,13 +368,18 @@ function Claims() {
                         ) : '-'}
                       </td>
                       <td>
-                        {claim.status === 'pending' && (
+                        {/* Only show action buttons if pending AND not linked to payroll */}
+                        {claim.status === 'pending' && !claim.linked_payroll_item_id && (
                           <>
                             <button onClick={() => handleApprove(claim.id)} className="action-btn approve">Approve</button>
                             <button onClick={() => handleReject(claim.id)} className="action-btn reject">Reject</button>
                             <button onClick={() => handleEdit(claim)} className="action-btn edit">Edit</button>
                             <button onClick={() => handleDelete(claim.id)} className="action-btn delete">Delete</button>
                           </>
+                        )}
+                        {/* Show locked indicator for linked claims */}
+                        {claim.linked_payroll_item_id && (
+                          <span className="locked-indicator" title="Linked to payroll - cannot modify">🔒</span>
                         )}
                       </td>
                     </tr>
