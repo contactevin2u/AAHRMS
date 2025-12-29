@@ -12,9 +12,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../db');
 const { asyncHandler, ValidationError } = require('../../middleware/errorHandler');
-
-// Require admin authentication
-const authenticateAdmin = require('../../middleware/adminAuth');
+const { authenticateAdmin } = require('../../middleware/auth');
 
 /**
  * GET /api/admin/retention/status
