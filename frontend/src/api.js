@@ -315,6 +315,22 @@ export const outletsApi = {
   seed: () => api.post('/outlets/seed'),
 };
 
+// Schedules (for Mimix - outlet-based companies)
+export const schedulesApi = {
+  getAll: (params) => api.get('/schedules', { params }),
+  getCalendar: (year, month, outletId) => api.get('/schedules/calendar', { params: { year, month, outlet_id: outletId } }),
+  getEmployeeSchedule: (employeeId, year, month) => api.get(`/schedules/employees/${employeeId}/month/${year}/${month}`),
+  create: (data) => api.post('/schedules', data),
+  bulkCreate: (data) => api.post('/schedules/bulk', data),
+  update: (id, data) => api.put(`/schedules/${id}`, data),
+  delete: (id) => api.delete(`/schedules/${id}`),
+
+  // Extra Shift Requests
+  getExtraShiftRequests: (params) => api.get('/schedules/extra-shift-requests', { params }),
+  approveExtraShift: (id) => api.post(`/schedules/extra-shift-requests/${id}/approve`),
+  rejectExtraShift: (id, reason) => api.post(`/schedules/extra-shift-requests/${id}/reject`, { rejection_reason: reason }),
+};
+
 // Company Management
 export const companiesApi = {
   getAll: () => api.get('/companies'),
@@ -412,6 +428,13 @@ export const essApi = {
   // Benefits In Kind (AA Alive only)
   getBenefits: () => api.get('/ess/benefits', essApiConfig),
   getBenefitsHistory: (params) => api.get('/ess/benefits/history', { params, ...essApiConfig }),
+
+  // Schedules (Mimix only)
+  getTodaySchedule: () => api.get('/ess/schedules/today', essApiConfig),
+  getMySchedule: (year, month) => api.get('/ess/schedules/my-schedule', { params: { year, month }, ...essApiConfig }),
+  getExtraShiftRequests: (params) => api.get('/ess/schedules/extra-shift-requests', { params, ...essApiConfig }),
+  submitExtraShiftRequest: (data) => api.post('/ess/schedules/extra-shift-requests', data, essApiConfig),
+  cancelExtraShiftRequest: (id) => api.delete(`/ess/schedules/extra-shift-requests/${id}`, essApiConfig),
 };
 
 export default api;

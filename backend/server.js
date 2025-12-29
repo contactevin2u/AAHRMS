@@ -27,6 +27,7 @@ const outletsRoutes = require('./routes/outlets');
 const automationRoutes = require('./routes/automation');
 const bikRoutes = require('./routes/benefitsInKind');
 const retentionRoutes = require('./routes/admin/retention');
+const schedulesRoutes = require('./routes/schedules');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -68,6 +69,7 @@ app.use('/api/outlets', outletsRoutes);  // Outlets (for Mimix A)
 app.use('/api/automation', automationRoutes);  // Automation & Scheduling
 app.use('/api/benefits-in-kind', bikRoutes);  // Benefits In Kind (AA Alive)
 app.use('/api/admin/retention', retentionRoutes);  // Data Retention Policy Management
+app.use('/api/schedules', schedulesRoutes);  // Employee Schedules (Mimix)
 
 // Health check
 app.get('/api/health', (req, res) => {

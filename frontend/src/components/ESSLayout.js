@@ -175,6 +175,12 @@ function ESSLayout({ children }) {
                   Claims
                 </NavLink>
               )}
+              {features.clockIn && (
+                <NavLink to="/ess/schedule" onClick={() => setShowMoreMenu(false)}>
+                  <span className="menu-icon">&#x1F4C5;</span>
+                  My Schedule
+                </NavLink>
+              )}
               {features.letters && (
                 <NavLink to="/ess/letters" onClick={() => setShowMoreMenu(false)}>
                   <span className="menu-icon">&#x1F4E8;</span>

@@ -282,12 +282,18 @@ function Layout({ children }) {
             </div>
           )}
 
-          {/* Outlets for Mimix */}
+          {/* Outlets and Schedules for Mimix */}
           {usesOutlets() && (
-            <NavLink to="/admin/outlets" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-              <span className="nav-icon">🏪</span>
-              <span>Outlets</span>
-            </NavLink>
+            <>
+              <NavLink to="/admin/outlets" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                <span className="nav-icon">🏪</span>
+                <span>Outlets</span>
+              </NavLink>
+              <NavLink to="/admin/schedules" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                <span className="nav-icon">📅</span>
+                <span>Schedules</span>
+              </NavLink>
+            </>
           )}
 
           {/* SYSTEM SECTION - Only for authorized users */}

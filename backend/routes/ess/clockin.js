@@ -278,7 +278,10 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
 
   // Get employee info
   const empResult = await pool.query(
-    'SELECT company_id, outlet_id FROM employees WHERE id = $1',
+    `SELECT e.company_id, e.outlet_id, c.grouping_type
+     FROM employees e
+     LEFT JOIN companies c ON e.company_id = c.id
+     WHERE e.id = $1`,
     [employeeId]
   );
 
@@ -286,7 +289,31 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError('Employee not found');
   }
 
-  const { company_id, outlet_id } = empResult.rows[0];
+  const { company_id, outlet_id, grouping_type } = empResult.rows[0];
+
+  // Schedule-based clock-in enforcement for outlet-based companies (Mimix)
+  if (grouping_type === 'outlet' && action === 'clock_in_1') {
+    const scheduleResult = await pool.query(
+      `SELECT * FROM schedules
+       WHERE employee_id = $1 AND schedule_date = $2 AND status = 'scheduled'`,
+      [employeeId, today]
+    );
+
+    if (scheduleResult.rows.length === 0) {
+      throw new ValidationError('No shift scheduled for today. Please request supervisor approval for an extra shift.');
+    }
+
+    // Check if within allowed time window (15 min before shift start)
+    const schedule = scheduleResult.rows[0];
+    const shiftStart = schedule.shift_start.substring(0, 5); // HH:MM
+    const shiftStartMinutes = parseInt(shiftStart.split(':')[0]) * 60 + parseInt(shiftStart.split(':')[1]);
+    const currentMinutes = parseInt(currentTime.split(':')[0]) * 60 + parseInt(currentTime.split(':')[1]);
+    const earlyWindowMinutes = shiftStartMinutes - 15;
+
+    if (currentMinutes < earlyWindowMinutes) {
+      throw new ValidationError(`Your shift starts at ${shiftStart}. You can clock in 15 minutes before.`);
+    }
+  }
 
   // Check existing record for today
   let existingRecord = await pool.query(

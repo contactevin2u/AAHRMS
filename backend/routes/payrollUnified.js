@@ -88,7 +88,7 @@ const DEFAULT_PAYROLL_SETTINGS = {
  */
 async function getCompanySettings(companyId) {
   const result = await pool.query(
-    'SELECT payroll_settings, settings FROM companies WHERE id = $1',
+    'SELECT payroll_settings, settings, grouping_type FROM companies WHERE id = $1',
     [companyId]
   );
 
@@ -98,6 +98,7 @@ async function getCompanySettings(companyId) {
 
   const payrollSettings = result.rows[0].payroll_settings || {};
   const legacySettings = result.rows[0].settings || {};
+  const groupingType = result.rows[0].grouping_type;
 
   // Merge with defaults
   return {
@@ -110,7 +111,53 @@ async function getCompanySettings(companyId) {
       indoor_sales_commission_rate: legacySettings.indoor_sales_commission_rate || payrollSettings.rates?.indoor_sales_commission_rate || 6
     },
     period: { ...DEFAULT_PAYROLL_SETTINGS.period, ...payrollSettings.period },
-    statutory: { ...DEFAULT_PAYROLL_SETTINGS.statutory, ...payrollSettings.statutory }
+    statutory: { ...DEFAULT_PAYROLL_SETTINGS.statutory, ...payrollSettings.statutory },
+    groupingType // 'department' or 'outlet'
+  };
+}
+
+/**
+ * Calculate schedule-based payable days for outlet companies (Mimix)
+ * Returns: { scheduledDays, attendedDays, payableDays }
+ */
+async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
+  // Get all schedules for the period with attendance data
+  const result = await pool.query(`
+    SELECT
+      s.schedule_date,
+      s.status as schedule_status,
+      cr.clock_in_1,
+      cr.clock_out_1,
+      cr.clock_in_2,
+      cr.clock_out_2,
+      CASE
+        WHEN cr.clock_out_2 IS NOT NULL OR cr.clock_out_1 IS NOT NULL THEN true
+        ELSE false
+      END as attended
+    FROM schedules s
+    LEFT JOIN clock_in_records cr
+      ON s.employee_id = cr.employee_id
+      AND s.schedule_date = cr.work_date
+    WHERE s.employee_id = $1
+      AND s.schedule_date BETWEEN $2 AND $3
+      AND s.status IN ('scheduled', 'completed')
+    ORDER BY s.schedule_date
+  `, [employeeId, periodStart, periodEnd]);
+
+  const scheduledDays = result.rows.length;
+  const attendedDays = result.rows.filter(r => r.attended).length;
+
+  // Payable days = scheduled AND attended
+  // Or if schedule marked as 'completed' (for approved absences)
+  const payableDays = result.rows.filter(r =>
+    r.attended || r.schedule_status === 'completed'
+  ).length;
+
+  return {
+    scheduledDays,
+    attendedDays,
+    payableDays,
+    absentDays: scheduledDays - payableDays
   };
 }
 
@@ -696,10 +743,40 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // Unpaid leave
-      const unpaidDays = unpaidLeaveMap[emp.id] || 0;
+      // Unpaid leave / Schedule-based deductions
       const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
-      const unpaidDeduction = dailyRate * unpaidDays;
+      let unpaidDeduction = 0;
+      let unpaidDays = 0;
+      let scheduleBasedPay = null;
+
+      // For outlet-based companies (Mimix), use schedule-based pay calculation
+      if (settings.groupingType === 'outlet') {
+        try {
+          scheduleBasedPay = await calculateScheduleBasedPay(
+            emp.id,
+            period.start.toISOString().split('T')[0],
+            period.end.toISOString().split('T')[0]
+          );
+
+          // Calculate pay based on payable days only
+          // If they have schedules, pay = (payableDays / scheduledDays) * basicSalary
+          if (scheduleBasedPay.scheduledDays > 0) {
+            const scheduledDailyRate = basicSalary / scheduleBasedPay.scheduledDays;
+            const scheduledPay = scheduleBasedPay.payableDays * scheduledDailyRate;
+            unpaidDeduction = basicSalary - scheduledPay; // Deduct unattended days
+            unpaidDays = scheduleBasedPay.absentDays;
+          }
+        } catch (e) {
+          console.warn(`Schedule-based pay calculation failed for ${emp.name}:`, e.message);
+          // Fallback to standard unpaid leave calculation
+          unpaidDays = unpaidLeaveMap[emp.id] || 0;
+          unpaidDeduction = dailyRate * unpaidDays;
+        }
+      } else {
+        // Standard unpaid leave calculation for non-outlet companies
+        unpaidDays = unpaidLeaveMap[emp.id] || 0;
+        unpaidDeduction = dailyRate * unpaidDays;
+      }
 
       // Claims
       const claimsAmount = claimsMap[emp.id] || 0;

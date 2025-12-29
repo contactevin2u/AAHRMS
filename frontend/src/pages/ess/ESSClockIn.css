@@ -36,6 +36,86 @@
   font-size: 13px;
 }
 
+/* Schedule Warning */
+.schedule-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  width: 100%;
+  text-align: left;
+}
+
+.schedule-warning.no-schedule {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+}
+
+.schedule-warning.wait-time {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+}
+
+.schedule-warning .warning-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.schedule-warning strong {
+  display: block;
+  color: #1e293b;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.schedule-warning p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.schedule-warning .shift-info {
+  color: #1976d2;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.schedule-warning .request-shift-link {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.schedule-warning .request-shift-link:hover {
+  background: #1565c0;
+}
+
+/* Schedule Info */
+.schedule-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #e3f2fd;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  width: 100%;
+  font-size: 14px;
+  color: #1976d2;
+}
+
+.schedule-info .schedule-icon {
+  font-size: 18px;
+}
+
 /* Time Display */
 .time-display {
   margin-bottom: 16px;

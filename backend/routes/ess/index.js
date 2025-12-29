@@ -19,6 +19,7 @@ const lettersRoutes = require('./letters');
 const dashboardRoutes = require('./dashboard');
 const clockinRoutes = require('./clockin');
 const benefitsRoutes = require('./benefits');
+const schedulesRoutes = require('./schedules');
 
 // Mount sub-routes
 // Auth routes (login, password reset, etc.) - no prefix needed
@@ -50,5 +51,8 @@ router.use('/clockin', clockinRoutes);
 
 // Benefits In Kind routes (AA Alive only)
 router.use('/benefits', benefitsRoutes);
+
+// Schedules routes (Mimix/outlet-based companies)
+router.use('/schedules', schedulesRoutes);
 
 module.exports = router;

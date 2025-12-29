@@ -18,6 +18,10 @@ function ESSClockIn() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Schedule state (for outlet-based companies like Mimix)
+  const [scheduleStatus, setScheduleStatus] = useState(null);
+  const [scheduleLoading, setScheduleLoading] = useState(true);
+
   // Camera and location states
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
@@ -60,6 +64,29 @@ function ESSClockIn() {
       setLoading(false);
     }
   };
+
+  // Fetch schedule status for outlet-based companies (Mimix)
+  const fetchScheduleStatus = async () => {
+    try {
+      const res = await essApi.getTodaySchedule();
+      setScheduleStatus(res.data);
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
+      // If endpoint doesn't exist or fails, assume scheduling not required
+      setScheduleStatus({ has_schedule: true, can_clock_in: true });
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  // Fetch schedule on mount (for Mimix employees)
+  useEffect(() => {
+    if (employeeInfo?.features?.clockIn) {
+      fetchScheduleStatus();
+    } else {
+      setScheduleLoading(false);
+    }
+  }, [employeeInfo]);
 
   // Stream ref to hold camera stream
   const streamRef = useRef(null);
@@ -261,7 +288,7 @@ function ESSClockIn() {
     }
   };
 
-  if (loading) {
+  if (loading || scheduleLoading) {
     return (
       <ESSLayout>
         <div className="ess-loading">
@@ -271,6 +298,10 @@ function ESSClockIn() {
       </ESSLayout>
     );
   }
+
+  // Check if no schedule for today (for outlet-based companies)
+  const noScheduleToday = scheduleStatus && !scheduleStatus.has_schedule;
+  const cannotClockInYet = scheduleStatus && scheduleStatus.has_schedule && !scheduleStatus.can_clock_in;
 
   return (
     <ESSLayout>
@@ -295,6 +326,47 @@ function ESSClockIn() {
             {serverTime.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}
           </span>
         </div>
+
+        {/* No Schedule Warning */}
+        {noScheduleToday && (
+          <div className="schedule-warning no-schedule">
+            <span className="warning-icon">&#x26A0;&#xFE0F;</span>
+            <div>
+              <strong>No Shift Scheduled</strong>
+              <p>You don't have a shift scheduled for today.</p>
+              <button
+                className="request-shift-link"
+                onClick={() => navigate('/ess/schedule')}
+              >
+                Request Extra Shift
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Cannot Clock In Yet Warning */}
+        {cannotClockInYet && (
+          <div className="schedule-warning wait-time">
+            <span className="warning-icon">&#x23F0;</span>
+            <div>
+              <strong>Too Early</strong>
+              <p>{scheduleStatus.message}</p>
+              {scheduleStatus.schedule && (
+                <p className="shift-info">
+                  Your shift: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Today's Schedule Info */}
+        {scheduleStatus?.has_schedule && scheduleStatus?.schedule && !cannotClockInYet && (
+          <div className="schedule-info">
+            <span className="schedule-icon">&#x1F4C5;</span>
+            <span>Today's shift: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}</span>
+          </div>
+        )}
 
         {/* Status */}
         <div className={`status-badge ${status?.status || 'not_started'}`}>
@@ -324,7 +396,7 @@ function ESSClockIn() {
         )}
 
         {/* Camera Section */}
-        {status?.status !== 'completed' && (
+        {status?.status !== 'completed' && !noScheduleToday && !cannotClockInYet && (
           <div className="camera-section">
             {!cameraActive && !cameraLoading && !capturedPhoto && (
               <button className="start-camera-btn" onClick={startCamera} disabled={!isOnline}>
@@ -396,7 +468,7 @@ function ESSClockIn() {
         )}
 
         {/* Submit Button */}
-        {status?.status !== 'completed' && (
+        {status?.status !== 'completed' && !noScheduleToday && !cannotClockInYet && (
           <button
             className="submit-btn"
             onClick={handleSubmit}
