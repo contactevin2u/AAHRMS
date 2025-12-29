@@ -64,15 +64,33 @@ function ESSClockIn() {
   // Start camera
   const startCamera = async () => {
     setCameraLoading(true);
+    setCameraActive(false);
     setError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        },
+        audio: false
       });
+
       if (videoRef.current) {
+        // Clear any existing stream
+        if (videoRef.current.srcObject) {
+          videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        }
+
         videoRef.current.srcObject = stream;
-        // Wait for video to be ready then play
-        videoRef.current.onloadedmetadata = () => {
+
+        // For iOS Safari compatibility
+        videoRef.current.setAttribute('autoplay', '');
+        videoRef.current.setAttribute('playsinline', '');
+        videoRef.current.setAttribute('muted', '');
+
+        // Wait for video to be ready
+        const playVideo = () => {
           videoRef.current.play()
             .then(() => {
               setCameraLoading(false);
@@ -80,10 +98,18 @@ function ESSClockIn() {
             })
             .catch(err => {
               console.error('Video play error:', err);
+              // Try again without promise
+              videoRef.current.play();
               setCameraLoading(false);
-              setError('Unable to start video. Please try again.');
+              setCameraActive(true);
             });
         };
+
+        if (videoRef.current.readyState >= 2) {
+          playVideo();
+        } else {
+          videoRef.current.onloadeddata = playVideo;
+        }
       }
     } catch (err) {
       console.error('Camera error:', err);
@@ -307,22 +333,27 @@ function ESSClockIn() {
               </button>
             )}
 
-            {cameraLoading && (
+            {(cameraLoading || cameraActive) && (
               <div className="camera-view">
-                <div className="camera-loading">
-                  <div className="spinner"></div>
-                  <p>Starting camera...</p>
-                </div>
-                <video ref={videoRef} autoPlay playsInline muted />
-              </div>
-            )}
-
-            {cameraActive && !cameraLoading && (
-              <div className="camera-view">
-                <video ref={videoRef} autoPlay playsInline muted />
-                <button className="capture-btn" onClick={capturePhoto}>
-                  <span>&#x1F4F8;</span>
-                </button>
+                {cameraLoading && (
+                  <div className="camera-loading">
+                    <div className="spinner"></div>
+                    <p>Starting camera...</p>
+                  </div>
+                )}
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  webkit-playsinline="true"
+                  style={{ width: '100%', height: 'auto' }}
+                />
+                {cameraActive && !cameraLoading && (
+                  <button className="capture-btn" onClick={capturePhoto}>
+                    <span>&#x1F4F8;</span>
+                  </button>
+                )}
               </div>
             )}
 
