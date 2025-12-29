@@ -472,7 +472,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
     const runId = runResult.rows[0].id;
 
-    // Get employees
+    // Get employees: active OR resigned in their final month (for final settlement)
     let employeeQuery = `
       SELECT e.*,
              e.default_basic_salary as basic_salary,
@@ -481,12 +481,16 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
              d.payroll_structure_code
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.id
-      WHERE e.status = 'active' AND e.company_id = $1
+      WHERE e.company_id = $1
+        AND (
+          e.status = 'active'
+          OR (e.status = 'resigned' AND e.resign_date BETWEEN $2 AND $3)
+        )
     `;
-    let employeeParams = [companyId];
+    let employeeParams = [companyId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]];
 
     if (department_id) {
-      employeeQuery += ' AND e.department_id = $2';
+      employeeQuery += ` AND e.department_id = $${employeeParams.length + 1}`;
       employeeParams.push(department_id);
     }
 

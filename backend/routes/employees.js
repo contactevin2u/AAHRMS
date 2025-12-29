@@ -137,11 +137,18 @@ router.post('/', authenticateAdmin, async (req, res) => {
       employment_type, probation_months, salary_before_confirmation, salary_after_confirmation, increment_amount
     } = { ...req.body, ...sanitizedBody };
 
-    // Get company_id from authenticated user (or default to 1 for super_admin)
-    const companyId = req.companyId || 1;
+    // Get company_id from authenticated user - REQUIRED for tenant isolation
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required. Please select a company.' });
+    }
 
+    // Validate required fields: employee_id, name, ic_number, phone, department_id
     if (!employee_id || !name || !department_id) {
       return res.status(400).json({ error: 'Employee ID, name, and department are required' });
+    }
+    if (!ic_number || !phone) {
+      return res.status(400).json({ error: 'IC Number and Phone are required' });
     }
 
     // Calculate probation end date if join_date and probation_months are provided
