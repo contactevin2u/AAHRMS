@@ -75,43 +75,35 @@ function EmployeeClaims() {
         audio: false
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        // Clear any existing stream
-        if (videoRef.current.srcObject) {
-          videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-        }
-
-        videoRef.current.srcObject = stream;
-
-        // For iOS Safari compatibility
-        videoRef.current.setAttribute('autoplay', '');
-        videoRef.current.setAttribute('playsinline', '');
-        videoRef.current.setAttribute('muted', '');
-
-        // Wait for video to be ready then play
-        const playVideo = () => {
-          videoRef.current.play()
-            .then(() => {
-              setCameraActive(true);
-            })
-            .catch(err => {
-              console.error('Video play error:', err);
-              videoRef.current.play();
-              setCameraActive(true);
-            });
-        };
-
-        if (videoRef.current.readyState >= 2) {
-          playVideo();
-        } else {
-          videoRef.current.onloadeddata = playVideo;
-        }
-      }
+      // Set camera active first so video element renders
+      setCameraActive(true);
     } catch (err) {
       console.error('Camera error:', err);
       alert('Unable to access camera. Please allow camera permission.');
     }
   };
+
+  // Attach stream to video element when camera becomes active
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      // Clear any existing stream
+      if (videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      }
+
+      videoRef.current.srcObject = streamRef.current;
+
+      // For iOS Safari compatibility
+      videoRef.current.setAttribute('autoplay', '');
+      videoRef.current.setAttribute('playsinline', '');
+      videoRef.current.setAttribute('muted', '');
+
+      // Play the video
+      videoRef.current.play().catch(err => {
+        console.error('Video play error:', err);
+      });
+    }
+  }, [cameraActive]);
 
   const stopCamera = () => {
     if (streamRef.current) {

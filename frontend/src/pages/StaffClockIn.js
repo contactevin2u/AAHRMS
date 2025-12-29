@@ -39,6 +39,7 @@ function StaffClockIn() {
 
   // Camera and photo state
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [cameraStartTime, setCameraStartTime] = useState(null);
   const [canCapture, setCanCapture] = useState(false);
@@ -120,6 +121,8 @@ function StaffClockIn() {
       setError('');
       setCapturedPhoto(null);
       setCanCapture(false);
+      setCameraLoading(true);
+      setCameraActive(false);
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -131,46 +134,11 @@ function StaffClockIn() {
       });
 
       streamRef.current = stream;
-      if (videoRef.current) {
-        // Clear any existing stream
-        if (videoRef.current.srcObject) {
-          videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-        }
-
-        videoRef.current.srcObject = stream;
-
-        // For iOS Safari compatibility
-        videoRef.current.setAttribute('autoplay', '');
-        videoRef.current.setAttribute('playsinline', '');
-        videoRef.current.setAttribute('muted', '');
-
-        // Wait for video to be ready then play
-        const playVideo = () => {
-          videoRef.current.play()
-            .then(() => {
-              setCameraActive(true);
-              setCameraStartTime(Date.now());
-              setCaptureCountdown(Math.ceil(LIVENESS_DELAY / 1000));
-            })
-            .catch(err => {
-              console.error('Video play error:', err);
-              // Try again without promise
-              videoRef.current.play();
-              setCameraActive(true);
-              setCameraStartTime(Date.now());
-              setCaptureCountdown(Math.ceil(LIVENESS_DELAY / 1000));
-            });
-        };
-
-        if (videoRef.current.readyState >= 2) {
-          playVideo();
-        } else {
-          videoRef.current.onloadeddata = playVideo;
-        }
-      }
+      // State update will trigger useEffect to attach stream after video element renders
 
     } catch (err) {
       console.error('Camera error:', err);
+      setCameraLoading(false);
       if (err.name === 'NotAllowedError') {
         setError('Camera permission denied. Please allow camera access to clock in.');
       } else if (err.name === 'NotFoundError') {
@@ -179,7 +147,41 @@ function StaffClockIn() {
         setError('Unable to access camera. Please allow camera permission.');
       }
     }
-  }, [LIVENESS_DELAY]);
+  }, []);
+
+  // Attach stream to video element when it becomes available
+  useEffect(() => {
+    if (cameraLoading && videoRef.current && streamRef.current) {
+      // Clear any existing stream
+      if (videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      }
+
+      videoRef.current.srcObject = streamRef.current;
+
+      // For iOS Safari compatibility
+      videoRef.current.setAttribute('autoplay', '');
+      videoRef.current.setAttribute('playsinline', '');
+      videoRef.current.setAttribute('muted', '');
+
+      // Play the video
+      videoRef.current.play()
+        .then(() => {
+          setCameraLoading(false);
+          setCameraActive(true);
+          setCameraStartTime(Date.now());
+          setCaptureCountdown(Math.ceil(LIVENESS_DELAY / 1000));
+        })
+        .catch(err => {
+          console.error('Video play error:', err);
+          // Still set camera active even if play() fails
+          setCameraLoading(false);
+          setCameraActive(true);
+          setCameraStartTime(Date.now());
+          setCaptureCountdown(Math.ceil(LIVENESS_DELAY / 1000));
+        });
+    }
+  }, [cameraLoading, LIVENESS_DELAY]);
 
   // Stop camera
   const stopCamera = useCallback(() => {
@@ -188,6 +190,7 @@ function StaffClockIn() {
       streamRef.current = null;
     }
     setCameraActive(false);
+    setCameraLoading(false);
     setCameraStartTime(null);
     setCanCapture(false);
   }, []);
@@ -529,15 +532,21 @@ function StaffClockIn() {
 
             {/* Camera Section */}
             <div className="camera-section">
-              {!cameraActive && !capturedPhoto && (
+              {!cameraActive && !cameraLoading && !capturedPhoto && (
                 <button onClick={startCamera} className="action-btn camera-btn">
                   <span className="btn-icon">&#128247;</span>
                   Open Camera for Selfie
                 </button>
               )}
 
-              {cameraActive && (
+              {(cameraLoading || cameraActive) && (
                 <div className="camera-preview">
+                  {cameraLoading && (
+                    <div className="camera-loading-overlay">
+                      <span className="spinner"></span>
+                      <p>Starting camera...</p>
+                    </div>
+                  )}
                   <video ref={videoRef} autoPlay playsInline muted webkit-playsinline="true" style={{ width: '100%', height: 'auto' }} />
                   <div className="camera-overlay">
                     <div className="face-guide"></div>

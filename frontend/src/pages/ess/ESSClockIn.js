@@ -61,6 +61,9 @@ function ESSClockIn() {
     }
   };
 
+  // Stream ref to hold camera stream
+  const streamRef = useRef(null);
+
   // Start camera
   const startCamera = async () => {
     setCameraLoading(true);
@@ -75,48 +78,43 @@ function ESSClockIn() {
         },
         audio: false
       });
-
-      if (videoRef.current) {
-        // Clear any existing stream
-        if (videoRef.current.srcObject) {
-          videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-        }
-
-        videoRef.current.srcObject = stream;
-
-        // For iOS Safari compatibility
-        videoRef.current.setAttribute('autoplay', '');
-        videoRef.current.setAttribute('playsinline', '');
-        videoRef.current.setAttribute('muted', '');
-
-        // Wait for video to be ready
-        const playVideo = () => {
-          videoRef.current.play()
-            .then(() => {
-              setCameraLoading(false);
-              setCameraActive(true);
-            })
-            .catch(err => {
-              console.error('Video play error:', err);
-              // Try again without promise
-              videoRef.current.play();
-              setCameraLoading(false);
-              setCameraActive(true);
-            });
-        };
-
-        if (videoRef.current.readyState >= 2) {
-          playVideo();
-        } else {
-          videoRef.current.onloadeddata = playVideo;
-        }
-      }
+      streamRef.current = stream;
+      // State update will trigger useEffect to attach stream
     } catch (err) {
       console.error('Camera error:', err);
       setCameraLoading(false);
       setError('Unable to access camera. Please allow camera permission.');
     }
   };
+
+  // Attach stream to video element when it becomes available
+  useEffect(() => {
+    if (cameraLoading && videoRef.current && streamRef.current) {
+      // Clear any existing stream
+      if (videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      }
+
+      videoRef.current.srcObject = streamRef.current;
+
+      // For iOS Safari compatibility
+      videoRef.current.setAttribute('autoplay', '');
+      videoRef.current.setAttribute('playsinline', '');
+      videoRef.current.setAttribute('muted', '');
+
+      // Play the video
+      videoRef.current.play()
+        .then(() => {
+          setCameraLoading(false);
+          setCameraActive(true);
+        })
+        .catch(err => {
+          console.error('Video play error:', err);
+          setCameraLoading(false);
+          setCameraActive(true);
+        });
+    }
+  }, [cameraLoading]);
 
   // Stop camera
   const stopCamera = () => {
