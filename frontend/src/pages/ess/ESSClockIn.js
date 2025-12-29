@@ -20,6 +20,7 @@ function ESSClockIn() {
 
   // Camera and location states
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [location, setLocation] = useState(null);
   const [address, setAddress] = useState('');
@@ -62,16 +63,31 @@ function ESSClockIn() {
 
   // Start camera
   const startCamera = async () => {
+    setCameraLoading(true);
+    setError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: 640, height: 480 }
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        setCameraActive(true);
+        // Wait for video to be ready then play
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play()
+            .then(() => {
+              setCameraLoading(false);
+              setCameraActive(true);
+            })
+            .catch(err => {
+              console.error('Video play error:', err);
+              setCameraLoading(false);
+              setError('Unable to start video. Please try again.');
+            });
+        };
       }
     } catch (err) {
       console.error('Camera error:', err);
+      setCameraLoading(false);
       setError('Unable to access camera. Please allow camera permission.');
     }
   };
@@ -284,14 +300,24 @@ function ESSClockIn() {
         {/* Camera Section */}
         {status?.status !== 'completed' && (
           <div className="camera-section">
-            {!cameraActive && !capturedPhoto && (
+            {!cameraActive && !cameraLoading && !capturedPhoto && (
               <button className="start-camera-btn" onClick={startCamera} disabled={!isOnline}>
                 <span>&#x1F4F7;</span>
                 Take Selfie
               </button>
             )}
 
-            {cameraActive && (
+            {cameraLoading && (
+              <div className="camera-view">
+                <div className="camera-loading">
+                  <div className="spinner"></div>
+                  <p>Starting camera...</p>
+                </div>
+                <video ref={videoRef} autoPlay playsInline muted />
+              </div>
+            )}
+
+            {cameraActive && !cameraLoading && (
               <div className="camera-view">
                 <video ref={videoRef} autoPlay playsInline muted />
                 <button className="capture-btn" onClick={capturePhoto}>

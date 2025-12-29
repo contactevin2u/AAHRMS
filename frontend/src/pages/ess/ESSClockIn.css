@@ -169,12 +169,45 @@
   border-radius: 16px;
   overflow: hidden;
   background: #000;
+  min-height: 225px;
 }
 
 .camera-view video {
   width: 100%;
+  min-height: 225px;
   display: block;
   transform: scaleX(-1);
+  background: #000;
+  object-fit: cover;
+}
+
+.camera-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  text-align: center;
+  color: white;
+}
+
+.camera-loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 12px;
+}
+
+.camera-loading p {
+  font-size: 14px;
+  margin: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .capture-btn {
