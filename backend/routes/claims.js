@@ -98,7 +98,8 @@ router.get('/summary', authenticateAdmin, async (req, res) => {
       SELECT
         c.category,
         COUNT(*) as count,
-        SUM(c.amount) as total_amount,
+        SUM(c.amount) FILTER (WHERE c.status = 'approved') as total_amount,
+        SUM(c.amount) FILTER (WHERE c.status = 'pending') as pending_amount,
         COUNT(*) FILTER (WHERE c.status = 'pending') as pending_count,
         COUNT(*) FILTER (WHERE c.status = 'approved') as approved_count,
         COUNT(*) FILTER (WHERE c.status = 'rejected') as rejected_count
