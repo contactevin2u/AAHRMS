@@ -52,7 +52,7 @@ const initDb = async () => {
       -- Create default company if not exists (for migration)
       INSERT INTO companies (id, name, code, status)
       VALUES (1, 'Default Company', 'DEFAULT', 'active')
-      ON CONFLICT (code) DO NOTHING;
+      ON CONFLICT (id) DO NOTHING;
 
       -- Anonymous Feedback
       CREATE TABLE IF NOT EXISTS anonymous_feedback (
