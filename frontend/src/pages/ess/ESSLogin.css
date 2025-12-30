@@ -218,6 +218,54 @@
   margin: 0;
 }
 
+/* Password Icon */
+.password-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+/* Skip Button (for change password page) */
+.skip-btn {
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #e5e7eb;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.skip-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* Password Hint */
+.password-hint {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.password-hint p {
+  margin: 0 0 8px 0;
+  color: #374151;
+}
+
+.password-hint ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #64748b;
+}
+
+.password-hint li {
+  margin-bottom: 4px;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .login-card {

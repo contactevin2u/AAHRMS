@@ -1,0 +1,385 @@
+/* ESS Letters Page Styles */
+.ess-letters-page {
+  padding: 16px;
+  padding-bottom: 100px;
+}
+
+/* Page Header */
+.ess-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.ess-page-header .header-content h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.ess-page-header .header-content p {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+}
+
+.unread-badge {
+  background: #dc2626;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Tabs */
+.ess-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.ess-tabs .tab-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.ess-tabs .tab-btn.active {
+  background: white;
+  color: #1976d2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Loading & Empty */
+.ess-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.ess-loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #1976d2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.empty-state .empty-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+/* Letters List */
+.letters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.letter-card {
+  background: white;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.letter-card.unread {
+  background: #f0f9ff;
+}
+
+.letter-card:active {
+  transform: scale(0.98);
+}
+
+.letter-type-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+.letter-content {
+  flex: 1;
+  min-width: 0;
+  padding-left: 8px;
+}
+
+.letter-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.letter-type-badge {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+}
+
+.new-badge {
+  background: #dc2626;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.letter-subject {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.letter-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.letter-arrow {
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+  font-size: 18px;
+}
+
+/* Modal */
+.ess-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.ess-modal.letter-modal {
+  background: white;
+  width: 100%;
+  max-width: 500px;
+  border-radius: 20px 20px 0 0;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.ess-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+}
+
+.ess-modal .modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.ess-modal .close-btn {
+  background: #f1f5f9;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.ess-modal .modal-body {
+  padding: 16px 20px;
+}
+
+.ess-modal .modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+  position: sticky;
+  bottom: 0;
+  background: white;
+}
+
+.download-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  background: linear-gradient(135deg, #1976d2, #1565c0);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+}
+
+/* Letter Preview */
+.letter-preview {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.letter-preview .letterhead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.letter-preview .letterhead .company-logo {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.letter-preview .letterhead .company-info h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #1e293b;
+}
+
+.letter-preview .letter-divider {
+  border-top: 2px solid #1976d2;
+  margin-bottom: 20px;
+}
+
+.letter-preview .letter-date-line {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 16px;
+}
+
+.letter-preview .letter-subject-line {
+  font-size: 14px;
+  color: #1e293b;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.letter-preview .letter-body-content {
+  margin-bottom: 24px;
+}
+
+.letter-preview .letter-body-content pre {
+  margin: 0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #374151;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.letter-preview .letter-signature {
+  margin-top: 30px;
+}
+
+.letter-preview .signature-block {
+  max-width: 200px;
+}
+
+.letter-preview .signature-line {
+  border-top: 1px solid #374151;
+  margin-bottom: 8px;
+}
+
+.letter-preview .signature-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.letter-preview .signature-designation {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.letter-meta-info {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+  text-align: center;
+}
+
+/* Desktop */
+@media (min-width: 768px) {
+  .ess-modal-overlay {
+    align-items: center;
+  }
+
+  .ess-modal.letter-modal {
+    border-radius: 16px;
+    max-height: 80vh;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .ess-modal-overlay {
+    position: static;
+    background: none;
+  }
+
+  .modal-header,
+  .modal-footer,
+  .letter-meta-info {
+    display: none;
+  }
+}

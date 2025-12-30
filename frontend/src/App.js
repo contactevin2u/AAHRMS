@@ -38,7 +38,7 @@ import EmployeeLetters from './pages/EmployeeLetters';
 import MimixLogin from './pages/MimixLogin';
 import StaffClockIn from './pages/StaffClockIn';
 // New Unified ESS PWA
-import { ESSLogin, ESSDashboard, ESSClockIn, ESSBenefits, ESSProfile, ESSSchedule } from './pages/ess';
+import { ESSLogin, ESSChangePassword, ESSDashboard, ESSClockIn, ESSBenefits, ESSProfile, ESSSchedule, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters } from './pages/ess';
 import Schedules from './pages/Schedules';
 import './App.css';
 
@@ -335,6 +335,14 @@ function App() {
         {/* Unified ESS PWA Routes */}
         <Route path="/ess/login" element={<ESSLogin />} />
         <Route
+          path="/ess/change-password"
+          element={
+            <ESSProtectedRoute>
+              <ESSChangePassword />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
           path="/ess/dashboard"
           element={
             <ESSProtectedRoute>
@@ -354,7 +362,7 @@ function App() {
           path="/ess/payslips"
           element={
             <ESSProtectedRoute>
-              <EmployeePayslips />
+              <ESSPayslips />
             </ESSProtectedRoute>
           }
         />
@@ -362,7 +370,7 @@ function App() {
           path="/ess/leave"
           element={
             <ESSProtectedRoute>
-              <EmployeeLeave />
+              <ESSLeave />
             </ESSProtectedRoute>
           }
         />
@@ -370,7 +378,7 @@ function App() {
           path="/ess/claims"
           element={
             <ESSProtectedRoute>
-              <EmployeeClaims />
+              <ESSClaims />
             </ESSProtectedRoute>
           }
         />
@@ -378,7 +386,7 @@ function App() {
           path="/ess/notifications"
           element={
             <ESSProtectedRoute>
-              <EmployeeNotifications />
+              <ESSNotifications />
             </ESSProtectedRoute>
           }
         />
@@ -386,7 +394,7 @@ function App() {
           path="/ess/letters"
           element={
             <ESSProtectedRoute>
-              <EmployeeLetters />
+              <ESSLetters />
             </ESSProtectedRoute>
           }
         />

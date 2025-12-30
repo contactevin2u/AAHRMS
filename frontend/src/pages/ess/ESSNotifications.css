@@ -1,0 +1,252 @@
+/* ESS Notifications Page Styles */
+.ess-notifications-page {
+  padding: 16px;
+  padding-bottom: 100px;
+}
+
+/* Page Header */
+.ess-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.ess-page-header .header-content h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.ess-page-header .header-content p {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+}
+
+.mark-all-btn {
+  background: #f1f5f9;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1976d2;
+  cursor: pointer;
+}
+
+/* Tabs */
+.ess-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.ess-tabs .tab-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.ess-tabs .tab-btn.active {
+  background: white;
+  color: #1976d2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Loading & Empty */
+.ess-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.ess-loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #1976d2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.empty-state .empty-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+/* Notifications List */
+.notifications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notification-card {
+  background: white;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.notification-card.unread {
+  background: #f0f9ff;
+  border-left: 3px solid #1976d2;
+}
+
+.notification-card:active {
+  background: #f8fafc;
+}
+
+.notification-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.notification-icon.type-leave {
+  background: #dcfce7;
+}
+
+.notification-icon.type-payroll {
+  background: #fef3c7;
+}
+
+.notification-icon.type-claim {
+  background: #e0e7ff;
+}
+
+.notification-icon.type-announcement {
+  background: #fee2e2;
+}
+
+.notification-icon.type-system {
+  background: #f1f5f9;
+}
+
+.notification-icon.type-reminder {
+  background: #fff7ed;
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.notification-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  flex: 1;
+  padding-right: 8px;
+}
+
+.notification-time {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.notification-message {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notification-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-type {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.notification-type.type-leave {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.notification-type.type-payroll {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.notification-type.type-claim {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.notification-type.type-announcement {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.notification-type.type-system {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.notification-type.type-reminder {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  background: #1976d2;
+  border-radius: 50%;
+}

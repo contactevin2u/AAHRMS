@@ -71,14 +71,19 @@ function ESSLogin() {
         response = await essApi.loginIC(formData.employee_id, formData.ic_number);
       }
 
-      const { token, employee } = response.data;
+      const { token, employee, requiresPasswordChange } = response.data;
 
       // Store token and employee info
       localStorage.setItem('employeeToken', token);
       localStorage.setItem('employeeInfo', JSON.stringify(employee));
 
-      // Navigate to dashboard
-      navigate('/ess/dashboard');
+      // If first login with IC as password, redirect to change password
+      if (requiresPasswordChange) {
+        navigate('/ess/change-password', { state: { firstLogin: true } });
+      } else {
+        // Navigate to dashboard
+        navigate('/ess/dashboard');
+      }
     } catch (err) {
       console.error('Login error:', err);
       setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
