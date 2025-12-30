@@ -140,28 +140,66 @@ function ESSClockIn() {
 
   // Stop camera
   const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-      setCameraActive(false);
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject = null;
+      }
+    } catch (err) {
+      console.error('Stop camera error:', err);
     }
+    setCameraActive(false);
+    setCameraLoading(false);
   };
 
   // Capture photo
   const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    try {
+      if (!videoRef.current || !canvasRef.current) {
+        setError('Camera not ready. Please try again.');
+        return;
+      }
 
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+      // Check if video has valid dimensions
+      const width = video.videoWidth || video.clientWidth || 640;
+      const height = video.videoHeight || video.clientHeight || 480;
 
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
+      if (width === 0 || height === 0) {
+        setError('Camera not ready. Please wait and try again.');
+        return;
+      }
 
-    const photoData = canvas.toDataURL('image/jpeg', 0.7);
-    setCapturedPhoto(photoData);
-    stopCamera();
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setError('Failed to capture photo. Please try again.');
+        return;
+      }
+
+      ctx.drawImage(video, 0, 0, width, height);
+
+      const photoData = canvas.toDataURL('image/jpeg', 0.7);
+
+      if (!photoData || photoData === 'data:,') {
+        setError('Failed to capture photo. Please try again.');
+        return;
+      }
+
+      // Stop camera first, then set photo
+      stopCamera();
+      setCapturedPhoto(photoData);
+    } catch (err) {
+      console.error('Photo capture error:', err);
+      setError('Failed to capture photo. Please try again.');
+    }
   };
 
   // Retake photo
