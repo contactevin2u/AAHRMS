@@ -292,7 +292,12 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
 
   const { company_id, outlet_id, grouping_type } = empResult.rows[0];
 
-  // Schedule-based clock-in enforcement for outlet-based companies (Mimix)
+  // Schedule check for outlet-based companies (Mimix)
+  // Clock-in is ALWAYS allowed, but we track whether there's a schedule
+  let hasSchedule = false;
+  let scheduleId = null;
+  let attendanceStatus = 'present';
+
   if (grouping_type === 'outlet' && action === 'clock_in_1') {
     const scheduleResult = await pool.query(
       `SELECT * FROM schedules
@@ -300,19 +305,26 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       [employeeId, today]
     );
 
-    if (scheduleResult.rows.length === 0) {
-      throw new ValidationError('No shift scheduled for today. Please request supervisor approval for an extra shift.');
-    }
+    if (scheduleResult.rows.length > 0) {
+      hasSchedule = true;
+      scheduleId = scheduleResult.rows[0].id;
+      attendanceStatus = 'present';
 
-    // Check if within allowed time window (15 min before shift start)
-    const schedule = scheduleResult.rows[0];
-    const shiftStart = schedule.shift_start.substring(0, 5); // HH:MM
-    const shiftStartMinutes = parseInt(shiftStart.split(':')[0]) * 60 + parseInt(shiftStart.split(':')[1]);
-    const currentMinutes = parseInt(currentTime.split(':')[0]) * 60 + parseInt(currentTime.split(':')[1]);
-    const earlyWindowMinutes = shiftStartMinutes - 15;
+      // Check if within allowed time window (15 min before shift start)
+      const schedule = scheduleResult.rows[0];
+      const shiftStart = schedule.shift_start.substring(0, 5); // HH:MM
+      const shiftStartMinutes = parseInt(shiftStart.split(':')[0]) * 60 + parseInt(shiftStart.split(':')[1]);
+      const currentMinutes = parseInt(currentTime.split(':')[0]) * 60 + parseInt(currentTime.split(':')[1]);
+      const earlyWindowMinutes = shiftStartMinutes - 15;
 
-    if (currentMinutes < earlyWindowMinutes) {
-      throw new ValidationError(`Your shift starts at ${shiftStart}. You can clock in 15 minutes before.`);
+      if (currentMinutes < earlyWindowMinutes) {
+        throw new ValidationError(`Your shift starts at ${shiftStart}. You can clock in 15 minutes before.`);
+      }
+    } else {
+      // No schedule - still allow clock-in but mark as no_schedule
+      hasSchedule = false;
+      scheduleId = null;
+      attendanceStatus = 'no_schedule';
     }
   }
 
@@ -340,25 +352,28 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_in_1');
 
     if (existingRecord.rows.length === 0) {
-      // Create new record
+      // Create new record with schedule tracking
       record = await pool.query(
         `INSERT INTO clock_in_records
          (employee_id, company_id, outlet_id, work_date,
           clock_in_1, photo_in_1, location_in_1, address_in_1, face_detected_in_1, face_confidence_in_1,
+          has_schedule, schedule_id, attendance_status,
           status, approval_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'in_progress', 'pending')
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'in_progress', 'pending')
          RETURNING *`,
-        [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0]
+        [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus]
       );
     } else {
-      // Update existing record
+      // Update existing record with schedule tracking
       record = await pool.query(
         `UPDATE clock_in_records SET
            clock_in_1 = $1, photo_in_1 = $2, location_in_1 = $3, address_in_1 = $4,
-           face_detected_in_1 = $5, face_confidence_in_1 = $6, status = 'in_progress'
-         WHERE employee_id = $7 AND work_date = $8
+           face_detected_in_1 = $5, face_confidence_in_1 = $6,
+           has_schedule = $7, schedule_id = $8, attendance_status = $9,
+           status = 'in_progress'
+         WHERE employee_id = $10 AND work_date = $11
          RETURNING *`,
-        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
+        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus, employeeId, today]
       );
     }
 
@@ -481,7 +496,10 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
   const currentTime = getCurrentTime();
 
   const empResult = await pool.query(
-    'SELECT company_id, outlet_id FROM employees WHERE id = $1',
+    `SELECT e.company_id, e.outlet_id, c.grouping_type
+     FROM employees e
+     LEFT JOIN companies c ON e.company_id = c.id
+     WHERE e.id = $1`,
     [employeeId]
   );
 
@@ -489,7 +507,30 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError('Employee not found');
   }
 
-  const { company_id, outlet_id } = empResult.rows[0];
+  const { company_id, outlet_id, grouping_type } = empResult.rows[0];
+
+  // Schedule check for outlet-based companies
+  let hasSchedule = false;
+  let scheduleId = null;
+  let attendanceStatus = 'present';
+
+  if (grouping_type === 'outlet') {
+    const scheduleResult = await pool.query(
+      `SELECT * FROM schedules
+       WHERE employee_id = $1 AND schedule_date = $2 AND status = 'scheduled'`,
+      [employeeId, today]
+    );
+
+    if (scheduleResult.rows.length > 0) {
+      hasSchedule = true;
+      scheduleId = scheduleResult.rows[0].id;
+      attendanceStatus = 'present';
+    } else {
+      hasSchedule = false;
+      scheduleId = null;
+      attendanceStatus = 'no_schedule';
+    }
+  }
 
   // Check existing record
   const existingRecord = await pool.query(
@@ -510,8 +551,9 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
     `INSERT INTO clock_in_records
      (employee_id, company_id, outlet_id, work_date,
       clock_in_1, photo_in_1, location_in_1, address_in_1, face_detected_in_1, face_confidence_in_1,
+      has_schedule, schedule_id, attendance_status,
       status, approval_status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'in_progress', 'pending')
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'in_progress', 'pending')
      ON CONFLICT (employee_id, work_date) DO UPDATE SET
        clock_in_1 = EXCLUDED.clock_in_1,
        photo_in_1 = EXCLUDED.photo_in_1,
@@ -519,9 +561,12 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
        address_in_1 = EXCLUDED.address_in_1,
        face_detected_in_1 = EXCLUDED.face_detected_in_1,
        face_confidence_in_1 = EXCLUDED.face_confidence_in_1,
+       has_schedule = EXCLUDED.has_schedule,
+       schedule_id = EXCLUDED.schedule_id,
+       attendance_status = EXCLUDED.attendance_status,
        status = 'in_progress'
      RETURNING *`,
-    [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0]
+    [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus]
   );
 
   res.json({

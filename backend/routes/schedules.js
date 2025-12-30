@@ -207,6 +207,16 @@ router.post('/', authenticateAdmin, async (req, res) => {
       });
     }
 
+    // Check if schedule date is in the past
+    const scheduleDate = new Date(schedule_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (scheduleDate < today) {
+      return res.status(400).json({
+        error: 'Cannot create schedules for past dates'
+      });
+    }
+
     // Check if schedule already exists for this date
     const existing = await pool.query(
       'SELECT id FROM schedules WHERE employee_id = $1 AND schedule_date = $2',
@@ -270,6 +280,16 @@ router.post('/bulk', authenticateAdmin, async (req, res) => {
     if (!employee_id || !start_date || !end_date || !shift_start || !shift_end || !days_of_week) {
       return res.status(400).json({
         error: 'Employee, date range, shift times, and days of week are required'
+      });
+    }
+
+    // Check if start_date is in the past
+    const startDateObj = new Date(start_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (startDateObj < today) {
+      return res.status(400).json({
+        error: 'Cannot create schedules for past dates. Start date must be today or later.'
       });
     }
 
@@ -375,6 +395,11 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     }
 
     const oldValue = existing.rows[0];
+
+    // Check if schedule date is in the past
+    if (new Date(oldValue.schedule_date) < new Date().setHours(0, 0, 0, 0)) {
+      return res.status(400).json({ error: 'Cannot edit past schedules' });
+    }
 
     const result = await pool.query(
       `UPDATE schedules

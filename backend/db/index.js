@@ -1315,6 +1315,16 @@ Human Resources Department
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='approved_at') THEN
           ALTER TABLE clock_in_records ADD COLUMN approved_at TIMESTAMP;
         END IF;
+        -- Schedule-related columns for attendance tracking
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='has_schedule') THEN
+          ALTER TABLE clock_in_records ADD COLUMN has_schedule BOOLEAN DEFAULT false;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='schedule_id') THEN
+          ALTER TABLE clock_in_records ADD COLUMN schedule_id INTEGER;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='attendance_status') THEN
+          ALTER TABLE clock_in_records ADD COLUMN attendance_status VARCHAR(20) DEFAULT 'present';
+        END IF;
       END $$;
 
       -- Create unique index on employee_id + work_date if not exists
