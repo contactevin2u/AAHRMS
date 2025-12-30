@@ -76,6 +76,81 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Initialize missing tables (one-time setup endpoint)
+app.post('/api/init-schedules', async (req, res) => {
+  const pool = require('./db');
+  try {
+    // Create schedules table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS schedules (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        company_id INTEGER REFERENCES companies(id),
+        outlet_id INTEGER REFERENCES outlets(id),
+        schedule_date DATE NOT NULL,
+        shift_start TIME NOT NULL,
+        shift_end TIME NOT NULL,
+        break_duration INTEGER DEFAULT 60,
+        status VARCHAR(20) DEFAULT 'scheduled',
+        created_by INTEGER REFERENCES admin_users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(employee_id, schedule_date)
+      )
+    `);
+
+    // Create indexes
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_schedules_date ON schedules(schedule_date)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_schedules_employee ON schedules(employee_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_schedules_outlet ON schedules(outlet_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_schedules_company ON schedules(company_id)`);
+
+    // Create extra_shift_requests table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS extra_shift_requests (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        company_id INTEGER REFERENCES companies(id),
+        outlet_id INTEGER REFERENCES outlets(id),
+        request_date DATE NOT NULL,
+        shift_start TIME NOT NULL,
+        shift_end TIME NOT NULL,
+        reason TEXT,
+        status VARCHAR(20) DEFAULT 'pending',
+        approved_by INTEGER REFERENCES admin_users(id),
+        approved_at TIMESTAMP,
+        rejection_reason TEXT,
+        schedule_id INTEGER REFERENCES schedules(id),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Create schedule_audit_logs table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS schedule_audit_logs (
+        id SERIAL PRIMARY KEY,
+        schedule_id INTEGER REFERENCES schedules(id) ON DELETE SET NULL,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+        action VARCHAR(50) NOT NULL,
+        old_value JSONB,
+        new_value JSONB,
+        reason TEXT,
+        performed_by INTEGER REFERENCES admin_users(id),
+        performed_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    res.json({
+      success: true,
+      message: 'Schedule tables created successfully',
+      tables: ['schedules', 'extra_shift_requests', 'schedule_audit_logs']
+    });
+  } catch (error) {
+    console.error('Error creating schedule tables:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 404 handler for undefined routes
 app.use(notFoundHandler);
 
