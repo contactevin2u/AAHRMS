@@ -311,7 +311,8 @@ function ESSClockInContent() {
         face_confidence: 0.95
       });
 
-      setSuccess(res.data.message || 'Action recorded successfully!');
+      const successMsg = res.data.message;
+      setSuccess(typeof successMsg === 'string' ? successMsg : 'Action recorded successfully!');
       setCapturedPhoto(null);
 
       // Refresh status
@@ -321,7 +322,8 @@ function ESSClockInContent() {
       }, 2000);
     } catch (err) {
       console.error('Clock action error:', err);
-      setError(err.response?.data?.error || 'Failed to record action. Please try again.');
+      const errMsg = err.response?.data?.error;
+      setError(typeof errMsg === 'string' ? errMsg : (errMsg?.message || 'Failed to record action. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -403,7 +405,7 @@ function ESSClockInContent() {
             <span className="warning-icon">&#x23F0;</span>
             <div>
               <strong>Too Early</strong>
-              <p>{scheduleStatus.message}</p>
+              <p>{typeof scheduleStatus.message === 'string' ? scheduleStatus.message : 'Schedule information unavailable'}</p>
               {scheduleStatus.schedule && (
                 <p className="shift-info">
                   Your shift: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}
