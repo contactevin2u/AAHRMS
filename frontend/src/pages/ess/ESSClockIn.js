@@ -1,11 +1,40 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import './ESSClockIn.css';
 
-function ESSClockIn() {
+// Error Boundary to catch rendering errors
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Clock-in page error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 20, textAlign: 'center' }}>
+          <h2>Something went wrong</h2>
+          <p>{this.state.error?.message || 'Unknown error'}</p>
+          <button onClick={() => window.location.reload()}>Reload Page</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function ESSClockInContent() {
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
   const videoRef = useRef(null);
@@ -455,7 +484,15 @@ function ESSClockIn() {
 
             {capturedPhoto && (
               <div className="photo-preview">
-                <img src={capturedPhoto} alt="Selfie" />
+                <img
+                  src={capturedPhoto}
+                  alt="Selfie"
+                  onError={(e) => {
+                    console.error('Image load error');
+                    setCapturedPhoto(null);
+                    setError('Failed to load photo. Please try again.');
+                  }}
+                />
                 <button className="retake-btn" onClick={retakePhoto}>Retake</button>
               </div>
             )}
@@ -516,6 +553,15 @@ function ESSClockIn() {
         )}
       </div>
     </ESSLayout>
+  );
+}
+
+// Wrap with Error Boundary
+function ESSClockIn() {
+  return (
+    <ErrorBoundary>
+      <ESSClockInContent />
+    </ErrorBoundary>
   );
 }
 
