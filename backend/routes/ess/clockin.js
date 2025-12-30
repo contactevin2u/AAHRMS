@@ -54,6 +54,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../db');
 const { asyncHandler, ValidationError } = require('../../middleware/errorHandler');
+const { uploadAttendance } = require('../../utils/cloudinaryStorage');
 
 // Standard work time: 8.5 hours = 510 minutes
 const STANDARD_WORK_MINUTES = 510;
@@ -335,6 +336,9 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       throw new ValidationError('You have already clocked in for today');
     }
 
+    // Upload photo to Cloudinary
+    const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_in_1');
+
     if (existingRecord.rows.length === 0) {
       // Create new record
       record = await pool.query(
@@ -344,7 +348,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
           status, approval_status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'in_progress', 'pending')
          RETURNING *`,
-        [employeeId, company_id, outlet_id, today, currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0]
+        [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0]
       );
     } else {
       // Update existing record
@@ -354,7 +358,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
            face_detected_in_1 = $5, face_confidence_in_1 = $6, status = 'in_progress'
          WHERE employee_id = $7 AND work_date = $8
          RETURNING *`,
-        [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
+        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
       );
     }
 
@@ -374,13 +378,16 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       throw new ValidationError('You have already taken your break');
     }
 
+    // Upload photo to Cloudinary
+    const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_1');
+
     record = await pool.query(
       `UPDATE clock_in_records SET
          clock_out_1 = $1, photo_out_1 = $2, location_out_1 = $3, address_out_1 = $4,
          face_detected_out_1 = $5, face_confidence_out_1 = $6
        WHERE employee_id = $7 AND work_date = $8
        RETURNING *`,
-      [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
+      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
     );
 
     res.json({
@@ -399,13 +406,16 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       throw new ValidationError('You have already returned from break');
     }
 
+    // Upload photo to Cloudinary
+    const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_in_2');
+
     record = await pool.query(
       `UPDATE clock_in_records SET
          clock_in_2 = $1, photo_in_2 = $2, location_in_2 = $3, address_in_2 = $4,
          face_detected_in_2 = $5, face_confidence_in_2 = $6
        WHERE employee_id = $7 AND work_date = $8
        RETURNING *`,
-      [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
+      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
     );
 
     res.json({
@@ -424,6 +434,9 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       throw new ValidationError('You have already clocked out for the day');
     }
 
+    // Upload photo to Cloudinary
+    const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_2');
+
     // Calculate work time
     const updatedRecord = {
       ...existingRecord.rows[0],
@@ -438,7 +451,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
          total_work_minutes = $7, ot_minutes = $8, status = 'completed'
        WHERE employee_id = $9 AND work_date = $10
        RETURNING *`,
-      [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, employeeId, today]
+      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, employeeId, today]
     );
 
     res.json({
@@ -490,6 +503,9 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
 
   const locationStr = `${latitude},${longitude}`;
 
+  // Upload photo to Cloudinary
+  const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_in_1');
+
   const record = await pool.query(
     `INSERT INTO clock_in_records
      (employee_id, company_id, outlet_id, work_date,
@@ -505,7 +521,7 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
        face_confidence_in_1 = EXCLUDED.face_confidence_in_1,
        status = 'in_progress'
      RETURNING *`,
-    [employeeId, company_id, outlet_id, today, currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0]
+    [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0]
   );
 
   res.json({
@@ -540,7 +556,17 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError('You have already clocked out for the day');
   }
 
+  // Get company_id for Cloudinary folder
+  const empResult = await pool.query(
+    'SELECT company_id FROM employees WHERE id = $1',
+    [employeeId]
+  );
+  const company_id = empResult.rows[0]?.company_id || 0;
+
   const locationStr = `${latitude},${longitude}`;
+
+  // Upload photo to Cloudinary
+  const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_2');
 
   // Calculate work time
   const updatedRecord = {
@@ -562,7 +588,7 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
        status = 'completed'
      WHERE employee_id = $9 AND work_date = $10
      RETURNING *`,
-    [currentTime, photo_base64, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, employeeId, today]
+    [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, employeeId, today]
   );
 
   res.json({
