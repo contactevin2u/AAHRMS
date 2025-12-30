@@ -365,7 +365,7 @@ function ESSClockInContent() {
 
   // Check if no schedule for today (for outlet-based companies)
   const noScheduleToday = scheduleStatus && !scheduleStatus.has_schedule;
-  const cannotClockInYet = scheduleStatus && scheduleStatus.has_schedule && !scheduleStatus.can_clock_in;
+  // Clock-in is always allowed regardless of schedule time
 
   return (
     <ESSLayout>
@@ -399,24 +399,8 @@ function ESSClockInContent() {
           </div>
         )}
 
-        {/* Cannot Clock In Yet Warning */}
-        {cannotClockInYet && (
-          <div className="schedule-warning wait-time">
-            <span className="warning-icon">&#x23F0;</span>
-            <div>
-              <strong>Too Early</strong>
-              <p>{typeof scheduleStatus.message === 'string' ? scheduleStatus.message : 'Schedule information unavailable'}</p>
-              {scheduleStatus.schedule && (
-                <p className="shift-info">
-                  Your shift: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Today's Schedule Info */}
-        {scheduleStatus?.has_schedule && scheduleStatus?.schedule && !cannotClockInYet && (
+        {scheduleStatus?.has_schedule && scheduleStatus?.schedule && (
           <div className="schedule-info">
             <span className="schedule-icon">&#x1F4C5;</span>
             <span>Today's shift: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}</span>
@@ -450,8 +434,8 @@ function ESSClockInContent() {
           </div>
         )}
 
-        {/* Camera Section - Allow clock-in regardless of schedule */}
-        {status?.status !== 'completed' && !cannotClockInYet && (
+        {/* Camera Section */}
+        {status?.status !== 'completed' && (
           <div className="camera-section">
             {!cameraActive && !cameraLoading && !capturedPhoto && (
               <button className="start-camera-btn" onClick={startCamera} disabled={!isOnline}>
@@ -530,8 +514,8 @@ function ESSClockInContent() {
           </div>
         )}
 
-        {/* Submit Button - Allow clock-in regardless of schedule */}
-        {status?.status !== 'completed' && !cannotClockInYet && (
+        {/* Submit Button */}
+        {status?.status !== 'completed' && (
           <button
             className="submit-btn"
             onClick={handleSubmit}

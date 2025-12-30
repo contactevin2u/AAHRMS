@@ -309,17 +309,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       hasSchedule = true;
       scheduleId = scheduleResult.rows[0].id;
       attendanceStatus = 'present';
-
-      // Check if within allowed time window (15 min before shift start)
-      const schedule = scheduleResult.rows[0];
-      const shiftStart = schedule.shift_start.substring(0, 5); // HH:MM
-      const shiftStartMinutes = parseInt(shiftStart.split(':')[0]) * 60 + parseInt(shiftStart.split(':')[1]);
-      const currentMinutes = parseInt(currentTime.split(':')[0]) * 60 + parseInt(currentTime.split(':')[1]);
-      const earlyWindowMinutes = shiftStartMinutes - 15;
-
-      if (currentMinutes < earlyWindowMinutes) {
-        throw new ValidationError(`Your shift starts at ${shiftStart}. You can clock in 15 minutes before.`);
-      }
+      // Clock-in is allowed at any time - no time window restriction
     } else {
       // No schedule - still allow clock-in but mark as no_schedule
       hasSchedule = false;
