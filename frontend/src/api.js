@@ -398,6 +398,7 @@ export const essApi = {
 
   // Profile
   getProfile: () => api.get('/ess/profile', essApiConfig),
+  updateProfile: (data) => api.put('/ess/profile', data, essApiConfig),
 
   // Payslips
   getPayslips: (params) => api.get('/ess/payslips', { params, ...essApiConfig }),

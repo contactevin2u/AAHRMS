@@ -226,3 +226,165 @@
   border-radius: 8px;
   cursor: pointer;
 }
+
+/* Section Header with Edit Button */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.section-header h2 {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.edit-btn {
+  background: #1976d2;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.edit-btn:hover {
+  background: #1565c0;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cancel-btn {
+  background: #f1f5f9;
+  color: #64748b;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cancel-btn:hover {
+  background: #e2e8f0;
+}
+
+.save-btn {
+  background: #059669;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.save-btn:hover {
+  background: #047857;
+}
+
+.save-btn:disabled,
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Edit Form */
+.edit-form {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-size: 13px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group textarea {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 15px;
+  color: #1e293b;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Success/Error Messages */
+.save-success {
+  background: #d1fae5;
+  color: #059669;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.save-error {
+  background: #fee2e2;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Section Note */
+.section-note {
+  color: #94a3b8;
+  font-size: 12px;
+  margin: -8px 0 16px 0;
+  font-style: italic;
+}
+
+@media (max-width: 600px) {
+  .edit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .form-group.full-width {
+    grid-column: 1;
+  }
+
+  .section-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+}

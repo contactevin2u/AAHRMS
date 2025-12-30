@@ -18,6 +18,7 @@ const INITIAL_FORM_STATE = {
   phone: '',
   ic_number: '',
   department_id: '',
+  outlet_id: '',
   position: '',
   join_date: '',
   status: 'active',
@@ -94,6 +95,8 @@ const EmployeeForm = ({
   setForm,
   editingEmployee,
   departments,
+  outlets,
+  usesOutlets,
   commissionTypes,
   allowanceTypes,
   employeeCommissions,
@@ -135,7 +138,12 @@ const EmployeeForm = ({
             onChange={(e) => setForm({ ...form, employee_id: e.target.value })}
             placeholder="e.g. EMP001"
             required
+            disabled={!!editingEmployee}
+            style={editingEmployee ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
           />
+          {editingEmployee && (
+            <small style={{ color: '#64748b', fontSize: '11px' }}>Employee ID cannot be changed</small>
+          )}
         </div>
         <div className="form-group">
           <label>Full Name *</label>
@@ -150,19 +158,35 @@ const EmployeeForm = ({
       </div>
 
       <div className="form-row">
-        <div className="form-group">
-          <label>Department *</label>
-          <select
-            value={form.department_id}
-            onChange={(e) => onDepartmentChange(e.target.value)}
-            required
-          >
-            <option value="">Select department</option>
-            {departments.map(d => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        </div>
+        {usesOutlets ? (
+          <div className="form-group">
+            <label>Outlet *</label>
+            <select
+              value={form.outlet_id || ''}
+              onChange={(e) => setForm({ ...form, outlet_id: e.target.value })}
+              required
+            >
+              <option value="">Select outlet</option>
+              {(outlets || []).map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="form-group">
+            <label>Department *</label>
+            <select
+              value={form.department_id}
+              onChange={(e) => onDepartmentChange(e.target.value)}
+              required
+            >
+              <option value="">Select department</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="form-group">
           <label>Position</label>
           <input
