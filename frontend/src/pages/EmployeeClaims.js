@@ -214,7 +214,10 @@ function EmployeeClaims() {
   };
 
   const getTotalAmount = () => {
-    return claims.reduce((sum, claim) => sum + parseFloat(claim.amount || 0), 0);
+    // Exclude rejected claims from total
+    return claims
+      .filter(c => c.status !== 'rejected')
+      .reduce((sum, claim) => sum + parseFloat(claim.amount || 0), 0);
   };
 
   const getPendingAmount = () => {
