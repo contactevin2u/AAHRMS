@@ -1116,23 +1116,157 @@ Human Resources Department
         employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
         company_id INTEGER REFERENCES companies(id),
         outlet_id INTEGER REFERENCES outlets(id),
-        clock_in_time TIMESTAMP NOT NULL,
-        clock_out_time TIMESTAMP,
-        photo_url TEXT,
-        latitude DECIMAL(10, 8),
-        longitude DECIMAL(11, 8),
-        location_address TEXT,
-        status VARCHAR(20) DEFAULT 'clocked_in',
+        work_date DATE NOT NULL,
+
+        -- 4-action clock times (HH:MM format stored as TIME)
+        clock_in_1 TIME,
+        clock_out_1 TIME,
+        clock_in_2 TIME,
+        clock_out_2 TIME,
+
+        -- Photos for each action
+        photo_in_1 TEXT,
+        photo_out_1 TEXT,
+        photo_in_2 TEXT,
+        photo_out_2 TEXT,
+
+        -- Location for each action (point format: lat,lng)
+        location_in_1 TEXT,
+        location_out_1 TEXT,
+        location_in_2 TEXT,
+        location_out_2 TEXT,
+
+        -- Address for each action
+        address_in_1 TEXT,
+        address_out_1 TEXT,
+        address_in_2 TEXT,
+        address_out_2 TEXT,
+
+        -- Face detection for each action
+        face_detected_in_1 BOOLEAN,
+        face_detected_out_1 BOOLEAN,
+        face_detected_in_2 BOOLEAN,
+        face_detected_out_2 BOOLEAN,
+        face_confidence_in_1 DECIMAL(5,4),
+        face_confidence_out_1 DECIMAL(5,4),
+        face_confidence_in_2 DECIMAL(5,4),
+        face_confidence_out_2 DECIMAL(5,4),
+
+        -- Calculated hours
+        total_work_hours DECIMAL(5,2) DEFAULT 0,
+        ot_hours DECIMAL(5,2) DEFAULT 0,
+
+        -- Status and approval
+        status VARCHAR(20) DEFAULT 'pending',
+        approved_by INTEGER REFERENCES admin_users(id),
+        approved_at TIMESTAMP,
         notes TEXT,
+
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(employee_id, work_date)
       );
 
       CREATE INDEX IF NOT EXISTS idx_clock_in_employee ON clock_in_records(employee_id);
       CREATE INDEX IF NOT EXISTS idx_clock_in_company ON clock_in_records(company_id);
       CREATE INDEX IF NOT EXISTS idx_clock_in_outlet ON clock_in_records(outlet_id);
-      CREATE INDEX IF NOT EXISTS idx_clock_in_time ON clock_in_records(clock_in_time);
-      CREATE INDEX IF NOT EXISTS idx_clock_in_date ON clock_in_records(DATE(clock_in_time));
+      CREATE INDEX IF NOT EXISTS idx_clock_in_work_date ON clock_in_records(work_date);
+
+      -- Add missing columns to existing clock_in_records table
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='work_date') THEN
+          ALTER TABLE clock_in_records ADD COLUMN work_date DATE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='clock_in_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN clock_in_1 TIME;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='clock_out_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN clock_out_1 TIME;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='clock_in_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN clock_in_2 TIME;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='clock_out_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN clock_out_2 TIME;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='photo_in_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN photo_in_1 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='location_in_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN location_in_1 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='address_in_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN address_in_1 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='face_detected_in_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN face_detected_in_1 BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='face_confidence_in_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN face_confidence_in_1 DECIMAL(5,4);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='total_work_hours') THEN
+          ALTER TABLE clock_in_records ADD COLUMN total_work_hours DECIMAL(5,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_hours') THEN
+          ALTER TABLE clock_in_records ADD COLUMN ot_hours DECIMAL(5,2) DEFAULT 0;
+        END IF;
+        -- Add other missing columns for out_1, in_2, out_2
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='photo_out_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN photo_out_1 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='photo_in_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN photo_in_2 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='photo_out_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN photo_out_2 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='location_out_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN location_out_1 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='location_in_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN location_in_2 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='location_out_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN location_out_2 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='address_out_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN address_out_1 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='address_in_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN address_in_2 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='address_out_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN address_out_2 TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='face_detected_out_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN face_detected_out_1 BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='face_detected_in_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN face_detected_in_2 BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='face_detected_out_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN face_detected_out_2 BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='face_confidence_out_1') THEN
+          ALTER TABLE clock_in_records ADD COLUMN face_confidence_out_1 DECIMAL(5,4);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='face_confidence_in_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN face_confidence_in_2 DECIMAL(5,4);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='face_confidence_out_2') THEN
+          ALTER TABLE clock_in_records ADD COLUMN face_confidence_out_2 DECIMAL(5,4);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='approved_by') THEN
+          ALTER TABLE clock_in_records ADD COLUMN approved_by INTEGER REFERENCES admin_users(id);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='approved_at') THEN
+          ALTER TABLE clock_in_records ADD COLUMN approved_at TIMESTAMP;
+        END IF;
+      END $$;
+
+      -- Create unique index on employee_id + work_date if not exists
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_clock_in_employee_date ON clock_in_records(employee_id, work_date);
 
       -- =====================================================
       -- SCHEDULING SYSTEM (for outlet-based companies like Mimix)

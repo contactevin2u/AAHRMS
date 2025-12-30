@@ -101,7 +101,7 @@ router.get('/calendar', authenticateAdmin, async (req, res) => {
       LEFT JOIN employees e ON s.employee_id = e.id
       LEFT JOIN outlets o ON s.outlet_id = o.id
       LEFT JOIN clock_in_records cr ON s.employee_id = cr.employee_id
-        AND s.schedule_date = cr.clock_date
+        AND s.schedule_date = cr.work_date
       WHERE s.schedule_date BETWEEN $1 AND $2
     `;
     let params = [startDate, endDate];
@@ -164,7 +164,7 @@ router.get('/employees/:employeeId/month/:year/:month', authenticateAdmin, async
       FROM schedules s
       LEFT JOIN outlets o ON s.outlet_id = o.id
       LEFT JOIN clock_in_records cr ON s.employee_id = cr.employee_id
-        AND s.schedule_date = cr.clock_date
+        AND s.schedule_date = cr.work_date
       WHERE s.employee_id = $1 AND s.schedule_date BETWEEN $2 AND $3
     `;
     let params = [employeeId, startDate, endDate];
