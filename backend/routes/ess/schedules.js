@@ -36,6 +36,7 @@ const formatTime = (time) => {
 };
 
 // Get today's schedule (for clock-in check)
+// Clock-in is ALWAYS allowed - this endpoint just provides schedule info
 router.get('/today', authenticateEmployee, asyncHandler(async (req, res) => {
   const employeeId = req.employee.id;
   const today = new Date().toISOString().split('T')[0];
@@ -52,35 +53,28 @@ router.get('/today', authenticateEmployee, asyncHandler(async (req, res) => {
   );
 
   if (result.rows.length === 0) {
+    // No schedule - but still allow clock-in
     return res.json({
       has_schedule: false,
+      can_clock_in: true,  // Always allow clock-in
       schedule: null,
-      message: 'No shift scheduled for today'
+      message: 'No shift scheduled for today (attendance will be recorded)'
     });
   }
 
   const schedule = result.rows[0];
-  const now = new Date();
-  const shiftStart = new Date(`${today}T${schedule.shift_start}`);
-  const shiftEnd = new Date(`${today}T${schedule.shift_end}`);
 
-  // Calculate if within clock-in window (15 minutes before shift start)
-  const earlyWindow = new Date(shiftStart.getTime() - 15 * 60 * 1000);
-  const canClockIn = now >= earlyWindow && now <= shiftEnd;
-
+  // Always allow clock-in regardless of time
+  // The backend will track if it's within schedule or not
   res.json({
     has_schedule: true,
-    can_clock_in: canClockIn,
+    can_clock_in: true,  // Always allow clock-in
     schedule: {
       ...schedule,
       shift_start: formatTime(schedule.shift_start),
       shift_end: formatTime(schedule.shift_end)
     },
-    message: canClockIn
-      ? 'You can clock in now'
-      : now < earlyWindow
-        ? `Your shift starts at ${formatTime(schedule.shift_start)}. You can clock in 15 minutes before.`
-        : 'Your shift has ended'
+    message: 'You can clock in now'
   });
 }));
 

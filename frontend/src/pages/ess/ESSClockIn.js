@@ -327,20 +327,11 @@ function ESSClockIn() {
           </span>
         </div>
 
-        {/* No Schedule Warning */}
+        {/* No Schedule Info - Still allow clock-in */}
         {noScheduleToday && (
-          <div className="schedule-warning no-schedule">
-            <span className="warning-icon">&#x26A0;&#xFE0F;</span>
-            <div>
-              <strong>No Shift Scheduled</strong>
-              <p>You don't have a shift scheduled for today.</p>
-              <button
-                className="request-shift-link"
-                onClick={() => navigate('/ess/schedule')}
-              >
-                Request Extra Shift
-              </button>
-            </div>
+          <div className="schedule-info no-schedule-info">
+            <span className="schedule-icon">&#x1F4C5;</span>
+            <span>No shift scheduled today (attendance will be recorded)</span>
           </div>
         )}
 
@@ -395,8 +386,8 @@ function ESSClockIn() {
           </div>
         )}
 
-        {/* Camera Section */}
-        {status?.status !== 'completed' && !noScheduleToday && !cannotClockInYet && (
+        {/* Camera Section - Allow clock-in regardless of schedule */}
+        {status?.status !== 'completed' && !cannotClockInYet && (
           <div className="camera-section">
             {!cameraActive && !cameraLoading && !capturedPhoto && (
               <button className="start-camera-btn" onClick={startCamera} disabled={!isOnline}>
@@ -467,8 +458,8 @@ function ESSClockIn() {
           </div>
         )}
 
-        {/* Submit Button */}
-        {status?.status !== 'completed' && !noScheduleToday && !cannotClockInYet && (
+        {/* Submit Button - Allow clock-in regardless of schedule */}
+        {status?.status !== 'completed' && !cannotClockInYet && (
           <button
             className="submit-btn"
             onClick={handleSubmit}
