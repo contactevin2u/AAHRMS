@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Layout from '../components/Layout';
 import { attendanceApi, employeeApi, outletsApi } from '../api';
 import './Attendance.css';
 
@@ -16,6 +17,7 @@ const Attendance = () => {
     employee_id: ''
   });
   const [editModal, setEditModal] = useState(null);
+  const [gpsModal, setGpsModal] = useState(null); // For showing GPS coordinates
 
   const admin = JSON.parse(localStorage.getItem('admin') || '{}');
   const isSupervisor = admin.role === 'supervisor';
@@ -130,7 +132,44 @@ const Attendance = () => {
 
   const pendingCount = records.filter(r => r.status === 'pending').length;
 
+  // Parse GPS location string to get coordinates
+  const parseLocation = (locationStr) => {
+    if (!locationStr) return null;
+    try {
+      // Format could be "lat,lng" or JSON object
+      if (typeof locationStr === 'string' && locationStr.includes(',')) {
+        const [lat, lng] = locationStr.split(',').map(s => parseFloat(s.trim()));
+        return { lat, lng };
+      }
+      if (typeof locationStr === 'object') {
+        return { lat: locationStr.lat || locationStr.latitude, lng: locationStr.lng || locationStr.longitude };
+      }
+      const parsed = JSON.parse(locationStr);
+      return { lat: parsed.lat || parsed.latitude, lng: parsed.lng || parsed.longitude };
+    } catch {
+      return null;
+    }
+  };
+
+  // Format coordinates for display
+  const formatCoords = (coords) => {
+    if (!coords) return '-';
+    return `${coords.lat?.toFixed(6)}, ${coords.lng?.toFixed(6)}`;
+  };
+
+  // Open location in Google Maps
+  const openInMaps = (coords) => {
+    if (!coords) return;
+    window.open(`https://www.google.com/maps?q=${coords.lat},${coords.lng}`, '_blank');
+  };
+
+  // Show GPS modal with record details
+  const showGpsDetails = (record) => {
+    setGpsModal(record);
+  };
+
   return (
+    <Layout>
     <div className="attendance-page">
       <div className="page-header">
         <div className="header-content">
@@ -224,6 +263,7 @@ const Attendance = () => {
                 <th className="time-col">Clock Out 1<br/><small>Break</small></th>
                 <th className="time-col">Clock In 2<br/><small>Return</small></th>
                 <th className="time-col">Clock Out 2<br/><small>End Work</small></th>
+                <th>GPS Location</th>
                 <th>Total Hours</th>
                 <th>OT Hours</th>
                 <th>Status</th>
@@ -233,7 +273,7 @@ const Attendance = () => {
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={isSupervisor ? 11 : 12} className="no-data">
+                  <td colSpan={isSupervisor ? 12 : 13} className="no-data">
                     No attendance records found
                   </td>
                 </tr>
@@ -259,13 +299,24 @@ const Attendance = () => {
                     {!isSupervisor && <td>{record.outlet_name || '-'}</td>}
                     <td className="time-cell">
                       {formatTime(record.clock_in_1)}
-                      {record.location_in_1 && <span className="has-location" title="Has GPS">📍</span>}
                     </td>
                     <td className="time-cell">{formatTime(record.clock_out_1)}</td>
                     <td className="time-cell">{formatTime(record.clock_in_2)}</td>
                     <td className="time-cell">
                       {formatTime(record.clock_out_2)}
-                      {record.location_out_2 && <span className="has-location" title="Has GPS">📍</span>}
+                    </td>
+                    <td className="gps-cell">
+                      {(record.location_in_1 || record.location_out_2) ? (
+                        <button
+                          className="gps-btn"
+                          onClick={() => showGpsDetails(record)}
+                          title="View GPS Coordinates"
+                        >
+                          📍 View
+                        </button>
+                      ) : (
+                        <span className="no-gps">-</span>
+                      )}
                     </td>
                     <td className="hours-cell">
                       {record.total_hours ? `${parseFloat(record.total_hours).toFixed(1)}h` : '-'}
@@ -324,7 +375,78 @@ const Attendance = () => {
           <span className="legend-value">Hours above 8.5h</span>
         </div>
       </div>
+
+      {/* GPS Location Modal */}
+      {gpsModal && (
+        <div className="modal-overlay" onClick={() => setGpsModal(null)}>
+          <div className="modal gps-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>GPS Locations</h2>
+              <button className="close-btn" onClick={() => setGpsModal(null)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div className="gps-record-info">
+                <strong>{gpsModal.employee_name}</strong>
+                <span className="gps-date">{formatDate(gpsModal.work_date)}</span>
+              </div>
+
+              <div className="gps-locations-list">
+                {gpsModal.location_in_1 && (
+                  <div className="gps-location-item">
+                    <div className="gps-location-header">
+                      <span className="gps-label">Clock In (Start Work)</span>
+                      <span className="gps-time">{formatTime(gpsModal.clock_in_1)}</span>
+                    </div>
+                    <div className="gps-coords">
+                      <span className="coords-label">Latitude:</span>
+                      <span className="coords-value">{parseLocation(gpsModal.location_in_1)?.lat?.toFixed(6) || '-'}</span>
+                    </div>
+                    <div className="gps-coords">
+                      <span className="coords-label">Longitude:</span>
+                      <span className="coords-value">{parseLocation(gpsModal.location_in_1)?.lng?.toFixed(6) || '-'}</span>
+                    </div>
+                    <button
+                      className="open-map-btn"
+                      onClick={() => openInMaps(parseLocation(gpsModal.location_in_1))}
+                    >
+                      Open in Google Maps
+                    </button>
+                  </div>
+                )}
+
+                {gpsModal.location_out_2 && (
+                  <div className="gps-location-item">
+                    <div className="gps-location-header">
+                      <span className="gps-label">Clock Out (End Work)</span>
+                      <span className="gps-time">{formatTime(gpsModal.clock_out_2)}</span>
+                    </div>
+                    <div className="gps-coords">
+                      <span className="coords-label">Latitude:</span>
+                      <span className="coords-value">{parseLocation(gpsModal.location_out_2)?.lat?.toFixed(6) || '-'}</span>
+                    </div>
+                    <div className="gps-coords">
+                      <span className="coords-label">Longitude:</span>
+                      <span className="coords-value">{parseLocation(gpsModal.location_out_2)?.lng?.toFixed(6) || '-'}</span>
+                    </div>
+                    <button
+                      className="open-map-btn"
+                      onClick={() => openInMaps(parseLocation(gpsModal.location_out_2))}
+                    >
+                      Open in Google Maps
+                    </button>
+                  </div>
+                )}
+
+                {!gpsModal.location_in_1 && !gpsModal.location_out_2 && (
+                  <p className="no-gps-data">No GPS data recorded for this entry</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+    </Layout>
   );
 };
 

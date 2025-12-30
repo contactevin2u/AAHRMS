@@ -296,6 +296,187 @@
   color: #475569;
 }
 
+/* GPS Cell & Button */
+.gps-cell {
+  text-align: center;
+}
+
+.gps-btn {
+  padding: 6px 12px;
+  background: #e0f2fe;
+  color: #0284c7;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gps-btn:hover {
+  background: #0284c7;
+  color: white;
+}
+
+.no-gps {
+  color: #94a3b8;
+}
+
+/* GPS Modal */
+.gps-modal {
+  max-width: 450px;
+  width: 100%;
+}
+
+.gps-record-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 16px;
+}
+
+.gps-record-info strong {
+  font-size: 16px;
+  color: #1e293b;
+}
+
+.gps-date {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.gps-locations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gps-location-item {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 3px solid #3b82f6;
+}
+
+.gps-location-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.gps-label {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.gps-time {
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 13px;
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.gps-coords {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.coords-label {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.coords-value {
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 13px;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.open-map-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.open-map-btn:hover {
+  background: #2563eb;
+}
+
+.no-gps-data {
+  text-align: center;
+  color: #94a3b8;
+  padding: 24px;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #64748b;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .attendance-page {
