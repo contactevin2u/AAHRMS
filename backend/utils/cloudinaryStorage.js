@@ -13,10 +13,9 @@ const cloudinary = require('../config/cloudinary');
  * Upload attendance photo to Cloudinary
  *
  * Compression settings for selfies:
- * - Width: 480px (small, sufficient for face verification)
+ * - Width: 480px
  * - Quality: auto:low (maximum compression)
- * - Format: jpg (best compression for photos)
- * - Target size: ~20-40KB
+ * - Format: jpg
  *
  * @param {string} base64Data - Base64 encoded image (with or without data URI prefix)
  * @param {number} companyId - Company ID
@@ -43,9 +42,9 @@ async function uploadAttendance(base64Data, companyId, employeeId, clockType) {
       transformation: [
         {
           width: 480,
-          crop: 'limit',        // Only shrink if larger, don't upscale
-          quality: 'auto:low',  // Maximum compression
-          fetch_format: 'jpg'   // Force JPG for best compression
+          crop: 'limit',
+          quality: 'auto:low',
+          format: 'jpg'
         }
       ]
     });
@@ -61,11 +60,11 @@ async function uploadAttendance(base64Data, companyId, employeeId, clockType) {
  * Upload claim receipt to Cloudinary (supports images and PDFs)
  *
  * Compression settings for receipts:
- * - Width: 1200px (large enough for text readability)
- * - Quality: auto:good (balanced compression, text stays clear)
- * - Format: auto (keeps PDF as PDF, images as optimal format)
- * - Flags: preserve_transparency (for PNG receipts)
- * - Target size: ~100-200KB, text still readable
+ * - Width: 1000px
+ * - Quality: auto:low (max compression)
+ * - Format: jpg (all converted to JPG including PDFs)
+ * - Effect: sharpen (keeps text edges clear despite compression)
+ * - PDFs: converted to JPG, page 1 only
  *
  * @param {string} base64Data - Base64 encoded file (with or without data URI prefix)
  * @param {number} companyId - Company ID
@@ -96,25 +95,26 @@ async function uploadClaim(base64Data, companyId, employeeId, claimId) {
     const timestamp = Date.now();
     const publicId = `hrms/claims/${companyId}/${employeeId}/claim_${claimId || timestamp}`;
 
-    // Different settings for PDF vs images
     const uploadOptions = {
       public_id: publicId,
-      resource_type: 'auto',
+      resource_type: isPDF ? 'image' : 'image', // Force image type for PDF conversion
       overwrite: true,
-      folder: ''
+      folder: '',
+      transformation: [
+        {
+          width: 1000,
+          crop: 'limit',
+          quality: 'auto:low',
+          format: 'jpg',
+          effect: 'sharpen'  // Keep text edges clear
+        }
+      ]
     };
 
-    // Only apply image transformations for non-PDF files
-    if (!isPDF) {
-      uploadOptions.transformation = [
-        {
-          width: 1200,
-          crop: 'limit',              // Only shrink if larger
-          quality: 'auto:good',       // Good quality for text readability
-          flags: 'preserve_transparency', // Keep transparency for PNGs
-          fetch_format: 'auto'        // Let Cloudinary choose best format
-        }
-      ];
+    // For PDFs, extract page 1 only
+    if (isPDF) {
+      uploadOptions.pages = true; // Enable page extraction
+      uploadOptions.transformation[0].page = 1; // First page only
     }
 
     const result = await cloudinary.uploader.upload(uploadData, uploadOptions);
