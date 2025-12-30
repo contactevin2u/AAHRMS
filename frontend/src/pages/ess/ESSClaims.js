@@ -16,8 +16,10 @@ function ESSClaims() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedReceipt, setCapturedReceipt] = useState(null);
+  const [receiptType, setReceiptType] = useState(null); // 'image' or 'pdf'
   const [processingImage, setProcessingImage] = useState(false);
 
   const [form, setForm] = useState({
@@ -120,11 +122,13 @@ function ESSClaims() {
       console.log(`Receipt scanned: ${sizeKB} KB`);
 
       setCapturedReceipt(compressedDataUrl);
+      setReceiptType('image');
       setForm(prev => ({ ...prev, receipt_url: compressedDataUrl }));
       stopCamera();
     } catch (err) {
       console.error('Compression error:', err);
       setCapturedReceipt(rawDataUrl);
+      setReceiptType('image');
       setForm(prev => ({ ...prev, receipt_url: rawDataUrl }));
       stopCamera();
     } finally {
@@ -132,14 +136,95 @@ function ESSClaims() {
     }
   };
 
+  // Handle file upload (image or PDF)
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setProcessingImage(true);
+
+    const isPDF = file.type === 'application/pdf';
+    const isImage = file.type.startsWith('image/');
+
+    if (!isPDF && !isImage) {
+      alert('Please upload an image or PDF file');
+      setProcessingImage(false);
+      return;
+    }
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be less than 10MB');
+      setProcessingImage(false);
+      return;
+    }
+
+    try {
+      if (isPDF) {
+        // For PDF, convert to base64 directly (no compression)
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64 = event.target.result;
+          setCapturedReceipt(base64);
+          setReceiptType('pdf');
+          setForm(prev => ({ ...prev, receipt_url: base64 }));
+          setProcessingImage(false);
+        };
+        reader.onerror = () => {
+          alert('Failed to read PDF file');
+          setProcessingImage(false);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // For images, compress while maintaining text clarity
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const rawDataUrl = event.target.result;
+          try {
+            const compressedDataUrl = await compressReceiptPhoto(rawDataUrl);
+            const sizeKB = getBase64SizeKB(compressedDataUrl);
+            console.log(`Receipt uploaded: ${sizeKB} KB`);
+
+            setCapturedReceipt(compressedDataUrl);
+            setReceiptType('image');
+            setForm(prev => ({ ...prev, receipt_url: compressedDataUrl }));
+          } catch (err) {
+            console.error('Compression error:', err);
+            setCapturedReceipt(rawDataUrl);
+            setReceiptType('image');
+            setForm(prev => ({ ...prev, receipt_url: rawDataUrl }));
+          } finally {
+            setProcessingImage(false);
+          }
+        };
+        reader.onerror = () => {
+          alert('Failed to read image file');
+          setProcessingImage(false);
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (err) {
+      console.error('File upload error:', err);
+      alert('Failed to process file');
+      setProcessingImage(false);
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const retakeReceipt = () => {
     setCapturedReceipt(null);
+    setReceiptType(null);
     setForm(prev => ({ ...prev, receipt_url: '' }));
     startCamera();
   };
 
   const removeReceipt = () => {
     setCapturedReceipt(null);
+    setReceiptType(null);
     setForm(prev => ({ ...prev, receipt_url: '' }));
   };
 
@@ -152,6 +237,7 @@ function ESSClaims() {
       setShowSubmitModal(false);
       setForm({ category: '', amount: '', description: '', claim_date: '', receipt_url: '' });
       setCapturedReceipt(null);
+      setReceiptType(null);
       stopCamera();
       fetchClaims();
       alert('Claim submitted successfully!');
@@ -336,19 +422,39 @@ function ESSClaims() {
                     />
                   </div>
 
-                  {/* Receipt Photo */}
+                  {/* Receipt Photo/File */}
                   <div className="form-group">
-                    <label>Receipt Photo</label>
+                    <label>Receipt (Photo or PDF)</label>
                     <div className="receipt-section">
-                      {!cameraActive && !capturedReceipt && (
-                        <button type="button" onClick={startCamera} className="scan-btn">
-                          &#x1F4F7; Scan Receipt
-                        </button>
+                      {!cameraActive && !capturedReceipt && !processingImage && (
+                        <div className="receipt-options">
+                          <button type="button" onClick={startCamera} className="scan-btn">
+                            &#x1F4F7; Take Photo
+                          </button>
+                          <button type="button" onClick={() => fileInputRef.current?.click()} className="upload-btn">
+                            &#x1F4C1; Upload File
+                          </button>
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            accept="image/*,application/pdf"
+                            style={{ display: 'none' }}
+                          />
+                          <p className="receipt-hint">Supports images (JPG, PNG) and PDF</p>
+                        </div>
+                      )}
+
+                      {processingImage && !cameraActive && (
+                        <div className="processing-indicator">
+                          <div className="spinner"></div>
+                          <p>Processing...</p>
+                        </div>
                       )}
 
                       {cameraActive && (
                         <div className="camera-view">
-                          <video ref={videoRef} autoPlay playsInline muted />
+                          <video ref={videoRef} autoPlay playsInline muted className="receipt-camera" />
                           <div className="camera-actions">
                             <button type="button" onClick={captureReceipt} className="capture-btn" disabled={processingImage}>
                               {processingImage ? 'Processing...' : 'Capture'}
@@ -360,9 +466,16 @@ function ESSClaims() {
 
                       {capturedReceipt && (
                         <div className="receipt-preview">
-                          <img src={capturedReceipt} alt="Receipt" />
+                          {receiptType === 'pdf' ? (
+                            <div className="pdf-preview">
+                              <span className="pdf-icon">&#x1F4C4;</span>
+                              <span>PDF Receipt Attached</span>
+                            </div>
+                          ) : (
+                            <img src={capturedReceipt} alt="Receipt" />
+                          )}
                           <div className="receipt-actions">
-                            <button type="button" onClick={retakeReceipt}>Retake</button>
+                            <button type="button" onClick={() => fileInputRef.current?.click()}>Change</button>
                             <button type="button" onClick={removeReceipt}>Remove</button>
                           </div>
                         </div>
