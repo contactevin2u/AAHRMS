@@ -315,6 +315,15 @@ export const outletsApi = {
   seed: () => api.post('/outlets/seed'),
 };
 
+// Positions (for both department-based and outlet-based companies)
+export const positionsApi = {
+  getAll: (params) => api.get('/positions', { params }),
+  getOne: (id) => api.get(`/positions/${id}`),
+  create: (data) => api.post('/positions', data),
+  update: (id, data) => api.put(`/positions/${id}`, data),
+  delete: (id) => api.delete(`/positions/${id}`),
+};
+
 // Schedules (for Mimix - outlet-based companies)
 export const schedulesApi = {
   getAll: (params) => api.get('/schedules', { params }),
@@ -329,6 +338,13 @@ export const schedulesApi = {
   getExtraShiftRequests: (params) => api.get('/schedules/extra-shift-requests', { params }),
   approveExtraShift: (id) => api.post(`/schedules/extra-shift-requests/${id}/approve`),
   rejectExtraShift: (id, reason) => api.post(`/schedules/extra-shift-requests/${id}/reject`, { rejection_reason: reason }),
+
+  // Shift Swap Requests (Admin)
+  getSwapRequests: (params) => api.get('/shift-swap', { params }),
+  getPendingSwapRequests: (outletId) => api.get('/shift-swap/pending', { params: { outlet_id: outletId } }),
+  getPendingSwapCount: () => api.get('/shift-swap/pending-count'),
+  approveSwap: (id) => api.post(`/shift-swap/${id}/approve`),
+  rejectSwap: (id, reason) => api.post(`/shift-swap/${id}/reject`, { reason }),
 };
 
 // Company Management
@@ -385,6 +401,7 @@ export const essApi = {
   forgotPassword: (email) => api.post('/ess/forgot-password', { email }),
   resetPassword: (token, newPassword) => api.post('/ess/reset-password', { token, newPassword }),
   setPassword: (data) => api.post('/ess/set-password', data),
+  changePassword: (currentPassword, newPassword) => api.post('/ess/change-password', { currentPassword, newPassword }, essApiConfig),
 
   // Dashboard
   getDashboard: () => api.get('/ess/dashboard', essApiConfig),
@@ -438,6 +455,16 @@ export const essApi = {
   getExtraShiftRequests: (params) => api.get('/ess/schedules/extra-shift-requests', { params, ...essApiConfig }),
   submitExtraShiftRequest: (data) => api.post('/ess/schedules/extra-shift-requests', data, essApiConfig),
   cancelExtraShiftRequest: (id) => api.delete(`/ess/schedules/extra-shift-requests/${id}`, essApiConfig),
+
+  // Shift Swap (Outlet employees)
+  getOutletCalendar: (year, month) => api.get('/ess/shift-swap/outlet-calendar', { params: { year, month }, ...essApiConfig }),
+  getOutletColleagues: () => api.get('/ess/shift-swap/outlet-colleagues', essApiConfig),
+  getMyShifts: () => api.get('/ess/shift-swap/my-shifts', essApiConfig),
+  getColleagueShifts: (colleagueId) => api.get(`/ess/shift-swap/colleague-shifts/${colleagueId}`, essApiConfig),
+  getSwapRequests: () => api.get('/ess/shift-swap/my-requests', essApiConfig),
+  createSwapRequest: (data) => api.post('/ess/shift-swap/request', data, essApiConfig),
+  respondToSwap: (id, response) => api.post(`/ess/shift-swap/${id}/respond`, { response }, essApiConfig),
+  cancelSwapRequest: (id) => api.delete(`/ess/shift-swap/${id}`, essApiConfig),
 };
 
 export default api;

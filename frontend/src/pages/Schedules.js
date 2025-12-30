@@ -37,6 +37,10 @@ function Schedules() {
   const [extraShiftRequests, setExtraShiftRequests] = useState([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
 
+  // Shift swap requests
+  const [swapRequests, setSwapRequests] = useState([]);
+  const [swapsLoading, setSwapsLoading] = useState(false);
+
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth() + 1;
 
@@ -93,8 +97,23 @@ function Schedules() {
   useEffect(() => {
     if (activeTab === 'requests') {
       fetchExtraShiftRequests();
+    } else if (activeTab === 'swaps') {
+      fetchSwapRequests();
     }
   }, [activeTab, fetchExtraShiftRequests]);
+
+  // Fetch swap requests
+  const fetchSwapRequests = useCallback(async () => {
+    try {
+      setSwapsLoading(true);
+      const res = await schedulesApi.getPendingSwapRequests(selectedOutlet || undefined);
+      setSwapRequests(res.data || []);
+    } catch (error) {
+      console.error('Error fetching swap requests:', error);
+    } finally {
+      setSwapsLoading(false);
+    }
+  }, [selectedOutlet]);
 
   // Calendar navigation
   const goToPrevMonth = () => {
@@ -264,6 +283,33 @@ function Schedules() {
     }
   };
 
+  // Handle swap request approval
+  const handleApproveSwap = async (id) => {
+    if (!window.confirm('Approve this shift swap? Both employees\' schedules will be updated.')) return;
+
+    try {
+      await schedulesApi.approveSwap(id);
+      fetchSwapRequests();
+      fetchCalendarData();
+      alert('Shift swap approved. Schedules have been updated.');
+    } catch (error) {
+      console.error('Error approving swap:', error);
+      alert(error.response?.data?.error || 'Failed to approve swap');
+    }
+  };
+
+  const handleRejectSwap = async (id) => {
+    const reason = prompt('Rejection reason (optional):');
+
+    try {
+      await schedulesApi.rejectSwap(id, reason || '');
+      fetchSwapRequests();
+    } catch (error) {
+      console.error('Error rejecting swap:', error);
+      alert(error.response?.data?.error || 'Failed to reject swap');
+    }
+  };
+
   const calendarDays = generateCalendarDays();
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -295,9 +341,18 @@ function Schedules() {
             className={activeTab === 'requests' ? 'active' : ''}
             onClick={() => setActiveTab('requests')}
           >
-            Extra Shift Requests
+            Extra Shifts
             {extraShiftRequests.length > 0 && (
               <span className="badge">{extraShiftRequests.length}</span>
+            )}
+          </button>
+          <button
+            className={activeTab === 'swaps' ? 'active' : ''}
+            onClick={() => setActiveTab('swaps')}
+          >
+            Swap Requests
+            {swapRequests.length > 0 && (
+              <span className="badge">{swapRequests.length}</span>
             )}
           </button>
         </div>
@@ -419,6 +474,74 @@ function Schedules() {
                       <button
                         className="btn-reject"
                         onClick={() => handleRejectExtraShift(request.id)}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Swap Requests */}
+        {activeTab === 'swaps' && (
+          <div className="requests-container">
+            {swapsLoading ? (
+              <div className="loading">Loading swap requests...</div>
+            ) : swapRequests.length === 0 ? (
+              <div className="no-data">No pending shift swap requests</div>
+            ) : (
+              <div className="requests-list">
+                {swapRequests.map(request => (
+                  <div key={request.id} className="request-card swap-request">
+                    <div className="request-info">
+                      <div className="swap-header">
+                        <strong>{request.requester_name}</strong>
+                        <span className="swap-arrow">wants to swap with</span>
+                        <strong>{request.target_name}</strong>
+                      </div>
+                      <div className="swap-details-grid">
+                        <div className="swap-shift-box">
+                          <span className="swap-label">Requester gives:</span>
+                          <span className="swap-date">
+                            {new Date(request.requester_shift_date).toLocaleDateString('en-MY', {
+                              weekday: 'short', day: 'numeric', month: 'short'
+                            })}
+                          </span>
+                          <span className="swap-time">{request.requester_shift_start} - {request.requester_shift_end}</span>
+                        </div>
+                        <div className="swap-shift-box">
+                          <span className="swap-label">Requester takes:</span>
+                          <span className="swap-date">
+                            {new Date(request.target_shift_date).toLocaleDateString('en-MY', {
+                              weekday: 'short', day: 'numeric', month: 'short'
+                            })}
+                          </span>
+                          <span className="swap-time">{request.target_shift_start} - {request.target_shift_end}</span>
+                        </div>
+                      </div>
+                      {request.outlet_name && (
+                        <span className="outlet">{request.outlet_name}</span>
+                      )}
+                      {request.reason && (
+                        <p className="reason">Note: {request.reason}</p>
+                      )}
+                      <small className="swap-status-info">
+                        Both employees agreed. Awaiting your approval.
+                      </small>
+                    </div>
+                    <div className="request-actions">
+                      <button
+                        className="btn-approve"
+                        onClick={() => handleApproveSwap(request.id)}
+                      >
+                        Approve Swap
+                      </button>
+                      <button
+                        className="btn-reject"
+                        onClick={() => handleRejectSwap(request.id)}
                       >
                         Reject
                       </button>

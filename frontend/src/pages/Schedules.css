@@ -309,6 +309,80 @@
   font-size: 12px;
 }
 
+/* Swap Request Styles */
+.swap-request {
+  border-left: 3px solid #8b5cf6;
+}
+
+.swap-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.swap-header strong {
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.swap-arrow {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.swap-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.swap-shift-box {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.swap-shift-box:first-child {
+  border-left: 3px solid #f97316;
+}
+
+.swap-shift-box:last-child {
+  border-left: 3px solid #22c55e;
+}
+
+.swap-label {
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.swap-date {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.swap-time {
+  font-size: 13px;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.swap-status-info {
+  color: #22c55e;
+  font-size: 12px;
+  display: block;
+  margin-top: 8px;
+}
+
 .request-actions {
   display: flex;
   gap: 8px;
@@ -436,6 +510,10 @@
   }
 
   .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .swap-details-grid {
     grid-template-columns: 1fr;
   }
 }

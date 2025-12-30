@@ -1116,6 +1116,51 @@ Human Resources Department
       END $$;
 
       -- =====================================================
+      -- POSITIONS TABLE (normalized job positions)
+      -- =====================================================
+      CREATE TABLE IF NOT EXISTS positions (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+        department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
+        name VARCHAR(100) NOT NULL,
+        is_multi_outlet BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company_id);
+      CREATE INDEX IF NOT EXISTS idx_positions_department ON positions(department_id);
+
+      -- =====================================================
+      -- EMPLOYEE_OUTLETS TABLE (for multi-outlet managers)
+      -- =====================================================
+      CREATE TABLE IF NOT EXISTS employee_outlets (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        outlet_id INTEGER REFERENCES outlets(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(employee_id, outlet_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_employee_outlets_employee ON employee_outlets(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_employee_outlets_outlet ON employee_outlets(outlet_id);
+
+      -- Add position_id to employees
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='position_id') THEN
+          ALTER TABLE employees ADD COLUMN position_id INTEGER REFERENCES positions(id);
+        END IF;
+      END $$;
+
+      -- Add must_change_password flag to employees (for first login with IC)
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='must_change_password') THEN
+          ALTER TABLE employees ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE;
+        END IF;
+      END $$;
+
+      -- =====================================================
       -- CLOCK-IN RECORDS TABLE (for attendance)
       -- =====================================================
       CREATE TABLE IF NOT EXISTS clock_in_records (
@@ -1340,6 +1385,29 @@ Human Resources Department
       CREATE INDEX IF NOT EXISTS idx_schedule_audit_schedule ON schedule_audit_logs(schedule_id);
       CREATE INDEX IF NOT EXISTS idx_schedule_audit_employee ON schedule_audit_logs(employee_id);
       CREATE INDEX IF NOT EXISTS idx_schedule_audit_action ON schedule_audit_logs(action);
+
+      -- Shift swap requests table (for outlet employees to swap shifts)
+      CREATE TABLE IF NOT EXISTS shift_swap_requests (
+        id SERIAL PRIMARY KEY,
+        outlet_id INTEGER REFERENCES outlets(id),
+        requester_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        requester_shift_id INTEGER REFERENCES schedules(id) ON DELETE CASCADE,
+        target_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        target_shift_id INTEGER REFERENCES schedules(id) ON DELETE CASCADE,
+        status VARCHAR(20) DEFAULT 'pending_target',
+        target_response VARCHAR(20),
+        target_responded_at TIMESTAMP,
+        admin_response VARCHAR(20),
+        admin_id INTEGER REFERENCES admin_users(id),
+        admin_responded_at TIMESTAMP,
+        reason TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_swap_outlet ON shift_swap_requests(outlet_id);
+      CREATE INDEX IF NOT EXISTS idx_swap_requester ON shift_swap_requests(requester_id);
+      CREATE INDEX IF NOT EXISTS idx_swap_target ON shift_swap_requests(target_id);
+      CREATE INDEX IF NOT EXISTS idx_swap_status ON shift_swap_requests(status);
     `);
     console.log('Database tables initialized');
   } catch (err) {

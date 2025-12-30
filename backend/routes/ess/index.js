@@ -20,6 +20,7 @@ const dashboardRoutes = require('./dashboard');
 const clockinRoutes = require('./clockin');
 const benefitsRoutes = require('./benefits');
 const schedulesRoutes = require('./schedules');
+const shiftSwapRoutes = require('./shiftSwap');
 
 // Mount sub-routes
 // Auth routes (login, password reset, etc.) - no prefix needed
@@ -54,5 +55,8 @@ router.use('/benefits', benefitsRoutes);
 
 // Schedules routes (Mimix/outlet-based companies)
 router.use('/schedules', schedulesRoutes);
+
+// Shift Swap routes (outlet employees can swap shifts)
+router.use('/shift-swap', shiftSwapRoutes);
 
 module.exports = router;
