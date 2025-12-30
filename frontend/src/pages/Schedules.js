@@ -213,7 +213,11 @@ function Schedules() {
       fetchCalendarData();
     } catch (error) {
       console.error('Error saving schedule:', error);
-      alert(error.response?.data?.error || 'Failed to save schedule');
+      const errData = error.response?.data;
+      const errMsg = errData?.details
+        ? `${errData.error}: ${errData.details}`
+        : (errData?.error || 'Failed to save schedule');
+      alert(errMsg);
     }
   };
 

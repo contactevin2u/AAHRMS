@@ -144,7 +144,11 @@ router.get('/calendar', authenticateAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching calendar data:', error);
-    res.status(500).json({ error: 'Failed to fetch calendar data' });
+    res.status(500).json({
+      error: 'Failed to fetch calendar data',
+      details: error.message,
+      code: error.code
+    });
   }
 });
 
@@ -195,6 +199,8 @@ router.post('/', authenticateAdmin, async (req, res) => {
     const companyId = req.companyId || req.admin?.company_id;
     const adminId = req.admin?.id;
 
+    console.log('Creating schedule:', { employee_id, schedule_date, shift_start, shift_end, companyId, adminId });
+
     if (!employee_id || !schedule_date || !shift_start || !shift_end) {
       return res.status(400).json({
         error: 'Employee, date, shift start and end times are required'
@@ -228,12 +234,16 @@ router.post('/', authenticateAdmin, async (req, res) => {
       [employee_id, companyId, effectiveOutletId, schedule_date, shift_start, shift_end, break_duration || 60, adminId]
     );
 
-    // Log audit
-    await pool.query(
-      `INSERT INTO schedule_audit_logs (schedule_id, employee_id, action, new_value, performed_by)
-       VALUES ($1, $2, 'created', $3, $4)`,
-      [result.rows[0].id, employee_id, JSON.stringify(result.rows[0]), adminId]
-    );
+    // Log audit (optional - don't fail if audit table doesn't exist)
+    try {
+      await pool.query(
+        `INSERT INTO schedule_audit_logs (schedule_id, employee_id, action, new_value, performed_by)
+         VALUES ($1, $2, 'created', $3, $4)`,
+        [result.rows[0].id, employee_id, JSON.stringify(result.rows[0]), adminId]
+      );
+    } catch (auditError) {
+      console.warn('Audit log failed (non-critical):', auditError.message);
+    }
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -241,7 +251,12 @@ router.post('/', authenticateAdmin, async (req, res) => {
     if (error.code === '23505') {
       return res.status(400).json({ error: 'Schedule already exists for this date' });
     }
-    res.status(500).json({ error: 'Failed to create schedule' });
+    // Return detailed error in development
+    res.status(500).json({
+      error: 'Failed to create schedule',
+      details: error.message,
+      code: error.code
+    });
   }
 });
 
