@@ -96,7 +96,14 @@ function ESSClockIn() {
     setCameraLoading(true);
     setCameraActive(false);
     setError('');
+
     try {
+      // Stop any existing stream first
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
@@ -105,43 +112,31 @@ function ESSClockIn() {
         },
         audio: false
       });
+
       streamRef.current = stream;
-      // State update will trigger useEffect to attach stream
+
+      // Attach stream to video element directly
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('autoplay', '');
+        videoRef.current.setAttribute('playsinline', '');
+        videoRef.current.setAttribute('muted', '');
+
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Video autoplay failed:', playErr);
+        }
+
+        setCameraLoading(false);
+        setCameraActive(true);
+      }
     } catch (err) {
       console.error('Camera error:', err);
       setCameraLoading(false);
       setError('Unable to access camera. Please allow camera permission.');
     }
   };
-
-  // Attach stream to video element when it becomes available
-  useEffect(() => {
-    if (cameraLoading && videoRef.current && streamRef.current) {
-      // Clear any existing stream
-      if (videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-      }
-
-      videoRef.current.srcObject = streamRef.current;
-
-      // For iOS Safari compatibility
-      videoRef.current.setAttribute('autoplay', '');
-      videoRef.current.setAttribute('playsinline', '');
-      videoRef.current.setAttribute('muted', '');
-
-      // Play the video
-      videoRef.current.play()
-        .then(() => {
-          setCameraLoading(false);
-          setCameraActive(true);
-        })
-        .catch(err => {
-          console.error('Video play error:', err);
-          setCameraLoading(false);
-          setCameraActive(true);
-        });
-    }
-  }, [cameraLoading]);
 
   // Stop camera
   const stopCamera = () => {
