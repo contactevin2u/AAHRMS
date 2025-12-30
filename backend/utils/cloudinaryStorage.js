@@ -12,6 +12,12 @@ const cloudinary = require('../config/cloudinary');
 /**
  * Upload attendance photo to Cloudinary
  *
+ * Compression settings for selfies:
+ * - Width: 480px (small, sufficient for face verification)
+ * - Quality: auto:low (maximum compression)
+ * - Format: jpg (best compression for photos)
+ * - Target size: ~20-40KB
+ *
  * @param {string} base64Data - Base64 encoded image (with or without data URI prefix)
  * @param {number} companyId - Company ID
  * @param {number} employeeId - Employee ID
@@ -31,11 +37,16 @@ async function uploadAttendance(base64Data, companyId, employeeId, clockType) {
 
     const result = await cloudinary.uploader.upload(uploadData, {
       public_id: publicId,
-      resource_type: 'auto',
+      resource_type: 'image',
       overwrite: true,
-      folder: '', // Already included in public_id
+      folder: '',
       transformation: [
-        { quality: 'auto:low', fetch_format: 'auto' } // Optimize for smaller size
+        {
+          width: 480,
+          crop: 'limit',        // Only shrink if larger, don't upscale
+          quality: 'auto:low',  // Maximum compression
+          fetch_format: 'jpg'   // Force JPG for best compression
+        }
       ]
     });
 
@@ -49,6 +60,13 @@ async function uploadAttendance(base64Data, companyId, employeeId, clockType) {
 /**
  * Upload claim receipt to Cloudinary (supports images and PDFs)
  *
+ * Compression settings for receipts:
+ * - Width: 1200px (large enough for text readability)
+ * - Quality: auto:good (balanced compression, text stays clear)
+ * - Format: auto (keeps PDF as PDF, images as optimal format)
+ * - Flags: preserve_transparency (for PNG receipts)
+ * - Target size: ~100-200KB, text still readable
+ *
  * @param {string} base64Data - Base64 encoded file (with or without data URI prefix)
  * @param {number} companyId - Company ID
  * @param {number} employeeId - Employee ID
@@ -59,25 +77,47 @@ async function uploadClaim(base64Data, companyId, employeeId, claimId) {
   try {
     // Ensure proper data URI format
     let uploadData = base64Data;
+    let isPDF = false;
+
     if (!base64Data.startsWith('data:')) {
       // Try to detect type from base64 header
       if (base64Data.startsWith('JVBERi')) {
         // PDF magic bytes in base64
         uploadData = `data:application/pdf;base64,${base64Data}`;
+        isPDF = true;
       } else {
         uploadData = `data:image/jpeg;base64,${base64Data}`;
       }
+    } else {
+      // Check if it's a PDF from the data URI
+      isPDF = base64Data.includes('application/pdf');
     }
 
     const timestamp = Date.now();
     const publicId = `hrms/claims/${companyId}/${employeeId}/claim_${claimId || timestamp}`;
 
-    const result = await cloudinary.uploader.upload(uploadData, {
+    // Different settings for PDF vs images
+    const uploadOptions = {
       public_id: publicId,
-      resource_type: 'auto', // Handles both images and PDFs
+      resource_type: 'auto',
       overwrite: true,
       folder: ''
-    });
+    };
+
+    // Only apply image transformations for non-PDF files
+    if (!isPDF) {
+      uploadOptions.transformation = [
+        {
+          width: 1200,
+          crop: 'limit',              // Only shrink if larger
+          quality: 'auto:good',       // Good quality for text readability
+          flags: 'preserve_transparency', // Keep transparency for PNGs
+          fetch_format: 'auto'        // Let Cloudinary choose best format
+        }
+      ];
+    }
+
+    const result = await cloudinary.uploader.upload(uploadData, uploadOptions);
 
     return result.secure_url;
   } catch (error) {
