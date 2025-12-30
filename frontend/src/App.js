@@ -24,6 +24,7 @@ import Settings from './pages/Settings';
 import SalesEntry from './pages/SalesEntry';
 import Attendance from './pages/Attendance';
 import BenefitsInKind from './pages/BenefitsInKind';
+import Analytics from './pages/Analytics';
 // Employee Self-Service (ESS) imports - Legacy
 import EmployeeLogin from './pages/EmployeeLogin';
 import EmployeeDashboard from './pages/EmployeeDashboard';
@@ -249,6 +250,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Schedules />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/analytics"
+          element={
+            <ProtectedRoute>
+              <Analytics />
             </ProtectedRoute>
           }
         />

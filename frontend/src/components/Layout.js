@@ -201,6 +201,11 @@ function Layout({ children }) {
             <span>Dashboard</span>
           </NavLink>
 
+          <NavLink to="/admin/analytics" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+            <span className="nav-icon">📈</span>
+            <span>Analytics</span>
+          </NavLink>
+
           {/* PEOPLE SECTION */}
           <div className="nav-section">
             <button className={`section-header ${expandedSection === 'people' ? 'expanded' : ''}`} onClick={() => toggleSection('people')}>
