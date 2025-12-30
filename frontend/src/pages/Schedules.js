@@ -231,7 +231,11 @@ function Schedules() {
       fetchCalendarData();
     } catch (error) {
       console.error('Error deleting schedule:', error);
-      alert(error.response?.data?.error || 'Failed to delete schedule');
+      const errData = error.response?.data;
+      const errMsg = errData?.details
+        ? `${errData.error}: ${errData.details}`
+        : (errData?.error || 'Failed to delete schedule');
+      alert(errMsg);
     }
   };
 

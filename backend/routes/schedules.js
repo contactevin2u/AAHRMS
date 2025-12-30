@@ -409,7 +409,13 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
     const companyId = getCompanyFilter(req);
     const adminId = req.admin?.id;
 
-    // Get existing schedule
+    console.log('Deleting schedule:', { id, companyId, adminId });
+
+    // Get existing schedule - first without company filter to see if it exists at all
+    const allCheck = await pool.query('SELECT * FROM schedules WHERE id = $1', [id]);
+    console.log('Schedule lookup result:', allCheck.rows.length ? allCheck.rows[0] : 'not found');
+
+    // Get existing schedule with company filter
     let checkQuery = 'SELECT * FROM schedules WHERE id = $1';
     let checkParams = [id];
     if (companyId !== null) {
@@ -419,6 +425,13 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
 
     const existing = await pool.query(checkQuery, checkParams);
     if (existing.rows.length === 0) {
+      // Return more details about why not found
+      if (allCheck.rows.length > 0) {
+        return res.status(404).json({
+          error: 'Schedule not found',
+          details: `Schedule exists (company_id: ${allCheck.rows[0].company_id}) but your company filter is: ${companyId}`
+        });
+      }
       return res.status(404).json({ error: 'Schedule not found' });
     }
 
@@ -431,12 +444,16 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
 
     await pool.query('DELETE FROM schedules WHERE id = $1', [id]);
 
-    // Log audit
-    await pool.query(
-      `INSERT INTO schedule_audit_logs (schedule_id, employee_id, action, old_value, reason, performed_by)
-       VALUES ($1, $2, 'deleted', $3, 'Manual deletion', $4)`,
-      [id, schedule.employee_id, JSON.stringify(schedule), adminId]
-    );
+    // Log audit (optional)
+    try {
+      await pool.query(
+        `INSERT INTO schedule_audit_logs (schedule_id, employee_id, action, old_value, reason, performed_by)
+         VALUES ($1, $2, 'deleted', $3, 'Manual deletion', $4)`,
+        [id, schedule.employee_id, JSON.stringify(schedule), adminId]
+      );
+    } catch (auditErr) {
+      console.warn('Audit log failed:', auditErr.message);
+    }
 
     res.json({ message: 'Schedule deleted successfully' });
   } catch (error) {
