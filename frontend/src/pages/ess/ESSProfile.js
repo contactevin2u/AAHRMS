@@ -3,6 +3,25 @@ import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import './ESSProfile.css';
 
+// Field labels for display
+const FIELD_LABELS = {
+  name: 'Full Name',
+  ic_number: 'IC Number',
+  date_of_birth: 'Date of Birth',
+  phone: 'Phone',
+  address: 'Address',
+  email: 'Email',
+  bank_name: 'Bank Name',
+  bank_account_no: 'Account Number',
+  bank_account_holder: 'Account Holder',
+  epf_number: 'EPF Number',
+  socso_number: 'SOCSO Number',
+  tax_number: 'Tax Number (LHDN)',
+  marital_status: 'Marital Status',
+  spouse_working: 'Spouse Working',
+  children_count: 'Number of Children'
+};
+
 function ESSProfile() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -21,14 +40,7 @@ function ESSProfile() {
     try {
       const res = await essApi.getProfile();
       setProfile(res.data);
-      setEditForm({
-        name: res.data.name || '',
-        email: res.data.email || '',
-        phone: res.data.phone || '',
-        ic_number: res.data.ic_number || '',
-        date_of_birth: res.data.date_of_birth ? res.data.date_of_birth.split('T')[0] : '',
-        address: res.data.address || ''
-      });
+      initEditForm(res.data);
     } catch (err) {
       console.error('Error fetching profile:', err);
       setError('Failed to load profile');
@@ -37,9 +49,31 @@ function ESSProfile() {
     }
   };
 
+  const initEditForm = (data) => {
+    setEditForm({
+      name: data.name || '',
+      email: data.email || '',
+      phone: data.phone || '',
+      date_of_birth: data.date_of_birth ? data.date_of_birth.split('T')[0] : '',
+      address: data.address || '',
+      bank_name: data.bank_name || '',
+      bank_account_no: data.bank_account_no || '',
+      bank_account_holder: data.bank_account_holder || '',
+      epf_number: data.epf_number || '',
+      socso_number: data.socso_number || '',
+      tax_number: data.tax_number || '',
+      marital_status: data.marital_status || 'single',
+      spouse_working: data.spouse_working || false,
+      children_count: data.children_count || 0
+    });
+  };
+
   const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditForm(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setEditForm(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
   const handleSave = async () => {
@@ -47,8 +81,11 @@ function ESSProfile() {
     setSaveError('');
     setSaveSuccess('');
     try {
-      await essApi.updateProfile(editForm);
-      setSaveSuccess('Profile updated successfully!');
+      const res = await essApi.updateProfile(editForm);
+      const message = res.data.profile_status?.complete
+        ? 'Profile completed and saved!'
+        : 'Profile updated successfully!';
+      setSaveSuccess(message);
       setIsEditing(false);
       fetchProfile();
       setTimeout(() => setSaveSuccess(''), 3000);
@@ -62,14 +99,7 @@ function ESSProfile() {
 
   const handleCancel = () => {
     setIsEditing(false);
-    setEditForm({
-      name: profile.name || '',
-      email: profile.email || '',
-      phone: profile.phone || '',
-      ic_number: profile.ic_number || '',
-      date_of_birth: profile.date_of_birth ? profile.date_of_birth.split('T')[0] : '',
-      address: profile.address || ''
-    });
+    initEditForm(profile);
     setSaveError('');
   };
 
@@ -112,6 +142,31 @@ function ESSProfile() {
     return <span className={`probation-badge ${s.class}`}>{s.label}</span>;
   };
 
+  // Check if a field is editable
+  const isFieldEditable = (fieldName) => {
+    if (!profile?.profile_status) return false;
+    return profile.profile_status.editable_fields?.includes(fieldName);
+  };
+
+  // Check if a field is missing (required but not filled)
+  const isFieldMissing = (fieldName) => {
+    if (!profile?.profile_status) return false;
+    return profile.profile_status.missing_fields?.includes(fieldName);
+  };
+
+  // Calculate completion progress
+  const getCompletionProgress = () => {
+    if (!profile?.profile_status) return { percent: 0, filled: 0, total: 10 };
+    const missing = profile.profile_status.missing_fields?.length || 0;
+    const total = 10; // Total required fields
+    const filled = total - missing;
+    return {
+      percent: Math.round((filled / total) * 100),
+      filled,
+      total
+    };
+  };
+
   if (loading) {
     return (
       <ESSLayout>
@@ -134,33 +189,79 @@ function ESSProfile() {
     );
   }
 
+  const profileStatus = profile?.profile_status;
+  const isProfileComplete = profileStatus?.complete;
+  const progress = getCompletionProgress();
+
   return (
     <ESSLayout>
       <div className="ess-profile">
         {/* Header */}
         <div className="profile-header">
           <div className="profile-avatar">
-            {profile.name?.charAt(0).toUpperCase()}
+            {profile.name?.charAt(0)?.toUpperCase() || '?'}
           </div>
           <div className="profile-title">
-            <h1>{profile.name}</h1>
+            <h1>{profile.name || 'New Employee'}</h1>
             <p className="employee-id">{profile.employee_id}</p>
             <p className="position">{profile.position || 'Employee'}</p>
             {getStatusBadge(profile.status)}
           </div>
         </div>
 
+        {/* Profile Completion Banner */}
+        {!isProfileComplete && (
+          <div className="profile-completion-banner">
+            <div className="banner-content">
+              <div className="banner-icon">!</div>
+              <div className="banner-text">
+                <h3>Complete Your Profile</h3>
+                <p>Please fill in your personal information to complete your profile.</p>
+                {profileStatus?.deadline && (
+                  <p className="deadline">
+                    Deadline: {formatDate(profileStatus.deadline)}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${progress.percent}%` }}></div>
+            </div>
+            <div className="progress-text">
+              {progress.filled} of {progress.total} required fields completed ({progress.percent}%)
+            </div>
+            {profileStatus?.missing_fields?.length > 0 && (
+              <div className="missing-fields">
+                <strong>Missing:</strong> {profileStatus.missing_fields.map(f => FIELD_LABELS[f] || f).join(', ')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Profile Verified Badge */}
+        {isProfileComplete && (
+          <div className="profile-verified-banner">
+            <span className="verified-icon">&#10003;</span>
+            <span>Profile Verified</span>
+            {profile.profile_completed_at && (
+              <span className="verified-date">
+                Completed on {formatDate(profile.profile_completed_at)}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Success/Error Messages */}
         {saveSuccess && <div className="save-success">{saveSuccess}</div>}
         {saveError && <div className="save-error">{saveError}</div>}
 
-        {/* Personal Information - Editable by Employee */}
+        {/* Personal Information Section */}
         <section className="profile-section">
           <div className="section-header">
             <h2>Personal Information</h2>
             {!isEditing ? (
               <button className="edit-btn" onClick={() => setIsEditing(true)}>
-                Edit
+                {isProfileComplete ? 'Edit' : 'Complete Profile'}
               </button>
             ) : (
               <div className="edit-actions">
@@ -174,29 +275,52 @@ function ESSProfile() {
             )}
           </div>
 
+          {isProfileComplete && !isEditing && (
+            <p className="section-note">Only phone and address can be edited. Contact HR for other changes.</p>
+          )}
+
           {isEditing ? (
             <div className="edit-form">
-              <div className="form-group">
+              {/* Name */}
+              <div className={`form-group ${isFieldMissing('name') ? 'missing' : ''}`}>
                 <label>Full Name *</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={editForm.name}
-                  onChange={handleEditChange}
-                  required
-                />
+                {isFieldEditable('name') ? (
+                  <input
+                    type="text"
+                    name="name"
+                    value={editForm.name}
+                    onChange={handleEditChange}
+                    required
+                  />
+                ) : (
+                  <div className="locked-field">
+                    <span>{profile.name || '-'}</span>
+                    <span className="lock-icon">&#128274;</span>
+                  </div>
+                )}
               </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={editForm.email}
-                  onChange={handleEditChange}
-                />
+
+              {/* Date of Birth */}
+              <div className={`form-group ${isFieldMissing('date_of_birth') ? 'missing' : ''}`}>
+                <label>Date of Birth *</label>
+                {isFieldEditable('date_of_birth') ? (
+                  <input
+                    type="date"
+                    name="date_of_birth"
+                    value={editForm.date_of_birth}
+                    onChange={handleEditChange}
+                  />
+                ) : (
+                  <div className="locked-field">
+                    <span>{formatDate(profile.date_of_birth)}</span>
+                    <span className="lock-icon">&#128274;</span>
+                  </div>
+                )}
               </div>
-              <div className="form-group">
-                <label>Phone</label>
+
+              {/* Phone */}
+              <div className={`form-group ${isFieldMissing('phone') ? 'missing' : ''}`}>
+                <label>Phone *</label>
                 <input
                   type="tel"
                   name="phone"
@@ -204,27 +328,28 @@ function ESSProfile() {
                   onChange={handleEditChange}
                 />
               </div>
+
+              {/* Email */}
               <div className="form-group">
-                <label>IC Number</label>
-                <input
-                  type="text"
-                  name="ic_number"
-                  value={editForm.ic_number}
-                  onChange={handleEditChange}
-                  placeholder="e.g., 900101-01-1234"
-                />
+                <label>Email</label>
+                {isFieldEditable('email') ? (
+                  <input
+                    type="email"
+                    name="email"
+                    value={editForm.email}
+                    onChange={handleEditChange}
+                  />
+                ) : (
+                  <div className="locked-field">
+                    <span>{profile.email || '-'}</span>
+                    <span className="lock-icon">&#128274;</span>
+                  </div>
+                )}
               </div>
-              <div className="form-group">
-                <label>Date of Birth</label>
-                <input
-                  type="date"
-                  name="date_of_birth"
-                  value={editForm.date_of_birth}
-                  onChange={handleEditChange}
-                />
-              </div>
-              <div className="form-group full-width">
-                <label>Address</label>
+
+              {/* Address */}
+              <div className={`form-group full-width ${isFieldMissing('address') ? 'missing' : ''}`}>
+                <label>Address *</label>
                 <textarea
                   name="address"
                   value={editForm.address}
@@ -232,28 +357,92 @@ function ESSProfile() {
                   rows={3}
                 />
               </div>
+
+              {/* Marital Status */}
+              <div className="form-group">
+                <label>Marital Status</label>
+                {isFieldEditable('marital_status') ? (
+                  <select
+                    name="marital_status"
+                    value={editForm.marital_status}
+                    onChange={handleEditChange}
+                  >
+                    <option value="single">Single</option>
+                    <option value="married">Married</option>
+                    <option value="divorced">Divorced</option>
+                    <option value="widowed">Widowed</option>
+                  </select>
+                ) : (
+                  <div className="locked-field">
+                    <span className="capitalize">{profile.marital_status || '-'}</span>
+                    <span className="lock-icon">&#128274;</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Spouse Working (if married) */}
+              {(editForm.marital_status === 'married' || profile.marital_status === 'married') && (
+                <>
+                  <div className="form-group">
+                    <label>Spouse Working</label>
+                    {isFieldEditable('spouse_working') ? (
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          name="spouse_working"
+                          checked={editForm.spouse_working}
+                          onChange={handleEditChange}
+                        />
+                        Yes, spouse is working
+                      </label>
+                    ) : (
+                      <div className="locked-field">
+                        <span>{profile.spouse_working ? 'Yes' : 'No'}</span>
+                        <span className="lock-icon">&#128274;</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="form-group">
+                    <label>Number of Children</label>
+                    {isFieldEditable('children_count') ? (
+                      <input
+                        type="number"
+                        name="children_count"
+                        min="0"
+                        value={editForm.children_count}
+                        onChange={handleEditChange}
+                      />
+                    ) : (
+                      <div className="locked-field">
+                        <span>{profile.children_count || 0}</span>
+                        <span className="lock-icon">&#128274;</span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="info-grid">
-              <div className="info-item">
+              <div className={`info-item ${isFieldMissing('name') ? 'missing' : ''}`}>
                 <label>Full Name</label>
-                <span>{profile.name || '-'}</span>
+                <span>{profile.name || <em className="empty">Not provided</em>}</span>
               </div>
               <div className="info-item">
                 <label>IC Number</label>
                 <span>{profile.ic_number || '-'}</span>
               </div>
-              <div className="info-item">
+              <div className={`info-item ${isFieldMissing('date_of_birth') ? 'missing' : ''}`}>
                 <label>Date of Birth</label>
-                <span>{formatDate(profile.date_of_birth)}</span>
+                <span>{profile.date_of_birth ? formatDate(profile.date_of_birth) : <em className="empty">Not provided</em>}</span>
               </div>
               <div className="info-item">
                 <label>Email</label>
                 <span>{profile.email || '-'}</span>
               </div>
-              <div className="info-item">
+              <div className={`info-item ${isFieldMissing('phone') ? 'missing' : ''}`}>
                 <label>Phone</label>
-                <span>{profile.phone || '-'}</span>
+                <span>{profile.phone || <em className="empty">Not provided</em>}</span>
               </div>
               <div className="info-item">
                 <label>Marital Status</label>
@@ -271,15 +460,171 @@ function ESSProfile() {
                   </div>
                 </>
               )}
-              <div className="info-item full-width">
+              <div className={`info-item full-width ${isFieldMissing('address') ? 'missing' : ''}`}>
                 <label>Address</label>
-                <span>{profile.address || '-'}</span>
+                <span>{profile.address || <em className="empty">Not provided</em>}</span>
               </div>
             </div>
           )}
         </section>
 
-        {/* Employment Details - Read Only for Employee */}
+        {/* Bank & Payment Information */}
+        <section className="profile-section">
+          <div className="section-header">
+            <h2>Bank & Payment Information</h2>
+            {!isProfileComplete && !isEditing && (
+              <button className="edit-btn small" onClick={() => setIsEditing(true)}>
+                Edit
+              </button>
+            )}
+          </div>
+          {isProfileComplete && (
+            <p className="section-note">Contact HR to update bank details</p>
+          )}
+
+          {isEditing && !isProfileComplete ? (
+            <div className="edit-form">
+              <div className={`form-group ${isFieldMissing('bank_name') ? 'missing' : ''}`}>
+                <label>Bank Name *</label>
+                <select
+                  name="bank_name"
+                  value={editForm.bank_name}
+                  onChange={handleEditChange}
+                >
+                  <option value="">Select bank</option>
+                  <option value="Maybank">Maybank</option>
+                  <option value="CIMB">CIMB</option>
+                  <option value="Public Bank">Public Bank</option>
+                  <option value="RHB">RHB</option>
+                  <option value="Hong Leong">Hong Leong</option>
+                  <option value="AmBank">AmBank</option>
+                  <option value="Bank Islam">Bank Islam</option>
+                  <option value="Bank Rakyat">Bank Rakyat</option>
+                  <option value="OCBC">OCBC</option>
+                  <option value="HSBC">HSBC</option>
+                  <option value="UOB">UOB</option>
+                  <option value="Standard Chartered">Standard Chartered</option>
+                  <option value="Affin Bank">Affin Bank</option>
+                  <option value="Alliance Bank">Alliance Bank</option>
+                  <option value="BSN">BSN</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div className={`form-group ${isFieldMissing('bank_account_no') ? 'missing' : ''}`}>
+                <label>Account Number *</label>
+                <input
+                  type="text"
+                  name="bank_account_no"
+                  value={editForm.bank_account_no}
+                  onChange={handleEditChange}
+                  placeholder="Enter account number"
+                />
+              </div>
+              <div className="form-group">
+                <label>Account Holder Name</label>
+                <input
+                  type="text"
+                  name="bank_account_holder"
+                  value={editForm.bank_account_holder}
+                  onChange={handleEditChange}
+                  placeholder="Name as per bank account"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="info-grid">
+              <div className={`info-item ${isFieldMissing('bank_name') ? 'missing' : ''}`}>
+                <label>Bank Name</label>
+                <span>{profile.bank_name || <em className="empty">Not provided</em>}</span>
+                {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
+              </div>
+              <div className={`info-item ${isFieldMissing('bank_account_no') ? 'missing' : ''}`}>
+                <label>Account Number</label>
+                <span className="mono">{profile.bank_account_no || <em className="empty">Not provided</em>}</span>
+                {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
+              </div>
+              <div className="info-item">
+                <label>Account Holder</label>
+                <span>{profile.bank_account_holder || '-'}</span>
+                {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Tax & Contributions */}
+        <section className="profile-section">
+          <div className="section-header">
+            <h2>Tax & Contributions</h2>
+            {!isProfileComplete && !isEditing && (
+              <button className="edit-btn small" onClick={() => setIsEditing(true)}>
+                Edit
+              </button>
+            )}
+          </div>
+          {isProfileComplete && (
+            <p className="section-note">Contact HR to update statutory details</p>
+          )}
+
+          {isEditing && !isProfileComplete ? (
+            <div className="edit-form">
+              <div className={`form-group ${isFieldMissing('epf_number') ? 'missing' : ''}`}>
+                <label>EPF Number *</label>
+                <input
+                  type="text"
+                  name="epf_number"
+                  value={editForm.epf_number}
+                  onChange={handleEditChange}
+                  placeholder="e.g., 12345678"
+                />
+              </div>
+              <div className={`form-group ${isFieldMissing('socso_number') ? 'missing' : ''}`}>
+                <label>SOCSO Number *</label>
+                <input
+                  type="text"
+                  name="socso_number"
+                  value={editForm.socso_number}
+                  onChange={handleEditChange}
+                  placeholder="e.g., A12345678"
+                />
+              </div>
+              <div className={`form-group ${isFieldMissing('tax_number') ? 'missing' : ''}`}>
+                <label>Tax Number (LHDN) *</label>
+                <input
+                  type="text"
+                  name="tax_number"
+                  value={editForm.tax_number}
+                  onChange={handleEditChange}
+                  placeholder="e.g., SG12345678100"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="info-grid">
+              <div className={`info-item ${isFieldMissing('epf_number') ? 'missing' : ''}`}>
+                <label>EPF Number</label>
+                <span className="mono">{profile.epf_number || <em className="empty">Not provided</em>}</span>
+                {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
+              </div>
+              <div className="info-item">
+                <label>EPF Contribution Type</label>
+                <span className="capitalize">{profile.epf_contribution_type || '-'}</span>
+              </div>
+              <div className={`info-item ${isFieldMissing('socso_number') ? 'missing' : ''}`}>
+                <label>SOCSO Number</label>
+                <span className="mono">{profile.socso_number || <em className="empty">Not provided</em>}</span>
+                {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
+              </div>
+              <div className={`info-item ${isFieldMissing('tax_number') ? 'missing' : ''}`}>
+                <label>Tax Number (LHDN)</label>
+                <span className="mono">{profile.tax_number || <em className="empty">Not provided</em>}</span>
+                {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Employment Details - Always Read Only */}
         <section className="profile-section">
           <h2>Employment Details</h2>
           <p className="section-note">Contact HR to update employment details</p>
@@ -290,7 +635,7 @@ function ESSProfile() {
             </div>
             <div className="info-item">
               <label>Department</label>
-              <span>{profile.department_name || '-'}</span>
+              <span>{profile.department_name || profile.outlet_name || '-'}</span>
             </div>
             <div className="info-item">
               <label>Position</label>
@@ -318,66 +663,10 @@ function ESSProfile() {
                 <span>{formatDate(profile.probation_end_date)}</span>
               </div>
             )}
-            {profile.confirmation_date && (
-              <div className="info-item">
-                <label>Confirmation Date</label>
-                <span>{formatDate(profile.confirmation_date)}</span>
-              </div>
-            )}
-            {profile.resign_date && (
-              <div className="info-item">
-                <label>Resign Date</label>
-                <span>{formatDate(profile.resign_date)}</span>
-              </div>
-            )}
           </div>
         </section>
 
-        {/* Bank & Payment Information - Read Only */}
-        <section className="profile-section">
-          <h2>Bank & Payment Information</h2>
-          <p className="section-note">Contact HR to update bank details</p>
-          <div className="info-grid">
-            <div className="info-item">
-              <label>Bank Name</label>
-              <span>{profile.bank_name || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>Account Number</label>
-              <span className="mono">{profile.bank_account_no || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>Account Holder</label>
-              <span>{profile.bank_account_holder || '-'}</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Tax & Contributions - Read Only */}
-        <section className="profile-section">
-          <h2>Tax & Contributions</h2>
-          <p className="section-note">Contact HR to update statutory details</p>
-          <div className="info-grid">
-            <div className="info-item">
-              <label>EPF Number</label>
-              <span className="mono">{profile.epf_number || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>EPF Contribution Type</label>
-              <span className="capitalize">{profile.epf_contribution_type || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>SOCSO Number</label>
-              <span className="mono">{profile.socso_number || '-'}</span>
-            </div>
-            <div className="info-item">
-              <label>Tax Number (LHDN)</label>
-              <span className="mono">{profile.tax_number || '-'}</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Salary & Earnings - Read Only */}
+        {/* Salary & Earnings - Always Read Only */}
         <section className="profile-section">
           <h2>Salary & Earnings</h2>
           <div className="info-grid">
@@ -399,30 +688,6 @@ function ESSProfile() {
               <div className="info-item">
                 <label>Incentive</label>
                 <span className="amount">{formatCurrency(profile.default_incentive)}</span>
-              </div>
-            )}
-            {profile.commission_rate > 0 && (
-              <div className="info-item">
-                <label>Commission Rate</label>
-                <span>{profile.commission_rate}%</span>
-              </div>
-            )}
-            {profile.ot_rate > 0 && (
-              <div className="info-item">
-                <label>OT Rate</label>
-                <span>{formatCurrency(profile.ot_rate)}/hr</span>
-              </div>
-            )}
-            {profile.per_trip_rate > 0 && (
-              <div className="info-item">
-                <label>Per Trip Rate</label>
-                <span>{formatCurrency(profile.per_trip_rate)}</span>
-              </div>
-            )}
-            {profile.outstation_rate > 0 && (
-              <div className="info-item">
-                <label>Outstation Rate</label>
-                <span>{formatCurrency(profile.outstation_rate)}</span>
               </div>
             )}
           </div>

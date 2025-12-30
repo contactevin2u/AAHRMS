@@ -7,6 +7,7 @@ import './ESSDashboard.css';
 function ESSDashboard() {
   const [employeeInfo, setEmployeeInfo] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
+  const [profileStatus, setProfileStatus] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,6 +16,7 @@ function ESSDashboard() {
       setEmployeeInfo(JSON.parse(storedInfo));
     }
     fetchDashboard();
+    fetchProfileStatus();
   }, []);
 
   const fetchDashboard = async () => {
@@ -25,6 +27,15 @@ function ESSDashboard() {
       console.error('Error fetching dashboard:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProfileStatus = async () => {
+    try {
+      const res = await essApi.getProfileCompletionStatus();
+      setProfileStatus(res.data);
+    } catch (error) {
+      console.error('Error fetching profile status:', error);
     }
   };
 
@@ -53,9 +64,35 @@ function ESSDashboard() {
       <div className="ess-dashboard">
         {/* Welcome Section */}
         <div className="welcome-section">
-          <h1>{getGreeting()}, {employeeInfo?.name?.split(' ')[0]}!</h1>
+          <h1>{getGreeting()}, {employeeInfo?.name?.split(' ')[0] || 'there'}!</h1>
           <p>{new Date().toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         </div>
+
+        {/* Profile Completion Reminder */}
+        {profileStatus && !profileStatus.complete && (
+          <Link to="/ess/profile" className="profile-reminder-card">
+            <div className="reminder-icon">!</div>
+            <div className="reminder-content">
+              <h3>Complete Your Profile</h3>
+              <p>
+                {profileStatus.completed_count} of {profileStatus.total_required} required fields completed
+              </p>
+              {profileStatus.days_remaining !== null && profileStatus.days_remaining > 0 && (
+                <span className="reminder-deadline">{profileStatus.days_remaining} days remaining</span>
+              )}
+              {profileStatus.days_remaining !== null && profileStatus.days_remaining <= 0 && (
+                <span className="reminder-deadline overdue">Overdue - Please complete now</span>
+              )}
+            </div>
+            <div className="reminder-progress">
+              <div
+                className="progress-fill"
+                style={{ width: `${Math.round((profileStatus.completed_count / profileStatus.total_required) * 100)}%` }}
+              ></div>
+            </div>
+            <span className="reminder-arrow">&#8594;</span>
+          </Link>
+        )}
 
         {/* Quick Actions */}
         <div className="quick-actions">

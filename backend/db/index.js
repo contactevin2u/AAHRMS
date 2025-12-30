@@ -369,6 +369,13 @@ const initDb = async () => {
           -- Migrate existing employees to default company
           UPDATE employees SET company_id = 1 WHERE company_id IS NULL;
         END IF;
+        -- Profile completion tracking (employee self-onboarding)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='profile_completed') THEN
+          ALTER TABLE employees ADD COLUMN profile_completed BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='profile_completed_at') THEN
+          ALTER TABLE employees ADD COLUMN profile_completed_at TIMESTAMP;
+        END IF;
       END $$;
 
       CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id);

@@ -146,16 +146,32 @@ const EmployeeForm = ({
           )}
         </div>
         <div className="form-group">
-          <label>Full Name *</label>
+          <label>Full Name</label>
           <input
             type="text"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Full name"
-            required
+            placeholder="Employee will complete via ESS"
           />
+          <small style={{ color: '#64748b', fontSize: '11px' }}>Optional - Employee can fill via ESS</small>
         </div>
       </div>
+
+      {/* Info Banner for New Employee Onboarding */}
+      {!editingEmployee && (
+        <div style={{
+          background: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          marginBottom: '16px',
+          fontSize: '13px',
+          color: '#1e40af'
+        }}>
+          <strong>Quick Setup:</strong> Only Employee ID, IC Number, and Department/Outlet are required.
+          The employee will complete remaining fields (name, bank, statutory info) via ESS after logging in with their IC number.
+        </div>
+      )}
 
       <div className="form-row">
         {usesOutlets ? (
@@ -221,13 +237,15 @@ const EmployeeForm = ({
 
       <div className="form-row">
         <div className="form-group">
-          <label>IC Number</label>
+          <label>IC Number *</label>
           <input
             type="text"
             value={form.ic_number}
             onChange={(e) => setForm({ ...form, ic_number: e.target.value })}
             placeholder="e.g. 901234-56-7890"
+            required
           />
+          <small style={{ color: '#64748b', fontSize: '11px' }}>Required for employee login</small>
         </div>
         <div className="form-group">
           <label>Gender</label>

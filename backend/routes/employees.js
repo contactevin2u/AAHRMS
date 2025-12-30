@@ -125,7 +125,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
     const sanitizedBody = sanitizeEmployeeData(req.body);
 
     const {
-      employee_id, name, email, phone, ic_number, department_id, position, join_date,
+      employee_id, name, email, phone, ic_number, department_id, outlet_id, position, join_date,
       address, bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
       marital_status, spouse_working, children_count, date_of_birth,
@@ -143,12 +143,17 @@ router.post('/', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Company context required. Please select a company.' });
     }
 
-    // Validate required fields: employee_id, name, ic_number, phone, department_id
-    if (!employee_id || !name || !department_id) {
-      return res.status(400).json({ error: 'Employee ID, name, and department are required' });
+    // Validate required fields for employee creation
+    // Minimal fields: employee_id, ic_number, and either department_id or outlet_id
+    // Employee will complete remaining profile fields via ESS
+    if (!employee_id) {
+      return res.status(400).json({ error: 'Employee ID is required' });
     }
-    if (!ic_number || !phone) {
-      return res.status(400).json({ error: 'IC Number and Phone are required' });
+    if (!ic_number) {
+      return res.status(400).json({ error: 'IC Number is required (for employee login)' });
+    }
+    if (!department_id && !outlet_id) {
+      return res.status(400).json({ error: 'Department or Outlet is required' });
     }
 
     // Calculate probation end date if join_date and probation_months are provided
@@ -170,7 +175,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO employees (
-        employee_id, name, email, phone, ic_number, department_id, position, join_date,
+        employee_id, name, email, phone, ic_number, department_id, outlet_id, position, join_date,
         address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
         marital_status, spouse_working, children_count, date_of_birth,
@@ -178,20 +183,20 @@ router.post('/', authenticateAdmin, async (req, res) => {
         default_bonus, default_incentive,
         employment_type, probation_months, probation_end_date, probation_status,
         salary_before_confirmation, salary_after_confirmation, increment_amount,
-        company_id
+        company_id, profile_completed
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38)
        RETURNING *`,
       [
-        employee_id, name, email, phone, ic_number, department_id, position, join_date,
-        address, bank_name, bank_account_no, bank_account_holder,
-        epf_number, socso_number, tax_number, epf_contribution_type || 'normal',
-        marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth,
+        employee_id, name || null, email || null, phone || null, ic_number, department_id || null, outlet_id || null, position || null, join_date || null,
+        address || null, bank_name || null, bank_account_no || null, bank_account_holder || null,
+        epf_number || null, socso_number || null, tax_number || null, epf_contribution_type || 'normal',
+        marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth || null,
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
         default_bonus || 0, default_incentive || 0,
         empType, probMonths, probation_end_date, empType === 'confirmed' ? 'confirmed' : 'ongoing',
         salary_before_confirmation || null, salary_after_confirmation || null, calcIncrement || null,
-        companyId
+        companyId, false
       ]
     );
 

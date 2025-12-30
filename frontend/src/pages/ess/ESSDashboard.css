@@ -265,9 +265,108 @@
   color: #94a3b8;
 }
 
+/* Profile Reminder Card */
+.profile-reminder-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 1px solid #fbbf24;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.profile-reminder-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+}
+
+.profile-reminder-card .reminder-icon {
+  width: 40px;
+  height: 40px;
+  background: #f59e0b;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.profile-reminder-card .reminder-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-reminder-card .reminder-content h3 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.profile-reminder-card .reminder-content p {
+  margin: 0;
+  font-size: 13px;
+  color: #a16207;
+}
+
+.profile-reminder-card .reminder-deadline {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #b45309;
+  font-weight: 500;
+}
+
+.profile-reminder-card .reminder-deadline.overdue {
+  color: #dc2626;
+}
+
+.profile-reminder-card .reminder-progress {
+  width: 60px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.profile-reminder-card .reminder-progress .progress-fill {
+  height: 100%;
+  background: #059669;
+  border-radius: 3px;
+}
+
+.profile-reminder-card .reminder-arrow {
+  color: #92400e;
+  font-size: 20px;
+  font-weight: 600;
+}
+
 /* Responsive */
 @media (min-width: 480px) {
   .quick-actions {
     grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 400px) {
+  .profile-reminder-card {
+    flex-wrap: wrap;
+  }
+
+  .profile-reminder-card .reminder-progress {
+    width: 100%;
+    order: 5;
+    margin-top: 8px;
+  }
+
+  .profile-reminder-card .reminder-arrow {
+    display: none;
   }
 }
