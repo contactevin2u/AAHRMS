@@ -18,6 +18,7 @@ const Attendance = () => {
   });
   const [editModal, setEditModal] = useState(null);
   const [gpsModal, setGpsModal] = useState(null); // For showing GPS coordinates
+  const [photoModal, setPhotoModal] = useState(null); // For showing selfie photos
 
   const admin = JSON.parse(localStorage.getItem('admin') || '{}');
   const isSupervisor = admin.role === 'supervisor';
@@ -168,6 +169,16 @@ const Attendance = () => {
     setGpsModal(record);
   };
 
+  // Show photo modal with selfie images
+  const showPhotoDetails = (record) => {
+    setPhotoModal(record);
+  };
+
+  // Check if record has any photos
+  const hasPhotos = (record) => {
+    return record.photo_in_1 || record.photo_out_1 || record.photo_in_2 || record.photo_out_2;
+  };
+
   return (
     <Layout>
     <div className="attendance-page">
@@ -263,6 +274,7 @@ const Attendance = () => {
                 <th className="time-col">Clock Out 1<br/><small>Break</small></th>
                 <th className="time-col">Clock In 2<br/><small>Return</small></th>
                 <th className="time-col">Clock Out 2<br/><small>End Work</small></th>
+                <th>Selfie</th>
                 <th>GPS Location</th>
                 <th>Total Hours</th>
                 <th>OT Hours</th>
@@ -273,7 +285,7 @@ const Attendance = () => {
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={isSupervisor ? 12 : 13} className="no-data">
+                  <td colSpan={isSupervisor ? 13 : 14} className="no-data">
                     No attendance records found
                   </td>
                 </tr>
@@ -304,6 +316,19 @@ const Attendance = () => {
                     <td className="time-cell">{formatTime(record.clock_in_2)}</td>
                     <td className="time-cell">
                       {formatTime(record.clock_out_2)}
+                    </td>
+                    <td className="photo-cell">
+                      {hasPhotos(record) ? (
+                        <button
+                          className="photo-btn"
+                          onClick={() => showPhotoDetails(record)}
+                          title="View Selfie Photos"
+                        >
+                          📷 View
+                        </button>
+                      ) : (
+                        <span className="no-photo">-</span>
+                      )}
                     </td>
                     <td className="gps-cell">
                       {(record.location_in_1 || record.location_out_2) ? (
@@ -362,6 +387,10 @@ const Attendance = () => {
       )}
 
       <div className="attendance-legend">
+        <div className="legend-item">
+          <span className="legend-icon">📷</span>
+          <span>Selfie photo recorded</span>
+        </div>
         <div className="legend-item">
           <span className="legend-icon">📍</span>
           <span>GPS location recorded</span>
@@ -439,6 +468,94 @@ const Attendance = () => {
 
                 {!gpsModal.location_in_1 && !gpsModal.location_out_2 && (
                   <p className="no-gps-data">No GPS data recorded for this entry</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Modal */}
+      {photoModal && (
+        <div className="modal-overlay" onClick={() => setPhotoModal(null)}>
+          <div className="modal photo-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Selfie Photos</h2>
+              <button className="close-btn" onClick={() => setPhotoModal(null)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div className="photo-record-info">
+                <strong>{photoModal.employee_name}</strong>
+                <span className="photo-date">{formatDate(photoModal.work_date)}</span>
+              </div>
+
+              <div className="photos-grid">
+                {photoModal.photo_in_1 && (
+                  <div className="photo-item">
+                    <div className="photo-label">
+                      <span>Clock In (Start)</span>
+                      <span className="photo-time">{formatTime(photoModal.clock_in_1)}</span>
+                    </div>
+                    <div className="photo-container">
+                      <img
+                        src={photoModal.photo_in_1}
+                        alt="Clock In 1"
+                        onClick={() => window.open(photoModal.photo_in_1, '_blank')}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {photoModal.photo_out_1 && (
+                  <div className="photo-item">
+                    <div className="photo-label">
+                      <span>Clock Out (Break)</span>
+                      <span className="photo-time">{formatTime(photoModal.clock_out_1)}</span>
+                    </div>
+                    <div className="photo-container">
+                      <img
+                        src={photoModal.photo_out_1}
+                        alt="Clock Out 1"
+                        onClick={() => window.open(photoModal.photo_out_1, '_blank')}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {photoModal.photo_in_2 && (
+                  <div className="photo-item">
+                    <div className="photo-label">
+                      <span>Clock In (Return)</span>
+                      <span className="photo-time">{formatTime(photoModal.clock_in_2)}</span>
+                    </div>
+                    <div className="photo-container">
+                      <img
+                        src={photoModal.photo_in_2}
+                        alt="Clock In 2"
+                        onClick={() => window.open(photoModal.photo_in_2, '_blank')}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {photoModal.photo_out_2 && (
+                  <div className="photo-item">
+                    <div className="photo-label">
+                      <span>Clock Out (End)</span>
+                      <span className="photo-time">{formatTime(photoModal.clock_out_2)}</span>
+                    </div>
+                    <div className="photo-container">
+                      <img
+                        src={photoModal.photo_out_2}
+                        alt="Clock Out 2"
+                        onClick={() => window.open(photoModal.photo_out_2, '_blank')}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {!hasPhotos(photoModal) && (
+                  <p className="no-photo-data">No selfie photos recorded for this entry</p>
                 )}
               </div>
             </div>
