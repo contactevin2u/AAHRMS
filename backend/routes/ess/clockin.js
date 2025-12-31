@@ -141,12 +141,19 @@ function timeToMinutes(timeStr) {
 }
 
 function getCurrentTime() {
-  const now = new Date();
-  return now.toTimeString().substring(0, 8); // HH:MM:SS
+  // Use Malaysia timezone (UTC+8)
+  const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' });
+  const malaysiaTime = new Date(now);
+  return malaysiaTime.toTimeString().substring(0, 8); // HH:MM:SS
 }
 
 function getCurrentDate() {
-  return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  // Use Malaysia timezone (UTC+8) for date calculation
+  const malaysiaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
+  const year = malaysiaTime.getFullYear();
+  const month = String(malaysiaTime.getMonth() + 1).padStart(2, '0');
+  const day = String(malaysiaTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`; // YYYY-MM-DD
 }
 
 /**

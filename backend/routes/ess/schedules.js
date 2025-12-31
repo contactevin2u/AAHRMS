@@ -39,7 +39,10 @@ const formatTime = (time) => {
 // Clock-in is ALWAYS allowed - this endpoint just provides schedule info
 router.get('/today', authenticateEmployee, asyncHandler(async (req, res) => {
   const employeeId = req.employee.id;
-  const today = new Date().toISOString().split('T')[0];
+
+  // Use Malaysia timezone (UTC+8) for date calculation
+  const malaysiaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
+  const today = malaysiaTime.toISOString().split('T')[0];
 
   const result = await pool.query(
     `SELECT s.*,
