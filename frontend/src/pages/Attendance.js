@@ -426,6 +426,12 @@ const Attendance = () => {
                       <span className="gps-label">Clock In (Start Work)</span>
                       <span className="gps-time">{formatTime(gpsModal.clock_in_1)}</span>
                     </div>
+                    {gpsModal.address_in_1 && (
+                      <div className="gps-address">
+                        <span className="address-icon">📍</span>
+                        <span className="address-text">{gpsModal.address_in_1}</span>
+                      </div>
+                    )}
                     <div className="gps-coords">
                       <span className="coords-label">Latitude:</span>
                       <span className="coords-value">{parseLocation(gpsModal.location_in_1)?.lat?.toFixed(6) || '-'}</span>
@@ -449,6 +455,12 @@ const Attendance = () => {
                       <span className="gps-label">Clock Out (End Work)</span>
                       <span className="gps-time">{formatTime(gpsModal.clock_out_2)}</span>
                     </div>
+                    {gpsModal.address_out_2 && (
+                      <div className="gps-address">
+                        <span className="address-icon">📍</span>
+                        <span className="address-text">{gpsModal.address_out_2}</span>
+                      </div>
+                    )}
                     <div className="gps-coords">
                       <span className="coords-label">Latitude:</span>
                       <span className="coords-value">{parseLocation(gpsModal.location_out_2)?.lat?.toFixed(6) || '-'}</span>
