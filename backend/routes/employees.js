@@ -990,10 +990,10 @@ router.post('/init-seed-aa-alive', async (req, res) => {
 });
 
 // Quick Add Employee - minimal fields for immediate ESS access
-// Only requires: employee_id, name, ic_number
+// Requires: employee_id, name, ic_number, outlet_id (for Mimix)
 router.post('/quick-add', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, name, ic_number } = req.body;
+    const { employee_id, name, ic_number, outlet_id } = req.body;
 
     // Get company_id from authenticated user
     const companyId = req.companyId;
@@ -1010,6 +1010,11 @@ router.post('/quick-add', authenticateAdmin, async (req, res) => {
     }
     if (!ic_number) {
       return res.status(400).json({ error: 'IC Number is required (used for login)' });
+    }
+
+    // For Mimix (company_id = 3), outlet is required
+    if (companyId === 3 && !outlet_id) {
+      return res.status(400).json({ error: 'Outlet is required for Mimix employees' });
     }
 
     // Check if employee_id already exists in this company
@@ -1031,13 +1036,13 @@ router.post('/quick-add', authenticateAdmin, async (req, res) => {
     // Insert employee with ESS enabled
     const result = await pool.query(
       `INSERT INTO employees (
-        employee_id, name, ic_number, company_id, join_date,
+        employee_id, name, ic_number, company_id, outlet_id, join_date,
         status, ess_enabled, password_hash, must_change_password,
         employment_type, probation_months, profile_completed
       )
-       VALUES ($1, $2, $3, $4, $5, 'active', true, $6, true, 'probation', 3, false)
-       RETURNING id, employee_id, name, ic_number, status, ess_enabled`,
-      [employee_id, name, ic_number, companyId, today, passwordHash]
+       VALUES ($1, $2, $3, $4, $5, $6, 'active', true, $7, true, 'probation', 3, false)
+       RETURNING id, employee_id, name, ic_number, outlet_id, status, ess_enabled`,
+      [employee_id, name, ic_number, companyId, outlet_id || null, today, passwordHash]
     );
 
     const newEmployee = result.rows[0];
@@ -1047,7 +1052,7 @@ router.post('/quick-add', authenticateAdmin, async (req, res) => {
       employee: newEmployee,
       login_info: {
         employee_id: employee_id,
-        password: 'IC Number (without dashes)',
+        initial_password: cleanIC,
         login_url: '/ess/login'
       }
     });

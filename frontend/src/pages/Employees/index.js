@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { employeeApi, departmentApi } from '../../api';
+import api from '../../api';
 import Layout from '../../components/Layout';
 
 // Import sub-components
@@ -15,9 +16,14 @@ function Employees() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
+  // Check if company uses outlets (Mimix = company_id 3)
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const usesOutlets = adminInfo.company_id === 3;
+
   // Main data state
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [outlets, setOutlets] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,7 +43,7 @@ function Employees() {
 
   // Quick Add Modal state
   const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [quickAddForm, setQuickAddForm] = useState({ employee_id: '', name: '', ic_number: '' });
+  const [quickAddForm, setQuickAddForm] = useState({ employee_id: '', name: '', ic_number: '', outlet_id: '' });
   const [quickAddLoading, setQuickAddLoading] = useState(false);
   const [quickAddResult, setQuickAddResult] = useState(null);
 
@@ -53,12 +59,22 @@ function Employees() {
       setEmployees(empRes.data);
       setDepartments(deptRes.data);
       setStats(statsRes.data);
+
+      // Fetch outlets if company uses them
+      if (usesOutlets) {
+        try {
+          const outletRes = await api.get('/outlets');
+          setOutlets(outletRes.data || []);
+        } catch (e) {
+          console.error('Error fetching outlets:', e);
+        }
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, usesOutlets]);
 
   useEffect(() => {
     fetchData();
@@ -110,7 +126,7 @@ function Employees() {
   };
 
   const resetQuickAdd = () => {
-    setQuickAddForm({ employee_id: '', name: '', ic_number: '' });
+    setQuickAddForm({ employee_id: '', name: '', ic_number: '', outlet_id: '' });
     setQuickAddResult(null);
   };
 
@@ -153,6 +169,7 @@ function Employees() {
           onViewEmployee={setViewEmployee}
           goToDepartments={goToDepartments}
           loading={loading}
+          usesOutlets={usesOutlets}
         />
 
         {/* Employee Detail Modal */}
@@ -214,6 +231,23 @@ function Employees() {
                     />
                     <span className="form-hint">IC will be used as initial password (without dashes)</span>
                   </div>
+
+                  {usesOutlets && (
+                    <div className="form-group">
+                      <label>Outlet *</label>
+                      <select
+                        value={quickAddForm.outlet_id}
+                        onChange={(e) => setQuickAddForm({...quickAddForm, outlet_id: e.target.value})}
+                        required
+                      >
+                        <option value="">Select outlet</option>
+                        {outlets.map(outlet => (
+                          <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
+                        ))}
+                      </select>
+                      <span className="form-hint">Assign employee to an outlet</span>
+                    </div>
+                  )}
 
                   <div className="modal-actions">
                     <button type="button" className="cancel-btn" onClick={closeQuickAdd}>Cancel</button>

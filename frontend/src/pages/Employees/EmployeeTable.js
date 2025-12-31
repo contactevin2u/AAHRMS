@@ -8,7 +8,8 @@ const EmployeeTable = ({
   onSelectEmployee,
   onViewEmployee,
   goToDepartments,
-  loading
+  loading,
+  usesOutlets = false
 }) => {
   if (loading) {
     return <div className="loading">Loading...</div>;
@@ -29,7 +30,7 @@ const EmployeeTable = ({
             <th>ID</th>
             <th>Name</th>
             <th>Gender</th>
-            <th>Department</th>
+            {usesOutlets ? <th>Outlet</th> : <th>Department</th>}
             <th>Position</th>
             <th>Employment</th>
             <th>Status</th>
@@ -86,15 +87,19 @@ const EmployeeTable = ({
                     })()}
                   </td>
                   <td>
-                    {emp.department_name ? (
-                      <span
-                        className="department-link"
-                        onClick={goToDepartments}
-                        title="Go to Departments"
-                      >
-                        {emp.department_name}
-                      </span>
-                    ) : '-'}
+                    {usesOutlets ? (
+                      emp.outlet_name || <span style={{ color: '#999' }}>-</span>
+                    ) : (
+                      emp.department_name ? (
+                        <span
+                          className="department-link"
+                          onClick={goToDepartments}
+                          title="Go to Departments"
+                        >
+                          {emp.department_name}
+                        </span>
+                      ) : '-'
+                    )}
                   </td>
                   <td>{emp.position || '-'}</td>
                   <td>
