@@ -2,18 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
+import { isSupervisorOrManager, canApproveOT, canViewTeamLeave, canApproveShiftSwap } from '../../utils/permissions';
 import './ESSDashboard.css';
 
 function ESSDashboard() {
   const [employeeInfo, setEmployeeInfo] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [profileStatus, setProfileStatus] = useState(null);
+  const [pendingApprovals, setPendingApprovals] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const storedInfo = localStorage.getItem('employeeInfo');
     if (storedInfo) {
-      setEmployeeInfo(JSON.parse(storedInfo));
+      const info = JSON.parse(storedInfo);
+      setEmployeeInfo(info);
+
+      // Fetch pending approvals for supervisors/managers
+      if (isSupervisorOrManager(info)) {
+        fetchPendingApprovals(info);
+      }
     }
     fetchDashboard();
     fetchProfileStatus();
@@ -39,7 +47,49 @@ function ESSDashboard() {
     }
   };
 
+  const fetchPendingApprovals = async (info) => {
+    try {
+      const approvals = { leave: 0, ot: 0, swap: 0 };
+
+      // Fetch pending leave approvals
+      if (canViewTeamLeave(info)) {
+        try {
+          const leaveRes = await essApi.getTeamPendingLeave();
+          approvals.leave = leaveRes.data?.length || 0;
+        } catch (e) {
+          console.error('Error fetching leave approvals:', e);
+        }
+      }
+
+      // Fetch pending OT approvals
+      if (canApproveOT(info)) {
+        try {
+          const otRes = await essApi.getPendingOT();
+          approvals.ot = otRes.data?.length || 0;
+        } catch (e) {
+          console.error('Error fetching OT approvals:', e);
+        }
+      }
+
+      // Fetch pending shift swap approvals
+      if (canApproveShiftSwap(info)) {
+        try {
+          const swapRes = await essApi.getPendingSwapApprovals();
+          approvals.swap = swapRes.data?.length || 0;
+        } catch (e) {
+          console.error('Error fetching swap approvals:', e);
+        }
+      }
+
+      setPendingApprovals(approvals);
+    } catch (error) {
+      console.error('Error fetching pending approvals:', error);
+    }
+  };
+
   const features = employeeInfo?.features || {};
+  const showApprovalSection = isSupervisorOrManager(employeeInfo) && pendingApprovals &&
+    (pendingApprovals.leave > 0 || pendingApprovals.ot > 0 || pendingApprovals.swap > 0);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -92,6 +142,36 @@ function ESSDashboard() {
             </div>
             <span className="reminder-arrow">&#8594;</span>
           </Link>
+        )}
+
+        {/* Pending Approvals Section for Supervisors/Managers */}
+        {showApprovalSection && (
+          <div className="pending-approvals-section">
+            <h2>Pending Approvals</h2>
+            <div className="approvals-grid">
+              {pendingApprovals.leave > 0 && (
+                <Link to="/ess/leave" className="approval-card leave">
+                  <div className="approval-badge">{pendingApprovals.leave}</div>
+                  <div className="approval-icon">&#x1F4C5;</div>
+                  <span className="approval-label">Leave Requests</span>
+                </Link>
+              )}
+              {pendingApprovals.ot > 0 && (
+                <Link to="/ess/attendance" className="approval-card ot">
+                  <div className="approval-badge">{pendingApprovals.ot}</div>
+                  <div className="approval-icon">&#x23F0;</div>
+                  <span className="approval-label">OT Approvals</span>
+                </Link>
+              )}
+              {pendingApprovals.swap > 0 && (
+                <Link to="/ess/calendar" className="approval-card swap">
+                  <div className="approval-badge">{pendingApprovals.swap}</div>
+                  <div className="approval-icon">&#x1F504;</div>
+                  <span className="approval-label">Shift Swaps</span>
+                </Link>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Quick Actions */}
