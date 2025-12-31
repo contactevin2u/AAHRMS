@@ -38,7 +38,7 @@ import EmployeeLetters from './pages/EmployeeLetters';
 import MimixLogin from './pages/MimixLogin';
 import StaffClockIn from './pages/StaffClockIn';
 // New Unified ESS PWA
-import { ESSLogin, ESSChangePassword, ESSDashboard, ESSClockIn, ESSBenefits, ESSProfile, ESSSchedule, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters } from './pages/ess';
+import { ESSLogin, ESSChangePassword, ESSDashboard, ESSClockIn, ESSAttendance, ESSBenefits, ESSProfile, ESSSchedule, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters } from './pages/ess';
 import Schedules from './pages/Schedules';
 import './App.css';
 
@@ -407,6 +407,14 @@ function App() {
           }
         />
         <Route
+          path="/ess/attendance"
+          element={
+            <ESSProtectedRoute>
+              <ESSAttendance />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
           path="/ess/benefits"
           element={
             <ESSProtectedRoute>
@@ -419,6 +427,14 @@ function App() {
           element={
             <ESSProtectedRoute>
               <ESSSchedule />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/calendar"
+          element={
+            <ESSProtectedRoute>
+              <ESSCalendar />
             </ESSProtectedRoute>
           }
         />
