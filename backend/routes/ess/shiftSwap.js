@@ -1,6 +1,7 @@
 /**
  * ESS Shift Swap Routes
  * Allows outlet employees to swap shifts with colleagues
+ * Includes supervisor approval workflow (Mimix only)
  */
 
 const express = require('express');
@@ -8,6 +9,12 @@ const router = express.Router();
 const pool = require('../../db');
 const jwt = require('jsonwebtoken');
 const { asyncHandler } = require('../../middleware/errorHandler');
+const {
+  isSupervisorOrManager,
+  getManagedOutlets,
+  isMimixCompany,
+  canApproveForOutlet
+} = require('../../middleware/essPermissions');
 
 // Middleware to verify employee token
 const authenticateEmployee = async (req, res, next) => {
@@ -216,7 +223,7 @@ router.post('/request', authenticateEmployee, asyncHandler(async (req, res) => {
     `SELECT id FROM shift_swap_requests
      WHERE (requester_shift_id = $1 OR target_shift_id = $1
             OR requester_shift_id = $2 OR target_shift_id = $2)
-       AND status IN ('pending_target', 'pending_admin')`,
+       AND status IN ('pending_target', 'pending_supervisor', 'pending_admin')`,
     [requester_shift_id, target_shift_id]
   );
 
@@ -328,10 +335,10 @@ router.post('/:id/respond', authenticateEmployee, asyncHandler(async (req, res) 
   );
 
   if (response === 'accepted') {
-    // Update to pending_admin
+    // Update to pending_supervisor (supervisor/manager approval required)
     await pool.query(
       `UPDATE shift_swap_requests
-       SET status = 'pending_admin',
+       SET status = 'pending_supervisor',
            target_response = 'accepted',
            target_responded_at = NOW()
        WHERE id = $1`,
@@ -344,12 +351,32 @@ router.post('/:id/respond', authenticateEmployee, asyncHandler(async (req, res) 
        VALUES ($1, 'shift_swap', 'Swap Request Accepted', $2, 'shift_swap', $3)`,
       [
         swap.requester_id,
-        `${targetInfo.rows[0].name} accepted your swap request. Pending admin approval.`,
+        `${targetInfo.rows[0].name} accepted your swap request. Pending supervisor approval.`,
         id
       ]
     );
 
-    res.json({ message: 'You accepted the swap request. Waiting for admin approval.' });
+    // Find and notify supervisor for this outlet
+    const supervisorResult = await pool.query(
+      `SELECT id FROM employees
+       WHERE outlet_id = $1 AND employee_role = 'supervisor' AND status = 'active'
+       LIMIT 1`,
+      [swap.outlet_id]
+    );
+
+    if (supervisorResult.rows.length > 0) {
+      await pool.query(
+        `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+         VALUES ($1, 'shift_swap', 'Shift Swap Approval Required', $2, 'shift_swap', $3)`,
+        [
+          supervisorResult.rows[0].id,
+          `${swap.requester_name} and ${targetInfo.rows[0].name} want to swap shifts`,
+          id
+        ]
+      );
+    }
+
+    res.json({ message: 'You accepted the swap request. Waiting for supervisor approval.' });
   } else {
     // Rejected
     await pool.query(
@@ -474,6 +501,273 @@ router.get('/colleague-shifts/:colleagueId', authenticateEmployee, asyncHandler(
   }));
 
   res.json(shifts);
+}));
+
+// =====================================================
+// SUPERVISOR/MANAGER APPROVAL ENDPOINTS (Mimix only)
+// =====================================================
+
+/**
+ * Get pending shift swap approvals for supervisor/manager
+ */
+router.get('/pending-approvals', authenticateEmployee, asyncHandler(async (req, res) => {
+  // Check if user is supervisor or manager
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  // Get employee's full info
+  const empResult = await pool.query(
+    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const employee = { ...req.employee, ...empResult.rows[0] };
+
+  if (!isMimixCompany(employee.company_id)) {
+    return res.status(403).json({ error: 'Shift swap approval is only available for outlet-based companies.' });
+  }
+
+  const outletIds = await getManagedOutlets(employee);
+
+  if (outletIds.length === 0) {
+    return res.json([]);
+  }
+
+  // Get pending swap requests for managed outlets
+  const result = await pool.query(
+    `SELECT ssr.*,
+            req.name as requester_name, req.employee_id as requester_emp_code,
+            tgt.name as target_name, tgt.employee_id as target_emp_code,
+            rs.schedule_date as requester_shift_date,
+            rs.shift_start as requester_shift_start,
+            rs.shift_end as requester_shift_end,
+            ts.schedule_date as target_shift_date,
+            ts.shift_start as target_shift_start,
+            ts.shift_end as target_shift_end,
+            o.name as outlet_name
+     FROM shift_swap_requests ssr
+     JOIN employees req ON ssr.requester_id = req.id
+     JOIN employees tgt ON ssr.target_id = tgt.id
+     JOIN schedules rs ON ssr.requester_shift_id = rs.id
+     JOIN schedules ts ON ssr.target_shift_id = ts.id
+     LEFT JOIN outlets o ON ssr.outlet_id = o.id
+     WHERE ssr.outlet_id = ANY($1)
+       AND ssr.status = 'pending_supervisor'
+     ORDER BY ssr.created_at ASC`,
+    [outletIds]
+  );
+
+  const requests = result.rows.map(r => ({
+    ...r,
+    requester_shift_start: formatTime(r.requester_shift_start),
+    requester_shift_end: formatTime(r.requester_shift_end),
+    target_shift_start: formatTime(r.target_shift_start),
+    target_shift_end: formatTime(r.target_shift_end)
+  }));
+
+  res.json(requests);
+}));
+
+/**
+ * Supervisor approves shift swap
+ */
+router.post('/:id/supervisor-approve', authenticateEmployee, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Check if user is supervisor or manager
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  // Get employee's full info
+  const empResult = await pool.query(
+    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const approver = { ...req.employee, ...empResult.rows[0] };
+
+  // Get the swap request
+  const swapResult = await pool.query(
+    `SELECT ssr.*, req.name as requester_name, tgt.name as target_name,
+            rs.schedule_date as requester_date, ts.schedule_date as target_date
+     FROM shift_swap_requests ssr
+     JOIN employees req ON ssr.requester_id = req.id
+     JOIN employees tgt ON ssr.target_id = tgt.id
+     JOIN schedules rs ON ssr.requester_shift_id = rs.id
+     JOIN schedules ts ON ssr.target_shift_id = ts.id
+     WHERE ssr.id = $1`,
+    [id]
+  );
+
+  if (swapResult.rows.length === 0) {
+    return res.status(404).json({ error: 'Swap request not found' });
+  }
+
+  const swap = swapResult.rows[0];
+
+  // Verify status is pending_supervisor
+  if (swap.status !== 'pending_supervisor') {
+    return res.status(400).json({ error: 'This swap request is not pending supervisor approval' });
+  }
+
+  // Verify approver can approve for this outlet
+  const canApprove = await canApproveForOutlet(approver, swap.outlet_id);
+  if (!canApprove) {
+    return res.status(403).json({ error: 'You cannot approve swaps for this outlet' });
+  }
+
+  // Execute the swap - update schedules
+  // Swap the employee_id on both schedule records
+  await pool.query(
+    `UPDATE schedules SET employee_id = $1 WHERE id = $2`,
+    [swap.target_id, swap.requester_shift_id]
+  );
+
+  await pool.query(
+    `UPDATE schedules SET employee_id = $1 WHERE id = $2`,
+    [swap.requester_id, swap.target_shift_id]
+  );
+
+  // Update swap request status
+  await pool.query(
+    `UPDATE shift_swap_requests
+     SET status = 'approved',
+         supervisor_id = $1,
+         supervisor_approved = TRUE,
+         supervisor_approved_at = NOW()
+     WHERE id = $2`,
+    [req.employee.id, id]
+  );
+
+  // Notify both employees
+  await pool.query(
+    `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+     VALUES ($1, 'shift_swap', 'Shift Swap Approved', $2, 'shift_swap', $3)`,
+    [swap.requester_id, `Your shift swap with ${swap.target_name} has been approved. Check your new schedule.`, id]
+  );
+
+  await pool.query(
+    `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+     VALUES ($1, 'shift_swap', 'Shift Swap Approved', $2, 'shift_swap', $3)`,
+    [swap.target_id, `Your shift swap with ${swap.requester_name} has been approved. Check your new schedule.`, id]
+  );
+
+  res.json({ message: 'Shift swap approved. Schedules have been updated.' });
+}));
+
+/**
+ * Supervisor rejects shift swap
+ */
+router.post('/:id/supervisor-reject', authenticateEmployee, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+
+  if (!reason) {
+    return res.status(400).json({ error: 'Rejection reason is required' });
+  }
+
+  // Check if user is supervisor or manager
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  // Get employee's full info
+  const empResult = await pool.query(
+    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const approver = { ...req.employee, ...empResult.rows[0] };
+
+  // Get the swap request
+  const swapResult = await pool.query(
+    `SELECT ssr.*, req.name as requester_name, tgt.name as target_name
+     FROM shift_swap_requests ssr
+     JOIN employees req ON ssr.requester_id = req.id
+     JOIN employees tgt ON ssr.target_id = tgt.id
+     WHERE ssr.id = $1`,
+    [id]
+  );
+
+  if (swapResult.rows.length === 0) {
+    return res.status(404).json({ error: 'Swap request not found' });
+  }
+
+  const swap = swapResult.rows[0];
+
+  // Verify status is pending_supervisor
+  if (swap.status !== 'pending_supervisor') {
+    return res.status(400).json({ error: 'This swap request is not pending supervisor approval' });
+  }
+
+  // Verify approver can reject for this outlet
+  const canApprove = await canApproveForOutlet(approver, swap.outlet_id);
+  if (!canApprove) {
+    return res.status(403).json({ error: 'You cannot reject swaps for this outlet' });
+  }
+
+  // Update swap request status
+  await pool.query(
+    `UPDATE shift_swap_requests
+     SET status = 'rejected',
+         supervisor_id = $1,
+         supervisor_approved = FALSE,
+         supervisor_approved_at = NOW(),
+         rejection_reason = $2
+     WHERE id = $3`,
+    [req.employee.id, reason, id]
+  );
+
+  // Notify both employees
+  await pool.query(
+    `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+     VALUES ($1, 'shift_swap', 'Shift Swap Rejected', $2, 'shift_swap', $3)`,
+    [swap.requester_id, `Your shift swap with ${swap.target_name} has been rejected. Reason: ${reason}`, id]
+  );
+
+  await pool.query(
+    `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+     VALUES ($1, 'shift_swap', 'Shift Swap Rejected', $2, 'shift_swap', $3)`,
+    [swap.target_id, `Your shift swap with ${swap.requester_name} has been rejected. Reason: ${reason}`, id]
+  );
+
+  res.json({ message: 'Shift swap rejected.' });
+}));
+
+/**
+ * Get count of pending swap approvals for supervisor/manager
+ */
+router.get('/pending-approvals-count', authenticateEmployee, asyncHandler(async (req, res) => {
+  // Check if user is supervisor or manager
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.json({ count: 0 });
+  }
+
+  // Get employee's full info
+  const empResult = await pool.query(
+    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const employee = { ...req.employee, ...empResult.rows[0] };
+
+  if (!isMimixCompany(employee.company_id)) {
+    return res.json({ count: 0 });
+  }
+
+  const outletIds = await getManagedOutlets(employee);
+
+  if (outletIds.length === 0) {
+    return res.json({ count: 0 });
+  }
+
+  const result = await pool.query(
+    `SELECT COUNT(*) as count
+     FROM shift_swap_requests
+     WHERE outlet_id = ANY($1)
+       AND status = 'pending_supervisor'`,
+    [outletIds]
+  );
+
+  res.json({ count: parseInt(result.rows[0].count) });
 }));
 
 module.exports = router;

@@ -1,6 +1,9 @@
 /**
  * ESS Profile Routes
  * Handles employee profile viewing and self-onboarding
+ *
+ * SECURITY NOTE: Salary and sensitive financial data are NOT exposed to employees.
+ * Employees can see their own profile info but NOT salary-related fields.
  */
 
 const express = require('express');
@@ -26,6 +29,23 @@ const EDITABLE_BEFORE_COMPLETE = [
 
 // Fields employee can edit AFTER profile is complete
 const EDITABLE_AFTER_COMPLETE = ['phone', 'address'];
+
+// Fields to HIDE from employee profile response (sensitive financial data)
+const HIDDEN_FIELDS = [
+  'default_basic_salary', 'current_basic_salary', 'hourly_rate',
+  'daily_rate', 'overtime_rate', 'commission_rate',
+  'epf_rate', 'socso_rate', 'eis_rate',
+  'password_hash', 'password_reset_token', 'password_reset_expires'
+];
+
+// Helper to sanitize employee data (remove hidden fields)
+const sanitizeEmployeeData = (employee) => {
+  const sanitized = { ...employee };
+  for (const field of HIDDEN_FIELDS) {
+    delete sanitized[field];
+  }
+  return sanitized;
+};
 
 // Helper to check if profile is complete
 const checkProfileComplete = (employee) => {
@@ -56,10 +76,8 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
 
   const employee = result.rows[0];
 
-  // Remove sensitive fields
-  delete employee.password_hash;
-  delete employee.password_reset_token;
-  delete employee.password_reset_expires;
+  // Remove sensitive fields (salary, rates, passwords)
+  const sanitizedEmployee = sanitizeEmployeeData(employee);
 
   // Check profile completion status
   const { complete, missing } = checkProfileComplete(employee);
@@ -72,7 +90,7 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
   }
 
   res.json({
-    ...employee,
+    ...sanitizedEmployee,
     profile_status: {
       complete: employee.profile_completed || complete,
       missing_fields: employee.profile_completed ? [] : missing,
@@ -202,10 +220,8 @@ router.put('/', authenticateEmployee, asyncHandler(async (req, res) => {
     }
   }
 
-  // Remove sensitive fields
-  delete updatedEmployee.password_hash;
-  delete updatedEmployee.password_reset_token;
-  delete updatedEmployee.password_reset_expires;
+  // Remove sensitive fields (salary, rates, passwords)
+  const sanitizedEmployee = sanitizeEmployeeData(updatedEmployee);
 
   // Return completion status
   const { complete: nowComplete, missing } = checkProfileComplete(updatedEmployee);
@@ -214,7 +230,7 @@ router.put('/', authenticateEmployee, asyncHandler(async (req, res) => {
     message: updatedEmployee.profile_completed ?
       'Profile updated and marked as complete!' :
       'Profile updated successfully',
-    employee: updatedEmployee,
+    employee: sanitizedEmployee,
     profile_status: {
       complete: updatedEmployee.profile_completed || nowComplete,
       missing_fields: updatedEmployee.profile_completed ? [] : missing,

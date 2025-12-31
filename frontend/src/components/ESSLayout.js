@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import OfflineBanner from './OfflineBanner';
+import { isSupervisorOrManager, isMimixCompany, getRoleDisplayName } from '../utils/permissions';
 import './ESSLayout.css';
 
 function ESSLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [employeeInfo, setEmployeeInfo] = useState(null);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     const storedInfo = localStorage.getItem('employeeInfo');
@@ -15,6 +16,35 @@ function ESSLayout({ children }) {
       setEmployeeInfo(JSON.parse(storedInfo));
     }
   }, []);
+
+  // Fetch unread notification count
+  useEffect(() => {
+    if (!employeeInfo) return;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const token = localStorage.getItem('employeeToken');
+        const response = await fetch(
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/ess/notifications/unread-count`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            credentials: 'include'
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setUnreadNotifications(data.count || 0);
+        }
+      } catch (e) {
+        console.error('Error fetching notification count:', e);
+      }
+    };
+
+    fetchUnreadCount();
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchUnreadCount, 60000);
+    return () => clearInterval(interval);
+  }, [employeeInfo]);
 
   const handleLogout = async () => {
     try {
@@ -34,6 +64,9 @@ function ESSLayout({ children }) {
   };
 
   const features = employeeInfo?.features || {};
+
+  // Check if employee is from Mimix (has clock-in/schedule features)
+  const isMimix = isMimixCompany(employeeInfo);
 
   // Get company logo based on company
   const getCompanyLogo = () => {
@@ -59,15 +92,6 @@ function ESSLayout({ children }) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  // Count visible nav items to determine layout
-  const visibleNavItems = [
-    true, // Dashboard always visible
-    features.leave,
-    features.payslips,
-    features.clockIn,
-    features.notifications
-  ].filter(Boolean).length;
-
   return (
     <div className="ess-layout">
       <OfflineBanner />
@@ -84,6 +108,12 @@ function ESSLayout({ children }) {
           <span className="company-name">{employeeInfo?.company_name || 'Employee Portal'}</span>
         </div>
         <div className="header-right">
+          <NavLink to="/ess/notifications" className="header-icon-btn">
+            <span className="notification-icon">&#x1F514;</span>
+            {unreadNotifications > 0 && (
+              <span className="notification-badge">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>
+            )}
+          </NavLink>
           <NavLink to="/ess/profile" className="profile-link">
             <div className="user-avatar-small">{getInitials(employeeInfo?.name)}</div>
           </NavLink>
@@ -95,7 +125,7 @@ function ESSLayout({ children }) {
         {children}
       </main>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Navigation - Simplified 6 items */}
       <nav className="ess-bottom-nav">
         <NavLink
           to="/ess/dashboard"
@@ -105,27 +135,43 @@ function ESSLayout({ children }) {
           <span className="nav-label">Home</span>
         </NavLink>
 
-        {features.leave && (
+        {isMimix && (
           <NavLink
-            to="/ess/leave"
+            to="/ess/attendance"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <span className="nav-icon">&#x1F4C5;</span>
-            <span className="nav-label">Leave</span>
-          </NavLink>
-        )}
-
-        {features.clockIn && (
-          <NavLink
-            to="/ess/clock-in"
-            className={({ isActive }) => `nav-item clock-in-btn ${isActive ? 'active' : ''}`}
-          >
             <span className="nav-icon">&#x23F0;</span>
-            <span className="nav-label">Clock In</span>
+            <span className="nav-label">Attendance</span>
           </NavLink>
         )}
 
-        {features.payslips && (
+        <NavLink
+          to="/ess/leave"
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          <span className="nav-icon">&#x1F4C5;</span>
+          <span className="nav-label">Leave</span>
+        </NavLink>
+
+        <NavLink
+          to="/ess/claims"
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          <span className="nav-icon">&#x1F4DD;</span>
+          <span className="nav-label">Claims</span>
+        </NavLink>
+
+        {isMimix && (
+          <NavLink
+            to="/ess/calendar"
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <span className="nav-icon">&#x1F5D3;</span>
+            <span className="nav-label">Calendar</span>
+          </NavLink>
+        )}
+
+        {!isMimix && (
           <NavLink
             to="/ess/payslips"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
@@ -135,72 +181,14 @@ function ESSLayout({ children }) {
           </NavLink>
         )}
 
-        <button
-          className={`nav-item more-btn ${showMoreMenu ? 'active' : ''}`}
-          onClick={() => setShowMoreMenu(!showMoreMenu)}
+        <NavLink
+          to="/ess/profile"
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
         >
-          <span className="nav-icon">&#x2630;</span>
-          <span className="nav-label">More</span>
-        </button>
+          <span className="nav-icon">&#x1F464;</span>
+          <span className="nav-label">Profile</span>
+        </NavLink>
       </nav>
-
-      {/* More Menu Overlay */}
-      {showMoreMenu && (
-        <>
-          <div className="more-overlay" onClick={() => setShowMoreMenu(false)} />
-          <div className="more-menu">
-            <div className="more-header">
-              <div className="user-info">
-                <div className="user-avatar">{getInitials(employeeInfo?.name)}</div>
-                <div className="user-details">
-                  <span className="user-name">{employeeInfo?.name}</span>
-                  <span className="user-id">{employeeInfo?.employee_id}</span>
-                </div>
-              </div>
-            </div>
-            <div className="more-links">
-              <NavLink to="/ess/profile" onClick={() => setShowMoreMenu(false)}>
-                <span className="menu-icon">&#x1F464;</span>
-                Profile
-              </NavLink>
-              {features.notifications && (
-                <NavLink to="/ess/notifications" onClick={() => setShowMoreMenu(false)}>
-                  <span className="menu-icon">&#x1F514;</span>
-                  Notifications
-                </NavLink>
-              )}
-              {features.claims && (
-                <NavLink to="/ess/claims" onClick={() => setShowMoreMenu(false)}>
-                  <span className="menu-icon">&#x1F4DD;</span>
-                  Claims
-                </NavLink>
-              )}
-              {features.clockIn && (
-                <NavLink to="/ess/schedule" onClick={() => setShowMoreMenu(false)}>
-                  <span className="menu-icon">&#x1F4C5;</span>
-                  My Schedule
-                </NavLink>
-              )}
-              {features.letters && (
-                <NavLink to="/ess/letters" onClick={() => setShowMoreMenu(false)}>
-                  <span className="menu-icon">&#x1F4E8;</span>
-                  Letters
-                </NavLink>
-              )}
-              {features.benefitsInKind && (
-                <NavLink to="/ess/benefits" onClick={() => setShowMoreMenu(false)}>
-                  <span className="menu-icon">&#x1F381;</span>
-                  Benefits
-                </NavLink>
-              )}
-              <button className="logout-link" onClick={handleLogout}>
-                <span className="menu-icon">&#x1F6AA;</span>
-                Logout
-              </button>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }

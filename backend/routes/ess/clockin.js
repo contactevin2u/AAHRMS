@@ -55,6 +55,12 @@ const router = express.Router();
 const pool = require('../../db');
 const { asyncHandler, ValidationError } = require('../../middleware/errorHandler');
 const { uploadAttendance } = require('../../utils/cloudinaryStorage');
+const {
+  isSupervisorOrManager,
+  getManagedOutlets,
+  isMimixCompany,
+  canApproveForOutlet
+} = require('../../middleware/essPermissions');
 
 // Standard work time: 8.5 hours = 510 minutes
 const STANDARD_WORK_MINUTES = 510;
@@ -449,22 +455,46 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     };
     const { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
 
+    // Auto-flag OT if overtime detected (Mimix companies only)
+    const otFlagged = otMinutes > 0;
+
     record = await pool.query(
       `UPDATE clock_in_records SET
          clock_out_2 = $1, photo_out_2 = $2, location_out_2 = $3, address_out_2 = $4,
          face_detected_out_2 = $5, face_confidence_out_2 = $6,
-         total_work_minutes = $7, ot_minutes = $8, status = 'completed'
-       WHERE employee_id = $9 AND work_date = $10
+         total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9, status = 'completed'
+       WHERE employee_id = $10 AND work_date = $11
        RETURNING *`,
-      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, employeeId, today]
+      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, today]
     );
 
+    // If OT flagged for Mimix company, create notification for supervisor
+    if (otFlagged && isMimixCompany(company_id)) {
+      // Find supervisor for this outlet
+      const supervisorResult = await pool.query(
+        `SELECT id FROM employees
+         WHERE outlet_id = $1 AND employee_role = 'supervisor' AND status = 'active'
+         LIMIT 1`,
+        [outlet_id]
+      );
+
+      if (supervisorResult.rows.length > 0) {
+        const supervisorId = supervisorResult.rows[0].id;
+        await pool.query(
+          `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+           VALUES ($1, 'ot_approval', 'OT Approval Required', $2, 'clock_in_record', $3)`,
+          [supervisorId, `${req.employee.name} has ${otHours} hours of overtime on ${today}`, record.rows[0].id]
+        );
+      }
+    }
+
     res.json({
-      message: `Day complete! You worked ${totalHours} hours${otHours > 0 ? ` (OT: ${otHours}h)` : ''}.`,
+      message: `Day complete! You worked ${totalHours} hours${otHours > 0 ? ` (OT: ${otHours}h pending approval)` : ''}.`,
       action: 'clock_out_2',
       time: currentTime,
       total_hours: totalHours,
       ot_hours: otHours,
+      ot_flagged: otFlagged,
       record: record.rows[0]
     });
   }
@@ -610,6 +640,9 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
   };
   const { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
 
+  // Auto-flag OT if overtime detected
+  const otFlagged = otMinutes > 0;
+
   const record = await pool.query(
     `UPDATE clock_in_records SET
        clock_out_2 = $1,
@@ -620,17 +653,19 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
        face_confidence_out_2 = $6,
        total_work_minutes = $7,
        ot_minutes = $8,
+       ot_flagged = $9,
        status = 'completed'
-     WHERE employee_id = $9 AND work_date = $10
+     WHERE employee_id = $10 AND work_date = $11
      RETURNING *`,
-    [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, employeeId, today]
+    [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, today]
   );
 
   res.json({
     message: 'Clock-out successful',
     record: {
       ...record.rows[0],
-      hours_worked: totalHours
+      hours_worked: totalHours,
+      ot_flagged: otFlagged
     }
   });
 }));
@@ -678,6 +713,290 @@ router.get('/history', authenticateEmployee, asyncHandler(async (req, res) => {
       pending_completion: result.rows.filter(r => r.status === 'in_progress').length
     }
   });
+}));
+
+// =====================================================
+// SUPERVISOR/MANAGER OT APPROVAL ENDPOINTS (Mimix only)
+// =====================================================
+
+/**
+ * Get team attendance for supervisor/manager's outlets
+ * Shows today's attendance for employees in managed outlets
+ */
+router.get('/team-attendance', authenticateEmployee, asyncHandler(async (req, res) => {
+  // Check if user is supervisor or manager
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  // Get employee's full info
+  const empResult = await pool.query(
+    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const employee = { ...req.employee, ...empResult.rows[0] };
+
+  // Only for Mimix (outlet-based companies)
+  if (!isMimixCompany(employee.company_id)) {
+    return res.status(403).json({ error: 'Team attendance is only available for outlet-based companies.' });
+  }
+
+  // Get outlets this supervisor/manager can view
+  const outletIds = await getManagedOutlets(employee);
+
+  if (outletIds.length === 0) {
+    return res.json([]);
+  }
+
+  const { date } = req.query;
+  const targetDate = date || getCurrentDate();
+
+  // Get attendance for employees in managed outlets
+  const result = await pool.query(
+    `SELECT cir.*, e.name as employee_name, e.employee_id as emp_code,
+            e.outlet_id, o.name as outlet_name
+     FROM clock_in_records cir
+     JOIN employees e ON cir.employee_id = e.id
+     LEFT JOIN outlets o ON e.outlet_id = o.id
+     WHERE e.outlet_id = ANY($1)
+       AND cir.work_date = $2
+     ORDER BY cir.clock_in_1 ASC`,
+    [outletIds, targetDate]
+  );
+
+  // Add calculated hours to each record
+  const records = result.rows.map(r => ({
+    ...r,
+    total_hours: r.total_work_minutes ? (r.total_work_minutes / 60).toFixed(2) : null,
+    ot_hours: r.ot_minutes ? (r.ot_minutes / 60).toFixed(2) : null
+  }));
+
+  res.json(records);
+}));
+
+/**
+ * Get pending OT approvals for supervisor/manager
+ */
+router.get('/pending-ot', authenticateEmployee, asyncHandler(async (req, res) => {
+  // Check if user is supervisor or manager
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  // Get employee's full info
+  const empResult = await pool.query(
+    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const employee = { ...req.employee, ...empResult.rows[0] };
+
+  if (!isMimixCompany(employee.company_id)) {
+    return res.status(403).json({ error: 'OT approval is only available for outlet-based companies.' });
+  }
+
+  const outletIds = await getManagedOutlets(employee);
+
+  if (outletIds.length === 0) {
+    return res.json([]);
+  }
+
+  // Get records with OT flagged but not yet approved/rejected
+  const result = await pool.query(
+    `SELECT cir.*, e.name as employee_name, e.employee_id as emp_code,
+            e.outlet_id, o.name as outlet_name
+     FROM clock_in_records cir
+     JOIN employees e ON cir.employee_id = e.id
+     LEFT JOIN outlets o ON e.outlet_id = o.id
+     WHERE e.outlet_id = ANY($1)
+       AND cir.ot_flagged = TRUE
+       AND cir.ot_approved IS NULL
+     ORDER BY cir.work_date DESC`,
+    [outletIds]
+  );
+
+  const records = result.rows.map(r => ({
+    ...r,
+    total_hours: r.total_work_minutes ? (r.total_work_minutes / 60).toFixed(2) : null,
+    ot_hours: r.ot_minutes ? (r.ot_minutes / 60).toFixed(2) : null
+  }));
+
+  res.json(records);
+}));
+
+/**
+ * Approve OT (supervisor/manager)
+ */
+router.post('/:id/approve-ot', authenticateEmployee, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Check if user is supervisor or manager
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  // Get employee's full info
+  const empResult = await pool.query(
+    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const approver = { ...req.employee, ...empResult.rows[0] };
+
+  // Get the clock-in record with employee info
+  const recordResult = await pool.query(
+    `SELECT cir.*, e.outlet_id as employee_outlet_id, e.name as employee_name, e.id as emp_id
+     FROM clock_in_records cir
+     JOIN employees e ON cir.employee_id = e.id
+     WHERE cir.id = $1`,
+    [id]
+  );
+
+  if (recordResult.rows.length === 0) {
+    return res.status(404).json({ error: 'Clock-in record not found' });
+  }
+
+  const record = recordResult.rows[0];
+
+  // Verify OT is flagged and pending
+  if (!record.ot_flagged) {
+    return res.status(400).json({ error: 'This record has no flagged overtime' });
+  }
+  if (record.ot_approved !== null) {
+    return res.status(400).json({ error: 'OT has already been processed' });
+  }
+
+  // Verify approver can approve for this outlet
+  const canApprove = await canApproveForOutlet(approver, record.employee_outlet_id);
+  if (!canApprove) {
+    return res.status(403).json({ error: 'You cannot approve OT for this employee' });
+  }
+
+  // Approve OT
+  await pool.query(
+    `UPDATE clock_in_records
+     SET ot_approved = TRUE, ot_approved_by = $1, ot_approved_at = NOW()
+     WHERE id = $2`,
+    [req.employee.id, id]
+  );
+
+  // Create notification for employee
+  const otHours = record.ot_minutes ? (record.ot_minutes / 60).toFixed(2) : 0;
+  await pool.query(
+    `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+     VALUES ($1, 'ot_approval', 'OT Approved', $2, 'clock_in_record', $3)`,
+    [record.emp_id, `Your ${otHours} hours of overtime on ${record.work_date} has been approved.`, id]
+  );
+
+  res.json({ message: 'OT approved successfully.' });
+}));
+
+/**
+ * Reject OT (supervisor/manager)
+ */
+router.post('/:id/reject-ot', authenticateEmployee, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+
+  if (!reason) {
+    return res.status(400).json({ error: 'Rejection reason is required' });
+  }
+
+  // Check if user is supervisor or manager
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  // Get employee's full info
+  const empResult = await pool.query(
+    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const approver = { ...req.employee, ...empResult.rows[0] };
+
+  // Get the clock-in record with employee info
+  const recordResult = await pool.query(
+    `SELECT cir.*, e.outlet_id as employee_outlet_id, e.name as employee_name, e.id as emp_id
+     FROM clock_in_records cir
+     JOIN employees e ON cir.employee_id = e.id
+     WHERE cir.id = $1`,
+    [id]
+  );
+
+  if (recordResult.rows.length === 0) {
+    return res.status(404).json({ error: 'Clock-in record not found' });
+  }
+
+  const record = recordResult.rows[0];
+
+  // Verify OT is flagged and pending
+  if (!record.ot_flagged) {
+    return res.status(400).json({ error: 'This record has no flagged overtime' });
+  }
+  if (record.ot_approved !== null) {
+    return res.status(400).json({ error: 'OT has already been processed' });
+  }
+
+  // Verify approver can reject for this outlet
+  const canApprove = await canApproveForOutlet(approver, record.employee_outlet_id);
+  if (!canApprove) {
+    return res.status(403).json({ error: 'You cannot reject OT for this employee' });
+  }
+
+  // Reject OT
+  await pool.query(
+    `UPDATE clock_in_records
+     SET ot_approved = FALSE, ot_approved_by = $1, ot_approved_at = NOW(), ot_rejection_reason = $2
+     WHERE id = $3`,
+    [req.employee.id, reason, id]
+  );
+
+  // Create notification for employee
+  const otHours = record.ot_minutes ? (record.ot_minutes / 60).toFixed(2) : 0;
+  await pool.query(
+    `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+     VALUES ($1, 'ot_approval', 'OT Rejected', $2, 'clock_in_record', $3)`,
+    [record.emp_id, `Your ${otHours} hours of overtime on ${record.work_date} has been rejected. Reason: ${reason}`, id]
+  );
+
+  res.json({ message: 'OT rejected.' });
+}));
+
+/**
+ * Get count of pending OT approvals for supervisor/manager
+ */
+router.get('/pending-ot-count', authenticateEmployee, asyncHandler(async (req, res) => {
+  // Check if user is supervisor or manager
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.json({ count: 0 });
+  }
+
+  // Get employee's full info
+  const empResult = await pool.query(
+    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const employee = { ...req.employee, ...empResult.rows[0] };
+
+  if (!isMimixCompany(employee.company_id)) {
+    return res.json({ count: 0 });
+  }
+
+  const outletIds = await getManagedOutlets(employee);
+
+  if (outletIds.length === 0) {
+    return res.json({ count: 0 });
+  }
+
+  const result = await pool.query(
+    `SELECT COUNT(*) as count
+     FROM clock_in_records cir
+     JOIN employees e ON cir.employee_id = e.id
+     WHERE e.outlet_id = ANY($1)
+       AND cir.ot_flagged = TRUE
+       AND cir.ot_approved IS NULL`,
+    [outletIds]
+  );
+
+  res.json({ count: parseInt(result.rows[0].count) });
 }));
 
 module.exports = router;
