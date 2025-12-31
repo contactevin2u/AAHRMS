@@ -117,6 +117,9 @@ function ESSLayout({ children }) {
           <NavLink to="/ess/profile" className="profile-link">
             <div className="user-avatar-small">{getInitials(employeeInfo?.name)}</div>
           </NavLink>
+          <button className="logout-btn" onClick={handleLogout} title="Logout">
+            <span>&#x274C;</span>
+          </button>
         </div>
       </header>
 
