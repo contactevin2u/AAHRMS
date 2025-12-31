@@ -63,7 +63,12 @@
       "Bash(set DATABASE_URL=postgresql://hrms_user:Ut4Dfaz6CFcOBQ4932kwSACiRJ3zKJd9@dpg-d4k5tfmuk2gs73fldph0-a.singapore-postgres.render.com/hrms_db_e2uv)",
       "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\check-outlets.js\")",
       "Bash(find:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(npx vercel --prod)",
+      "Bash(npx vercel --prod --yes)",
+      "Bash(npx vercel login)",
+      "Bash(where:*)",
+      "Bash(npx vercel:*)"
     ],
     "deny": [],
     "ask": []

@@ -675,9 +675,12 @@ function ESSAttendanceContent() {
                       style={{ width: '100%', height: 'auto' }}
                     />
                     {cameraActive && !cameraLoading && (
-                      <button className="capture-btn" onClick={capturePhoto}>
-                        <span>&#x1F4F8;</span>
-                      </button>
+                      <div className="capture-container">
+                        <button className="capture-btn" onClick={capturePhoto}>
+                          <span className="capture-inner"></span>
+                        </button>
+                        <span className="capture-label">TAP TO CAPTURE</span>
+                      </div>
                     )}
                   </div>
                 )}
