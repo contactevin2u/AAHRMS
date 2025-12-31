@@ -260,7 +260,7 @@ function ESSProfile() {
           <div className="section-header">
             <h2>Personal Information</h2>
             {!isEditing ? (
-              <button className="edit-btn" onClick={() => setIsEditing(true)}>
+              <button className="edit-btn" onClick={() => alert('Coming Soon - Edit Profile is under development')}>
                 {isProfileComplete ? 'Edit' : 'Complete Profile'}
               </button>
             ) : (
@@ -473,7 +473,7 @@ function ESSProfile() {
           <div className="section-header">
             <h2>Bank & Payment Information</h2>
             {!isProfileComplete && !isEditing && (
-              <button className="edit-btn small" onClick={() => setIsEditing(true)}>
+              <button className="edit-btn small" onClick={() => alert('Coming Soon - Edit Profile is under development')}>
                 Edit
               </button>
             )}
@@ -557,7 +557,7 @@ function ESSProfile() {
           <div className="section-header">
             <h2>Tax & Contributions</h2>
             {!isProfileComplete && !isEditing && (
-              <button className="edit-btn small" onClick={() => setIsEditing(true)}>
+              <button className="edit-btn small" onClick={() => alert('Coming Soon - Edit Profile is under development')}>
                 Edit
               </button>
             )}

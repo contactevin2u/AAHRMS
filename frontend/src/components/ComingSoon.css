@@ -1,0 +1,33 @@
+.coming-soon-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  padding: 20px;
+}
+
+.coming-soon-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.coming-soon-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #374151;
+  margin: 0 0 8px 0;
+}
+
+.coming-soon-text {
+  font-size: 18px;
+  color: #6b7280;
+  margin: 0 0 4px 0;
+}
+
+.coming-soon-subtext {
+  font-size: 14px;
+  color: #9ca3af;
+  margin: 0;
+}
