@@ -1325,10 +1325,67 @@ Human Resources Department
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='attendance_status') THEN
           ALTER TABLE clock_in_records ADD COLUMN attendance_status VARCHAR(20) DEFAULT 'present';
         END IF;
+        -- OT approval columns (for supervisor approval flow)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_flagged') THEN
+          ALTER TABLE clock_in_records ADD COLUMN ot_flagged BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_approved') THEN
+          ALTER TABLE clock_in_records ADD COLUMN ot_approved BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_approved_by') THEN
+          ALTER TABLE clock_in_records ADD COLUMN ot_approved_by INTEGER;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_approved_at') THEN
+          ALTER TABLE clock_in_records ADD COLUMN ot_approved_at TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_rejection_reason') THEN
+          ALTER TABLE clock_in_records ADD COLUMN ot_rejection_reason TEXT;
+        END IF;
       END $$;
 
       -- Create unique index on employee_id + work_date if not exists
       CREATE UNIQUE INDEX IF NOT EXISTS idx_clock_in_employee_date ON clock_in_records(employee_id, work_date);
+
+      -- =====================================================
+      -- LEAVE MULTI-LEVEL APPROVAL COLUMNS
+      -- =====================================================
+      DO $$ BEGIN
+        -- Supervisor approval columns
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='supervisor_id') THEN
+          ALTER TABLE leave_requests ADD COLUMN supervisor_id INTEGER;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='supervisor_approved') THEN
+          ALTER TABLE leave_requests ADD COLUMN supervisor_approved BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='supervisor_approved_at') THEN
+          ALTER TABLE leave_requests ADD COLUMN supervisor_approved_at TIMESTAMP;
+        END IF;
+        -- Manager approval columns
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='manager_id') THEN
+          ALTER TABLE leave_requests ADD COLUMN manager_id INTEGER;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='manager_approved') THEN
+          ALTER TABLE leave_requests ADD COLUMN manager_approved BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='manager_approved_at') THEN
+          ALTER TABLE leave_requests ADD COLUMN manager_approved_at TIMESTAMP;
+        END IF;
+        -- Approval level tracking (1=pending_supervisor, 2=pending_manager, 3=pending_admin, 4=approved)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='approval_level') THEN
+          ALTER TABLE leave_requests ADD COLUMN approval_level INTEGER DEFAULT 1;
+        END IF;
+      END $$;
+
+      -- =====================================================
+      -- EMPLOYEE ROLE INDEX
+      -- =====================================================
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='employee_role') THEN
+          ALTER TABLE employees ADD COLUMN employee_role VARCHAR(20) DEFAULT 'staff';
+        END IF;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_employees_role ON employees(employee_role);
+      CREATE INDEX IF NOT EXISTS idx_employees_outlet_role ON employees(outlet_id, employee_role);
 
       -- =====================================================
       -- SCHEDULING SYSTEM (for outlet-based companies like Mimix)
@@ -1418,6 +1475,21 @@ Human Resources Department
       CREATE INDEX IF NOT EXISTS idx_swap_requester ON shift_swap_requests(requester_id);
       CREATE INDEX IF NOT EXISTS idx_swap_target ON shift_swap_requests(target_id);
       CREATE INDEX IF NOT EXISTS idx_swap_status ON shift_swap_requests(status);
+
+      -- =====================================================
+      -- SHIFT SWAP SUPERVISOR APPROVAL COLUMNS
+      -- =====================================================
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='shift_swap_requests' AND column_name='supervisor_id') THEN
+          ALTER TABLE shift_swap_requests ADD COLUMN supervisor_id INTEGER;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='shift_swap_requests' AND column_name='supervisor_approved') THEN
+          ALTER TABLE shift_swap_requests ADD COLUMN supervisor_approved BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='shift_swap_requests' AND column_name='supervisor_approved_at') THEN
+          ALTER TABLE shift_swap_requests ADD COLUMN supervisor_approved_at TIMESTAMP;
+        END IF;
+      END $$;
     `);
     console.log('Database tables initialized');
   } catch (err) {

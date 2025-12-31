@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const pool = require('../../db');
 const { asyncHandler, ValidationError, AuthenticationError } = require('../../middleware/errorHandler');
 const { authenticateEmployee } = require('../../middleware/auth');
+const { buildPermissionFlags, isMimixCompany } = require('../../middleware/essPermissions');
 
 // Cookie configuration
 const COOKIE_OPTIONS = {
@@ -59,7 +60,8 @@ router.post('/login', asyncHandler(async (req, res) => {
   // Find employee by email or employee_id, including company info
   const result = await pool.query(
     `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled,
-            e.department_id, e.company_id, e.outlet_id,
+            e.department_id, e.company_id, e.outlet_id, e.must_change_password,
+            e.employee_role,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings
      FROM employees e
@@ -105,6 +107,9 @@ router.post('/login', asyncHandler(async (req, res) => {
     settings: employee.company_settings
   });
 
+  // Build role-based permission flags
+  const permissions = await buildPermissionFlags(employee);
+
   // Generate JWT token with company context and features
   const token = jwt.sign(
     {
@@ -113,6 +118,7 @@ router.post('/login', asyncHandler(async (req, res) => {
       name: employee.name,
       email: employee.email,
       role: 'employee',
+      employee_role: employee.employee_role || 'staff',
       company_id: employee.company_id,
       outlet_id: employee.outlet_id,
       features
@@ -126,6 +132,7 @@ router.post('/login', asyncHandler(async (req, res) => {
 
   res.json({
     token, // Also return token for backward compatibility
+    requiresPasswordChange: employee.must_change_password || false,
     employee: {
       id: employee.id,
       employee_id: employee.employee_id,
@@ -137,7 +144,9 @@ router.post('/login', asyncHandler(async (req, res) => {
       company_logo: employee.company_logo,
       company_grouping_type: employee.company_grouping_type,
       outlet_id: employee.outlet_id,
-      features
+      employee_role: employee.employee_role || 'staff',
+      features,
+      permissions
     }
   });
 }));
@@ -237,7 +246,8 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
   // Find employee by employee_id and verify IC, including company info
   const result = await pool.query(
     `SELECT e.id, e.employee_id, e.name, e.email, e.ic_number, e.status, e.ess_enabled,
-            e.department_id, e.outlet_id, e.company_id,
+            e.department_id, e.outlet_id, e.company_id, e.must_change_password,
+            e.employee_role,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings,
             o.name as outlet_name
@@ -277,6 +287,9 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
     settings: employee.company_settings
   });
 
+  // Build role-based permission flags
+  const permissions = await buildPermissionFlags(employee);
+
   // Generate JWT token with company context and features
   const token = jwt.sign(
     {
@@ -285,6 +298,7 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
       name: employee.name,
       email: employee.email,
       role: 'employee',
+      employee_role: employee.employee_role || 'staff',
       company_id: employee.company_id,
       outlet_id: employee.outlet_id,
       features
@@ -298,6 +312,7 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
 
   res.json({
     token, // Also return token for backward compatibility
+    requiresPasswordChange: employee.must_change_password || false,
     employee: {
       id: employee.id,
       employee_id: employee.employee_id,
@@ -310,7 +325,9 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
       company_grouping_type: employee.company_grouping_type,
       outlet_id: employee.outlet_id,
       outlet_name: employee.outlet_name,
-      features
+      employee_role: employee.employee_role || 'staff',
+      features,
+      permissions
     }
   });
 }));
@@ -362,6 +379,7 @@ router.get('/me', authenticateEmployee, asyncHandler(async (req, res) => {
   // Fetch fresh employee data
   const result = await pool.query(
     `SELECT e.id, e.employee_id, e.name, e.email, e.status, e.department_id, e.outlet_id, e.company_id,
+            e.employee_role,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings,
             o.name as outlet_name
@@ -384,6 +402,9 @@ router.get('/me', authenticateEmployee, asyncHandler(async (req, res) => {
     settings: employee.company_settings
   });
 
+  // Build role-based permission flags
+  const permissions = await buildPermissionFlags(employee);
+
   res.json({
     employee: {
       id: employee.id,
@@ -397,9 +418,53 @@ router.get('/me', authenticateEmployee, asyncHandler(async (req, res) => {
       company_grouping_type: employee.company_grouping_type,
       outlet_id: employee.outlet_id,
       outlet_name: employee.outlet_name,
-      features
+      employee_role: employee.employee_role || 'staff',
+      features,
+      permissions
     }
   });
+}));
+
+// Change Password (for authenticated employees)
+router.post('/change-password', authenticateEmployee, asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    throw new ValidationError('Current password and new password are required');
+  }
+
+  if (newPassword.length < 6) {
+    throw new ValidationError('New password must be at least 6 characters long');
+  }
+
+  // Get employee's current password hash
+  const result = await pool.query(
+    'SELECT password_hash FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+
+  if (result.rows.length === 0) {
+    throw new AuthenticationError('Employee not found');
+  }
+
+  const employee = result.rows[0];
+
+  // Verify current password
+  const isValidPassword = await bcrypt.compare(currentPassword, employee.password_hash);
+  if (!isValidPassword) {
+    throw new AuthenticationError('Current password is incorrect');
+  }
+
+  // Hash new password
+  const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+  // Update password and clear must_change_password flag
+  await pool.query(
+    'UPDATE employees SET password_hash = $1, must_change_password = false WHERE id = $2',
+    [newPasswordHash, req.employee.id]
+  );
+
+  res.json({ message: 'Password changed successfully' });
 }));
 
 // Logout (clear HttpOnly cookie)
