@@ -22,7 +22,7 @@ router.get('/types', authenticateAdmin, async (req, res) => {
       SELECT id, code, name, is_paid, default_days_per_year, description, company_id,
              requires_attachment, is_consecutive, max_occurrences, min_service_days,
              gender_restriction, entitlement_rules, carries_forward, max_carry_forward,
-             created_at, updated_at
+             created_at
       FROM leave_types
     `;
     let params = [];
@@ -469,15 +469,15 @@ router.post('/requests/:id/approve', authenticateAdmin, async (req, res) => {
       finalApproval = true;
     } else if (approval_level === 'supervisor' || !lr.supervisor_approved) {
       // Supervisor approval (first level)
+      // Note: Don't set supervisor_id as it references employees table, not admin_users
       await pool.query(
         `UPDATE leave_requests
          SET supervisor_approved = TRUE,
              supervisor_approved_at = NOW(),
-             supervisor_id = $2,
              approval_level = 2,
              updated_at = NOW()
          WHERE id = $1`,
-        [id, approverId]
+        [id]
       );
 
       // Check if director approval is required
@@ -493,11 +493,11 @@ router.post('/requests/:id/approve', authenticateAdmin, async (req, res) => {
       }
     } else if (approval_level === 'director' || (lr.supervisor_approved && !lr.director_approved)) {
       // Director approval (final level)
+      // Note: Don't set director_id as it references employees table, not admin_users
       await pool.query(
         `UPDATE leave_requests
          SET director_approved = TRUE,
              director_approved_at = NOW(),
-             director_id = $2,
              status = 'approved',
              approved_at = NOW(),
              approver_id = $2,
