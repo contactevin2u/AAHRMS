@@ -153,6 +153,13 @@ function ESSLogin() {
                   autoComplete="current-password"
                 />
               </div>
+              <div className="login-hint">
+                <span className="hint-icon">💡</span>
+                <div className="hint-text">
+                  <strong>First time login?</strong>
+                  <p>Your password is your IC number without dashes (e.g. 901234145678)</p>
+                </div>
+              </div>
             </>
           ) : (
             <>
