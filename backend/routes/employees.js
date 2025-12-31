@@ -989,6 +989,77 @@ router.post('/init-seed-aa-alive', async (req, res) => {
   }
 });
 
+// Quick Add Employee - minimal fields for immediate ESS access
+// Only requires: employee_id, name, ic_number
+router.post('/quick-add', authenticateAdmin, async (req, res) => {
+  try {
+    const { employee_id, name, ic_number } = req.body;
+
+    // Get company_id from authenticated user
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required. Please select a company.' });
+    }
+
+    // Validate required fields
+    if (!employee_id) {
+      return res.status(400).json({ error: 'Employee ID is required' });
+    }
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    if (!ic_number) {
+      return res.status(400).json({ error: 'IC Number is required (used for login)' });
+    }
+
+    // Check if employee_id already exists in this company
+    const existingCheck = await pool.query(
+      'SELECT id FROM employees WHERE employee_id = $1 AND company_id = $2',
+      [employee_id, companyId]
+    );
+    if (existingCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'Employee ID already exists in this company' });
+    }
+
+    // Hash IC number as initial password (without dashes)
+    const cleanIC = ic_number.replace(/[-\s]/g, '');
+    const passwordHash = await bcrypt.hash(cleanIC, 10);
+
+    // Set join_date to today
+    const today = new Date().toISOString().split('T')[0];
+
+    // Insert employee with ESS enabled
+    const result = await pool.query(
+      `INSERT INTO employees (
+        employee_id, name, ic_number, company_id, join_date,
+        status, ess_enabled, password_hash, must_change_password,
+        employment_type, probation_months, profile_completed
+      )
+       VALUES ($1, $2, $3, $4, $5, 'active', true, $6, true, 'probation', 3, false)
+       RETURNING id, employee_id, name, ic_number, status, ess_enabled`,
+      [employee_id, name, ic_number, companyId, today, passwordHash]
+    );
+
+    const newEmployee = result.rows[0];
+
+    res.status(201).json({
+      message: `Employee ${name} created successfully. They can now login to ESS using Employee ID and IC Number.`,
+      employee: newEmployee,
+      login_info: {
+        employee_id: employee_id,
+        password: 'IC Number (without dashes)',
+        login_url: '/ess/login'
+      }
+    });
+  } catch (error) {
+    console.error('Error quick-adding employee:', error);
+    if (error.code === '23505') {
+      return res.status(400).json({ error: 'Employee ID already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create employee' });
+  }
+});
+
 // Get employee stats (filtered by company)
 router.get('/stats/overview', authenticateAdmin, async (req, res) => {
   try {

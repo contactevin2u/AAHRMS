@@ -60,6 +60,16 @@ function Employees() {
   });
   const [bulkUpdating, setBulkUpdating] = useState(false);
 
+  // Quick Add Employee state
+  const [showQuickAddModal, setShowQuickAddModal] = useState(false);
+  const [quickAddForm, setQuickAddForm] = useState({
+    employee_id: '',
+    name: '',
+    ic_number: ''
+  });
+  const [quickAddLoading, setQuickAddLoading] = useState(false);
+  const [quickAddResult, setQuickAddResult] = useState(null);
+
   const goToDepartments = () => {
     navigate('/admin/departments');
   };
@@ -342,6 +352,41 @@ function Employees() {
   const openAddModal = () => {
     resetForm();
     setShowModal(true);
+  };
+
+  // Quick Add Employee functions
+  const openQuickAddModal = () => {
+    setQuickAddForm({ employee_id: '', name: '', ic_number: '' });
+    setQuickAddResult(null);
+    setShowQuickAddModal(true);
+  };
+
+  const handleQuickAddSubmit = async (e) => {
+    e.preventDefault();
+    setQuickAddLoading(true);
+    setQuickAddResult(null);
+    try {
+      const res = await employeeApi.quickAdd(quickAddForm);
+      setQuickAddResult({
+        success: true,
+        message: res.data.message,
+        login_info: res.data.login_info
+      });
+      fetchData(); // Refresh employee list
+    } catch (error) {
+      setQuickAddResult({
+        success: false,
+        message: error.response?.data?.error || 'Failed to add employee'
+      });
+    } finally {
+      setQuickAddLoading(false);
+    }
+  };
+
+  const closeQuickAddModal = () => {
+    setShowQuickAddModal(false);
+    setQuickAddForm({ employee_id: '', name: '', ic_number: '' });
+    setQuickAddResult(null);
   };
 
   // Excel Import Functions
@@ -734,6 +779,9 @@ function Employees() {
             </button>
             <button onClick={() => fileInputRef.current?.click()} className="import-btn">
               Upload Employees
+            </button>
+            <button onClick={openQuickAddModal} className="quick-add-btn">
+              Quick Add
             </button>
             <button onClick={openAddModal} className="add-btn">
               + Add Employee
@@ -1974,6 +2022,107 @@ function Employees() {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Add Employee Modal */}
+        {showQuickAddModal && (
+          <div className="modal-overlay" onClick={closeQuickAddModal}>
+            <div className="modal quick-add-modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Quick Add Employee</h2>
+              <p className="modal-subtitle">Add employee with minimal info for immediate ESS access</p>
+
+              {!quickAddResult ? (
+                <form onSubmit={handleQuickAddSubmit}>
+                  <div className="form-group">
+                    <label>Employee ID *</label>
+                    <input
+                      type="text"
+                      value={quickAddForm.employee_id}
+                      onChange={(e) => setQuickAddForm({ ...quickAddForm, employee_id: e.target.value.toUpperCase() })}
+                      placeholder="e.g. EMP001"
+                      required
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Full Name *</label>
+                    <input
+                      type="text"
+                      value={quickAddForm.name}
+                      onChange={(e) => setQuickAddForm({ ...quickAddForm, name: e.target.value })}
+                      placeholder="Enter full name"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>IC Number *</label>
+                    <input
+                      type="text"
+                      value={quickAddForm.ic_number}
+                      onChange={(e) => setQuickAddForm({ ...quickAddForm, ic_number: e.target.value })}
+                      placeholder="e.g. 901234-56-7890"
+                      required
+                    />
+                    <small className="form-hint">IC number will be used as initial password (without dashes)</small>
+                  </div>
+
+                  <div className="modal-actions">
+                    <button type="button" onClick={closeQuickAddModal} className="cancel-btn">
+                      Cancel
+                    </button>
+                    <button type="submit" className="save-btn" disabled={quickAddLoading}>
+                      {quickAddLoading ? 'Adding...' : 'Add Employee'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className={`quick-add-result ${quickAddResult.success ? 'success' : 'error'}`}>
+                  <div className="result-icon">{quickAddResult.success ? '✓' : '✗'}</div>
+                  <p className="result-message">{quickAddResult.message}</p>
+
+                  {quickAddResult.success && quickAddResult.login_info && (
+                    <div className="login-info-box">
+                      <h4>Employee Login Details:</h4>
+                      <div className="info-row">
+                        <span className="label">Employee ID:</span>
+                        <span className="value">{quickAddResult.login_info.employee_id}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="label">Password:</span>
+                        <span className="value">{quickAddResult.login_info.password}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="label">Login URL:</span>
+                        <span className="value">/ess/login</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="modal-actions">
+                    {quickAddResult.success ? (
+                      <>
+                        <button onClick={() => {
+                          setQuickAddResult(null);
+                          setQuickAddForm({ employee_id: '', name: '', ic_number: '' });
+                        }} className="add-another-btn">
+                          Add Another
+                        </button>
+                        <button onClick={closeQuickAddModal} className="save-btn">
+                          Done
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => setQuickAddResult(null)} className="save-btn">
+                        Try Again
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
