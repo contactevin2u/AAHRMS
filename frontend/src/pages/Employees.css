@@ -207,17 +207,18 @@ tr:hover {
 .edit-btn,
 .delete-btn,
 .reset-pwd-btn {
-  background: none;
+  background: transparent;
   border: none;
   font-size: 16px;
   cursor: pointer;
   padding: 6px 8px;
   border-radius: 6px;
   transition: all 0.15s ease;
+  outline: none;
 }
 
 .edit-btn:hover {
-  background: #f1f5f9;
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .delete-btn:hover {
