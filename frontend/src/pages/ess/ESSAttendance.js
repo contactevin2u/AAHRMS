@@ -637,6 +637,17 @@ function ESSAttendanceContent() {
               </div>
             )}
 
+            {/* Clock In Instructions */}
+            {status?.status !== 'completed' && (
+              <div className="clockin-instructions">
+                <div className="instructions-title">How to Clock In:</div>
+                <div className="instructions-steps">
+                  <div className="step">1. Tap camera to take selfie</div>
+                  <div className="step">2. Tap "{getActionLabel()}" button</div>
+                </div>
+              </div>
+            )}
+
             {/* Camera Section */}
             {status?.status !== 'completed' && (
               <div className="camera-section">
