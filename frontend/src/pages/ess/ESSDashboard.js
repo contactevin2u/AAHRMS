@@ -174,30 +174,30 @@ function ESSDashboard() {
           </div>
         )}
 
-        {/* Quick Actions */}
+        {/* Quick Actions - Links to main pages only */}
         <div className="quick-actions">
           {features.clockIn && (
-            <Link to="/ess/clock-in" className="action-card clock-in">
+            <Link to="/ess/attendance" className="action-card clock-in">
               <span className="action-icon">&#x23F0;</span>
-              <span className="action-label">Clock In</span>
+              <span className="action-label">Attendance</span>
             </Link>
           )}
           {features.leave && (
             <Link to="/ess/leave" className="action-card">
               <span className="action-icon">&#x1F4C5;</span>
-              <span className="action-label">Apply Leave</span>
+              <span className="action-label">Leave</span>
             </Link>
           )}
           {features.claims && (
             <Link to="/ess/claims" className="action-card">
               <span className="action-icon">&#x1F4DD;</span>
-              <span className="action-label">Submit Claim</span>
+              <span className="action-label">Claims</span>
             </Link>
           )}
           {features.payslips && (
             <Link to="/ess/payslips" className="action-card">
               <span className="action-icon">&#x1F4B5;</span>
-              <span className="action-label">View Payslip</span>
+              <span className="action-label">Payslips</span>
             </Link>
           )}
         </div>

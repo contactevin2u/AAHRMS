@@ -37,8 +37,8 @@ import EmployeeLetters from './pages/EmployeeLetters';
 // Mimix Staff Portal - Legacy
 import MimixLogin from './pages/MimixLogin';
 import StaffClockIn from './pages/StaffClockIn';
-// New Unified ESS PWA
-import { ESSLogin, ESSChangePassword, ESSDashboard, ESSClockIn, ESSAttendance, ESSBenefits, ESSProfile, ESSSchedule, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters } from './pages/ess';
+// New Unified ESS PWA (6 main pages + auth + support pages)
+import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSProfile, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters } from './pages/ess';
 import Schedules from './pages/Schedules';
 import './App.css';
 
@@ -398,14 +398,8 @@ function App() {
             </ESSProtectedRoute>
           }
         />
-        <Route
-          path="/ess/clock-in"
-          element={
-            <ESSProtectedRoute>
-              <ESSClockIn />
-            </ESSProtectedRoute>
-          }
-        />
+        {/* Redirect /ess/clock-in to /ess/attendance (clock-in is inside attendance) */}
+        <Route path="/ess/clock-in" element={<Navigate to="/ess/attendance" replace />} />
         <Route
           path="/ess/attendance"
           element={
@@ -422,14 +416,8 @@ function App() {
             </ESSProtectedRoute>
           }
         />
-        <Route
-          path="/ess/schedule"
-          element={
-            <ESSProtectedRoute>
-              <ESSSchedule />
-            </ESSProtectedRoute>
-          }
-        />
+        {/* Redirect /ess/schedule to /ess/calendar (schedule is inside calendar) */}
+        <Route path="/ess/schedule" element={<Navigate to="/ess/calendar" replace />} />
         <Route
           path="/ess/calendar"
           element={
