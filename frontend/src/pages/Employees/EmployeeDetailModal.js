@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
 
-const EmployeeDetailModal = ({ employee, onClose }) => {
+const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
   const [fullData, setFullData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -294,6 +294,18 @@ const EmployeeDetailModal = ({ employee, onClose }) => {
 
         <div className="modal-footer">
           <button className="btn-secondary" onClick={onClose}>Close</button>
+          {onEdit && (
+            <button
+              className="btn-primary"
+              onClick={() => {
+                onClose();
+                onEdit(data);
+              }}
+              style={{ marginLeft: '10px' }}
+            >
+              ✏️ Edit Employee
+            </button>
+          )}
         </div>
       </div>
 

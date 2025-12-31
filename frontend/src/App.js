@@ -4,6 +4,7 @@ import AnonymousFeedback from './pages/AnonymousFeedback';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import Employees from './pages/Employees/index';
+import EmployeeEdit from './pages/Employees/EmployeeEdit';
 import Payroll from './pages/Payroll';
 import PayrollV2 from './pages/PayrollV2';
 import SalaryEntry from './pages/SalaryEntry';
@@ -82,6 +83,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Employees />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/employees/edit/:id"
+          element={
+            <ProtectedRoute>
+              <EmployeeEdit />
             </ProtectedRoute>
           }
         />

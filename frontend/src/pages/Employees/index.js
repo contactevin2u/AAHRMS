@@ -111,6 +111,10 @@ function Employees() {
           <EmployeeDetailModal
             employee={viewEmployee}
             onClose={() => setViewEmployee(null)}
+            onEdit={(emp) => {
+              setViewEmployee(null);
+              navigate(`/admin/employees/edit/${emp.id}`);
+            }}
           />
         )}
       </div>
