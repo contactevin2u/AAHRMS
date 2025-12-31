@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { employeeApi, departmentApi } from '../../api';
+import { employeeApi, departmentApi, earningsApi } from '../../api';
 import api from '../../api';
 import Layout from '../../components/Layout';
 import EmployeeForm, { INITIAL_FORM_STATE } from './EmployeeForm';
@@ -21,6 +21,10 @@ function EmployeeAdd() {
   // Reference data
   const [departments, setDepartments] = useState([]);
   const [outlets, setOutlets] = useState([]);
+  const [commissionTypes, setCommissionTypes] = useState([]);
+  const [allowanceTypes, setAllowanceTypes] = useState([]);
+  const [employeeCommissions, setEmployeeCommissions] = useState([]);
+  const [employeeAllowances, setEmployeeAllowances] = useState([]);
 
   // Check if company uses outlets
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
@@ -30,8 +34,15 @@ function EmployeeAdd() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const deptRes = await departmentApi.getAll();
+        const [deptRes, commRes, allowRes] = await Promise.all([
+          departmentApi.getAll(),
+          earningsApi.getCommissionTypes().catch(() => ({ data: [] })),
+          earningsApi.getAllowanceTypes().catch(() => ({ data: [] }))
+        ]);
+
         setDepartments(deptRes.data || []);
+        setCommissionTypes(commRes.data || []);
+        setAllowanceTypes(allowRes.data || []);
 
         if (usesOutlets) {
           try {
@@ -49,8 +60,7 @@ function EmployeeAdd() {
     fetchData();
   }, [usesOutlets]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setSaving(true);
     setError(null);
 
@@ -79,9 +89,12 @@ function EmployeeAdd() {
     } catch (err) {
       console.error('Error creating employee:', err);
       setError(err.response?.data?.error || err.message || 'Failed to create employee');
-    } finally {
       setSaving(false);
     }
+  };
+
+  const handleCancel = () => {
+    navigate('/admin/employees');
   };
 
   return (
@@ -91,11 +104,6 @@ function EmployeeAdd() {
           <div>
             <h1>Add Employee</h1>
             <p>Create a new employee record</p>
-          </div>
-          <div className="header-actions">
-            <button className="cancel-btn" onClick={() => navigate('/admin/employees')}>
-              Cancel
-            </button>
           </div>
         </header>
 
@@ -119,25 +127,33 @@ function EmployeeAdd() {
           boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           border: '1px solid #e2e8f0'
         }}>
-          <form onSubmit={handleSubmit}>
-            <EmployeeForm
-              form={form}
-              setForm={setForm}
-              departments={departments}
-              outlets={outlets}
-              usesOutlets={usesOutlets}
-              isEditing={false}
-            />
+          <EmployeeForm
+            form={form}
+            setForm={setForm}
+            editingEmployee={null}
+            departments={departments}
+            outlets={outlets}
+            usesOutlets={usesOutlets}
+            commissionTypes={commissionTypes}
+            allowanceTypes={allowanceTypes}
+            employeeCommissions={employeeCommissions}
+            setEmployeeCommissions={setEmployeeCommissions}
+            employeeAllowances={employeeAllowances}
+            setEmployeeAllowances={setEmployeeAllowances}
+            salaryAutoPopulated={false}
+            onDepartmentChange={() => {}}
+            onSubmit={handleSubmit}
+            onCancel={handleCancel}
+          />
 
-            <div className="modal-actions" style={{ marginTop: '24px' }}>
-              <button type="button" className="cancel-btn" onClick={() => navigate('/admin/employees')}>
-                Cancel
-              </button>
-              <button type="submit" className="save-btn" disabled={saving}>
-                {saving ? 'Creating...' : 'Create Employee'}
-              </button>
-            </div>
-          </form>
+          <div className="modal-actions" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+            <button type="button" className="cancel-btn" onClick={handleCancel}>
+              Cancel
+            </button>
+            <button type="button" className="save-btn" onClick={handleSubmit} disabled={saving}>
+              {saving ? 'Creating...' : 'Create Employee'}
+            </button>
+          </div>
         </div>
       </div>
     </Layout>
