@@ -259,7 +259,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     const sanitizedBody = sanitizeEmployeeData(req.body);
 
     const {
-      employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
+      employee_id, name, email, phone, ic_number, department_id, outlet_id, position, join_date, status,
       address, bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
       marital_status, spouse_working, children_count, date_of_birth,
@@ -301,21 +301,21 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     const result = await pool.query(
       `UPDATE employees
        SET employee_id = $1, name = $2, email = $3, phone = $4, ic_number = $5,
-           department_id = $6, position = $7, join_date = $8, status = $9,
-           address = $10, bank_name = $11, bank_account_no = $12, bank_account_holder = $13,
-           epf_number = $14, socso_number = $15, tax_number = $16, epf_contribution_type = $17,
-           marital_status = $18, spouse_working = $19, children_count = $20, date_of_birth = $21,
-           default_basic_salary = $22, default_allowance = $23, commission_rate = $24,
-           per_trip_rate = $25, ot_rate = $26, outstation_rate = $27,
-           default_bonus = $28, default_incentive = $29,
-           employment_type = $30, probation_months = $31, probation_end_date = $32,
-           salary_before_confirmation = $33, salary_after_confirmation = $34, increment_amount = $35,
-           probation_notes = $36,
+           department_id = $6, outlet_id = $7, position = $8, join_date = $9, status = $10,
+           address = $11, bank_name = $12, bank_account_no = $13, bank_account_holder = $14,
+           epf_number = $15, socso_number = $16, tax_number = $17, epf_contribution_type = $18,
+           marital_status = $19, spouse_working = $20, children_count = $21, date_of_birth = $22,
+           default_basic_salary = $23, default_allowance = $24, commission_rate = $25,
+           per_trip_rate = $26, ot_rate = $27, outstation_rate = $28,
+           default_bonus = $29, default_incentive = $30,
+           employment_type = $31, probation_months = $32, probation_end_date = $33,
+           salary_before_confirmation = $34, salary_after_confirmation = $35, increment_amount = $36,
+           probation_notes = $37,
            updated_at = NOW()
-       WHERE id = $37
+       WHERE id = $38
        RETURNING *`,
       [
-        employee_id, name, email, phone, ic_number, department_id, position, join_date, status,
+        employee_id, name, email, phone, ic_number, department_id, outlet_id || null, position, join_date, status,
         address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
         marital_status, spouse_working, children_count, date_of_birth,
