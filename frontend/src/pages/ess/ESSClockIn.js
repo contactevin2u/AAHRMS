@@ -39,6 +39,7 @@ function ESSClockInContent() {
   const isOnline = useOnlineStatus();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const streamRef = useRef(null);
 
   const [employeeInfo, setEmployeeInfo] = useState(null);
   const [status, setStatus] = useState(null);
@@ -51,6 +52,9 @@ function ESSClockInContent() {
   const [scheduleStatus, setScheduleStatus] = useState(null);
   const [scheduleLoading, setScheduleLoading] = useState(true);
 
+  // Camera permission state (check without popup)
+  const [cameraPermission, setCameraPermission] = useState(null); // 'granted', 'denied', 'prompt'
+
   // Camera and location states
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
@@ -59,6 +63,21 @@ function ESSClockInContent() {
   const [address, setAddress] = useState('');
   const [locationError, setLocationError] = useState('');
   const [serverTime, setServerTime] = useState(new Date());
+
+  // Check camera permission on mount (does NOT trigger popup)
+  useEffect(() => {
+    const checkCameraPermission = async () => {
+      try {
+        const result = await navigator.permissions.query({ name: 'camera' });
+        setCameraPermission(result.state);
+        result.onchange = () => setCameraPermission(result.state);
+      } catch {
+        // Firefox doesn't support permissions.query for camera
+        setCameraPermission('prompt');
+      }
+    };
+    checkCameraPermission();
+  }, []);
 
   // Check if feature is enabled
   useEffect(() => {
@@ -117,11 +136,64 @@ function ESSClockInContent() {
     }
   }, [employeeInfo]);
 
-  // Stream ref to hold camera stream
-  const streamRef = useRef(null);
+  // Stop camera helper function
+  const stopCamera = useCallback(() => {
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject = null;
+      }
+    } catch (err) {
+      console.error('Stop camera error:', err);
+    }
+    setCameraActive(false);
+    setCameraLoading(false);
+  }, []);
 
-  // Start camera
+  // CLEANUP: Stop camera on component unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
+  // CLEANUP: Stop camera when navigating away or tab hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && streamRef.current) {
+        stopCamera();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [stopCamera]);
+
+  // Start camera - ONLY on button click
   const startCamera = async () => {
+    // Check if camera permission is denied
+    if (cameraPermission === 'denied') {
+      setError('Camera blocked. Please enable camera in browser settings.');
+      return;
+    }
+
     setCameraLoading(true);
     setCameraActive(false);
     setError('');
@@ -163,25 +235,13 @@ function ESSClockInContent() {
     } catch (err) {
       console.error('Camera error:', err);
       setCameraLoading(false);
-      setError('Unable to access camera. Please allow camera permission.');
-    }
-  };
-
-  // Stop camera
-  const stopCamera = () => {
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
+      if (err.name === 'NotAllowedError') {
+        setError('Camera permission denied. Please allow camera access.');
+        setCameraPermission('denied');
+      } else {
+        setError('Unable to access camera. Please check your device.');
       }
-      if (videoRef.current?.srcObject) {
-        videoRef.current.srcObject = null;
-      }
-    } catch (err) {
-      console.error('Stop camera error:', err);
     }
-    setCameraActive(false);
-    setCameraLoading(false);
   };
 
   // Capture photo

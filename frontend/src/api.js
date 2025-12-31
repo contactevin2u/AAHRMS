@@ -428,6 +428,11 @@ export const essApi = {
   getLeaveHistory: (params) => api.get('/ess/leave/history', { params, ...essApiConfig }),
   getLeaveTypes: () => api.get('/ess/leave/types', essApiConfig),
   applyLeave: (data) => api.post('/ess/leave/apply', data, essApiConfig),
+  applyLeaveWithFile: (formData) => api.post('/ess/leave/apply', formData, {
+    ...essApiConfig,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  cancelLeaveRequest: (id) => api.post(`/ess/leave/${id}/cancel`, {}, essApiConfig),
 
   // Team Leave (Supervisor/Manager)
   getTeamPendingLeave: () => api.get('/ess/leave/team-pending', essApiConfig),
@@ -474,12 +479,14 @@ export const essApi = {
   // Schedules (Mimix only)
   getTodaySchedule: () => api.get('/ess/schedules/today', essApiConfig),
   getMySchedule: (year, month) => api.get('/ess/schedules/my-schedule', { params: { year, month }, ...essApiConfig }),
+  getPublicHolidays: (year, month) => api.get('/ess/schedules/public-holidays', { params: { year, month }, ...essApiConfig }),
   getExtraShiftRequests: (params) => api.get('/ess/schedules/extra-shift-requests', { params, ...essApiConfig }),
   submitExtraShiftRequest: (data) => api.post('/ess/schedules/extra-shift-requests', data, essApiConfig),
   cancelExtraShiftRequest: (id) => api.delete(`/ess/schedules/extra-shift-requests/${id}`, essApiConfig),
 
   // Shift Swap (Outlet employees)
   getOutletCalendar: (year, month) => api.get('/ess/shift-swap/outlet-calendar', { params: { year, month }, ...essApiConfig }),
+  getDateStaff: (date) => api.get('/ess/shift-swap/date-staff', { params: { date }, ...essApiConfig }),
   getOutletColleagues: () => api.get('/ess/shift-swap/outlet-colleagues', essApiConfig),
   getMyShifts: () => api.get('/ess/shift-swap/my-shifts', essApiConfig),
   getColleagueShifts: (colleagueId) => api.get(`/ess/shift-swap/colleague-shifts/${colleagueId}`, essApiConfig),

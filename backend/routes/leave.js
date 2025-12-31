@@ -3,16 +3,28 @@ const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter } = require('../middleware/tenant');
+const {
+  initializeLeaveBalances,
+  initializeYearlyLeaveBalances,
+  calculateYearsOfService,
+  getEntitlementByServiceYears
+} = require('../utils/leaveProration');
 
 // =====================================================
 // LEAVE TYPES (filtered by company)
 // =====================================================
 
-// Get all leave types
+// Get all leave types with Malaysian Employment Act info
 router.get('/types', authenticateAdmin, async (req, res) => {
   try {
     const companyId = getCompanyFilter(req);
-    let query = 'SELECT * FROM leave_types';
+    let query = `
+      SELECT id, code, name, is_paid, default_days_per_year, description, company_id,
+             requires_attachment, is_consecutive, max_occurrences, min_service_days,
+             gender_restriction, entitlement_rules, carries_forward, max_carry_forward,
+             created_at, updated_at
+      FROM leave_types
+    `;
     let params = [];
 
     if (companyId !== null) {
@@ -29,16 +41,31 @@ router.get('/types', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Create leave type
+// Create leave type with Malaysian Employment Act options
 router.post('/types', authenticateAdmin, async (req, res) => {
   try {
-    const { code, name, is_paid, default_days_per_year, description } = req.body;
+    const {
+      code, name, is_paid, default_days_per_year, description,
+      requires_attachment, is_consecutive, max_occurrences, min_service_days,
+      gender_restriction, entitlement_rules, carries_forward, max_carry_forward
+    } = req.body;
     const companyId = req.companyId || 1;
 
     const result = await pool.query(
-      `INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [code, name, is_paid, default_days_per_year || 0, description, companyId]
+      `INSERT INTO leave_types (
+        code, name, is_paid, default_days_per_year, description, company_id,
+        requires_attachment, is_consecutive, max_occurrences, min_service_days,
+        gender_restriction, entitlement_rules, carries_forward, max_carry_forward
+      )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       RETURNING *`,
+      [
+        code, name, is_paid, default_days_per_year || 0, description, companyId,
+        requires_attachment || false, is_consecutive || false, max_occurrences || null,
+        min_service_days || 0, gender_restriction || null,
+        entitlement_rules ? JSON.stringify(entitlement_rules) : null,
+        carries_forward || false, max_carry_forward || 0
+      ]
     );
 
     res.status(201).json(result.rows[0]);
@@ -62,15 +89,36 @@ router.get('/balances/:employeeId', authenticateAdmin, async (req, res) => {
     const { year } = req.query;
     const currentYear = year || new Date().getFullYear();
 
+    // Get employee info for years of service calculation
+    const empResult = await pool.query(
+      'SELECT join_date FROM employees WHERE id = $1',
+      [employeeId]
+    );
+
+    const joinDate = empResult.rows[0]?.join_date;
+    const yearsOfService = joinDate ? calculateYearsOfService(joinDate) : 0;
+
     const result = await pool.query(`
-      SELECT lb.*, lt.code, lt.name as leave_type_name, lt.is_paid
+      SELECT lb.*,
+             lt.code,
+             lt.name as leave_type_name,
+             lt.is_paid,
+             lt.requires_attachment,
+             lt.entitlement_rules,
+             lt.carries_forward,
+             lt.max_carry_forward,
+             (lb.entitled_days + COALESCE(lb.carried_forward, 0) - lb.used_days) as remaining_days
       FROM leave_balances lb
       JOIN leave_types lt ON lb.leave_type_id = lt.id
       WHERE lb.employee_id = $1 AND lb.year = $2
       ORDER BY lt.code
     `, [employeeId, currentYear]);
 
-    res.json(result.rows);
+    res.json({
+      year: parseInt(currentYear),
+      years_of_service: Math.round(yearsOfService * 10) / 10,
+      balances: result.rows
+    });
   } catch (error) {
     console.error('Error fetching leave balances:', error);
     res.status(500).json({ error: 'Failed to fetch leave balances' });
@@ -114,15 +162,15 @@ router.get('/balances', authenticateAdmin, async (req, res) => {
 });
 
 // Initialize leave balances for an employee (called when creating employee)
+// Uses Malaysian Employment Act service-year based entitlements
 router.post('/balances/initialize/:employeeId', authenticateAdmin, async (req, res) => {
   try {
     const { employeeId } = req.params;
     const { year } = req.body;
-    const currentYear = year || new Date().getFullYear();
 
-    // Get employee join date for pro-rating
+    // Get employee info
     const empResult = await pool.query(
-      'SELECT join_date FROM employees WHERE id = $1',
+      'SELECT id, join_date, company_id, gender FROM employees WHERE id = $1',
       [employeeId]
     );
 
@@ -130,56 +178,62 @@ router.post('/balances/initialize/:employeeId', authenticateAdmin, async (req, r
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    const joinDate = empResult.rows[0].join_date;
+    const employee = empResult.rows[0];
 
-    // Get all paid leave types
-    const leaveTypes = await pool.query(
-      'SELECT * FROM leave_types WHERE is_paid = true'
+    // Use the Malaysian Employment Act compliant initialization
+    const result = await initializeLeaveBalances(
+      parseInt(employeeId),
+      employee.company_id,
+      employee.join_date,
+      { gender: employee.gender }
     );
 
-    // Calculate pro-rated entitlement based on join date
-    const calculateEntitlement = (defaultDays, joinDate) => {
-      if (!joinDate) return defaultDays;
-
-      const join = new Date(joinDate);
-      const yearStart = new Date(currentYear, 0, 1);
-      const yearEnd = new Date(currentYear, 11, 31);
-
-      // If joined before this year, full entitlement
-      if (join < yearStart) return defaultDays;
-
-      // If joined after this year, no entitlement
-      if (join > yearEnd) return 0;
-
-      // Pro-rate based on remaining months
-      const monthsRemaining = 12 - join.getMonth();
-      return Math.round((defaultDays * monthsRemaining / 12) * 2) / 2; // Round to 0.5
-    };
-
-    const created = [];
-
-    for (const lt of leaveTypes.rows) {
-      const entitled = calculateEntitlement(lt.default_days_per_year, joinDate);
-
-      try {
-        const result = await pool.query(`
-          INSERT INTO leave_balances (employee_id, leave_type_id, year, entitled_days, used_days)
-          VALUES ($1, $2, $3, $4, 0)
-          ON CONFLICT (employee_id, leave_type_id, year)
-          DO UPDATE SET entitled_days = $4, updated_at = NOW()
-          RETURNING *
-        `, [employeeId, lt.id, currentYear, entitled]);
-
-        created.push(result.rows[0]);
-      } catch (err) {
-        console.error('Error creating balance for leave type:', lt.code, err);
-      }
-    }
-
-    res.json({ message: 'Leave balances initialized', balances: created });
+    res.json({
+      message: 'Leave balances initialized with Malaysian Employment Act rules',
+      years_of_service: result.years_of_service,
+      balances: result.balances
+    });
   } catch (error) {
     console.error('Error initializing leave balances:', error);
     res.status(500).json({ error: 'Failed to initialize leave balances' });
+  }
+});
+
+// Initialize leave balances for a new year (annual reset)
+router.post('/balances/yearly-reset/:employeeId', authenticateAdmin, async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { year } = req.body;
+    const targetYear = year || new Date().getFullYear();
+
+    // Get employee info
+    const empResult = await pool.query(
+      'SELECT id, join_date, company_id FROM employees WHERE id = $1',
+      [employeeId]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const employee = empResult.rows[0];
+
+    // Use the yearly reset with carry forward calculation
+    const result = await initializeYearlyLeaveBalances(
+      parseInt(employeeId),
+      employee.company_id,
+      targetYear,
+      employee.join_date
+    );
+
+    res.json({
+      message: `Leave balances initialized for year ${targetYear}`,
+      years_of_service: result.years_of_service,
+      balances: result.balances
+    });
+  } catch (error) {
+    console.error('Error in yearly leave reset:', error);
+    res.status(500).json({ error: 'Failed to reset yearly leave balances' });
   }
 });
 
@@ -222,17 +276,22 @@ router.get('/requests', authenticateAdmin, async (req, res) => {
              e.employee_id as emp_code,
              e.employee_role,
              d.name as department_name,
+             o.name as outlet_name,
              lt.code as leave_type_code,
              lt.name as leave_type_name,
              lt.is_paid,
+             lt.requires_attachment,
              sup.name as supervisor_name,
-             dir.name as director_name
+             dir.name as director_name,
+             mgr.name as manager_name
       FROM leave_requests lr
       JOIN employees e ON lr.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
       JOIN leave_types lt ON lr.leave_type_id = lt.id
       LEFT JOIN employees sup ON lr.supervisor_id = sup.id
       LEFT JOIN employees dir ON lr.director_id = dir.id
+      LEFT JOIN employees mgr ON lr.manager_id = mgr.id
       WHERE 1=1
     `;
     const params = [];

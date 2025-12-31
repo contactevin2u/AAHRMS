@@ -517,16 +517,102 @@ const initDb = async () => {
       -- Unique constraint on code + company_id
       CREATE UNIQUE INDEX IF NOT EXISTS idx_leave_types_code_company ON leave_types(code, company_id);
 
-      -- Insert default leave types for default company
+      -- Add Malaysian Employment Act leave type columns
+      DO $$
+      BEGIN
+        -- requires_attachment: true for sick leave (MC required)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_types' AND column_name='requires_attachment') THEN
+          ALTER TABLE leave_types ADD COLUMN requires_attachment BOOLEAN DEFAULT FALSE;
+        END IF;
+        -- is_consecutive: true for maternity/paternity (consecutive days only)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_types' AND column_name='is_consecutive') THEN
+          ALTER TABLE leave_types ADD COLUMN is_consecutive BOOLEAN DEFAULT FALSE;
+        END IF;
+        -- max_occurrences: limit per career (e.g., 5 for maternity/paternity)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_types' AND column_name='max_occurrences') THEN
+          ALTER TABLE leave_types ADD COLUMN max_occurrences INTEGER;
+        END IF;
+        -- min_service_days: minimum service days required (e.g., 90 for maternity)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_types' AND column_name='min_service_days') THEN
+          ALTER TABLE leave_types ADD COLUMN min_service_days INTEGER DEFAULT 0;
+        END IF;
+        -- gender_restriction: 'male', 'female', or null for all
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_types' AND column_name='gender_restriction') THEN
+          ALTER TABLE leave_types ADD COLUMN gender_restriction VARCHAR(10);
+        END IF;
+        -- entitlement_rules: JSONB for service-year based entitlements
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_types' AND column_name='entitlement_rules') THEN
+          ALTER TABLE leave_types ADD COLUMN entitlement_rules JSONB;
+        END IF;
+        -- carries_forward: whether unused days can be carried to next year
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_types' AND column_name='carries_forward') THEN
+          ALTER TABLE leave_types ADD COLUMN carries_forward BOOLEAN DEFAULT FALSE;
+        END IF;
+        -- max_carry_forward: max days that can be carried forward
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_types' AND column_name='max_carry_forward') THEN
+          ALTER TABLE leave_types ADD COLUMN max_carry_forward INTEGER DEFAULT 0;
+        END IF;
+      END $$;
+
+      -- Insert Malaysian Employment Act leave types
+      -- Annual Leave: 8 days (<2 years), 12 days (2-5 years), 16 days (>5 years)
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment, entitlement_rules, carries_forward, max_carry_forward) VALUES
+        ('AL', 'Annual Leave', TRUE, 8, 'Paid annual leave per Malaysian Employment Act 1955', 1, FALSE,
+         '{"type": "service_years", "rules": [{"min_years": 0, "max_years": 2, "days": 8}, {"min_years": 2, "max_years": 5, "days": 12}, {"min_years": 5, "max_years": 99, "days": 16}]}',
+         TRUE, 5)
+      ON CONFLICT (code, company_id) DO UPDATE SET
+        entitlement_rules = EXCLUDED.entitlement_rules,
+        carries_forward = EXCLUDED.carries_forward,
+        max_carry_forward = EXCLUDED.max_carry_forward;
+
+      -- Sick Leave: 14 days (<2 years), 18 days (2-5 years), 22 days (>5 years)
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment, entitlement_rules) VALUES
+        ('SL', 'Sick Leave', TRUE, 14, 'Paid sick leave - requires Medical Certificate', 1, TRUE,
+         '{"type": "service_years", "rules": [{"min_years": 0, "max_years": 2, "days": 14}, {"min_years": 2, "max_years": 5, "days": 18}, {"min_years": 5, "max_years": 99, "days": 22}]}')
+      ON CONFLICT (code, company_id) DO UPDATE SET
+        requires_attachment = TRUE,
+        entitlement_rules = EXCLUDED.entitlement_rules;
+
+      -- Hospitalization Leave: 60 days (separate from sick leave)
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment) VALUES
+        ('HL', 'Hospitalization Leave', TRUE, 60, 'Hospitalization leave - separate from sick leave, requires MC', 1, TRUE)
+      ON CONFLICT (code, company_id) DO UPDATE SET
+        default_days_per_year = 60,
+        requires_attachment = TRUE;
+
+      -- Maternity Leave: 98 days, first 5 children only, requires 90 days service
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, is_consecutive, max_occurrences, min_service_days, gender_restriction) VALUES
+        ('MAT', 'Maternity Leave', TRUE, 98, 'Maternity leave - 98 consecutive days for first 5 children', 1, TRUE, 5, 90, 'female')
+      ON CONFLICT (code, company_id) DO UPDATE SET
+        default_days_per_year = 98,
+        is_consecutive = TRUE,
+        max_occurrences = 5,
+        min_service_days = 90,
+        gender_restriction = 'female';
+
+      -- Paternity Leave: 7 days, first 5 children only, married males only
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, is_consecutive, max_occurrences, gender_restriction) VALUES
+        ('PAT', 'Paternity Leave', TRUE, 7, 'Paternity leave - 7 consecutive days for married males, first 5 children', 1, TRUE, 5, 'male')
+      ON CONFLICT (code, company_id) DO UPDATE SET
+        default_days_per_year = 7,
+        is_consecutive = TRUE,
+        max_occurrences = 5,
+        gender_restriction = 'male';
+
+      -- Unpaid Leave
       INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id) VALUES
-        ('AL', 'Annual Leave', TRUE, 14, 'Paid annual leave', 1),
-        ('ML', 'Medical Leave', TRUE, 14, 'Paid medical/sick leave', 1),
-        ('UL', 'Unpaid Leave', FALSE, 0, 'Unpaid leave - deducted from salary', 1),
-        ('EL', 'Emergency Leave', TRUE, 3, 'Emergency leave', 1),
-        ('CL', 'Compassionate Leave', TRUE, 3, 'Bereavement/compassionate leave', 1),
-        ('ML2', 'Maternity Leave', TRUE, 60, 'Maternity leave', 1),
-        ('PL', 'Paternity Leave', TRUE, 7, 'Paternity leave', 1)
-      ON CONFLICT DO NOTHING;
+        ('UL', 'Unpaid Leave', FALSE, 0, 'Unpaid leave - deducted from salary', 1)
+      ON CONFLICT (code, company_id) DO NOTHING;
+
+      -- Compassionate Leave
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id) VALUES
+        ('CL', 'Compassionate Leave', TRUE, 3, 'Bereavement/compassionate leave', 1)
+      ON CONFLICT (code, company_id) DO NOTHING;
+
+      -- Emergency Leave
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id) VALUES
+        ('EL', 'Emergency Leave', TRUE, 3, 'Emergency leave', 1)
+      ON CONFLICT (code, company_id) DO NOTHING;
 
       -- Leave Balances (per employee per year)
       CREATE TABLE IF NOT EXISTS leave_balances (
@@ -562,6 +648,47 @@ const initDb = async () => {
       CREATE INDEX IF NOT EXISTS idx_leave_requests_employee ON leave_requests(employee_id);
       CREATE INDEX IF NOT EXISTS idx_leave_requests_status ON leave_requests(status);
       CREATE INDEX IF NOT EXISTS idx_leave_requests_dates ON leave_requests(start_date, end_date);
+
+      -- Add MC upload and approval columns to leave_requests
+      DO $$
+      BEGIN
+        -- mc_url: Medical Certificate URL for sick leave
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='mc_url') THEN
+          ALTER TABLE leave_requests ADD COLUMN mc_url TEXT;
+        END IF;
+        -- half_day: for half-day leave (AM/PM)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='half_day') THEN
+          ALTER TABLE leave_requests ADD COLUMN half_day VARCHAR(2);
+        END IF;
+        -- supervisor approval columns
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='supervisor_id') THEN
+          ALTER TABLE leave_requests ADD COLUMN supervisor_id INTEGER REFERENCES employees(id);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='supervisor_approved') THEN
+          ALTER TABLE leave_requests ADD COLUMN supervisor_approved BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='supervisor_approved_at') THEN
+          ALTER TABLE leave_requests ADD COLUMN supervisor_approved_at TIMESTAMP;
+        END IF;
+        -- manager approval columns
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='manager_id') THEN
+          ALTER TABLE leave_requests ADD COLUMN manager_id INTEGER REFERENCES employees(id);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='manager_approved') THEN
+          ALTER TABLE leave_requests ADD COLUMN manager_approved BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='manager_approved_at') THEN
+          ALTER TABLE leave_requests ADD COLUMN manager_approved_at TIMESTAMP;
+        END IF;
+        -- approval level tracking (1=supervisor, 2=manager, 3=admin)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='approval_level') THEN
+          ALTER TABLE leave_requests ADD COLUMN approval_level INTEGER DEFAULT 1;
+        END IF;
+        -- child_number: for maternity/paternity tracking (1-5)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='child_number') THEN
+          ALTER TABLE leave_requests ADD COLUMN child_number INTEGER;
+        END IF;
+      END $$;
 
       -- Claims
       CREATE TABLE IF NOT EXISTS claims (

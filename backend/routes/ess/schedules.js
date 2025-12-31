@@ -78,6 +78,35 @@ router.get('/today', authenticateEmployee, asyncHandler(async (req, res) => {
   });
 }));
 
+// Get public holidays for a month
+router.get('/public-holidays', authenticateEmployee, asyncHandler(async (req, res) => {
+  const { year, month } = req.query;
+
+  if (!year || !month) {
+    return res.status(400).json({ error: 'Year and month are required' });
+  }
+
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+  const result = await pool.query(
+    `SELECT id, name, date
+     FROM public_holidays
+     WHERE date BETWEEN $1 AND $2
+     ORDER BY date`,
+    [startDate, endDate]
+  );
+
+  // Format as a map for easy lookup
+  const holidays = {};
+  result.rows.forEach(h => {
+    const dateKey = h.date.toISOString().split('T')[0];
+    holidays[dateKey] = h.name;
+  });
+
+  res.json(holidays);
+}));
+
 // Get own schedule for a month
 router.get('/my-schedule', authenticateEmployee, asyncHandler(async (req, res) => {
   const employeeId = req.employee.id;

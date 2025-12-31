@@ -10,7 +10,6 @@ function ESSCalendar() {
   // Get employee info from localStorage
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const showApprovalSection = canApproveShiftSwap(employeeInfo);
-  const isSupOrMgr = isSupervisorOrManager(employeeInfo);
 
   // Calendar state
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -18,11 +17,18 @@ function ESSCalendar() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState(null);
+  const [publicHolidays, setPublicHolidays] = useState({});
 
   // Outlet calendar state
   const [outletSchedules, setOutletSchedules] = useState([]);
   const [outletLoading, setOutletLoading] = useState(false);
   const [hasOutlet, setHasOutlet] = useState(true);
+
+  // Date staff popup state
+  const [showDatePopup, setShowDatePopup] = useState(false);
+  const [datePopupData, setDatePopupData] = useState({ date: null, staff: [], holiday: null });
+  const [selectedStaff, setSelectedStaff] = useState([]);
+  const [dateStaffLoading, setDateStaffLoading] = useState(false);
 
   // Swap requests state
   const [swapRequests, setSwapRequests] = useState([]);
@@ -38,6 +44,7 @@ function ESSCalendar() {
 
   // Swap form state
   const [showSwapModal, setShowSwapModal] = useState(false);
+  const [swapAction, setSwapAction] = useState('swap'); // 'swap' or 'replace'
   const [selectedColleagueShift, setSelectedColleagueShift] = useState(null);
   const [myShifts, setMyShifts] = useState([]);
   const [swapForm, setSwapForm] = useState({
@@ -51,13 +58,17 @@ function ESSCalendar() {
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth() + 1;
 
-  // Fetch schedule data
+  // Fetch schedule data and holidays
   const fetchScheduleData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await essApi.getMySchedule(currentYear, currentMonth);
-      setSchedules(res.data.schedules || {});
-      setSummary(res.data.summary || null);
+      const [schedRes, holidayRes] = await Promise.all([
+        essApi.getMySchedule(currentYear, currentMonth),
+        essApi.getPublicHolidays(currentYear, currentMonth)
+      ]);
+      setSchedules(schedRes.data.schedules || {});
+      setSummary(schedRes.data.summary || null);
+      setPublicHolidays(holidayRes.data || {});
     } catch (error) {
       console.error('Error fetching schedule:', error);
     } finally {
@@ -73,8 +84,12 @@ function ESSCalendar() {
   const fetchOutletCalendar = useCallback(async () => {
     try {
       setOutletLoading(true);
-      const res = await essApi.getOutletCalendar(currentYear, currentMonth);
-      setOutletSchedules(res.data || []);
+      const [schedRes, holidayRes] = await Promise.all([
+        essApi.getOutletCalendar(currentYear, currentMonth),
+        essApi.getPublicHolidays(currentYear, currentMonth)
+      ]);
+      setOutletSchedules(schedRes.data || []);
+      setPublicHolidays(holidayRes.data || {});
       setHasOutlet(true);
     } catch (error) {
       console.error('Error fetching outlet calendar:', error);
@@ -150,12 +165,14 @@ function ESSCalendar() {
     for (let day = 1; day <= totalDays; day++) {
       const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const schedule = schedules[dateStr];
+      const holiday = publicHolidays[dateStr];
       days.push({
         date: day,
         dateStr,
         isCurrentMonth: true,
         isToday: dateStr === new Date().toISOString().split('T')[0],
-        schedule
+        schedule,
+        holiday
       });
     }
 
@@ -172,44 +189,94 @@ function ESSCalendar() {
     const days = [];
 
     for (let i = 0; i < startPadding; i++) {
-      days.push({ date: null, isCurrentMonth: false, shifts: [] });
+      days.push({ date: null, isCurrentMonth: false, shifts: [], holiday: null });
     }
 
     for (let day = 1; day <= totalDays; day++) {
       const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const shifts = outletSchedules.filter(s => s.schedule_date.split('T')[0] === dateStr);
+      const holiday = publicHolidays[dateStr];
       days.push({
         date: day,
         dateStr,
         isCurrentMonth: true,
         isToday: dateStr === new Date().toISOString().split('T')[0],
-        shifts
+        shifts,
+        holiday,
+        staffCount: shifts.length
       });
     }
 
     return days;
   };
 
-  // Handle day click
+  // Handle day click on My Schedule
   const handleDayClick = (day) => {
     if (!day.isCurrentMonth || !day.date) return;
     setSelectedDay(day);
   };
 
-  // Handle outlet shift click (for swap request)
-  const handleOutletShiftClick = async (shift) => {
-    if (shift.is_mine) return;
+  // Handle outlet day click - show staff popup
+  const handleOutletDayClick = async (day) => {
+    if (!day.isCurrentMonth || !day.date) return;
 
-    if (new Date(shift.schedule_date) < new Date().setHours(0, 0, 0, 0)) {
-      alert('Cannot swap past shifts');
-      return;
+    setDateStaffLoading(true);
+    setShowDatePopup(true);
+    setSelectedStaff([]);
+
+    try {
+      const res = await essApi.getDateStaff(day.dateStr);
+      setDatePopupData({
+        date: day.dateStr,
+        staff: res.data || [],
+        holiday: day.holiday
+      });
+    } catch (error) {
+      console.error('Error fetching date staff:', error);
+      setDatePopupData({
+        date: day.dateStr,
+        staff: [],
+        holiday: day.holiday
+      });
+    } finally {
+      setDateStaffLoading(false);
     }
+  };
 
-    setSelectedColleagueShift(shift);
+  // Toggle staff selection
+  const toggleStaffSelection = (staffMember) => {
+    if (!staffMember.can_swap) return;
+
+    setSelectedStaff(prev => {
+      const isSelected = prev.some(s => s.schedule_id === staffMember.schedule_id);
+      if (isSelected) {
+        return prev.filter(s => s.schedule_id !== staffMember.schedule_id);
+      } else {
+        return [...prev, staffMember];
+      }
+    });
+  };
+
+  // Handle swap/replace action
+  const handleSwapAction = async (action) => {
+    if (selectedStaff.length === 0) return;
+
+    // For now, only support single employee swap
+    const target = selectedStaff[0];
+    setSwapAction(action);
+    setSelectedColleagueShift({
+      id: target.schedule_id,
+      employee_id: target.employee_id,
+      employee_name: target.employee_name,
+      schedule_date: target.schedule_date,
+      shift_start: target.shift_start,
+      shift_end: target.shift_end
+    });
+
     setSwapForm({
       requester_shift_id: '',
-      target_id: shift.employee_id,
-      target_shift_id: shift.id,
+      target_id: target.employee_id,
+      target_shift_id: target.schedule_id,
       reason: ''
     });
 
@@ -220,6 +287,7 @@ function ESSCalendar() {
       console.error('Error fetching my shifts:', error);
     }
 
+    setShowDatePopup(false);
     setShowSwapModal(true);
   };
 
@@ -238,6 +306,7 @@ function ESSCalendar() {
       setShowSwapModal(false);
       setSelectedColleagueShift(null);
       setSwapForm({ requester_shift_id: '', target_id: '', target_shift_id: '', reason: '' });
+      setSelectedStaff([]);
       alert('Swap request sent! Waiting for colleague approval.');
       fetchSwapRequests();
     } catch (error) {
@@ -344,6 +413,12 @@ function ESSCalendar() {
     });
   };
 
+  const formatFullDate = (dateStr) => {
+    return new Date(dateStr).toLocaleDateString('en-MY', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+  };
+
   const getSwapStatusLabel = (request) => {
     switch (request.status) {
       case 'pending_target':
@@ -443,13 +518,18 @@ function ESSCalendar() {
                   {calendarDays.map((day, index) => (
                     <div
                       key={index}
-                      className={`calendar-day ${day.isCurrentMonth ? '' : 'other'} ${day.isToday ? 'today' : ''} ${day.schedule ? getStatusClass(day.schedule) : ''}`}
+                      className={`calendar-day ${day.isCurrentMonth ? '' : 'other'} ${day.isToday ? 'today' : ''} ${day.schedule ? getStatusClass(day.schedule) : ''} ${day.holiday ? 'holiday' : ''}`}
                       onClick={() => handleDayClick(day)}
                     >
                       <span className="day-num">{day.date || ''}</span>
                       {day.schedule && (
                         <div className="shift-indicator">
                           {day.schedule.shift_start}
+                        </div>
+                      )}
+                      {day.holiday && (
+                        <div className="holiday-name" title={day.holiday}>
+                          {day.holiday.substring(0, 6)}
                         </div>
                       )}
                     </div>
@@ -468,6 +548,9 @@ function ESSCalendar() {
               <div className="legend-item">
                 <span className="dot absent"></span> Absent
               </div>
+              <div className="legend-item">
+                <span className="dot holiday"></span> Holiday
+              </div>
             </div>
           </>
         )}
@@ -483,7 +566,7 @@ function ESSCalendar() {
             ) : (
               <>
                 <div className="outlet-calendar-info">
-                  <p>Tap on a colleague's shift to request a swap</p>
+                  <p>Tap on any date to view staff and request shift swap</p>
                 </div>
 
                 <div className="calendar-nav-ess">
@@ -511,25 +594,20 @@ function ESSCalendar() {
                       {outletCalendarDays.map((day, index) => (
                         <div
                           key={index}
-                          className={`calendar-day outlet-day ${day.isCurrentMonth ? '' : 'other'} ${day.isToday ? 'today' : ''}`}
+                          className={`calendar-day outlet-day ${day.isCurrentMonth ? '' : 'other'} ${day.isToday ? 'today' : ''} ${day.holiday ? 'holiday' : ''}`}
+                          onClick={() => handleOutletDayClick(day)}
                         >
                           <span className="day-num">{day.date || ''}</span>
-                          <div className="outlet-shifts">
-                            {day.shifts.slice(0, 3).map((shift, i) => (
-                              <div
-                                key={i}
-                                className={`outlet-shift ${shift.is_mine ? 'mine' : 'colleague'}`}
-                                onClick={() => !shift.is_mine && handleOutletShiftClick(shift)}
-                                title={`${shift.employee_name}: ${shift.shift_start}-${shift.shift_end}`}
-                              >
-                                <span className="shift-name">{shift.employee_name?.split(' ')[0]}</span>
-                                <span className="shift-time">{shift.shift_start}</span>
-                              </div>
-                            ))}
-                            {day.shifts.length > 3 && (
-                              <div className="more-shifts">+{day.shifts.length - 3}</div>
-                            )}
-                          </div>
+                          {day.staffCount > 0 && (
+                            <div className="staff-count">
+                              {day.staffCount} staff
+                            </div>
+                          )}
+                          {day.holiday && (
+                            <div className="holiday-name" title={day.holiday}>
+                              {day.holiday.substring(0, 8)}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -542,6 +620,9 @@ function ESSCalendar() {
                   </div>
                   <div className="legend-item">
                     <span className="dot colleague"></span> Colleague
+                  </div>
+                  <div className="legend-item">
+                    <span className="dot holiday"></span> Holiday
                   </div>
                 </div>
               </>
@@ -652,7 +733,7 @@ function ESSCalendar() {
                   <h3>My Requests</h3>
                   {outgoingSwaps.length === 0 ? (
                     <div className="empty-state small">
-                      <p>No swap requests. Go to Outlet tab to request a swap.</p>
+                      <p>No swap requests. Go to Outlet tab and tap on a date to request a swap.</p>
                     </div>
                   ) : (
                     outgoingSwaps.map(request => (
@@ -703,6 +784,11 @@ function ESSCalendar() {
                 <button className="close-btn" onClick={() => setSelectedDay(null)}>&#x2715;</button>
               </div>
               <div className="modal-body">
+                {selectedDay.holiday && (
+                  <div className="holiday-banner">
+                    {selectedDay.holiday}
+                  </div>
+                )}
                 <div className="detail-row">
                   <span className="label">Shift:</span>
                   <span className="value">
@@ -732,19 +818,99 @@ function ESSCalendar() {
           </div>
         )}
 
+        {/* Date Staff Popup */}
+        {showDatePopup && (
+          <div className="ess-modal-overlay" onClick={() => { setShowDatePopup(false); setSelectedStaff([]); }}>
+            <div className="ess-modal date-staff-modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{datePopupData.date ? formatFullDate(datePopupData.date) : 'Loading...'}</h2>
+                <button className="close-btn" onClick={() => { setShowDatePopup(false); setSelectedStaff([]); }}>&#x2715;</button>
+              </div>
+
+              <div className="modal-body">
+                {datePopupData.holiday && (
+                  <div className="holiday-banner">
+                    {datePopupData.holiday}
+                  </div>
+                )}
+
+                {dateStaffLoading ? (
+                  <div className="ess-loading">
+                    <div className="spinner"></div>
+                    <p>Loading staff...</p>
+                  </div>
+                ) : datePopupData.staff.length === 0 ? (
+                  <div className="empty-state small">
+                    <p>No staff scheduled for this date</p>
+                  </div>
+                ) : (
+                  <div className="staff-list">
+                    <div className="staff-list-header">
+                      <span>Select staff to swap/replace shift:</span>
+                    </div>
+                    {datePopupData.staff.map(staff => (
+                      <div
+                        key={staff.schedule_id}
+                        className={`staff-item ${staff.is_mine ? 'mine' : ''} ${!staff.can_swap ? 'disabled' : ''} ${selectedStaff.some(s => s.schedule_id === staff.schedule_id) ? 'selected' : ''}`}
+                        onClick={() => toggleStaffSelection(staff)}
+                      >
+                        <div className="staff-checkbox">
+                          {staff.can_swap ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedStaff.some(s => s.schedule_id === staff.schedule_id)}
+                              onChange={() => {}}
+                            />
+                          ) : (
+                            <span className="checkbox-disabled">{staff.is_mine ? 'You' : '-'}</span>
+                          )}
+                        </div>
+                        <div className="staff-info">
+                          <div className="staff-name">{staff.employee_name}</div>
+                          <div className="staff-position">{staff.position}</div>
+                        </div>
+                        <div className="staff-shift">
+                          {staff.shift_start} - {staff.shift_end}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {selectedStaff.length > 0 && (
+                <div className="modal-footer swap-actions-footer">
+                  <button
+                    className="swap-btn"
+                    onClick={() => handleSwapAction('swap')}
+                  >
+                    Swap Shift
+                  </button>
+                  <button
+                    className="replace-btn"
+                    onClick={() => handleSwapAction('replace')}
+                  >
+                    Replace Shift
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Swap Request Modal */}
         {showSwapModal && selectedColleagueShift && (
           <div className="ess-modal-overlay" onClick={() => setShowSwapModal(false)}>
             <div className="ess-modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <h2>Request Shift Swap</h2>
+                <h2>{swapAction === 'swap' ? 'Swap Shift' : 'Replace Shift'}</h2>
                 <button className="close-btn" onClick={() => setShowSwapModal(false)}>&#x2715;</button>
               </div>
 
               <form onSubmit={handleSubmitSwap}>
                 <div className="modal-body">
                   <div className="swap-target-info">
-                    <p>You want to take:</p>
+                    <p>Request to {swapAction} with:</p>
                     <div className="target-shift">
                       <strong>{selectedColleagueShift.employee_name}'s shift</strong>
                       <span>{formatDate(selectedColleagueShift.schedule_date)}</span>

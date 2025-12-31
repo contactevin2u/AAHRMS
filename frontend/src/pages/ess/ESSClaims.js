@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import { compressReceiptPhoto, getBase64SizeKB } from '../../utils/imageCompression';
@@ -28,6 +28,7 @@ function ESSClaims() {
   const [capturedReceipt, setCapturedReceipt] = useState(null);
   const [receiptType, setReceiptType] = useState(null); // 'image' or 'pdf'
   const [processingImage, setProcessingImage] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState(null);
 
   const [form, setForm] = useState({
     category: '',
@@ -63,11 +64,61 @@ function ESSClaims() {
     }
   }, [mainTab, activeTab]);
 
+  // Check camera permission on mount (does NOT trigger popup)
+  useEffect(() => {
+    const checkCameraPermission = async () => {
+      try {
+        const result = await navigator.permissions.query({ name: 'camera' });
+        setCameraPermission(result.state);
+        result.onchange = () => setCameraPermission(result.state);
+      } catch {
+        setCameraPermission('prompt');
+      }
+    };
+    checkCameraPermission();
+  }, []);
+
+  // Stop camera helper function
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  // CLEANUP: Stop camera on component unmount
   useEffect(() => {
     return () => {
-      stopCamera();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
     };
   }, []);
+
+  // CLEANUP: Stop camera when navigating away or tab hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && streamRef.current) {
+        stopCamera();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [stopCamera]);
 
   const showTeamTab = canApproveClaims(employeeInfo);
 
@@ -140,8 +191,21 @@ function ESSClaims() {
     setShowRejectModal(true);
   };
 
+  // Start camera - ONLY on button click
   const startCamera = async () => {
+    // Check if camera permission is denied
+    if (cameraPermission === 'denied') {
+      alert('Camera blocked. Please enable camera in browser settings.');
+      return;
+    }
+
     try {
+      // Stop any existing stream first
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
@@ -154,7 +218,12 @@ function ESSClaims() {
       setCameraActive(true);
     } catch (err) {
       console.error('Camera error:', err);
-      alert('Unable to access camera. Please allow camera permission.');
+      if (err.name === 'NotAllowedError') {
+        setCameraPermission('denied');
+        alert('Camera permission denied. Please allow camera access.');
+      } else {
+        alert('Unable to access camera. Please check your device.');
+      }
     }
   };
 
@@ -170,14 +239,6 @@ function ESSClaims() {
       videoRef.current.play().catch(err => console.error('Video play error:', err));
     }
   }, [cameraActive]);
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setCameraActive(false);
-  };
 
   const captureReceipt = async () => {
     if (!videoRef.current || !canvasRef.current) return;

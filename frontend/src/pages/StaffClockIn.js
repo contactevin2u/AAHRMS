@@ -62,8 +62,25 @@ function StaffClockIn() {
     cameraActiveTime: 0
   });
 
+  // Camera permission state (check without popup)
+  const [cameraPermission, setCameraPermission] = useState(null);
+
   // Liveness delay (milliseconds)
   const LIVENESS_DELAY = getLivenessDelay();
+
+  // Check camera permission on mount (does NOT trigger popup)
+  useEffect(() => {
+    const checkCameraPermission = async () => {
+      try {
+        const result = await navigator.permissions.query({ name: 'camera' });
+        setCameraPermission(result.state);
+        result.onchange = () => setCameraPermission(result.state);
+      } catch {
+        setCameraPermission('prompt');
+      }
+    };
+    checkCameraPermission();
+  }, []);
 
   // Preload face detection models on component mount
   useEffect(() => {
@@ -115,14 +132,26 @@ function StaffClockIn() {
     }
   };
 
-  // Start camera
+  // Start camera - ONLY on button click
   const startCamera = useCallback(async () => {
+    // Check if camera permission is denied
+    if (cameraPermission === 'denied') {
+      setError('Camera blocked. Please enable camera in browser settings.');
+      return;
+    }
+
     try {
       setError('');
       setCapturedPhoto(null);
       setCanCapture(false);
       setCameraLoading(true);
       setCameraActive(false);
+
+      // Stop any existing stream first
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -141,13 +170,14 @@ function StaffClockIn() {
       setCameraLoading(false);
       if (err.name === 'NotAllowedError') {
         setError('Camera permission denied. Please allow camera access to clock in.');
+        setCameraPermission('denied');
       } else if (err.name === 'NotFoundError') {
         setError('No camera found. Please ensure your device has a camera.');
       } else {
         setError('Unable to access camera. Please allow camera permission.');
       }
     }
-  }, []);
+  }, [cameraPermission]);
 
   // Attach stream to video element when it becomes available
   useEffect(() => {
@@ -195,10 +225,36 @@ function StaffClockIn() {
     setCanCapture(false);
   }, []);
 
-  // Cleanup on unmount
+  // CLEANUP: Stop camera on component unmount
   useEffect(() => {
     return () => {
-      stopCamera();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
+  // CLEANUP: Stop camera when navigating away or tab hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && streamRef.current) {
+        stopCamera();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [stopCamera]);
 

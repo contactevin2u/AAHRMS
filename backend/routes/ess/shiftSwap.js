@@ -43,6 +43,7 @@ const formatTime = (time) => {
 };
 
 // Get outlet calendar (all shifts for employees in same outlet)
+// Role-based visibility: Employee/Supervisor = own outlet, Manager = managed outlets
 router.get('/outlet-calendar', authenticateEmployee, asyncHandler(async (req, res) => {
   const employeeId = req.employee.id;
   const { year, month } = req.query;
@@ -51,33 +52,56 @@ router.get('/outlet-calendar', authenticateEmployee, asyncHandler(async (req, re
     return res.status(400).json({ error: 'Year and month are required' });
   }
 
-  // Get employee's outlet
+  // Get employee's info including role
   const empResult = await pool.query(
-    'SELECT outlet_id FROM employees WHERE id = $1',
+    'SELECT outlet_id, employee_role, company_id FROM employees WHERE id = $1',
     [employeeId]
   );
 
-  if (!empResult.rows[0]?.outlet_id) {
+  const employee = empResult.rows[0];
+  if (!employee) {
+    return res.status(400).json({ error: 'Employee not found' });
+  }
+
+  // Determine which outlets to show based on role
+  let outletIds = [];
+  if (employee.employee_role === 'manager') {
+    // Manager sees all managed outlets
+    const managedResult = await pool.query(
+      'SELECT outlet_id FROM employee_outlets WHERE employee_id = $1',
+      [employeeId]
+    );
+    outletIds = managedResult.rows.map(r => r.outlet_id);
+    if (outletIds.length === 0 && employee.outlet_id) {
+      outletIds = [employee.outlet_id];
+    }
+  } else if (employee.outlet_id) {
+    // Employee/Supervisor sees own outlet only
+    outletIds = [employee.outlet_id];
+  }
+
+  if (outletIds.length === 0) {
     return res.status(400).json({ error: 'You are not assigned to an outlet' });
   }
 
-  const outletId = empResult.rows[0].outlet_id;
-
-  // Get all schedules for this outlet for the month
+  // Get all schedules for outlets for the month
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
   const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
   const result = await pool.query(
     `SELECT s.*,
             e.name as employee_name,
-            e.id as employee_id
+            e.id as employee_id,
+            e.position,
+            o.name as outlet_name
      FROM schedules s
      JOIN employees e ON s.employee_id = e.id
-     WHERE e.outlet_id = $1
+     LEFT JOIN outlets o ON e.outlet_id = o.id
+     WHERE e.outlet_id = ANY($1)
        AND s.schedule_date BETWEEN $2 AND $3
        AND s.status = 'scheduled'
-     ORDER BY s.schedule_date, s.shift_start`,
-    [outletId, startDate, endDate]
+     ORDER BY s.schedule_date, o.name, s.shift_start`,
+    [outletIds, startDate, endDate]
   );
 
   // Format the schedules
@@ -89,6 +113,84 @@ router.get('/outlet-calendar', authenticateEmployee, asyncHandler(async (req, re
   }));
 
   res.json(schedules);
+}));
+
+// Get staff working on a specific date (for shift swap popup)
+// Role-based visibility: Employee/Supervisor = own outlet, Manager = managed outlets
+router.get('/date-staff', authenticateEmployee, asyncHandler(async (req, res) => {
+  const employeeId = req.employee.id;
+  const { date } = req.query;
+
+  if (!date) {
+    return res.status(400).json({ error: 'Date is required' });
+  }
+
+  // Get employee's info including role
+  const empResult = await pool.query(
+    'SELECT outlet_id, employee_role, company_id, position FROM employees WHERE id = $1',
+    [employeeId]
+  );
+
+  const employee = empResult.rows[0];
+  if (!employee) {
+    return res.status(400).json({ error: 'Employee not found' });
+  }
+
+  // Determine which outlets to show based on role
+  let outletIds = [];
+  if (employee.employee_role === 'manager') {
+    // Manager sees all managed outlets
+    const managedResult = await pool.query(
+      'SELECT outlet_id FROM employee_outlets WHERE employee_id = $1',
+      [employeeId]
+    );
+    outletIds = managedResult.rows.map(r => r.outlet_id);
+    if (outletIds.length === 0 && employee.outlet_id) {
+      outletIds = [employee.outlet_id];
+    }
+  } else if (employee.outlet_id) {
+    // Employee/Supervisor sees own outlet only
+    outletIds = [employee.outlet_id];
+  }
+
+  if (outletIds.length === 0) {
+    return res.json([]);
+  }
+
+  // Get all staff working on this date
+  const result = await pool.query(
+    `SELECT s.*,
+            e.id as employee_id,
+            e.name as employee_name,
+            e.position,
+            e.outlet_id,
+            o.name as outlet_name
+     FROM schedules s
+     JOIN employees e ON s.employee_id = e.id
+     LEFT JOIN outlets o ON e.outlet_id = o.id
+     WHERE e.outlet_id = ANY($1)
+       AND s.schedule_date = $2
+       AND s.status = 'scheduled'
+     ORDER BY o.name, s.shift_start, e.name`,
+    [outletIds, date]
+  );
+
+  // Format response
+  const staff = result.rows.map(s => ({
+    schedule_id: s.id,
+    employee_id: s.employee_id,
+    employee_name: s.employee_name,
+    position: s.position || 'Staff',
+    outlet_id: s.outlet_id,
+    outlet_name: s.outlet_name,
+    shift_start: formatTime(s.shift_start),
+    shift_end: formatTime(s.shift_end),
+    schedule_date: s.schedule_date,
+    is_mine: s.employee_id === employeeId,
+    can_swap: s.employee_id !== employeeId && new Date(date) >= new Date().setHours(0, 0, 0, 0)
+  }));
+
+  res.json(staff);
 }));
 
 // Get colleagues in same outlet
