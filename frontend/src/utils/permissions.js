@@ -98,6 +98,14 @@ export const canApproveShiftSwap = (employeeInfo) => {
 };
 
 /**
+ * Check if employee can approve claims
+ * Supervisors/managers at any company
+ */
+export const canApproveClaims = (employeeInfo) => {
+  return isSupervisorOrManager(employeeInfo);
+};
+
+/**
  * Check if clock-in feature is available
  * Only for Mimix (outlet-based companies)
  */

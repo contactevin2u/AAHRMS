@@ -407,6 +407,10 @@
   border-left-color: #8b5cf6;
 }
 
+.approval-card.claims {
+  border-left-color: #22c55e;
+}
+
 .approval-badge {
   position: absolute;
   top: -8px;

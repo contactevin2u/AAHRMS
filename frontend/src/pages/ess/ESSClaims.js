@@ -2,15 +2,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import { compressReceiptPhoto, getBase64SizeKB } from '../../utils/imageCompression';
+import { canApproveClaims, isSupervisorOrManager } from '../../utils/permissions';
 import './ESSClaims.css';
 
 function ESSClaims() {
+  const [employeeInfo, setEmployeeInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [claims, setClaims] = useState([]);
+  const [teamClaims, setTeamClaims] = useState([]);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedClaim, setSelectedClaim] = useState(null);
+  const [mainTab, setMainTab] = useState('my'); // 'my' or 'team'
   const [activeTab, setActiveTab] = useState('all');
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [claimToReject, setClaimToReject] = useState(null);
 
   // Camera states
   const videoRef = useRef(null);
@@ -41,14 +48,28 @@ function ESSClaims() {
   ];
 
   useEffect(() => {
-    fetchClaims();
-  }, [activeTab]);
+    const storedInfo = localStorage.getItem('employeeInfo');
+    if (storedInfo) {
+      const info = JSON.parse(storedInfo);
+      setEmployeeInfo(info);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mainTab === 'my') {
+      fetchClaims();
+    } else if (mainTab === 'team') {
+      fetchTeamClaims();
+    }
+  }, [mainTab, activeTab]);
 
   useEffect(() => {
     return () => {
       stopCamera();
     };
   }, []);
+
+  const showTeamTab = canApproveClaims(employeeInfo);
 
   const fetchClaims = async () => {
     try {
@@ -61,6 +82,62 @@ function ESSClaims() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTeamClaims = async () => {
+    try {
+      setLoading(true);
+      const res = await essApi.getTeamPendingClaims();
+      setTeamClaims(res.data);
+    } catch (error) {
+      console.error('Error fetching team claims:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveClaim = async (claim) => {
+    if (!window.confirm(`Approve claim of ${formatCurrency(claim.amount)} from ${claim.employee_name}?`)) return;
+
+    try {
+      setSubmitting(true);
+      await essApi.approveClaim(claim.id, {});
+      alert('Claim approved successfully');
+      setSelectedClaim(null);
+      fetchTeamClaims();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to approve claim');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRejectClaim = async () => {
+    if (!rejectReason.trim()) {
+      alert('Please provide a rejection reason');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await essApi.rejectClaim(claimToReject.id, { remarks: rejectReason });
+      alert('Claim rejected');
+      setShowRejectModal(false);
+      setClaimToReject(null);
+      setRejectReason('');
+      setSelectedClaim(null);
+      fetchTeamClaims();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to reject claim');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openRejectModal = (claim) => {
+    setClaimToReject(claim);
+    setRejectReason('');
+    setShowRejectModal(true);
   };
 
   const startCamera = async () => {
@@ -298,68 +375,126 @@ function ESSClaims() {
             <h1>Claims</h1>
             <p>Submit and track expense claims</p>
           </div>
-          <button className="apply-btn" onClick={() => setShowSubmitModal(true)}>
-            + Submit
-          </button>
-        </div>
-
-        {/* Summary Cards */}
-        <div className="summary-cards">
-          <div className="summary-card pending">
-            <span className="summary-value">{formatCurrency(getPendingAmount())}</span>
-            <span className="summary-label">Pending</span>
-          </div>
-          <div className="summary-card approved">
-            <span className="summary-value">{formatCurrency(getApprovedAmount())}</span>
-            <span className="summary-label">Approved</span>
-          </div>
-        </div>
-
-        {/* Tab Filter */}
-        <div className="ess-tabs">
-          {['all', 'pending', 'approved', 'rejected'].map(tab => (
-            <button
-              key={tab}
-              className={`tab-btn ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          {mainTab === 'my' && (
+            <button className="apply-btn" onClick={() => setShowSubmitModal(true)}>
+              + Submit
             </button>
-          ))}
+          )}
         </div>
+
+        {/* Main Tab Switcher (My Claims / Team) */}
+        {showTeamTab && (
+          <div className="main-tabs">
+            <button
+              className={`main-tab ${mainTab === 'my' ? 'active' : ''}`}
+              onClick={() => setMainTab('my')}
+            >
+              My Claims
+            </button>
+            <button
+              className={`main-tab ${mainTab === 'team' ? 'active' : ''}`}
+              onClick={() => setMainTab('team')}
+            >
+              Team
+              {teamClaims.length > 0 && <span className="tab-badge">{teamClaims.length}</span>}
+            </button>
+          </div>
+        )}
+
+        {/* My Claims View */}
+        {mainTab === 'my' && (
+          <>
+            {/* Summary Cards */}
+            <div className="summary-cards">
+              <div className="summary-card pending">
+                <span className="summary-value">{formatCurrency(getPendingAmount())}</span>
+                <span className="summary-label">Pending</span>
+              </div>
+              <div className="summary-card approved">
+                <span className="summary-value">{formatCurrency(getApprovedAmount())}</span>
+                <span className="summary-label">Approved</span>
+              </div>
+            </div>
+
+            {/* Tab Filter */}
+            <div className="ess-tabs">
+              {['all', 'pending', 'approved', 'rejected'].map(tab => (
+                <button
+                  key={tab}
+                  className={`tab-btn ${activeTab === tab ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab)}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {loading ? (
           <div className="ess-loading">
             <div className="spinner"></div>
             <p>Loading...</p>
           </div>
-        ) : claims.length === 0 ? (
-          <div className="empty-state">
-            <span className="empty-icon">&#x1F4DD;</span>
-            <p>No claims found</p>
-          </div>
+        ) : mainTab === 'my' ? (
+          // My Claims List
+          claims.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-icon">&#x1F4DD;</span>
+              <p>No claims found</p>
+            </div>
+          ) : (
+            <div className="claims-list">
+              {claims.map((claim, idx) => (
+                <div
+                  key={idx}
+                  className="claim-card"
+                  onClick={() => setSelectedClaim({ ...claim, isTeamClaim: false })}
+                >
+                  <div className="claim-main">
+                    <span className="claim-type">{getClaimTypeLabel(claim.category)}</span>
+                    <span className="claim-desc">{claim.description || 'No description'}</span>
+                    <span className="claim-date">{formatDate(claim.claim_date)}</span>
+                  </div>
+                  <div className="claim-right">
+                    <span className="claim-amount">{formatCurrency(claim.amount)}</span>
+                    <span className={`claim-status ${getStatusClass(claim.status)}`}>
+                      {claim.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : (
-          <div className="claims-list">
-            {claims.map((claim, idx) => (
-              <div
-                key={idx}
-                className="claim-card"
-                onClick={() => setSelectedClaim(claim)}
-              >
-                <div className="claim-main">
-                  <span className="claim-type">{getClaimTypeLabel(claim.category)}</span>
-                  <span className="claim-desc">{claim.description || 'No description'}</span>
-                  <span className="claim-date">{formatDate(claim.claim_date)}</span>
+          // Team Claims List
+          teamClaims.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-icon">&#x2705;</span>
+              <p>No pending claims to approve</p>
+            </div>
+          ) : (
+            <div className="claims-list">
+              {teamClaims.map((claim, idx) => (
+                <div
+                  key={idx}
+                  className="claim-card team-claim"
+                  onClick={() => setSelectedClaim({ ...claim, isTeamClaim: true })}
+                >
+                  <div className="claim-main">
+                    <span className="claim-employee">{claim.employee_name}</span>
+                    <span className="claim-type">{getClaimTypeLabel(claim.category)}</span>
+                    <span className="claim-desc">{claim.description || 'No description'}</span>
+                    <span className="claim-date">{formatDate(claim.claim_date)}</span>
+                  </div>
+                  <div className="claim-right">
+                    <span className="claim-amount">{formatCurrency(claim.amount)}</span>
+                    <span className="claim-status status-pending">pending</span>
+                  </div>
                 </div>
-                <div className="claim-right">
-                  <span className="claim-amount">{formatCurrency(claim.amount)}</span>
-                  <span className={`claim-status ${getStatusClass(claim.status)}`}>
-                    {claim.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         )}
 
         {/* Submit Claim Modal */}
@@ -506,6 +641,13 @@ function ESSClaims() {
                 <button className="close-btn" onClick={() => setSelectedClaim(null)}>&#x2715;</button>
               </div>
               <div className="modal-body">
+                {/* Show employee name for team claims */}
+                {selectedClaim.isTeamClaim && (
+                  <div className="detail-item">
+                    <span className="label">Employee</span>
+                    <span className="value employee-name">{selectedClaim.employee_name}</span>
+                  </div>
+                )}
                 <div className="detail-item">
                   <span className="label">Type</span>
                   <span className="value">{getClaimTypeLabel(selectedClaim.category)}</span>
@@ -537,9 +679,72 @@ function ESSClaims() {
                 {selectedClaim.receipt_url && (
                   <div className="detail-item full">
                     <span className="label">Receipt</span>
-                    <img src={selectedClaim.receipt_url} alt="Receipt" className="receipt-image" />
+                    {selectedClaim.receipt_url.includes('application/pdf') ? (
+                      <div className="pdf-preview">
+                        <span className="pdf-icon">&#x1F4C4;</span>
+                        <span>PDF Receipt</span>
+                        <a href={selectedClaim.receipt_url} target="_blank" rel="noopener noreferrer">View PDF</a>
+                      </div>
+                    ) : (
+                      <img src={selectedClaim.receipt_url} alt="Receipt" className="receipt-image" />
+                    )}
                   </div>
                 )}
+              </div>
+              {/* Approve/Reject buttons for team claims */}
+              {selectedClaim.isTeamClaim && selectedClaim.status === 'pending' && (
+                <div className="modal-footer approval-actions">
+                  <button
+                    className="reject-btn"
+                    onClick={() => openRejectModal(selectedClaim)}
+                    disabled={submitting}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    className="approve-btn"
+                    onClick={() => handleApproveClaim(selectedClaim)}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Processing...' : 'Approve'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Reject Reason Modal */}
+        {showRejectModal && (
+          <div className="ess-modal-overlay" onClick={() => setShowRejectModal(false)}>
+            <div className="ess-modal small" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Reject Claim</h2>
+                <button className="close-btn" onClick={() => setShowRejectModal(false)}>&#x2715;</button>
+              </div>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Rejection Reason</label>
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Please provide a reason for rejection..."
+                    rows="3"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="cancel-btn" onClick={() => setShowRejectModal(false)}>
+                  Cancel
+                </button>
+                <button
+                  className="reject-btn"
+                  onClick={handleRejectClaim}
+                  disabled={submitting || !rejectReason.trim()}
+                >
+                  {submitting ? 'Rejecting...' : 'Reject Claim'}
+                </button>
               </div>
             </div>
           </div>

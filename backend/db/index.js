@@ -585,6 +585,23 @@ const initDb = async () => {
       CREATE INDEX IF NOT EXISTS idx_claims_status ON claims(status);
       CREATE INDEX IF NOT EXISTS idx_claims_date ON claims(claim_date);
 
+      -- Add supervisor approval columns to claims
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='claims' AND column_name='supervisor_id') THEN
+          ALTER TABLE claims ADD COLUMN supervisor_id INTEGER REFERENCES employees(id);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='claims' AND column_name='supervisor_approved') THEN
+          ALTER TABLE claims ADD COLUMN supervisor_approved BOOLEAN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='claims' AND column_name='supervisor_approved_at') THEN
+          ALTER TABLE claims ADD COLUMN supervisor_approved_at TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='claims' AND column_name='remarks') THEN
+          ALTER TABLE claims ADD COLUMN remarks TEXT;
+        END IF;
+      END $$;
+
       -- Payroll Runs (monthly payroll batch)
       CREATE TABLE IF NOT EXISTS payroll_runs (
         id SERIAL PRIMARY KEY,

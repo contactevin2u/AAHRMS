@@ -451,6 +451,9 @@ export const essApi = {
   // Claims
   getClaims: (params) => api.get('/ess/claims', { params, ...essApiConfig }),
   submitClaim: (data) => api.post('/ess/claims', data, essApiConfig),
+  getTeamPendingClaims: () => api.get('/ess/claims/team-pending', essApiConfig),
+  approveClaim: (id, data) => api.post(`/ess/claims/${id}/supervisor-approve`, data, essApiConfig),
+  rejectClaim: (id, data) => api.post(`/ess/claims/${id}/supervisor-reject`, data, essApiConfig),
 
   // Notifications
   getNotifications: (params) => api.get('/ess/notifications', { params, ...essApiConfig }),

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
-import { isSupervisorOrManager, canApproveOT, canViewTeamLeave, canApproveShiftSwap } from '../../utils/permissions';
+import { isSupervisorOrManager, canApproveOT, canViewTeamLeave, canApproveShiftSwap, canApproveClaims } from '../../utils/permissions';
 import './ESSDashboard.css';
 
 function ESSDashboard() {
@@ -49,7 +49,7 @@ function ESSDashboard() {
 
   const fetchPendingApprovals = async (info) => {
     try {
-      const approvals = { leave: 0, ot: 0, swap: 0 };
+      const approvals = { leave: 0, ot: 0, swap: 0, claims: 0 };
 
       // Fetch pending leave approvals
       if (canViewTeamLeave(info)) {
@@ -81,6 +81,16 @@ function ESSDashboard() {
         }
       }
 
+      // Fetch pending claims approvals
+      if (canApproveClaims(info)) {
+        try {
+          const claimsRes = await essApi.getTeamPendingClaims();
+          approvals.claims = claimsRes.data?.length || 0;
+        } catch (e) {
+          console.error('Error fetching claims approvals:', e);
+        }
+      }
+
       setPendingApprovals(approvals);
     } catch (error) {
       console.error('Error fetching pending approvals:', error);
@@ -89,7 +99,7 @@ function ESSDashboard() {
 
   const features = employeeInfo?.features || {};
   const showApprovalSection = isSupervisorOrManager(employeeInfo) && pendingApprovals &&
-    (pendingApprovals.leave > 0 || pendingApprovals.ot > 0 || pendingApprovals.swap > 0);
+    (pendingApprovals.leave > 0 || pendingApprovals.ot > 0 || pendingApprovals.swap > 0 || pendingApprovals.claims > 0);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -168,6 +178,13 @@ function ESSDashboard() {
                   <div className="approval-badge">{pendingApprovals.swap}</div>
                   <div className="approval-icon">&#x1F504;</div>
                   <span className="approval-label">Shift Swaps</span>
+                </Link>
+              )}
+              {pendingApprovals.claims > 0 && (
+                <Link to="/ess/claims" className="approval-card claims">
+                  <div className="approval-badge">{pendingApprovals.claims}</div>
+                  <div className="approval-icon">&#x1F4B3;</div>
+                  <span className="approval-label">Claims</span>
                 </Link>
               )}
             </div>
