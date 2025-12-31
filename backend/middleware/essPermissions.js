@@ -92,6 +92,33 @@ const getManagedOutlets = async (employee) => {
 };
 
 /**
+ * Check if supervisor/manager can approve for a specific employee
+ * @param {Object} approver - The supervisor/manager employee
+ * @param {Object} targetEmployee - The employee whose request needs approval (with outlet_id, company_id)
+ */
+const canApproveForEmployee = async (approver, targetEmployee) => {
+  // Must be supervisor or manager
+  if (!isSupervisorOrManager(approver)) {
+    return false;
+  }
+
+  // Must be same company
+  if (approver.company_id !== targetEmployee.company_id) {
+    return false;
+  }
+
+  // For Mimix (outlet-based), check outlet scope
+  if (isMimixCompany(approver.company_id)) {
+    const managedOutlets = await getManagedOutlets(approver);
+    return managedOutlets.includes(parseInt(targetEmployee.outlet_id));
+  }
+
+  // For non-Mimix companies, supervisor/manager can approve for their department
+  // (This is a fallback - AA Alive uses admin approval flow)
+  return true;
+};
+
+/**
  * Get employees under supervisor/manager's scope
  */
 const getTeamEmployeeIds = async (employee) => {
@@ -174,6 +201,7 @@ module.exports = {
   isSupervisor,
   isManager,
   canApproveForOutlet,
+  canApproveForEmployee,
   isSupervisorOrManager,
   canViewTeam,
   isMimixCompany,
