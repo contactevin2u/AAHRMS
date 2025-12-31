@@ -429,6 +429,25 @@ export const essApi = {
   getLeaveTypes: () => api.get('/ess/leave/types', essApiConfig),
   applyLeave: (data) => api.post('/ess/leave/apply', data, essApiConfig),
 
+  // Team Leave (Supervisor/Manager)
+  getTeamPendingLeave: () => api.get('/ess/leave/team-pending', essApiConfig),
+  getTeamPendingLeaveCount: () => api.get('/ess/leave/team-pending-count', essApiConfig),
+  approveLeave: (id) => api.post(`/ess/leave/${id}/approve`, {}, essApiConfig),
+  rejectLeave: (id, reason) => api.post(`/ess/leave/${id}/reject`, { reason }, essApiConfig),
+
+  // Team Attendance (Supervisor/Manager)
+  getTeamAttendance: (date) => api.get('/ess/clockin/team-attendance', { params: { date }, ...essApiConfig }),
+  getPendingOT: () => api.get('/ess/clockin/pending-ot', essApiConfig),
+  getPendingOTCount: () => api.get('/ess/clockin/pending-ot-count', essApiConfig),
+  approveOT: (id) => api.post(`/ess/clockin/${id}/approve-ot`, {}, essApiConfig),
+  rejectOT: (id, reason) => api.post(`/ess/clockin/${id}/reject-ot`, { reason }, essApiConfig),
+
+  // Team Shift Swap (Supervisor/Manager)
+  getPendingSwapApprovals: () => api.get('/ess/shift-swap/pending-approvals', essApiConfig),
+  getPendingSwapCount: () => api.get('/ess/shift-swap/pending-approvals-count', essApiConfig),
+  supervisorApproveSwap: (id) => api.post(`/ess/shift-swap/${id}/supervisor-approve`, {}, essApiConfig),
+  supervisorRejectSwap: (id, reason) => api.post(`/ess/shift-swap/${id}/supervisor-reject`, { reason }, essApiConfig),
+
   // Claims
   getClaims: (params) => api.get('/ess/claims', { params, ...essApiConfig }),
   submitClaim: (data) => api.post('/ess/claims', data, essApiConfig),

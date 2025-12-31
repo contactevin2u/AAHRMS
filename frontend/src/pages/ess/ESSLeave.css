@@ -413,6 +413,169 @@
   cursor: not-allowed;
 }
 
+/* Tab Badge */
+.ess-tabs .tab-btn {
+  position: relative;
+}
+
+.tab-badge {
+  position: absolute;
+  top: 2px;
+  right: 8px;
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+/* Team Leave Section */
+.team-section {
+  margin-top: 16px;
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.team-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.team-card .team-employee {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.team-card .employee-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.team-card .employee-outlet {
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.team-card .team-leave-info {
+  margin-bottom: 12px;
+}
+
+.team-card .leave-type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.team-card .leave-dates,
+.team-card .leave-days {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.team-card .leave-reason {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.team-card .team-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.team-card .approve-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.team-card .approve-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.team-card .reject-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.team-card .reject-btn:hover:not(:disabled) {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.team-card .approve-btn:disabled,
+.team-card .reject-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Reject Modal Styles */
+.reject-info {
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #991b1b;
+}
+
+.reject-submit-btn {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+}
+
+.reject-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 /* Desktop adjustments */
 @media (min-width: 768px) {
   .ess-modal-overlay {

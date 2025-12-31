@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
+import { canViewTeamLeave } from '../../utils/permissions';
 import './ESSLeave.css';
 
 function ESSLeave() {
@@ -8,9 +9,17 @@ function ESSLeave() {
   const [balances, setBalances] = useState([]);
   const [history, setHistory] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
+  const [teamPending, setTeamPending] = useState([]);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('balance');
+
+  // Get employee info from localStorage
+  const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
+  const showTeamTab = canViewTeamLeave(employeeInfo);
 
   const [form, setForm] = useState({
     leave_type_id: '',
@@ -26,19 +35,72 @@ function ESSLeave() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [balanceRes, historyRes, typesRes] = await Promise.all([
+      const promises = [
         essApi.getLeaveBalance(),
         essApi.getLeaveHistory({}),
         essApi.getLeaveTypes()
-      ]);
-      setBalances(balanceRes.data);
-      setHistory(historyRes.data);
-      setLeaveTypes(typesRes.data);
+      ];
+
+      // Only fetch team pending if user is supervisor/manager
+      if (showTeamTab) {
+        promises.push(essApi.getTeamPendingLeave());
+      }
+
+      const results = await Promise.all(promises);
+      setBalances(results[0].data);
+      setHistory(results[1].data);
+      setLeaveTypes(results[2].data);
+
+      if (showTeamTab && results[3]) {
+        setTeamPending(results[3].data);
+      }
     } catch (error) {
       console.error('Error fetching leave data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleApprove = async (requestId) => {
+    if (!window.confirm('Approve this leave request?')) return;
+
+    try {
+      setSubmitting(true);
+      await essApi.approveLeave(requestId);
+      alert('Leave request approved');
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to approve leave');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectReason.trim()) {
+      alert('Please provide a rejection reason');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await essApi.rejectLeave(selectedRequest.id, rejectReason);
+      alert('Leave request rejected');
+      setShowRejectModal(false);
+      setSelectedRequest(null);
+      setRejectReason('');
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to reject leave');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openRejectModal = (request) => {
+    setSelectedRequest(request);
+    setRejectReason('');
+    setShowRejectModal(true);
   };
 
   const handleApply = async (e) => {
@@ -105,6 +167,17 @@ function ESSLeave() {
           >
             History
           </button>
+          {showTeamTab && (
+            <button
+              className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
+              onClick={() => setActiveTab('team')}
+            >
+              Team
+              {teamPending.length > 0 && (
+                <span className="tab-badge">{teamPending.length}</span>
+              )}
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -189,6 +262,58 @@ function ESSLeave() {
                 )}
               </div>
             )}
+
+            {/* Team Leave Tab (Supervisor/Manager only) */}
+            {activeTab === 'team' && showTeamTab && (
+              <div className="team-section">
+                {teamPending.length === 0 ? (
+                  <div className="empty-state">
+                    <span className="empty-icon">&#x2705;</span>
+                    <p>No pending leave requests to approve</p>
+                  </div>
+                ) : (
+                  <div className="team-list">
+                    {teamPending.map((request) => (
+                      <div key={request.id} className="team-card">
+                        <div className="team-employee">
+                          <span className="employee-name">{request.employee_name}</span>
+                          <span className="employee-outlet">{request.outlet_name}</span>
+                        </div>
+                        <div className="team-leave-info">
+                          <div className="leave-type">
+                            <span className="type-code">{request.code}</span>
+                            <span className="type-name">{request.leave_type_name}</span>
+                          </div>
+                          <div className="leave-dates">
+                            {formatDate(request.start_date)} - {formatDate(request.end_date)}
+                          </div>
+                          <div className="leave-days">{request.total_days} day(s)</div>
+                          {request.reason && (
+                            <div className="leave-reason">{request.reason}</div>
+                          )}
+                        </div>
+                        <div className="team-actions">
+                          <button
+                            className="approve-btn"
+                            onClick={() => handleApprove(request.id)}
+                            disabled={submitting}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="reject-btn"
+                            onClick={() => openRejectModal(request)}
+                            disabled={submitting}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -260,6 +385,48 @@ function ESSLeave() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Reject Leave Modal */}
+        {showRejectModal && selectedRequest && (
+          <div className="ess-modal-overlay" onClick={() => setShowRejectModal(false)}>
+            <div className="ess-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Reject Leave Request</h2>
+                <button className="close-btn" onClick={() => setShowRejectModal(false)}>&#x2715;</button>
+              </div>
+              <div className="modal-body">
+                <p className="reject-info">
+                  Rejecting leave request from <strong>{selectedRequest.employee_name}</strong>
+                  <br />
+                  {formatDate(selectedRequest.start_date)} - {formatDate(selectedRequest.end_date)} ({selectedRequest.total_days} day(s))
+                </p>
+                <div className="form-group">
+                  <label>Rejection Reason *</label>
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Enter reason for rejection"
+                    rows="3"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="cancel-btn" onClick={() => setShowRejectModal(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="reject-submit-btn"
+                  onClick={handleReject}
+                  disabled={submitting || !rejectReason.trim()}
+                >
+                  {submitting ? 'Rejecting...' : 'Reject'}
+                </button>
+              </div>
             </div>
           </div>
         )}
