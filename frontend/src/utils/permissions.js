@@ -162,4 +162,13 @@ export const hasPendingApprovals = (employeeInfo, counts = {}) => {
   return total > 0;
 };
 
+/**
+ * Check if employee is a test user (employee_id starts with "TEST")
+ * Test users can see all features without "Coming Soon" restrictions
+ */
+export const isTestUser = (employeeInfo) => {
+  const employeeId = employeeInfo?.employee_id || '';
+  return employeeId.toUpperCase().startsWith('TEST');
+};
+
 export { COMPANIES, ROLES };

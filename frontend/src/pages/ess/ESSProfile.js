@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
+import { isTestUser } from '../../utils/permissions';
 import './ESSProfile.css';
 
 // Field labels for display
@@ -260,7 +261,14 @@ function ESSProfile() {
           <div className="section-header">
             <h2>Personal Information</h2>
             {!isEditing ? (
-              <button className="edit-btn" onClick={() => alert('Coming Soon - Edit Profile is under development')}>
+              <button className="edit-btn" onClick={() => {
+                const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
+                if (isTestUser(employeeInfo)) {
+                  setIsEditing(true);
+                } else {
+                  alert('Coming Soon - Edit Profile is under development');
+                }
+              }}>
                 {isProfileComplete ? 'Edit' : 'Complete Profile'}
               </button>
             ) : (
@@ -473,7 +481,14 @@ function ESSProfile() {
           <div className="section-header">
             <h2>Bank & Payment Information</h2>
             {!isProfileComplete && !isEditing && (
-              <button className="edit-btn small" onClick={() => alert('Coming Soon - Edit Profile is under development')}>
+              <button className="edit-btn small" onClick={() => {
+                const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
+                if (isTestUser(employeeInfo)) {
+                  setIsEditing(true);
+                } else {
+                  alert('Coming Soon - Edit Profile is under development');
+                }
+              }}>
                 Edit
               </button>
             )}
@@ -557,7 +572,14 @@ function ESSProfile() {
           <div className="section-header">
             <h2>Tax & Contributions</h2>
             {!isProfileComplete && !isEditing && (
-              <button className="edit-btn small" onClick={() => alert('Coming Soon - Edit Profile is under development')}>
+              <button className="edit-btn small" onClick={() => {
+                const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
+                if (isTestUser(employeeInfo)) {
+                  setIsEditing(true);
+                } else {
+                  alert('Coming Soon - Edit Profile is under development');
+                }
+              }}>
                 Edit
               </button>
             )}
