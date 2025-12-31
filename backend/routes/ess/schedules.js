@@ -1,6 +1,6 @@
 /**
  * ESS Schedule Routes
- * Employee schedule viewing and extra shift requests
+ * Employee schedule viewing, extra shift requests, and team management (supervisor/manager)
  */
 
 const express = require('express');
@@ -8,8 +8,15 @@ const router = express.Router();
 const pool = require('../../db');
 const jwt = require('jsonwebtoken');
 const { asyncHandler, ValidationError } = require('../../middleware/errorHandler');
+const {
+  isSupervisorOrManager,
+  getManagedOutlets,
+  getTeamEmployeeIds,
+  requireSupervisorOrManager,
+  requireMimixCompany
+} = require('../../middleware/essPermissions');
 
-// Middleware to verify employee token
+// Middleware to verify employee token and load full employee info
 const authenticateEmployee = async (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
 
@@ -22,7 +29,22 @@ const authenticateEmployee = async (req, res, next) => {
     if (decoded.role !== 'employee') {
       return res.status(403).json({ error: 'Access denied' });
     }
-    req.employee = decoded;
+
+    // Load full employee info including role
+    const empResult = await pool.query(
+      `SELECT id, employee_id, name, employee_role, outlet_id, company_id, department_id
+       FROM employees WHERE id = $1 AND status = 'active'`,
+      [decoded.id]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Employee not found' });
+    }
+
+    req.employee = {
+      ...decoded,
+      ...empResult.rows[0]
+    };
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Invalid token' });
@@ -296,6 +318,465 @@ router.delete('/extra-shift-requests/:id', authenticateEmployee, asyncHandler(as
   await pool.query('DELETE FROM extra_shift_requests WHERE id = $1', [id]);
 
   res.json({ message: 'Request cancelled successfully' });
+}));
+
+// ============================================
+// SUPERVISOR/MANAGER TEAM SCHEDULE MANAGEMENT
+// ============================================
+
+// Get team employees for scheduling (supervisor/manager only)
+router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const managedOutlets = await getManagedOutlets(req.employee);
+
+  if (managedOutlets.length === 0) {
+    return res.json({ employees: [], outlets: [] });
+  }
+
+  // Get employees in managed outlets
+  const empResult = await pool.query(
+    `SELECT e.id, e.employee_id, e.name, e.outlet_id, o.name as outlet_name
+     FROM employees e
+     LEFT JOIN outlets o ON e.outlet_id = o.id
+     WHERE e.outlet_id = ANY($1)
+       AND e.status = 'active'
+       AND e.company_id = $2
+     ORDER BY o.name, e.name`,
+    [managedOutlets, req.employee.company_id]
+  );
+
+  // Get outlet info
+  const outletResult = await pool.query(
+    `SELECT id, name FROM outlets WHERE id = ANY($1) ORDER BY name`,
+    [managedOutlets]
+  );
+
+  res.json({
+    employees: empResult.rows,
+    outlets: outletResult.rows
+  });
+}));
+
+// Get team schedules (supervisor/manager only)
+router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const { year, month, outlet_id } = req.query;
+  const managedOutlets = await getManagedOutlets(req.employee);
+
+  if (managedOutlets.length === 0) {
+    return res.json({ schedules: {}, employees: [] });
+  }
+
+  // Filter by specific outlet if provided (must be in managed outlets)
+  let outletFilter = managedOutlets;
+  if (outlet_id && managedOutlets.includes(parseInt(outlet_id))) {
+    outletFilter = [parseInt(outlet_id)];
+  }
+
+  const currentYear = year || new Date().getFullYear();
+  const currentMonth = month || (new Date().getMonth() + 1);
+  const startDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+  const endDate = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0];
+
+  // Get schedules
+  const schedResult = await pool.query(
+    `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, o.name as outlet_name
+     FROM schedules s
+     JOIN employees e ON s.employee_id = e.id
+     LEFT JOIN outlets o ON s.outlet_id = o.id
+     WHERE s.outlet_id = ANY($1)
+       AND s.schedule_date BETWEEN $2 AND $3
+     ORDER BY s.schedule_date, e.name`,
+    [outletFilter, startDate, endDate]
+  );
+
+  // Group by date
+  const schedules = {};
+  schedResult.rows.forEach(s => {
+    const dateKey = s.schedule_date.toISOString().split('T')[0];
+    if (!schedules[dateKey]) {
+      schedules[dateKey] = [];
+    }
+    schedules[dateKey].push({
+      ...s,
+      shift_start: formatTime(s.shift_start),
+      shift_end: formatTime(s.shift_end)
+    });
+  });
+
+  // Get employees in outlets
+  const empResult = await pool.query(
+    `SELECT e.id, e.employee_id, e.name, e.outlet_id, o.name as outlet_name
+     FROM employees e
+     LEFT JOIN outlets o ON e.outlet_id = o.id
+     WHERE e.outlet_id = ANY($1)
+       AND e.status = 'active'
+     ORDER BY e.name`,
+    [outletFilter]
+  );
+
+  res.json({
+    year: parseInt(currentYear),
+    month: parseInt(currentMonth),
+    schedules,
+    employees: empResult.rows,
+    outlets: outletFilter
+  });
+}));
+
+// Create schedule for team member (supervisor/manager only)
+router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const { employee_id, schedule_date, shift_start, shift_end, break_duration, notes } = req.body;
+
+  if (!employee_id || !schedule_date || !shift_start || !shift_end) {
+    throw new ValidationError('Employee, date, shift start and end are required');
+  }
+
+  const managedOutlets = await getManagedOutlets(req.employee);
+
+  // Verify target employee is in managed outlet
+  const empResult = await pool.query(
+    `SELECT id, outlet_id, company_id FROM employees
+     WHERE id = $1 AND status = 'active'`,
+    [employee_id]
+  );
+
+  if (empResult.rows.length === 0) {
+    throw new ValidationError('Employee not found');
+  }
+
+  const targetEmployee = empResult.rows[0];
+
+  if (!managedOutlets.includes(targetEmployee.outlet_id)) {
+    throw new ValidationError('You can only create schedules for employees in your outlet(s)');
+  }
+
+  // Check for existing schedule on same date
+  const existing = await pool.query(
+    `SELECT id FROM schedules WHERE employee_id = $1 AND schedule_date = $2`,
+    [employee_id, schedule_date]
+  );
+
+  if (existing.rows.length > 0) {
+    throw new ValidationError('Schedule already exists for this employee on this date');
+  }
+
+  // Create schedule
+  const result = await pool.query(
+    `INSERT INTO schedules
+       (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, notes, status, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'scheduled', $9)
+     RETURNING *`,
+    [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60, notes, req.employee.id]
+  );
+
+  res.status(201).json({
+    message: 'Schedule created successfully',
+    schedule: {
+      ...result.rows[0],
+      shift_start: formatTime(result.rows[0].shift_start),
+      shift_end: formatTime(result.rows[0].shift_end)
+    }
+  });
+}));
+
+// Bulk create schedules (supervisor/manager only)
+router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const { schedules } = req.body;
+
+  if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
+    throw new ValidationError('Schedules array is required');
+  }
+
+  const managedOutlets = await getManagedOutlets(req.employee);
+  const created = [];
+  const errors = [];
+
+  for (const sched of schedules) {
+    try {
+      const { employee_id, schedule_date, shift_start, shift_end, break_duration } = sched;
+
+      if (!employee_id || !schedule_date || !shift_start || !shift_end) {
+        errors.push({ employee_id, schedule_date, error: 'Missing required fields' });
+        continue;
+      }
+
+      // Verify employee is in managed outlet
+      const empResult = await pool.query(
+        `SELECT id, outlet_id, company_id FROM employees WHERE id = $1 AND status = 'active'`,
+        [employee_id]
+      );
+
+      if (empResult.rows.length === 0) {
+        errors.push({ employee_id, schedule_date, error: 'Employee not found' });
+        continue;
+      }
+
+      const targetEmployee = empResult.rows[0];
+
+      if (!managedOutlets.includes(targetEmployee.outlet_id)) {
+        errors.push({ employee_id, schedule_date, error: 'Employee not in your outlet' });
+        continue;
+      }
+
+      // Check for existing
+      const existing = await pool.query(
+        `SELECT id FROM schedules WHERE employee_id = $1 AND schedule_date = $2`,
+        [employee_id, schedule_date]
+      );
+
+      if (existing.rows.length > 0) {
+        errors.push({ employee_id, schedule_date, error: 'Schedule already exists' });
+        continue;
+      }
+
+      // Create
+      const result = await pool.query(
+        `INSERT INTO schedules
+           (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, status, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', $8)
+         RETURNING id`,
+        [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60, req.employee.id]
+      );
+
+      created.push({ id: result.rows[0].id, employee_id, schedule_date });
+    } catch (err) {
+      errors.push({ employee_id: sched.employee_id, schedule_date: sched.schedule_date, error: err.message });
+    }
+  }
+
+  res.json({
+    message: `Created ${created.length} schedules`,
+    created,
+    errors: errors.length > 0 ? errors : undefined
+  });
+}));
+
+// Update schedule (supervisor/manager only)
+router.put('/team-schedules/:id', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const { id } = req.params;
+  const { shift_start, shift_end, break_duration, notes, status } = req.body;
+  const managedOutlets = await getManagedOutlets(req.employee);
+
+  // Check schedule exists and is in managed outlet
+  const existing = await pool.query(
+    `SELECT s.*, e.name as employee_name
+     FROM schedules s
+     JOIN employees e ON s.employee_id = e.id
+     WHERE s.id = $1`,
+    [id]
+  );
+
+  if (existing.rows.length === 0) {
+    throw new ValidationError('Schedule not found');
+  }
+
+  const schedule = existing.rows[0];
+
+  if (!managedOutlets.includes(schedule.outlet_id)) {
+    throw new ValidationError('You can only edit schedules in your outlet(s)');
+  }
+
+  // Update schedule
+  const result = await pool.query(
+    `UPDATE schedules
+     SET shift_start = COALESCE($1, shift_start),
+         shift_end = COALESCE($2, shift_end),
+         break_duration = COALESCE($3, break_duration),
+         notes = COALESCE($4, notes),
+         status = COALESCE($5, status),
+         updated_at = NOW()
+     WHERE id = $6
+     RETURNING *`,
+    [shift_start, shift_end, break_duration, notes, status, id]
+  );
+
+  res.json({
+    message: 'Schedule updated successfully',
+    schedule: {
+      ...result.rows[0],
+      shift_start: formatTime(result.rows[0].shift_start),
+      shift_end: formatTime(result.rows[0].shift_end)
+    }
+  });
+}));
+
+// Delete schedule (supervisor/manager only)
+router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const { id } = req.params;
+  const managedOutlets = await getManagedOutlets(req.employee);
+
+  // Check schedule exists and is in managed outlet
+  const existing = await pool.query(
+    `SELECT s.*, c.id as attendance_id
+     FROM schedules s
+     LEFT JOIN clock_in_records c ON s.employee_id = c.employee_id AND s.schedule_date = c.work_date
+     WHERE s.id = $1`,
+    [id]
+  );
+
+  if (existing.rows.length === 0) {
+    throw new ValidationError('Schedule not found');
+  }
+
+  const schedule = existing.rows[0];
+
+  if (!managedOutlets.includes(schedule.outlet_id)) {
+    throw new ValidationError('You can only delete schedules in your outlet(s)');
+  }
+
+  // Check if there's attendance for this schedule
+  if (schedule.attendance_id) {
+    throw new ValidationError('Cannot delete schedule with attendance records. Edit the schedule instead.');
+  }
+
+  await pool.query('DELETE FROM schedules WHERE id = $1', [id]);
+
+  res.json({ message: 'Schedule deleted successfully' });
+}));
+
+// Get pending extra shift requests for approval (supervisor/manager only)
+router.get('/team-extra-shift-requests', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const managedOutlets = await getManagedOutlets(req.employee);
+
+  if (managedOutlets.length === 0) {
+    return res.json([]);
+  }
+
+  const result = await pool.query(
+    `SELECT esr.*, e.name as employee_name, e.employee_id as emp_code, o.name as outlet_name
+     FROM extra_shift_requests esr
+     JOIN employees e ON esr.employee_id = e.id
+     LEFT JOIN outlets o ON esr.outlet_id = o.id
+     WHERE esr.outlet_id = ANY($1)
+       AND esr.status = 'pending'
+     ORDER BY esr.request_date ASC`,
+    [managedOutlets]
+  );
+
+  res.json(result.rows.map(r => ({
+    ...r,
+    shift_start: formatTime(r.shift_start),
+    shift_end: formatTime(r.shift_end)
+  })));
+}));
+
+// Approve extra shift request (supervisor/manager only)
+router.post('/team-extra-shift-requests/:id/approve', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const { id } = req.params;
+  const managedOutlets = await getManagedOutlets(req.employee);
+
+  // Check request exists and is in managed outlet
+  const existing = await pool.query(
+    `SELECT esr.*, e.company_id
+     FROM extra_shift_requests esr
+     JOIN employees e ON esr.employee_id = e.id
+     WHERE esr.id = $1`,
+    [id]
+  );
+
+  if (existing.rows.length === 0) {
+    throw new ValidationError('Request not found');
+  }
+
+  const request = existing.rows[0];
+
+  if (!managedOutlets.includes(request.outlet_id)) {
+    throw new ValidationError('You can only approve requests from your outlet(s)');
+  }
+
+  if (request.status !== 'pending') {
+    throw new ValidationError('Request is not pending');
+  }
+
+  // Create the schedule
+  const schedResult = await pool.query(
+    `INSERT INTO schedules
+       (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, status, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7)
+     RETURNING id`,
+    [request.employee_id, request.outlet_id, request.company_id, request.request_date, request.shift_start, request.shift_end, req.employee.id]
+  );
+
+  // Update request status
+  await pool.query(
+    `UPDATE extra_shift_requests
+     SET status = 'approved', approved_by = $1, approved_at = NOW(), schedule_id = $2
+     WHERE id = $3`,
+    [req.employee.id, schedResult.rows[0].id, id]
+  );
+
+  res.json({ message: 'Extra shift request approved and schedule created' });
+}));
+
+// Reject extra shift request (supervisor/manager only)
+router.post('/team-extra-shift-requests/:id/reject', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const { id } = req.params;
+  const { reason } = req.body;
+  const managedOutlets = await getManagedOutlets(req.employee);
+
+  // Check request exists and is in managed outlet
+  const existing = await pool.query(
+    `SELECT * FROM extra_shift_requests WHERE id = $1`,
+    [id]
+  );
+
+  if (existing.rows.length === 0) {
+    throw new ValidationError('Request not found');
+  }
+
+  const request = existing.rows[0];
+
+  if (!managedOutlets.includes(request.outlet_id)) {
+    throw new ValidationError('You can only reject requests from your outlet(s)');
+  }
+
+  if (request.status !== 'pending') {
+    throw new ValidationError('Request is not pending');
+  }
+
+  await pool.query(
+    `UPDATE extra_shift_requests
+     SET status = 'rejected', rejection_reason = $1, approved_by = $2, approved_at = NOW()
+     WHERE id = $3`,
+    [reason || 'Rejected by supervisor/manager', req.employee.id, id]
+  );
+
+  res.json({ message: 'Extra shift request rejected' });
 }));
 
 module.exports = router;

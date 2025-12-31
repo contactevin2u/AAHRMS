@@ -485,6 +485,17 @@ export const essApi = {
   submitExtraShiftRequest: (data) => api.post('/ess/schedules/extra-shift-requests', data, essApiConfig),
   cancelExtraShiftRequest: (id) => api.delete(`/ess/schedules/extra-shift-requests/${id}`, essApiConfig),
 
+  // Team Schedules (Supervisor/Manager only)
+  getTeamEmployees: () => api.get('/ess/schedules/team-employees', essApiConfig),
+  getTeamSchedules: (params) => api.get('/ess/schedules/team-schedules', { params, ...essApiConfig }),
+  createTeamSchedule: (data) => api.post('/ess/schedules/team-schedules', data, essApiConfig),
+  createTeamSchedulesBulk: (schedules) => api.post('/ess/schedules/team-schedules/bulk', { schedules }, essApiConfig),
+  updateTeamSchedule: (id, data) => api.put(`/ess/schedules/team-schedules/${id}`, data, essApiConfig),
+  deleteTeamSchedule: (id) => api.delete(`/ess/schedules/team-schedules/${id}`, essApiConfig),
+  getTeamExtraShiftRequests: () => api.get('/ess/schedules/team-extra-shift-requests', essApiConfig),
+  approveExtraShift: (id) => api.post(`/ess/schedules/team-extra-shift-requests/${id}/approve`, {}, essApiConfig),
+  rejectExtraShift: (id, reason) => api.post(`/ess/schedules/team-extra-shift-requests/${id}/reject`, { reason }, essApiConfig),
+
   // Shift Swap (Outlet employees)
   getOutletCalendar: (year, month) => api.get('/ess/shift-swap/outlet-calendar', { params: { year, month }, ...essApiConfig }),
   getDateStaff: (date) => api.get('/ess/shift-swap/date-staff', { params: { date }, ...essApiConfig }),

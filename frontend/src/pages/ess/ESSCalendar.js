@@ -42,6 +42,22 @@ function ESSCalendar() {
   const [selectedSwap, setSelectedSwap] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
 
+  // Team schedules state (supervisor/manager only)
+  const [teamEmployees, setTeamEmployees] = useState([]);
+  const [teamOutlets, setTeamOutlets] = useState([]);
+  const [teamSchedules, setTeamSchedules] = useState({});
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamExtraRequests, setTeamExtraRequests] = useState([]);
+  const [showAddScheduleModal, setShowAddScheduleModal] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    employee_id: '',
+    schedule_date: '',
+    shift_start: '09:00',
+    shift_end: '18:00'
+  });
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState(null);
+
   // Swap form state
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [swapAction, setSwapAction] = useState('swap'); // 'swap' or 'replace'
@@ -129,6 +145,28 @@ function ESSCalendar() {
     }
   }, [showApprovalSection]);
 
+  // Fetch team schedules (supervisor/manager only)
+  const fetchTeamSchedules = useCallback(async () => {
+    if (!isSupervisorOrManager(employeeInfo)) return;
+
+    try {
+      setTeamLoading(true);
+      const [empRes, schedRes, extraRes] = await Promise.all([
+        essApi.getTeamEmployees(),
+        essApi.getTeamSchedules({ year: currentYear, month: currentMonth }),
+        essApi.getTeamExtraShiftRequests()
+      ]);
+      setTeamEmployees(empRes.data.employees || []);
+      setTeamOutlets(empRes.data.outlets || []);
+      setTeamSchedules(schedRes.data.schedules || {});
+      setTeamExtraRequests(extraRes.data || []);
+    } catch (error) {
+      console.error('Error fetching team schedules:', error);
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [employeeInfo, currentYear, currentMonth]);
+
   useEffect(() => {
     if (activeTab === 'outlet') {
       fetchOutletCalendar();
@@ -137,8 +175,10 @@ function ESSCalendar() {
       if (showApprovalSection) {
         fetchPendingApprovals();
       }
+    } else if (activeTab === 'team') {
+      fetchTeamSchedules();
     }
-  }, [activeTab, fetchOutletCalendar, fetchSwapRequests, fetchPendingApprovals, showApprovalSection]);
+  }, [activeTab, fetchOutletCalendar, fetchSwapRequests, fetchPendingApprovals, showApprovalSection, fetchTeamSchedules]);
 
   // Calendar navigation
   const goToPrevMonth = () => {
@@ -395,6 +435,129 @@ function ESSCalendar() {
     }
   };
 
+  // Team schedule handlers (supervisor/manager)
+  const openAddScheduleModal = (date = null) => {
+    setEditingSchedule(null);
+    setScheduleForm({
+      employee_id: '',
+      schedule_date: date || '',
+      shift_start: '09:00',
+      shift_end: '18:00'
+    });
+    setShowAddScheduleModal(true);
+  };
+
+  const openEditScheduleModal = (schedule) => {
+    setEditingSchedule(schedule);
+    setScheduleForm({
+      employee_id: schedule.employee_id,
+      schedule_date: schedule.schedule_date.split('T')[0],
+      shift_start: schedule.shift_start,
+      shift_end: schedule.shift_end
+    });
+    setShowAddScheduleModal(true);
+  };
+
+  const handleSaveSchedule = async (e) => {
+    e.preventDefault();
+    if (!scheduleForm.employee_id || !scheduleForm.schedule_date || !scheduleForm.shift_start || !scheduleForm.shift_end) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    try {
+      setScheduleSubmitting(true);
+      if (editingSchedule) {
+        await essApi.updateTeamSchedule(editingSchedule.id, {
+          shift_start: scheduleForm.shift_start,
+          shift_end: scheduleForm.shift_end
+        });
+        alert('Schedule updated successfully');
+      } else {
+        await essApi.createTeamSchedule(scheduleForm);
+        alert('Schedule created successfully');
+      }
+      setShowAddScheduleModal(false);
+      fetchTeamSchedules();
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      alert(error.response?.data?.error || 'Failed to save schedule');
+    } finally {
+      setScheduleSubmitting(false);
+    }
+  };
+
+  const handleDeleteSchedule = async (scheduleId) => {
+    if (!window.confirm('Delete this schedule?')) return;
+
+    try {
+      await essApi.deleteTeamSchedule(scheduleId);
+      alert('Schedule deleted');
+      fetchTeamSchedules();
+    } catch (error) {
+      console.error('Error deleting schedule:', error);
+      alert(error.response?.data?.error || 'Failed to delete schedule');
+    }
+  };
+
+  const handleApproveExtraShift = async (id) => {
+    if (!window.confirm('Approve this extra shift request?')) return;
+
+    try {
+      await essApi.approveExtraShift(id);
+      alert('Extra shift approved and schedule created');
+      fetchTeamSchedules();
+    } catch (error) {
+      console.error('Error approving extra shift:', error);
+      alert(error.response?.data?.error || 'Failed to approve');
+    }
+  };
+
+  const handleRejectExtraShift = async (id) => {
+    const reason = prompt('Enter rejection reason:');
+    if (reason === null) return;
+
+    try {
+      await essApi.rejectExtraShift(id, reason);
+      alert('Extra shift request rejected');
+      fetchTeamSchedules();
+    } catch (error) {
+      console.error('Error rejecting extra shift:', error);
+      alert(error.response?.data?.error || 'Failed to reject');
+    }
+  };
+
+  // Generate team calendar days
+  const generateTeamCalendarDays = () => {
+    const firstDay = new Date(currentYear, currentMonth - 1, 1);
+    const lastDay = new Date(currentYear, currentMonth, 0);
+    const startPadding = firstDay.getDay();
+    const totalDays = lastDay.getDate();
+
+    const days = [];
+
+    for (let i = 0; i < startPadding; i++) {
+      days.push({ date: null, isCurrentMonth: false, shifts: [] });
+    }
+
+    for (let day = 1; day <= totalDays; day++) {
+      const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const shifts = teamSchedules[dateStr] || [];
+      days.push({
+        date: day,
+        dateStr,
+        isCurrentMonth: true,
+        isToday: dateStr === new Date().toISOString().split('T')[0],
+        shifts,
+        staffCount: shifts.length
+      });
+    }
+
+    return days;
+  };
+
+  const teamCalendarDays = isSupervisorOrManager(employeeInfo) ? generateTeamCalendarDays() : [];
+
   const calendarDays = generateCalendarDays();
   const outletCalendarDays = generateOutletCalendarDays();
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -462,6 +625,17 @@ function ESSCalendar() {
           >
             Outlet
           </button>
+          {isSupervisorOrManager(employeeInfo) && (
+            <button
+              className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
+              onClick={() => setActiveTab('team')}
+            >
+              Team
+              {teamExtraRequests.length > 0 && (
+                <span className="tab-badge">{teamExtraRequests.length}</span>
+              )}
+            </button>
+          )}
           <button
             className={`tab-btn ${activeTab === 'swaps' ? 'active' : ''}`}
             onClick={() => setActiveTab('swaps')}
@@ -628,6 +802,113 @@ function ESSCalendar() {
               </>
             )}
           </>
+        )}
+
+        {/* Team Schedules Tab (Supervisor/Manager only) */}
+        {activeTab === 'team' && isSupervisorOrManager(employeeInfo) && (
+          <div className="team-schedules-section">
+            {teamLoading ? (
+              <div className="ess-loading">
+                <div className="spinner"></div>
+                <p>Loading team schedules...</p>
+              </div>
+            ) : (
+              <>
+                {/* Add Schedule Button */}
+                <div className="team-header">
+                  <button className="add-schedule-btn" onClick={() => openAddScheduleModal()}>
+                    + Add Schedule
+                  </button>
+                </div>
+
+                {/* Extra Shift Requests */}
+                {teamExtraRequests.length > 0 && (
+                  <div className="extra-requests-section">
+                    <h3>Extra Shift Requests ({teamExtraRequests.length})</h3>
+                    <div className="requests-list">
+                      {teamExtraRequests.map(req => (
+                        <div key={req.id} className="request-card">
+                          <div className="request-info">
+                            <strong>{req.employee_name}</strong>
+                            <span className="request-date">{formatDate(req.request_date)}</span>
+                            <span className="request-time">{req.shift_start} - {req.shift_end}</span>
+                            {req.reason && <p className="request-reason">{req.reason}</p>}
+                          </div>
+                          <div className="request-actions">
+                            <button className="approve-btn" onClick={() => handleApproveExtraShift(req.id)}>Approve</button>
+                            <button className="reject-btn" onClick={() => handleRejectExtraShift(req.id)}>Reject</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Team Calendar */}
+                <div className="calendar-nav-ess">
+                  <button onClick={goToPrevMonth}>&lt;</button>
+                  <span className="current-month">
+                    {monthNames[currentMonth - 1]} {currentYear}
+                  </span>
+                  <button onClick={goToNextMonth}>&gt;</button>
+                </div>
+
+                <div className="team-employees-info">
+                  <span>{teamEmployees.length} team members</span>
+                  {teamOutlets.length > 1 && <span> • {teamOutlets.length} outlets</span>}
+                </div>
+
+                <div className="ess-calendar team-calendar">
+                  <div className="calendar-header-row">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                      <div key={i} className="calendar-header-cell">{day}</div>
+                    ))}
+                  </div>
+
+                  <div className="calendar-body">
+                    {teamCalendarDays.map((day, index) => (
+                      <div
+                        key={index}
+                        className={`calendar-day team-day ${day.isCurrentMonth ? '' : 'other'} ${day.isToday ? 'today' : ''}`}
+                        onClick={() => day.isCurrentMonth && day.date && openAddScheduleModal(day.dateStr)}
+                      >
+                        <span className="day-num">{day.date || ''}</span>
+                        {day.staffCount > 0 && (
+                          <div className="staff-count">{day.staffCount} staff</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Daily Schedule List */}
+                <div className="team-schedule-list">
+                  <h3>Schedules This Month</h3>
+                  {Object.keys(teamSchedules).length === 0 ? (
+                    <p className="no-schedules">No schedules for this month</p>
+                  ) : (
+                    Object.entries(teamSchedules)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([date, shifts]) => (
+                        <div key={date} className="schedule-day-group">
+                          <div className="schedule-date-header">{formatDate(date)}</div>
+                          {shifts.map(shift => (
+                            <div key={shift.id} className="schedule-item">
+                              <span className="emp-name">{shift.employee_name}</span>
+                              <span className="shift-time">{shift.shift_start} - {shift.shift_end}</span>
+                              <div className="schedule-actions">
+                                <button className="edit-btn" onClick={() => openEditScheduleModal(shift)}>Edit</button>
+                                <button className="delete-btn" onClick={() => handleDeleteSchedule(shift.id)}>Delete</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* Swaps Tab */}
@@ -999,6 +1280,74 @@ function ESSCalendar() {
                   {submitting ? 'Rejecting...' : 'Reject'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add/Edit Schedule Modal */}
+        {showAddScheduleModal && (
+          <div className="modal-overlay" onClick={() => setShowAddScheduleModal(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{editingSchedule ? 'Edit Schedule' : 'Add Schedule'}</h2>
+                <button className="close-btn" onClick={() => setShowAddScheduleModal(false)}>&times;</button>
+              </div>
+              <form onSubmit={handleSaveSchedule}>
+                <div className="form-group">
+                  <label>Employee</label>
+                  <select
+                    value={scheduleForm.employee_id}
+                    onChange={e => setScheduleForm({...scheduleForm, employee_id: e.target.value})}
+                    required
+                    disabled={!!editingSchedule}
+                  >
+                    <option value="">Select Employee</option>
+                    {teamEmployees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} {emp.outlet_name ? `(${emp.outlet_name})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    value={scheduleForm.schedule_date}
+                    onChange={e => setScheduleForm({...scheduleForm, schedule_date: e.target.value})}
+                    required
+                    disabled={!!editingSchedule}
+                  />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Shift Start</label>
+                    <input
+                      type="time"
+                      value={scheduleForm.shift_start}
+                      onChange={e => setScheduleForm({...scheduleForm, shift_start: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Shift End</label>
+                    <input
+                      type="time"
+                      value={scheduleForm.shift_end}
+                      onChange={e => setScheduleForm({...scheduleForm, shift_end: e.target.value})}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="cancel-btn" onClick={() => setShowAddScheduleModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="submit-btn" disabled={scheduleSubmitting}>
+                    {scheduleSubmitting ? 'Saving...' : (editingSchedule ? 'Update' : 'Create')}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

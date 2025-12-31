@@ -1325,3 +1325,214 @@
     max-height: 80vh;
   }
 }
+
+/* Team Schedules Section */
+.team-schedules-section {
+  padding: 0;
+}
+
+.team-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.add-schedule-btn {
+  background: #1976d2;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-schedule-btn:hover {
+  background: #1565c0;
+}
+
+.team-employees-info {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.team-calendar .calendar-day {
+  cursor: pointer;
+}
+
+.team-calendar .calendar-day:hover {
+  background: #e3f2fd;
+}
+
+.staff-count {
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Extra Shift Requests Section */
+.extra-requests-section {
+  background: #fff7ed;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.extra-requests-section h3 {
+  font-size: 14px;
+  color: #ea580c;
+  margin: 0 0 12px 0;
+}
+
+.requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.request-card {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.request-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.request-info strong {
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.request-date, .request-time {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.request-reason {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 4px 0 0 0;
+  font-style: italic;
+}
+
+.request-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.request-actions .approve-btn,
+.request-actions .reject-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.request-actions .approve-btn {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.request-actions .reject-btn {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Team Schedule List */
+.team-schedule-list {
+  margin-top: 20px;
+}
+
+.team-schedule-list h3 {
+  font-size: 16px;
+  color: #1e293b;
+  margin: 0 0 12px 0;
+}
+
+.no-schedules {
+  color: #94a3b8;
+  text-align: center;
+  padding: 20px;
+}
+
+.schedule-day-group {
+  margin-bottom: 16px;
+}
+
+.schedule-date-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 8px;
+}
+
+.schedule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+
+.schedule-item .emp-name {
+  font-weight: 500;
+  color: #1e293b;
+  flex: 1;
+}
+
+.schedule-item .shift-time {
+  font-size: 13px;
+  color: #64748b;
+  margin-right: 12px;
+}
+
+.schedule-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.schedule-actions .edit-btn,
+.schedule-actions .delete-btn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.schedule-actions .edit-btn {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.schedule-actions .delete-btn {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Form Styles in Modal */
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
