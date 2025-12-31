@@ -167,6 +167,7 @@ function Employees() {
           onSelectAll={handleSelectAll}
           onSelectEmployee={handleSelectEmployee}
           onViewEmployee={setViewEmployee}
+          onEditEmployee={(emp) => navigate(`/admin/employees/edit/${emp.id}`)}
           goToDepartments={goToDepartments}
           loading={loading}
           usesOutlets={usesOutlets}

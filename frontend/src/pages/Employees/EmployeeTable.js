@@ -7,6 +7,7 @@ const EmployeeTable = ({
   onSelectAll,
   onSelectEmployee,
   onViewEmployee,
+  onEditEmployee,
   goToDepartments,
   loading,
   usesOutlets = false
@@ -34,12 +35,13 @@ const EmployeeTable = ({
             <th>Position</th>
             <th>Employment</th>
             <th>Status</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
           {employees.length === 0 ? (
             <tr>
-              <td colSpan="8" className="no-data">No employees found</td>
+              <td colSpan="9" className="no-data">No employees found</td>
             </tr>
           ) : (
             employees.map(emp => {
@@ -112,6 +114,15 @@ const EmployeeTable = ({
                     <span className={`status-badge ${emp.status}`}>
                       {emp.status}
                     </span>
+                  </td>
+                  <td>
+                    <button
+                      className="edit-btn"
+                      onClick={() => onEditEmployee && onEditEmployee(emp)}
+                      title="Edit Employee"
+                    >
+                      ✏️
+                    </button>
                   </td>
                 </tr>
               );
