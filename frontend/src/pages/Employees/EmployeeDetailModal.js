@@ -5,6 +5,10 @@ const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
   const [fullData, setFullData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Check if company uses outlets (Mimix = company_id 3)
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const usesOutlets = adminInfo.company_id === 3;
+
   useEffect(() => {
     if (employee?.id) {
       fetchEmployeeDetails();
@@ -125,10 +129,17 @@ const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
                   <label>Employee ID</label>
                   <span>{data.employee_id || '-'}</span>
                 </div>
-                <div className="detail-item">
-                  <label>Department</label>
-                  <span>{data.department_name || '-'}</span>
-                </div>
+                {usesOutlets ? (
+                  <div className="detail-item">
+                    <label>Outlet</label>
+                    <span>{data.outlet_name || '-'}</span>
+                  </div>
+                ) : (
+                  <div className="detail-item">
+                    <label>Department</label>
+                    <span>{data.department_name || '-'}</span>
+                  </div>
+                )}
                 <div className="detail-item">
                   <label>Position</label>
                   <span>{data.position || '-'}</span>
