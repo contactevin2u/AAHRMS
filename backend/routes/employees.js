@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter, isSuperAdmin, getOutletFilter, isSupervisor } = require('../middleware/tenant');
@@ -125,7 +126,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
     const sanitizedBody = sanitizeEmployeeData(req.body);
 
     const {
-      employee_id, name, email, phone, ic_number, department_id, outlet_id, position, join_date,
+      employee_id, name, email, phone, ic_number, department_id, outlet_id, position, position_id, join_date,
       address, bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
       marital_status, spouse_working, children_count, date_of_birth,
@@ -134,7 +135,9 @@ router.post('/', authenticateAdmin, async (req, res) => {
       // Additional earning fields
       default_bonus, default_incentive,
       // Probation fields
-      employment_type, probation_months, salary_before_confirmation, salary_after_confirmation, increment_amount
+      employment_type, probation_months, salary_before_confirmation, salary_after_confirmation, increment_amount,
+      // Multi-outlet for managers
+      additional_outlet_ids
     } = { ...req.body, ...sanitizedBody };
 
     // Get company_id from authenticated user - REQUIRED for tenant isolation
@@ -144,8 +147,6 @@ router.post('/', authenticateAdmin, async (req, res) => {
     }
 
     // Validate required fields for employee creation
-    // Minimal fields: employee_id, ic_number, and either department_id or outlet_id
-    // Employee will complete remaining profile fields via ESS
     if (!employee_id) {
       return res.status(400).json({ error: 'Employee ID is required' });
     }
@@ -155,6 +156,13 @@ router.post('/', authenticateAdmin, async (req, res) => {
     if (!department_id && !outlet_id) {
       return res.status(400).json({ error: 'Department or Outlet is required' });
     }
+    if (!join_date) {
+      return res.status(400).json({ error: 'Join Date is required' });
+    }
+
+    // Hash IC number as initial password (employee will change on first login)
+    const cleanIC = ic_number.replace(/[-\s]/g, '');
+    const passwordHash = await bcrypt.hash(cleanIC, 10);
 
     // Calculate probation end date if join_date and probation_months are provided
     let probation_end_date = null;
@@ -175,7 +183,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO employees (
-        employee_id, name, email, phone, ic_number, department_id, outlet_id, position, join_date,
+        employee_id, name, email, phone, ic_number, department_id, outlet_id, position, position_id, join_date,
         address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
         marital_status, spouse_working, children_count, date_of_birth,
@@ -183,12 +191,12 @@ router.post('/', authenticateAdmin, async (req, res) => {
         default_bonus, default_incentive,
         employment_type, probation_months, probation_end_date, probation_status,
         salary_before_confirmation, salary_after_confirmation, increment_amount,
-        company_id, profile_completed
+        company_id, profile_completed, password_hash, must_change_password
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41)
        RETURNING *`,
       [
-        employee_id, name || null, email || null, phone || null, ic_number, department_id || null, outlet_id || null, position || null, join_date || null,
+        employee_id, name || null, email || null, phone || null, ic_number, department_id || null, outlet_id || null, position || null, position_id || null, join_date,
         address || null, bank_name || null, bank_account_no || null, bank_account_holder || null,
         epf_number || null, socso_number || null, tax_number || null, epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth || null,
@@ -196,11 +204,21 @@ router.post('/', authenticateAdmin, async (req, res) => {
         default_bonus || 0, default_incentive || 0,
         empType, probMonths, probation_end_date, empType === 'confirmed' ? 'confirmed' : 'ongoing',
         salary_before_confirmation || null, salary_after_confirmation || null, calcIncrement || null,
-        companyId, false
+        companyId, false, passwordHash, true
       ]
     );
 
     const newEmployee = result.rows[0];
+
+    // If multi-outlet manager, add additional outlet assignments
+    if (additional_outlet_ids && Array.isArray(additional_outlet_ids) && additional_outlet_ids.length > 0) {
+      for (const addOutletId of additional_outlet_ids) {
+        await pool.query(
+          'INSERT INTO employee_outlets (employee_id, outlet_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [newEmployee.id, addOutletId]
+        );
+      }
+    }
 
     // Initialize leave balances for the new employee (with proration for mid-year joiners)
     if (join_date) {

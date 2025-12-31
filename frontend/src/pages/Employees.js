@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { employeeApi, departmentApi, probationApi, earningsApi } from '../api';
+import { employeeApi, departmentApi, probationApi, earningsApi, positionsApi } from '../api';
 import Layout from '../components/Layout';
 import * as XLSX from 'xlsx';
 import './Employees.css';
@@ -38,6 +38,7 @@ function Employees() {
   // Commission & Allowance state
   const [commissionTypes, setCommissionTypes] = useState([]);
   const [allowanceTypes, setAllowanceTypes] = useState([]);
+  const [positions, setPositions] = useState([]);
   const [employeeCommissions, setEmployeeCommissions] = useState([]);
   const [employeeAllowances, setEmployeeAllowances] = useState([]);
 
@@ -100,7 +101,8 @@ function Employees() {
     phone: '',
     ic_number: '',
     department_id: '',
-    position: '',
+    position_id: '',
+    position: '',  // Keep for backward compatibility display
     join_date: '',
     status: 'active',
     address: '',
@@ -142,18 +144,20 @@ function Employees() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [empRes, deptRes, statsRes, commTypesRes, allowTypesRes] = await Promise.all([
+      const [empRes, deptRes, statsRes, commTypesRes, allowTypesRes, positionsRes] = await Promise.all([
         employeeApi.getAll(filter),
         departmentApi.getAll(),
         employeeApi.getStats(),
         earningsApi.getCommissionTypes(),
-        earningsApi.getAllowanceTypes()
+        earningsApi.getAllowanceTypes(),
+        positionsApi.getAll()
       ]);
       setEmployees(empRes.data);
       setDepartments(deptRes.data);
       setStats(statsRes.data);
       setCommissionTypes(commTypesRes.data);
       setAllowanceTypes(allowTypesRes.data);
+      setPositions(positionsRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -201,6 +205,7 @@ function Employees() {
       phone: emp.phone || '',
       ic_number: emp.ic_number || '',
       department_id: emp.department_id || '',
+      position_id: emp.position_id || '',
       position: emp.position || '',
       join_date: emp.join_date ? emp.join_date.split('T')[0] : '',
       status: emp.status,
@@ -283,6 +288,7 @@ function Employees() {
       phone: '',
       ic_number: '',
       department_id: '',
+      position_id: '',
       position: '',
       join_date: '',
       status: 'active',
@@ -1015,13 +1021,19 @@ function Employees() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>Position</label>
-                    <input
-                      type="text"
-                      value={form.position}
-                      onChange={(e) => setForm({ ...form, position: e.target.value })}
-                      placeholder="Job title"
-                    />
+                    <label>Position *</label>
+                    <select
+                      value={form.position_id}
+                      onChange={(e) => setForm({ ...form, position_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Select position</option>
+                      {positions
+                        .filter(p => !form.department_id || p.department_id === parseInt(form.department_id) || !p.department_id)
+                        .map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                    </select>
                   </div>
                 </div>
 
@@ -1059,11 +1071,12 @@ function Employees() {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Join Date</label>
+                    <label>Join Date *</label>
                     <input
                       type="date"
                       value={form.join_date}
                       onChange={(e) => setForm({ ...form, join_date: e.target.value })}
+                      required
                     />
                   </div>
                 </div>
