@@ -1158,6 +1158,10 @@ Human Resources Department
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='must_change_password') THEN
           ALTER TABLE employees ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE;
         END IF;
+        -- Work type: full_time or part_time (for Mimix attendance calculation)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='work_type') THEN
+          ALTER TABLE employees ADD COLUMN work_type VARCHAR(20) DEFAULT 'full_time';
+        END IF;
       END $$;
 
       -- =====================================================
@@ -1340,6 +1344,29 @@ Human Resources Department
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_rejection_reason') THEN
           ALTER TABLE clock_in_records ADD COLUMN ot_rejection_reason TEXT;
+        END IF;
+        -- Auto clock-out columns
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='is_auto_clock_out') THEN
+          ALTER TABLE clock_in_records ADD COLUMN is_auto_clock_out BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='auto_clock_out_reason') THEN
+          ALTER TABLE clock_in_records ADD COLUMN auto_clock_out_reason VARCHAR(20);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='needs_admin_review') THEN
+          ALTER TABLE clock_in_records ADD COLUMN needs_admin_review BOOLEAN DEFAULT FALSE;
+        END IF;
+        -- Store calculated minutes for accurate tracking
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='total_work_minutes') THEN
+          ALTER TABLE clock_in_records ADD COLUMN total_work_minutes INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_minutes') THEN
+          ALTER TABLE clock_in_records ADD COLUMN ot_minutes INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_rate') THEN
+          ALTER TABLE clock_in_records ADD COLUMN ot_rate DECIMAL(3,2) DEFAULT 1.5;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='approval_status') THEN
+          ALTER TABLE clock_in_records ADD COLUMN approval_status VARCHAR(20) DEFAULT 'pending';
         END IF;
       END $$;
 

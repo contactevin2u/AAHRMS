@@ -31,6 +31,9 @@ const schedulesRoutes = require('./routes/schedules');
 const positionsRoutes = require('./routes/positions');
 const shiftSwapRoutes = require('./routes/shiftSwap');
 
+// Scheduled jobs
+const { initScheduler, triggerAutoClockOut } = require('./jobs/scheduler');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -164,4 +167,12 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
+
+  // Initialize scheduled jobs
+  try {
+    initScheduler();
+    console.log('Scheduled jobs initialized');
+  } catch (error) {
+    console.error('Failed to initialize scheduled jobs:', error);
+  }
 });

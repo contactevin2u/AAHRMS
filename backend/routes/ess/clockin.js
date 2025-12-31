@@ -445,6 +445,13 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       throw new ValidationError('You have already clocked out for the day');
     }
 
+    // Get employee work_type for hours calculation
+    const empWorkTypeResult = await pool.query(
+      'SELECT work_type FROM employees WHERE id = $1',
+      [employeeId]
+    );
+    const workType = empWorkTypeResult.rows[0]?.work_type || 'full_time';
+
     // Upload photo to Cloudinary
     const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_2');
 
@@ -453,10 +460,20 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       ...existingRecord.rows[0],
       clock_out_2: currentTime
     };
-    const { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
+    let { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
 
-    // Auto-flag OT if overtime detected (Mimix companies only)
-    const otFlagged = otMinutes > 0;
+    // Apply work type rules for normal clock-out
+    // Full Time: Calculate actual hours, OT after 8.5 hrs (510 minutes)
+    // Part Time: Calculate actual hours, no OT flagging (but keep calculated hours)
+    let otFlagged = false;
+
+    if (workType === 'full_time') {
+      // Full Time: OT after 8.5 hours
+      otFlagged = otMinutes > 0;
+    } else {
+      // Part Time: No OT flagging, just count actual hours
+      otFlagged = false;
+    }
 
     record = await pool.query(
       `UPDATE clock_in_records SET
@@ -621,12 +638,13 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError('You have already clocked out for the day');
   }
 
-  // Get company_id for Cloudinary folder
+  // Get company_id and work_type for Cloudinary folder and hours calculation
   const empResult = await pool.query(
-    'SELECT company_id FROM employees WHERE id = $1',
+    'SELECT company_id, work_type FROM employees WHERE id = $1',
     [employeeId]
   );
   const company_id = empResult.rows[0]?.company_id || 0;
+  const workType = empResult.rows[0]?.work_type || 'full_time';
 
   const locationStr = `${latitude},${longitude}`;
 
@@ -640,8 +658,9 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
   };
   const { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
 
-  // Auto-flag OT if overtime detected
-  const otFlagged = otMinutes > 0;
+  // Apply work type rules for normal clock-out
+  // Full Time: OT after 8.5 hrs, Part Time: No OT flagging
+  const otFlagged = workType === 'full_time' && otMinutes > 0;
 
   const record = await pool.query(
     `UPDATE clock_in_records SET

@@ -544,6 +544,105 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// =====================================================
+// AUTO CLOCK-OUT MANAGEMENT ENDPOINTS
+// =====================================================
+
+const { getRecordsNeedingReview, markAsReviewed, triggerAutoClockOut: runAutoClockOutJob } = require('../jobs/autoClockOut');
+const { triggerAutoClockOut } = require('../jobs/scheduler');
+
+// Get records needing admin review (auto clock-out records)
+router.get('/needs-review', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = getCompanyFilter(req);
+    const records = await getRecordsNeedingReview(companyId);
+    res.json(records);
+  } catch (error) {
+    console.error('Error fetching records needing review:', error);
+    res.status(500).json({ error: 'Failed to fetch records' });
+  }
+});
+
+// Mark auto clock-out record as reviewed
+router.post('/:id/mark-reviewed', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adjusted_minutes } = req.body;
+    const adminId = req.admin?.id;
+
+    await markAsReviewed(id, adminId, adjusted_minutes || null);
+
+    res.json({ message: 'Record marked as reviewed' });
+  } catch (error) {
+    console.error('Error marking record as reviewed:', error);
+    res.status(500).json({ error: 'Failed to mark record as reviewed' });
+  }
+});
+
+// Manually trigger auto clock-out job (admin only)
+router.post('/trigger-auto-clockout', authenticateAdmin, async (req, res) => {
+  try {
+    // Only super_admin can trigger this
+    if (req.admin?.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Only super admin can trigger auto clock-out job' });
+    }
+
+    const result = await triggerAutoClockOut();
+
+    if (result.success) {
+      res.json({
+        message: `Auto clock-out job completed. Processed ${result.processed} records.`,
+        ...result
+      });
+    } else {
+      res.status(500).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Error triggering auto clock-out:', error);
+    res.status(500).json({ error: 'Failed to trigger auto clock-out job' });
+  }
+});
+
+// Get auto clock-out statistics
+router.get('/auto-clockout-stats', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = getCompanyFilter(req);
+    const { month, year } = req.query;
+
+    let query = `
+      SELECT
+        COUNT(*) FILTER (WHERE is_auto_clock_out = TRUE) as auto_clockout_count,
+        COUNT(*) FILTER (WHERE is_auto_clock_out = TRUE AND needs_admin_review = TRUE) as pending_review_count,
+        COUNT(*) FILTER (WHERE is_auto_clock_out = TRUE AND needs_admin_review = FALSE) as reviewed_count
+      FROM clock_in_records
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramCount = 0;
+
+    if (companyId !== null) {
+      paramCount++;
+      query += ` AND company_id = $${paramCount}`;
+      params.push(companyId);
+    }
+
+    if (month && year) {
+      paramCount++;
+      query += ` AND EXTRACT(MONTH FROM work_date) = $${paramCount}`;
+      params.push(month);
+      paramCount++;
+      query += ` AND EXTRACT(YEAR FROM work_date) = $${paramCount}`;
+      params.push(year);
+    }
+
+    const result = await pool.query(query, params);
+    res.json(result.rows[0] || { auto_clockout_count: 0, pending_review_count: 0, reviewed_count: 0 });
+  } catch (error) {
+    console.error('Error fetching auto clock-out stats:', error);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
+});
+
 // Get OT summary for payroll
 router.get('/ot-for-payroll/:year/:month', authenticateAdmin, async (req, res) => {
   try {
