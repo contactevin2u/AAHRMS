@@ -749,8 +749,8 @@ function Employees() {
       <div className="employees-page">
         <header className="page-header">
           <div>
-            <h1>👥 Employees</h1>
-            <p>Manage your team members</p>
+            <h1>Employees</h1>
+            <p>View your team members</p>
           </div>
           <div className="header-actions">
             <input
