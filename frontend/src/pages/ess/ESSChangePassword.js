@@ -126,11 +126,9 @@ function ESSChangePassword() {
             {loading ? 'Changing Password...' : 'Change Password'}
           </button>
 
-          {!isFirstLogin && (
-            <button type="button" className="skip-btn" onClick={handleSkip}>
-              Skip for now
-            </button>
-          )}
+          <button type="button" className="skip-btn" onClick={handleSkip}>
+            Skip for Now
+          </button>
         </form>
 
         {isFirstLogin && (
@@ -140,6 +138,9 @@ function ESSChangePassword() {
               <li>At least 6 characters long</li>
               <li>Must be different from your IC number</li>
             </ul>
+            <p style={{ marginTop: '10px', color: '#64748b', fontSize: '12px' }}>
+              You can skip for now, but you'll be asked again on next login.
+            </p>
           </div>
         )}
       </div>
