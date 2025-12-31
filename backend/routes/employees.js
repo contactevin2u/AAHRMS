@@ -379,6 +379,59 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Reset employee password (admin only)
+router.post('/:id/reset-password', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = getCompanyFilter(req);
+
+    // Get employee details
+    let query = 'SELECT id, employee_id, name, ic_number, company_id FROM employees WHERE id = $1';
+    const params = [id];
+
+    if (companyId !== null) {
+      query += ' AND company_id = $2';
+      params.push(companyId);
+    }
+
+    const empResult = await pool.query(query, params);
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const employee = empResult.rows[0];
+
+    // IC number is required for password reset
+    if (!employee.ic_number) {
+      return res.status(400).json({
+        error: 'Cannot reset password: Employee has no IC number on record'
+      });
+    }
+
+    // Remove dashes from IC number to use as password
+    const newPassword = employee.ic_number.replace(/-/g, '');
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    // Update password and set must_change_password flag
+    await pool.query(
+      `UPDATE employees
+       SET password_hash = $1, must_change_password = true, updated_at = NOW()
+       WHERE id = $2`,
+      [passwordHash, id]
+    );
+
+    res.json({
+      message: `Password reset successfully for ${employee.name}. New password is their IC number (without dashes).`,
+      employee_id: employee.employee_id,
+      name: employee.name
+    });
+  } catch (error) {
+    console.error('Error resetting employee password:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 // Update employee role and reporting structure
 router.put('/:id/role', authenticateAdmin, async (req, res) => {
   try {

@@ -82,6 +82,7 @@ export const employeeApi = {
   bulkImport: (employees) => api.post('/employees/bulk-import', { employees }),
   bulkUpdate: (employee_ids, updates) => api.put('/employees/bulk-update', { employee_ids, updates }),
   bulkDelete: (employee_ids) => api.post('/employees/bulk-delete', { employee_ids }),
+  resetPassword: (id) => api.post(`/employees/${id}/reset-password`),
 };
 
 export const departmentApi = {

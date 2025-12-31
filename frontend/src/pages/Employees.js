@@ -276,6 +276,21 @@ function Employees() {
     }
   };
 
+  const handleResetPassword = async (emp) => {
+    if (!emp.ic_number) {
+      alert('Cannot reset password: This employee has no IC number on record.');
+      return;
+    }
+    if (window.confirm(`Reset password for ${emp.name}?\n\nThe new password will be their IC number (without dashes).`)) {
+      try {
+        const res = await employeeApi.resetPassword(emp.id);
+        alert(res.data.message);
+      } catch (error) {
+        alert(error.response?.data?.error || 'Failed to reset password');
+      }
+    }
+  };
+
   const resetForm = () => {
     setEditingEmployee(null);
     setSalaryAutoPopulated(false);
@@ -882,9 +897,10 @@ function Employees() {
                           </span>
                         </td>
                         <td>
-                          <button onClick={() => handleEdit(emp)} className="edit-btn">✏️</button>
+                          <button onClick={() => handleEdit(emp)} className="edit-btn" title="Edit">✏️</button>
+                          <button onClick={() => handleResetPassword(emp)} className="reset-pwd-btn" title="Reset Password">🔑</button>
                           {emp.status === 'active' && (
-                            <button onClick={() => handleDelete(emp.id)} className="delete-btn">🗑️</button>
+                            <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Deactivate">🗑️</button>
                           )}
                         </td>
                       </tr>
@@ -964,9 +980,10 @@ function Employees() {
                           </span>
                         </td>
                         <td className="sticky-col-right">
-                          <button onClick={() => handleEdit(emp)} className="edit-btn">✏️</button>
+                          <button onClick={() => handleEdit(emp)} className="edit-btn" title="Edit">✏️</button>
+                          <button onClick={() => handleResetPassword(emp)} className="reset-pwd-btn" title="Reset Password">🔑</button>
                           {emp.status === 'active' && (
-                            <button onClick={() => handleDelete(emp.id)} className="delete-btn">🗑️</button>
+                            <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Deactivate">🗑️</button>
                           )}
                         </td>
                       </tr>

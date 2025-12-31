@@ -205,7 +205,8 @@ tr:hover {
 
 /* Action Buttons */
 .edit-btn,
-.delete-btn {
+.delete-btn,
+.reset-pwd-btn {
   background: none;
   border: none;
   font-size: 16px;
@@ -221,6 +222,10 @@ tr:hover {
 
 .delete-btn:hover {
   background: #fef2f2;
+}
+
+.reset-pwd-btn:hover {
+  background: #fef9c3;
 }
 
 /* Modal */
