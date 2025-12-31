@@ -52,7 +52,18 @@
       "Bash(node -e \"\nconst { Pool } = require\\(''pg''\\);\n\nconst pool = new Pool\\({\n  connectionString: ''postgresql://hrms_user:Ut4Dfaz6CFcOBQ4932kwSACiRJ3zKJd9@dpg-d4k5tfmuk2gs73fldph0-a.singapore-postgres.render.com/hrms_db_e2uv'',\n  ssl: { rejectUnauthorized: false }\n}\\);\n\nasync function clearData\\(\\) {\n  const client = await pool.connect\\(\\);\n  try {\n    await client.query\\(''BEGIN''\\);\n    \n    const tables = [\n      ''payroll_items'',\n      ''payroll_runs'', \n      ''payroll'',\n      ''leave_requests'',\n      ''leave_balances'',\n      ''claims'',\n      ''resignations'',\n      ''letters'',\n      ''employee_commissions'',\n      ''employee_allowances'',\n      ''sales_records'',\n      ''clock_in_records'',\n      ''feedback'',\n      ''notifications'',\n      ''employees'',\n      ''commission_types'',\n      ''allowance_types'',\n      ''departments''\n    ];\n    \n    const results = {};\n    for \\(const table of tables\\) {\n      try {\n        const res = await client.query\\(''DELETE FROM '' + table + '' RETURNING id''\\);\n        results[table] = res.rowCount;\n      } catch \\(e\\) {\n        results[table] = ''error: '' + e.message;\n      }\n    }\n    \n    // Delete admin users except super_admin\n    const adminRes = await client.query\\(\"\"DELETE FROM admin_users WHERE role != ''super_admin'' RETURNING id\"\"\\);\n    results.admin_users = adminRes.rowCount;\n    \n    // Delete companies except id=1\n    const compRes = await client.query\\(''DELETE FROM companies WHERE id > 1 RETURNING id''\\);\n    results.companies = compRes.rowCount;\n    \n    await client.query\\(''COMMIT''\\);\n    console.log\\(''Data cleared successfully!''\\);\n    console.log\\(JSON.stringify\\(results, null, 2\\)\\);\n    \n  } catch \\(err\\) {\n    await client.query\\(''ROLLBACK''\\);\n    console.error\\(''Error:'', err.message\\);\n  } finally {\n    client.release\\(\\);\n    pool.end\\(\\);\n  }\n}\n\nclearData\\(\\);\n\")",
       "Bash(node:*)",
       "Bash(git -C:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(copy:*)",
+      "Bash(copy mixue-logo.png iconsicon-512x512.png)",
+      "Bash(copy mixue-logo.png iconsicon-180x180.png)",
+      "Bash(copy mixue-logo.png iconsicon-144x144.png)",
+      "Bash(copy mixue-logo.png iconsicon-96x96.png)",
+      "Bash(del /f \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\nul\" \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\nul\")",
+      "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\check-employee.js\")",
+      "Bash(set DATABASE_URL=postgresql://hrms_user:Ut4Dfaz6CFcOBQ4932kwSACiRJ3zKJd9@dpg-d4k5tfmuk2gs73fldph0-a.singapore-postgres.render.com/hrms_db_e2uv)",
+      "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\check-outlets.js\")",
+      "Bash(find:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []

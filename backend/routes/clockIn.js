@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
-const { getCompanyFilter, getOutletFilter, isSupervisor } = require('../middleware/tenant');
+const { getCompanyFilter, getOutletFilter, isSupervisor, isAdmin } = require('../middleware/tenant');
 
 /**
  * Clock In/Out Routes - 4 Actions Per Day
@@ -515,33 +515,14 @@ router.post('/bulk-approve', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Delete attendance record
+// Delete attendance record - DISABLED for all users
+// Admin policy: Attendance records should be rejected, not deleted
+// This preserves audit trail and historical data
 router.delete('/:id', authenticateAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const companyId = getCompanyFilter(req);
-
-    let query = 'DELETE FROM clock_in_records WHERE id = $1';
-    let params = [id];
-
-    if (companyId !== null) {
-      query += ' AND company_id = $2';
-      params.push(companyId);
-    }
-
-    query += ' RETURNING id';
-
-    const result = await pool.query(query, params);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Record not found' });
-    }
-
-    res.json({ message: 'Attendance record deleted' });
-  } catch (error) {
-    console.error('Error deleting attendance:', error);
-    res.status(500).json({ error: 'Failed to delete record' });
-  }
+  return res.status(403).json({
+    error: 'Attendance records cannot be deleted',
+    message: 'Use reject action instead to maintain audit trail. If you need to remove this record, please contact system administrator.'
+  });
 });
 
 // =====================================================
@@ -582,9 +563,9 @@ router.post('/:id/mark-reviewed', authenticateAdmin, async (req, res) => {
 // Manually trigger auto clock-out job (admin only)
 router.post('/trigger-auto-clockout', authenticateAdmin, async (req, res) => {
   try {
-    // Only super_admin can trigger this
-    if (req.admin?.role !== 'super_admin') {
-      return res.status(403).json({ error: 'Only super admin can trigger auto clock-out job' });
+    // Any admin role can trigger this
+    if (!isAdmin(req)) {
+      return res.status(403).json({ error: 'Only admin users can trigger auto clock-out job' });
     }
 
     const result = await triggerAutoClockOut();

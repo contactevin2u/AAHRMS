@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
+const { isAdmin } = require('../middleware/tenant');
 const { processClaimAutoApproval, manualApproveClaim, rejectClaim, validateClaimCategory, getAllowedClaimTypesForEmployee } = require('../utils/claimsAutomation');
 const { logClaimAction } = require('../utils/auditLog');
 
@@ -231,6 +232,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
 });
 
 // Update claim
+// Admin can edit any claim (including amount) as long as it's not linked to payroll
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -240,23 +242,44 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Company context required' });
     }
 
-    // CRITICAL: Only update claims belonging to this company
-    // Also prevent updating linked claims
-    const result = await pool.query(`
-      UPDATE claims c
-      SET claim_date = $1, category = $2, description = $3, amount = $4, receipt_url = $5, updated_at = NOW()
-      FROM employees e
-      WHERE c.employee_id = e.id
-        AND e.company_id = $6
-        AND c.id = $7
-        AND c.status = 'pending'
-        AND c.linked_payroll_item_id IS NULL
-      RETURNING c.*
-    `, [claim_date, category, description, amount, receipt_url, companyId, id]);
+    // Check if claim exists and belongs to this company
+    const claimCheck = await pool.query(`
+      SELECT c.*, e.company_id
+      FROM claims c
+      JOIN employees e ON c.employee_id = e.id
+      WHERE c.id = $1 AND e.company_id = $2
+    `, [id, companyId]);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Claim not found, not pending, or already linked to payroll' });
+    if (claimCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Claim not found' });
     }
+
+    const claim = claimCheck.rows[0];
+
+    // Cannot update claims linked to payroll
+    if (claim.linked_payroll_item_id) {
+      return res.status(400).json({
+        error: 'Cannot update claim linked to payroll',
+        message: 'This claim is already included in a payroll run and cannot be modified.'
+      });
+    }
+
+    // Admin can update any claim status, non-admin can only update pending
+    if (!isAdmin(req) && claim.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending claims can be updated' });
+    }
+
+    const result = await pool.query(`
+      UPDATE claims
+      SET claim_date = COALESCE($1, claim_date),
+          category = COALESCE($2, category),
+          description = COALESCE($3, description),
+          amount = COALESCE($4, amount),
+          receipt_url = COALESCE($5, receipt_url),
+          updated_at = NOW()
+      WHERE id = $6
+      RETURNING *
+    `, [claim_date, category, description, amount, receipt_url, id]);
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -381,6 +404,7 @@ router.post('/link-to-payroll', authenticateAdmin, async (req, res) => {
 });
 
 // Delete claim
+// Admin can delete any claim (pending, approved, rejected) as long as it's not linked to payroll
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -389,22 +413,34 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Company context required' });
     }
 
-    // CRITICAL: Only delete claims belonging to this company
-    // Also prevent deleting linked claims
-    const result = await pool.query(`
-      DELETE FROM claims c
-      USING employees e
-      WHERE c.employee_id = e.id
-        AND e.company_id = $1
-        AND c.id = $2
-        AND c.status = 'pending'
-        AND c.linked_payroll_item_id IS NULL
-      RETURNING c.*
-    `, [companyId, id]);
+    // Check if claim is linked to payroll (cannot delete linked claims)
+    const claimCheck = await pool.query(`
+      SELECT c.*, e.company_id
+      FROM claims c
+      JOIN employees e ON c.employee_id = e.id
+      WHERE c.id = $1 AND e.company_id = $2
+    `, [id, companyId]);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Claim not found, not pending, or already linked to payroll' });
+    if (claimCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Claim not found' });
     }
+
+    const claim = claimCheck.rows[0];
+
+    // Cannot delete claims linked to payroll
+    if (claim.linked_payroll_item_id) {
+      return res.status(400).json({
+        error: 'Cannot delete claim linked to payroll',
+        message: 'This claim is already included in a payroll run and cannot be deleted.'
+      });
+    }
+
+    // Admin can delete any claim status, non-admin can only delete pending
+    if (!isAdmin(req) && claim.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending claims can be deleted' });
+    }
+
+    await pool.query('DELETE FROM claims WHERE id = $1', [id]);
 
     res.json({ message: 'Claim deleted' });
   } catch (error) {

@@ -118,6 +118,13 @@ const isSuperAdmin = (req) => {
   return req.admin && req.admin.role === 'super_admin' && !req.admin.company_id;
 };
 
+// Check if user is any admin role (bypasses most restrictions)
+// Admin roles: super_admin, owner, admin
+const isAdmin = (req) => {
+  const adminRoles = ['super_admin', 'owner', 'admin'];
+  return req.admin && adminRoles.includes(req.admin.role);
+};
+
 // Check if user can manage companies (only system-level super_admin)
 const requireSystemAdmin = (req, res, next) => {
   if (!isSuperAdmin(req)) {
@@ -136,6 +143,7 @@ module.exports = {
   buildCompanyFilter,
   allowCompanyOverride,
   isSuperAdmin,
+  isAdmin,
   requireSystemAdmin,
   // Outlet-level filtering for supervisors
   isSupervisor,

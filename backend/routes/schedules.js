@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
-const { getCompanyFilter } = require('../middleware/tenant');
+const { getCompanyFilter, isAdmin } = require('../middleware/tenant');
 
 // Helper to format time for display
 const formatTime = (time) => {
@@ -207,11 +207,11 @@ router.post('/', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // Check if schedule date is in the past
+    // Check if schedule date is in the past (admin can bypass this restriction)
     const scheduleDate = new Date(schedule_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (scheduleDate < today) {
+    if (scheduleDate < today && !isAdmin(req)) {
       return res.status(400).json({
         error: 'Cannot create schedules for past dates'
       });
@@ -283,11 +283,11 @@ router.post('/bulk', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // Check if start_date is in the past
+    // Check if start_date is in the past (admin can bypass this restriction)
     const startDateObj = new Date(start_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (startDateObj < today) {
+    if (startDateObj < today && !isAdmin(req)) {
       return res.status(400).json({
         error: 'Cannot create schedules for past dates. Start date must be today or later.'
       });
@@ -396,8 +396,8 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
 
     const oldValue = existing.rows[0];
 
-    // Check if schedule date is in the past
-    if (new Date(oldValue.schedule_date) < new Date().setHours(0, 0, 0, 0)) {
+    // Check if schedule date is in the past (admin can bypass this restriction)
+    if (new Date(oldValue.schedule_date) < new Date().setHours(0, 0, 0, 0) && !isAdmin(req)) {
       return res.status(400).json({ error: 'Cannot edit past schedules' });
     }
 
@@ -462,9 +462,22 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
 
     const schedule = existing.rows[0];
 
-    // Check if schedule date is in the past
-    if (new Date(schedule.schedule_date) < new Date().setHours(0, 0, 0, 0)) {
+    // Check if schedule date is in the past (admin can bypass this restriction)
+    if (new Date(schedule.schedule_date) < new Date().setHours(0, 0, 0, 0) && !isAdmin(req)) {
       return res.status(400).json({ error: 'Cannot delete past schedules' });
+    }
+
+    // Check if attendance record is linked to this schedule (admin restriction)
+    const attendanceCheck = await pool.query(
+      'SELECT id FROM clock_in_records WHERE employee_id = $1 AND work_date = $2',
+      [schedule.employee_id, schedule.schedule_date]
+    );
+
+    if (attendanceCheck.rows.length > 0) {
+      return res.status(400).json({
+        error: 'Cannot delete schedule with linked attendance records',
+        message: 'This schedule has attendance records. Delete or clear the attendance first.'
+      });
     }
 
     await pool.query('DELETE FROM schedules WHERE id = $1', [id]);
