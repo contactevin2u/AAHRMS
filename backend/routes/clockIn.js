@@ -355,6 +355,7 @@ router.put('/:id/action/:action', authenticateAdmin, async (req, res) => {
   try {
     const { id, action } = req.params;
     const { time, location, photo } = req.body;
+    const companyId = getCompanyFilter(req);
 
     const validActions = ['clock_in_1', 'clock_out_1', 'clock_in_2', 'clock_out_2'];
     if (!validActions.includes(action)) {
@@ -364,15 +365,24 @@ router.put('/:id/action/:action', authenticateAdmin, async (req, res) => {
     const locationField = action.replace('clock', 'location');
     const photoField = action.replace('clock', 'photo');
 
-    const result = await pool.query(`
+    let query = `
       UPDATE clock_in_records SET
         ${action} = $1,
         ${locationField} = COALESCE($2, ${locationField}),
         ${photoField} = COALESCE($3, ${photoField}),
         updated_at = NOW()
       WHERE id = $4
-      RETURNING *
-    `, [time, location, photo, id]);
+    `;
+    let params = [time, location, photo, id];
+
+    if (companyId !== null) {
+      query += ' AND company_id = $5';
+      params.push(companyId);
+    }
+
+    query += ' RETURNING *';
+
+    const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Record not found' });
