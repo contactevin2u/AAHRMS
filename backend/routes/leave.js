@@ -130,8 +130,9 @@ router.get('/balances', authenticateAdmin, async (req, res) => {
   try {
     const { year } = req.query;
     const currentYear = year || new Date().getFullYear();
+    const companyId = getCompanyFilter(req);
 
-    const result = await pool.query(`
+    let query = `
       SELECT
         e.id as employee_id,
         e.employee_id as emp_code,
@@ -150,10 +151,20 @@ router.get('/balances', authenticateAdmin, async (req, res) => {
       LEFT JOIN leave_balances lb ON e.id = lb.employee_id AND lb.year = $1
       LEFT JOIN leave_types lt ON lb.leave_type_id = lt.id
       WHERE e.status = 'active'
+    `;
+    const params = [currentYear];
+
+    if (companyId !== null) {
+      query += ' AND e.company_id = $2';
+      params.push(companyId);
+    }
+
+    query += `
       GROUP BY e.id, e.employee_id, e.name, d.name
       ORDER BY e.name
-    `, [currentYear]);
+    `;
 
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching all leave balances:', error);
@@ -269,6 +280,7 @@ router.put('/balances/:id', authenticateAdmin, async (req, res) => {
 router.get('/requests', authenticateAdmin, async (req, res) => {
   try {
     const { employee_id, status, month, year, pending_approval } = req.query;
+    const companyId = getCompanyFilter(req);
 
     let query = `
       SELECT lr.*,
@@ -296,6 +308,13 @@ router.get('/requests', authenticateAdmin, async (req, res) => {
     `;
     const params = [];
     let paramCount = 0;
+
+    // Filter by company
+    if (companyId !== null) {
+      paramCount++;
+      query += ` AND e.company_id = $${paramCount}`;
+      params.push(companyId);
+    }
 
     if (employee_id) {
       paramCount++;
@@ -342,9 +361,22 @@ router.get('/requests', authenticateAdmin, async (req, res) => {
 // Get pending leave requests count
 router.get('/requests/pending-count', authenticateAdmin, async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT COUNT(*) as count FROM leave_requests WHERE status = 'pending'"
-    );
+    const companyId = getCompanyFilter(req);
+
+    let query = `
+      SELECT COUNT(*) as count
+      FROM leave_requests lr
+      JOIN employees e ON lr.employee_id = e.id
+      WHERE lr.status = 'pending'
+    `;
+    const params = [];
+
+    if (companyId !== null) {
+      query += ' AND e.company_id = $1';
+      params.push(companyId);
+    }
+
+    const result = await pool.query(query, params);
     res.json({ count: parseInt(result.rows[0].count) });
   } catch (error) {
     console.error('Error fetching pending count:', error);
