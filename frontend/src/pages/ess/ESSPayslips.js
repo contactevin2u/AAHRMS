@@ -1,19 +1,8 @@
 import React, { useState } from 'react';
 import ESSLayout from '../../components/ESSLayout';
-import ComingSoon from '../../components/ComingSoon';
-import { isTestUser } from '../../utils/permissions';
 
 function ESSPayslips() {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
-
-  if (!isTestUser(employeeInfo)) {
-    return <ComingSoon title="Payslip" />;
-  }
-
-  return <ESSPayslipsContent employeeInfo={employeeInfo} />;
-}
-
-function ESSPayslipsContent({ employeeInfo }) {
   const [selectedPayslip, setSelectedPayslip] = useState(null);
 
   const payslips = [
@@ -34,9 +23,6 @@ function ESSPayslipsContent({ employeeInfo }) {
           <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>View your salary details</p>
         </div>
 
-        <div style={{ background: '#dbeafe', padding: '10px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', color: '#1e40af' }}>
-          Test Mode - Full Payslip Features Enabled
-        </div>
 
         {/* Latest Payslip Summary */}
         <div style={{ background: 'linear-gradient(135deg, #1976d2, #1565c0)', borderRadius: '16px', padding: '20px', color: 'white', marginBottom: '24px' }}>

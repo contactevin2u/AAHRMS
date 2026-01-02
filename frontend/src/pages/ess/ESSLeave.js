@@ -1,23 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import ESSLayout from '../../components/ESSLayout';
-import ComingSoon from '../../components/ComingSoon';
-import { isTestUser } from '../../utils/permissions';
 import { essApi } from '../../api';
 import './ESSLeave.css';
 
 function ESSLeave() {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
-
-  // Show Coming Soon for non-test users
-  if (!isTestUser(employeeInfo)) {
-    return <ComingSoon title="Leave Application" />;
-  }
-
-  // Test user view - Full Leave Management
-  return <ESSLeaveContent employeeInfo={employeeInfo} />;
-}
-
-function ESSLeaveContent({ employeeInfo }) {
   const [activeTab, setActiveTab] = useState('apply');
   const [leaveTypes] = useState([
     { id: 1, name: 'Annual Leave', balance: 14, used: 2 },

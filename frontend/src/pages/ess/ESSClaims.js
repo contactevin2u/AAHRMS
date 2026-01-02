@@ -1,19 +1,8 @@
 import React, { useState } from 'react';
 import ESSLayout from '../../components/ESSLayout';
-import ComingSoon from '../../components/ComingSoon';
-import { isTestUser } from '../../utils/permissions';
 
 function ESSClaims() {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
-
-  if (!isTestUser(employeeInfo)) {
-    return <ComingSoon title="Claims" />;
-  }
-
-  return <ESSClaimsContent employeeInfo={employeeInfo} />;
-}
-
-function ESSClaimsContent({ employeeInfo }) {
   const [activeTab, setActiveTab] = useState('submit');
   const [claims, setClaims] = useState([
     { id: 1, type: 'Transport', amount: 150.00, date: '2026-01-02', status: 'pending', description: 'Grab to client meeting' },

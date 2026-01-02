@@ -1,19 +1,8 @@
 import React, { useState } from 'react';
 import ESSLayout from '../../components/ESSLayout';
-import ComingSoon from '../../components/ComingSoon';
-import { isTestUser } from '../../utils/permissions';
 
 function ESSCalendar() {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
-
-  if (!isTestUser(employeeInfo)) {
-    return <ComingSoon title="Schedule" />;
-  }
-
-  return <ESSCalendarContent employeeInfo={employeeInfo} />;
-}
-
-function ESSCalendarContent({ employeeInfo }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
 
