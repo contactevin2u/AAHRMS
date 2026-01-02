@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { essApi } from '../../api';
 import './ESSLogin.css';
@@ -7,9 +7,6 @@ function ESSChangePassword() {
   const navigate = useNavigate();
   const location = useLocation();
   const isFirstLogin = location.state?.firstLogin || false;
-
-  // Get current employee info
-  const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
 
   const [formData, setFormData] = useState({
     newUsername: '',
@@ -20,12 +17,6 @@ function ESSChangePassword() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Pre-fill username with current email if exists
-  useEffect(() => {
-    if (employeeInfo.email) {
-      setFormData(prev => ({ ...prev, newUsername: employeeInfo.email }));
-    }
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
