@@ -332,6 +332,106 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
   });
 }));
 
+// Login with Full Name and IC Number (available for all companies)
+router.post('/login-name', asyncHandler(async (req, res) => {
+  const { name, ic_number } = req.body;
+
+  if (!name || !ic_number) {
+    throw new ValidationError('Full name and IC number are required');
+  }
+
+  // Clean IC number - remove dashes
+  const cleanIC = ic_number.replace(/-/g, '');
+
+  // Find employee by name (case-insensitive) and verify IC, including company info
+  const result = await pool.query(
+    `SELECT e.id, e.employee_id, e.name, e.email, e.ic_number, e.status, e.ess_enabled,
+            e.department_id, e.outlet_id, e.company_id, e.must_change_password,
+            e.employee_role,
+            c.name as company_name, c.code as company_code, c.logo_url as company_logo,
+            c.grouping_type as company_grouping_type, c.settings as company_settings,
+            o.name as outlet_name
+     FROM employees e
+     LEFT JOIN companies c ON e.company_id = c.id
+     LEFT JOIN outlets o ON e.outlet_id = o.id
+     WHERE LOWER(TRIM(e.name)) = LOWER(TRIM($1)) AND e.status = 'active'`,
+    [name]
+  );
+
+  if (result.rows.length === 0) {
+    throw new AuthenticationError('Invalid name or IC number');
+  }
+
+  const employee = result.rows[0];
+
+  // Verify IC number (compare without dashes)
+  const storedIC = (employee.ic_number || '').replace(/-/g, '');
+  if (storedIC !== cleanIC) {
+    throw new AuthenticationError('Invalid name or IC number');
+  }
+
+  // Check if ESS is enabled for this employee
+  if (!employee.ess_enabled) {
+    throw new AuthenticationError('Self-service access is not enabled for your account. Please contact HR.');
+  }
+
+  // Update last login
+  await pool.query(
+    'UPDATE employees SET last_login = NOW() WHERE id = $1',
+    [employee.id]
+  );
+
+  // Build feature flags based on company
+  const features = buildFeatureFlags(employee, {
+    grouping_type: employee.company_grouping_type,
+    settings: employee.company_settings
+  });
+
+  // Build role-based permission flags
+  const permissions = await buildPermissionFlags(employee);
+
+  // Generate JWT token with company context and features
+  const token = jwt.sign(
+    {
+      id: employee.id,
+      employee_id: employee.employee_id,
+      name: employee.name,
+      email: employee.email,
+      role: 'employee',
+      employee_role: employee.employee_role || 'staff',
+      company_id: employee.company_id,
+      outlet_id: employee.outlet_id,
+      features
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '8h' }
+  );
+
+  // Set HttpOnly cookie
+  res.cookie('ess_token', token, COOKIE_OPTIONS);
+
+  res.json({
+    token, // Also return token for backward compatibility
+    requiresPasswordChange: employee.must_change_password || false,
+    employee: {
+      id: employee.id,
+      employee_id: employee.employee_id,
+      name: employee.name,
+      email: employee.email,
+      company_id: employee.company_id,
+      company_name: employee.company_name,
+      company_code: employee.company_code,
+      company_logo: employee.company_logo,
+      company_grouping_type: employee.company_grouping_type,
+      outlet_id: employee.outlet_id,
+      outlet_name: employee.outlet_name,
+      employee_role: employee.employee_role || 'staff',
+      features,
+      permissions
+    }
+  });
+}));
+
 // Set Initial Password (for first-time login)
 router.post('/set-password', asyncHandler(async (req, res) => {
   const { employee_id, ic_number, newPassword } = req.body;

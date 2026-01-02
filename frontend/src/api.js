@@ -398,6 +398,7 @@ export const essApi = {
   // Authentication
   login: (login, password) => api.post('/ess/login', { login, password }, essApiConfig),
   loginIC: (employee_id, ic_number) => api.post('/ess/login-ic', { employee_id, ic_number }, essApiConfig),
+  loginByName: (name, ic_number) => api.post('/ess/login-name', { name, ic_number }, essApiConfig),
   logout: () => api.post('/ess/logout', {}, essApiConfig),
   me: () => api.get('/ess/me', essApiConfig),
   forgotPassword: (email) => api.post('/ess/forgot-password', { email }),

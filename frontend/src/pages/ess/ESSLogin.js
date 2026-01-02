@@ -9,7 +9,7 @@ function ESSLogin() {
   const [formData, setFormData] = useState({
     login: '',
     password: '',
-    employee_id: '',
+    name: '',
     ic_number: ''
   });
   const [error, setError] = useState('');
@@ -68,7 +68,7 @@ function ESSLogin() {
       if (loginMethod === 'email') {
         response = await essApi.login(formData.login, formData.password);
       } else {
-        response = await essApi.loginIC(formData.employee_id, formData.ic_number);
+        response = await essApi.loginByName(formData.name, formData.ic_number);
       }
 
       const { token, employee, requiresPasswordChange } = response.data;
@@ -164,12 +164,12 @@ function ESSLogin() {
           ) : (
             <>
               <div className="form-group">
-                <label>Employee ID</label>
+                <label>Full Name</label>
                 <input
                   type="text"
-                  value={formData.employee_id}
-                  onChange={(e) => setFormData({ ...formData, employee_id: e.target.value.toUpperCase() })}
-                  placeholder="e.g., EMP001"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Enter your full name"
                   required
                 />
               </div>
