@@ -70,10 +70,6 @@ function ESSCalendar() {
           <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>View your work schedule</p>
         </div>
 
-        <div style={{ background: '#dbeafe', padding: '10px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', color: '#1e40af' }}>
-          Test Mode - Full Calendar Features Enabled
-        </div>
-
         {/* Month Navigation */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <button onClick={prevMonth} style={{ padding: '8px 16px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer' }}>

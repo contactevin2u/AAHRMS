@@ -67,11 +67,6 @@ function ESSLeave() {
           <p>Apply and manage your leave</p>
         </div>
 
-        {/* Test User Badge */}
-        <div style={{ background: '#dbeafe', padding: '10px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', color: '#1e40af' }}>
-          Test Mode - Full Leave Features Enabled
-        </div>
-
         {/* Tabs */}
         <div className="ess-tabs">
           <button className={`tab-btn ${activeTab === 'apply' ? 'active' : ''}`} onClick={() => setActiveTab('apply')}>

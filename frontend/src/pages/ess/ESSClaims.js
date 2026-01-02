@@ -68,10 +68,6 @@ function ESSClaims() {
           <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>Submit and track expense claims</p>
         </div>
 
-        <div style={{ background: '#dbeafe', padding: '10px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', color: '#1e40af' }}>
-          Test Mode - Full Claims Features Enabled
-        </div>
-
         {/* Summary Cards */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
           <div style={{ flex: 1, background: '#fef3c7', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
