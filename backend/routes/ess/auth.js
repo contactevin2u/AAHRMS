@@ -525,9 +525,9 @@ router.get('/me', authenticateEmployee, asyncHandler(async (req, res) => {
   });
 }));
 
-// Change Password (for authenticated employees)
+// Change Password (for authenticated employees) - also supports setting username on first login
 router.post('/change-password', authenticateEmployee, asyncHandler(async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
+  const { currentPassword, newPassword, newUsername } = req.body;
 
   if (!currentPassword || !newPassword) {
     throw new ValidationError('Current password and new password are required');
@@ -535,6 +535,23 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
 
   if (newPassword.length < 6) {
     throw new ValidationError('New password must be at least 6 characters long');
+  }
+
+  // Validate email format if provided
+  if (newUsername) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newUsername)) {
+      throw new ValidationError('Please enter a valid email address');
+    }
+
+    // Check if email already in use by another employee
+    const emailCheck = await pool.query(
+      'SELECT id FROM employees WHERE email = $1 AND id != $2',
+      [newUsername.toLowerCase(), req.employee.id]
+    );
+    if (emailCheck.rows.length > 0) {
+      throw new ValidationError('This email is already in use by another employee');
+    }
   }
 
   // Get employee's current password hash
@@ -558,13 +575,54 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
   // Hash new password
   const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
-  // Update password and clear must_change_password flag
-  await pool.query(
-    'UPDATE employees SET password_hash = $1, must_change_password = false WHERE id = $2',
-    [newPasswordHash, req.employee.id]
+  // Update password, username (email), and clear must_change_password flag
+  if (newUsername) {
+    await pool.query(
+      'UPDATE employees SET password_hash = $1, email = $2, must_change_password = false WHERE id = $3',
+      [newPasswordHash, newUsername.toLowerCase(), req.employee.id]
+    );
+  } else {
+    await pool.query(
+      'UPDATE employees SET password_hash = $1, must_change_password = false WHERE id = $2',
+      [newPasswordHash, req.employee.id]
+    );
+  }
+
+  // Fetch updated employee data to return
+  const updatedResult = await pool.query(
+    `SELECT e.id, e.employee_id, e.name, e.email, e.company_id, e.outlet_id,
+            e.employee_role,
+            c.name as company_name, c.code as company_code, c.logo_url as company_logo,
+            c.grouping_type as company_grouping_type
+     FROM employees e
+     LEFT JOIN companies c ON e.company_id = c.id
+     WHERE e.id = $1`,
+    [req.employee.id]
   );
 
-  res.json({ message: 'Password changed successfully' });
+  const updatedEmployee = updatedResult.rows[0];
+  const features = buildFeatureFlags(updatedEmployee, {
+    grouping_type: updatedEmployee.company_grouping_type
+  });
+  const permissions = await buildPermissionFlags(updatedEmployee);
+
+  res.json({
+    message: newUsername ? 'Account setup completed successfully' : 'Password changed successfully',
+    employee: {
+      id: updatedEmployee.id,
+      employee_id: updatedEmployee.employee_id,
+      name: updatedEmployee.name,
+      email: updatedEmployee.email,
+      company_id: updatedEmployee.company_id,
+      company_name: updatedEmployee.company_name,
+      company_code: updatedEmployee.company_code,
+      company_logo: updatedEmployee.company_logo,
+      outlet_id: updatedEmployee.outlet_id,
+      employee_role: updatedEmployee.employee_role || 'staff',
+      features,
+      permissions
+    }
+  });
 }));
 
 // Logout (clear HttpOnly cookie)

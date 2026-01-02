@@ -404,7 +404,7 @@ export const essApi = {
   forgotPassword: (email) => api.post('/ess/forgot-password', { email }),
   resetPassword: (token, newPassword) => api.post('/ess/reset-password', { token, newPassword }),
   setPassword: (data) => api.post('/ess/set-password', data),
-  changePassword: (currentPassword, newPassword) => api.post('/ess/change-password', { currentPassword, newPassword }, essApiConfig),
+  changePassword: (currentPassword, newPassword, newUsername = null) => api.post('/ess/change-password', { currentPassword, newPassword, newUsername }, essApiConfig),
 
   // Dashboard
   getDashboard: () => api.get('/ess/dashboard', essApiConfig),
