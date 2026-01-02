@@ -544,6 +544,12 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
       throw new ValidationError('Username must be at least 3 characters');
     }
 
+    // Only letters and numbers allowed (no symbols)
+    const alphanumericRegex = /^[a-zA-Z0-9]+$/;
+    if (!alphanumericRegex.test(trimmedUsername)) {
+      throw new ValidationError('Username can only contain letters and numbers (no symbols)');
+    }
+
     // Check if username already in use by another employee (case-insensitive)
     const usernameCheck = await pool.query(
       'SELECT id FROM employees WHERE LOWER(email) = LOWER($1) AND id != $2',

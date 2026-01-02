@@ -33,9 +33,16 @@ function ESSChangePassword() {
 
     // Validate username for first login
     if (isFirstLogin && formData.newUsername) {
+      const username = formData.newUsername.trim();
       // Username must be at least 3 characters
-      if (formData.newUsername.trim().length < 3) {
+      if (username.length < 3) {
         setError('Username must be at least 3 characters');
+        return;
+      }
+      // Only letters and numbers allowed (no symbols)
+      const alphanumericRegex = /^[a-zA-Z0-9]+$/;
+      if (!alphanumericRegex.test(username)) {
+        setError('Username can only contain letters and numbers (no symbols)');
         return;
       }
     }
@@ -183,7 +190,7 @@ function ESSChangePassword() {
           <div className="password-hint">
             <p><strong>Account Setup:</strong></p>
             <ul>
-              <li>Choose a username (at least 3 characters)</li>
+              <li>Username: letters and numbers only, no symbols</li>
               <li>Password must be at least 6 characters</li>
               <li>Password must be different from your IC number</li>
             </ul>
