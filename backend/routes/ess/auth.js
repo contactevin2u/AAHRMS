@@ -57,7 +57,7 @@ router.post('/login', asyncHandler(async (req, res) => {
     throw new ValidationError('Login and password are required');
   }
 
-  // Find employee by email or employee_id, including company info
+  // Find employee by email/username or employee_id (case-insensitive), including company info
   const result = await pool.query(
     `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled,
             e.department_id, e.company_id, e.outlet_id, e.must_change_password,
@@ -66,7 +66,7 @@ router.post('/login', asyncHandler(async (req, res) => {
             c.grouping_type as company_grouping_type, c.settings as company_settings
      FROM employees e
      LEFT JOIN companies c ON e.company_id = c.id
-     WHERE (e.email = $1 OR e.employee_id = $1) AND e.status = 'active'`,
+     WHERE (LOWER(e.email) = LOWER($1) OR LOWER(e.employee_id) = LOWER($1)) AND e.status = 'active'`,
     [login]
   );
 
