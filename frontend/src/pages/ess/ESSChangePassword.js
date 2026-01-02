@@ -33,10 +33,9 @@ function ESSChangePassword() {
 
     // Validate username for first login
     if (isFirstLogin && formData.newUsername) {
-      // Basic email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.newUsername)) {
-        setError('Please enter a valid email address for your username');
+      // Username must be at least 3 characters
+      if (formData.newUsername.trim().length < 3) {
+        setError('Username must be at least 3 characters');
         return;
       }
     }
@@ -100,7 +99,7 @@ function ESSChangePassword() {
           <h1>{isFirstLogin ? 'Setup Your Account' : 'Change Password'}</h1>
           <p>
             {isFirstLogin
-              ? 'Set your login email and password. Your current password is your IC number.'
+              ? 'Choose your username and password. Your current password is your IC number.'
               : 'Enter your current password and choose a new one.'
             }
           </p>
@@ -118,14 +117,15 @@ function ESSChangePassword() {
           {/* Username field - only for first login */}
           {isFirstLogin && (
             <div className="form-group">
-              <label>Login Email (Username)</label>
+              <label>Username</label>
               <input
-                type="email"
+                type="text"
                 value={formData.newUsername}
                 onChange={(e) => setFormData({ ...formData, newUsername: e.target.value })}
-                placeholder="Enter your email address"
+                placeholder="Choose your username"
                 required
-                autoComplete="email"
+                autoComplete="username"
+                minLength={3}
               />
               <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
                 This will be your login username
@@ -183,7 +183,7 @@ function ESSChangePassword() {
           <div className="password-hint">
             <p><strong>Account Setup:</strong></p>
             <ul>
-              <li>Set your login email (you'll use this to sign in)</li>
+              <li>Choose a username (at least 3 characters)</li>
               <li>Password must be at least 6 characters</li>
               <li>Password must be different from your IC number</li>
             </ul>

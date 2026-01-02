@@ -132,12 +132,12 @@ function ESSLogin() {
           {loginMethod === 'email' ? (
             <>
               <div className="form-group">
-                <label>Email or Employee ID</label>
+                <label>Username or Employee ID</label>
                 <input
                   type="text"
                   value={formData.login}
                   onChange={(e) => setFormData({ ...formData, login: e.target.value })}
-                  placeholder="Enter email or employee ID"
+                  placeholder="Enter username or employee ID"
                   required
                   autoComplete="username"
                 />

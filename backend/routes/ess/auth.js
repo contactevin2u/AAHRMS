@@ -537,20 +537,20 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
     throw new ValidationError('New password must be at least 6 characters long');
   }
 
-  // Validate email format if provided
+  // Validate username if provided
   if (newUsername) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newUsername)) {
-      throw new ValidationError('Please enter a valid email address');
+    const trimmedUsername = newUsername.trim();
+    if (trimmedUsername.length < 3) {
+      throw new ValidationError('Username must be at least 3 characters');
     }
 
-    // Check if email already in use by another employee
-    const emailCheck = await pool.query(
-      'SELECT id FROM employees WHERE email = $1 AND id != $2',
-      [newUsername.toLowerCase(), req.employee.id]
+    // Check if username already in use by another employee (case-insensitive)
+    const usernameCheck = await pool.query(
+      'SELECT id FROM employees WHERE LOWER(email) = LOWER($1) AND id != $2',
+      [trimmedUsername, req.employee.id]
     );
-    if (emailCheck.rows.length > 0) {
-      throw new ValidationError('This email is already in use by another employee');
+    if (usernameCheck.rows.length > 0) {
+      throw new ValidationError('This username is already taken');
     }
   }
 
@@ -575,11 +575,11 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
   // Hash new password
   const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
-  // Update password, username (email), and clear must_change_password flag
+  // Update password, username (stored in email field), and clear must_change_password flag
   if (newUsername) {
     await pool.query(
       'UPDATE employees SET password_hash = $1, email = $2, must_change_password = false WHERE id = $3',
-      [newPasswordHash, newUsername.toLowerCase(), req.employee.id]
+      [newPasswordHash, newUsername.trim(), req.employee.id]
     );
   } else {
     await pool.query(
