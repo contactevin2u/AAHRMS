@@ -85,6 +85,19 @@ const Attendance = () => {
     }
   };
 
+  // Delete attendance record - Testing mode only
+  // TODO: Remove this after real data starts
+  const handleDelete = async (id) => {
+    if (window.confirm('Delete this attendance record? This action cannot be undone.')) {
+      try {
+        await attendanceApi.delete(id);
+        fetchData();
+      } catch (error) {
+        alert(error.response?.data?.error || 'Failed to delete');
+      }
+    }
+  };
+
   const handleBulkApprove = async () => {
     if (selectedRecords.length === 0) {
       alert('Select records to approve');
@@ -377,6 +390,15 @@ const Attendance = () => {
                           {record.approved_by_name && `by ${record.approved_by_name}`}
                         </span>
                       )}
+                      {/* Delete button - Testing mode only */}
+                      <button
+                        className="delete-btn"
+                        onClick={() => handleDelete(record.id)}
+                        title="Delete"
+                        style={{ marginLeft: '4px', background: '#dc2626', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                      >
+                        🗑
+                      </button>
                     </td>
                   </tr>
                 ))

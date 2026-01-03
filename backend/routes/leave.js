@@ -724,14 +724,55 @@ router.post('/requests/:id/cancel', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Delete leave request - DISABLED for all users
-// Admin policy: Leave requests should be rejected/cancelled, not deleted
-// This preserves audit trail and historical data
+// Delete leave request - ENABLED for testing mode
+// TODO: Disable this after real data starts - change back to 403
 router.delete('/requests/:id', authenticateAdmin, async (req, res) => {
-  return res.status(403).json({
-    error: 'Leave requests cannot be deleted',
-    message: 'Use reject or cancel action instead to maintain audit trail.'
-  });
+  try {
+    const { id } = req.params;
+    const companyId = getCompanyFilter(req);
+
+    // Get the leave request first
+    let query = `
+      SELECT lr.*, lt.is_paid, e.company_id
+      FROM leave_requests lr
+      JOIN leave_types lt ON lr.leave_type_id = lt.id
+      JOIN employees e ON lr.employee_id = e.id
+      WHERE lr.id = $1
+    `;
+    const params = [id];
+
+    if (companyId !== null) {
+      query += ' AND e.company_id = $2';
+      params.push(companyId);
+    }
+
+    const request = await pool.query(query, params);
+
+    if (request.rows.length === 0) {
+      return res.status(404).json({ error: 'Leave request not found' });
+    }
+
+    const lr = request.rows[0];
+
+    // If it was approved and paid, restore the balance
+    if (lr.status === 'approved' && lr.is_paid) {
+      const year = new Date(lr.start_date).getFullYear();
+      await pool.query(
+        `UPDATE leave_balances
+         SET used_days = used_days - $1, updated_at = NOW()
+         WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4`,
+        [lr.total_days, lr.employee_id, lr.leave_type_id, year]
+      );
+    }
+
+    // Delete the request
+    await pool.query('DELETE FROM leave_requests WHERE id = $1', [id]);
+
+    res.json({ message: 'Leave request deleted' });
+  } catch (error) {
+    console.error('Error deleting leave request:', error);
+    res.status(500).json({ error: 'Failed to delete leave request' });
+  }
 });
 
 // =====================================================

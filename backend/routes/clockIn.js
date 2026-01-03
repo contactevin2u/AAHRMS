@@ -525,14 +525,34 @@ router.post('/bulk-approve', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Delete attendance record - DISABLED for all users
-// Admin policy: Attendance records should be rejected, not deleted
-// This preserves audit trail and historical data
+// Delete attendance record - ENABLED for testing mode
+// TODO: Disable this after real data starts - change back to 403
 router.delete('/:id', authenticateAdmin, async (req, res) => {
-  return res.status(403).json({
-    error: 'Attendance records cannot be deleted',
-    message: 'Use reject action instead to maintain audit trail. If you need to remove this record, please contact system administrator.'
-  });
+  try {
+    const { id } = req.params;
+    const companyId = getCompanyFilter(req);
+
+    let query = 'DELETE FROM clock_in_records WHERE id = $1';
+    const params = [id];
+
+    if (companyId !== null) {
+      query += ' AND company_id = $2';
+      params.push(companyId);
+    }
+
+    query += ' RETURNING id';
+
+    const result = await pool.query(query, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attendance record not found' });
+    }
+
+    res.json({ message: 'Attendance record deleted' });
+  } catch (error) {
+    console.error('Error deleting attendance record:', error);
+    res.status(500).json({ error: 'Failed to delete attendance record' });
+  }
 });
 
 // =====================================================

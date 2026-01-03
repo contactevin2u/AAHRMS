@@ -368,14 +368,18 @@ function Claims() {
                         ) : '-'}
                       </td>
                       <td>
-                        {/* Only show action buttons if pending AND not linked to payroll */}
+                        {/* Show approve/reject/edit only if pending AND not linked to payroll */}
                         {claim.status === 'pending' && !claim.linked_payroll_item_id && (
                           <>
                             <button onClick={() => handleApprove(claim.id)} className="action-btn approve">Approve</button>
                             <button onClick={() => handleReject(claim.id)} className="action-btn reject">Reject</button>
                             <button onClick={() => handleEdit(claim)} className="action-btn edit">Edit</button>
-                            <button onClick={() => handleDelete(claim.id)} className="action-btn delete">Delete</button>
                           </>
+                        )}
+                        {/* Delete button - Testing mode, shows for all statuses (not linked to payroll) */}
+                        {/* TODO: Remove after real data starts */}
+                        {!claim.linked_payroll_item_id && (
+                          <button onClick={() => handleDelete(claim.id)} className="action-btn delete">Delete</button>
                         )}
                         {/* Show locked indicator for linked claims */}
                         {claim.linked_payroll_item_id && (

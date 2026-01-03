@@ -338,9 +338,9 @@ function Leave() {
                                 <button onClick={() => handleReject(req.id)} className="action-btn reject">Reject</button>
                               </>
                             )}
-                            {req.status === 'pending' && (
-                              <button onClick={() => handleDelete(req.id)} className="action-btn delete">Delete</button>
-                            )}
+                            {/* Delete button - Testing mode, shows for all statuses */}
+                            {/* TODO: Remove after real data starts */}
+                            <button onClick={() => handleDelete(req.id)} className="action-btn delete">Delete</button>
                           </td>
                         </tr>
                       ))
