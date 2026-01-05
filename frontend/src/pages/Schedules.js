@@ -1,482 +1,593 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
-import { schedulesApi, outletsApi, employeeApi } from '../api';
+import { schedulesApi, outletsApi, employeeApi, leaveApi } from '../api';
 import './Schedules.css';
 
 function Schedules() {
-  const [activeTab, setActiveTab] = useState('calendar');
-  const [viewMode, setViewMode] = useState('month'); // month or week
-
-  // Calendar state
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [schedules, setSchedules] = useState({});
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Filters
+  // User info
+  const [adminInfo, setAdminInfo] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Data
   const [outlets, setOutlets] = useState([]);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [employees, setEmployees] = useState([]);
-  const [selectedOutlet, setSelectedOutlet] = useState('');
+  const [roster, setRoster] = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [publicHolidays, setPublicHolidays] = useState([]);
 
-  // Modal state
-  const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); // create or edit
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedSchedule, setSelectedSchedule] = useState(null);
-  const [formData, setFormData] = useState({
-    employee_id: '',
-    schedule_date: '',
-    shift_start: '09:00',
-    shift_end: '18:00',
-    break_duration: 60,
-    repeat_weekly: false,
-    end_date: '',
-    days_of_week: [1, 2, 3, 4, 5] // Mon-Fri
+  // Week navigation
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
+    return new Date(today.setDate(diff));
   });
 
-  // Extra shift requests
+  // Tabs for requests (only for admin)
+  const [activeTab, setActiveTab] = useState('schedule');
   const [extraShiftRequests, setExtraShiftRequests] = useState([]);
-  const [requestsLoading, setRequestsLoading] = useState(false);
-
-  // Shift swap requests
   const [swapRequests, setSwapRequests] = useState([]);
-  const [swapsLoading, setSwapsLoading] = useState(false);
 
-  const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth() + 1;
+  // Get user info on mount
+  useEffect(() => {
+    const storedInfo = localStorage.getItem('adminInfo');
+    if (storedInfo) {
+      const info = JSON.parse(storedInfo);
+      setAdminInfo(info);
+      // Admin roles: super_admin, boss, admin. Others are supervisors/managers
+      setIsAdmin(['super_admin', 'boss', 'admin', 'director'].includes(info.role));
+    }
+  }, []);
 
-  // Fetch outlets and employees
+  // Fetch initial data
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [outletsRes, employeesRes] = await Promise.all([
+        setLoading(true);
+        const [outletsRes, templatesRes] = await Promise.all([
           outletsApi.getAll(),
-          employeeApi.getAll({ status: 'active' })
+          schedulesApi.getTemplates()
         ]);
-        setOutlets(outletsRes.data || []);
-        setEmployees(employeesRes.data || []);
+
+        const allOutlets = outletsRes.data || [];
+        setOutlets(allOutlets);
+        setTemplates(templatesRes.data || []);
+
+        // For non-admin (supervisor), filter to their outlet only
+        if (adminInfo && !isAdmin && adminInfo.outlet_id) {
+          const myOutlet = allOutlets.find(o => o.id === adminInfo.outlet_id);
+          if (myOutlet) {
+            setSelectedOutlet(myOutlet);
+          }
+        } else if (allOutlets.length > 0) {
+          setSelectedOutlet(allOutlets[0]);
+        }
       } catch (error) {
         console.error('Error fetching initial data:', error);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchInitialData();
-  }, []);
 
-  // Fetch calendar data
-  const fetchCalendarData = useCallback(async () => {
+    if (adminInfo) {
+      fetchInitialData();
+    }
+  }, [adminInfo, isAdmin]);
+
+  // Get week dates
+  const getWeekDates = useCallback(() => {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(currentWeekStart);
+      date.setDate(currentWeekStart.getDate() + i);
+      dates.push({
+        date: date.toISOString().split('T')[0],
+        dayName: date.toLocaleDateString('en-MY', { weekday: 'short' }).toUpperCase(),
+        dayNum: date.getDate(),
+        isWeekend: date.getDay() === 0 || date.getDay() === 6
+      });
+    }
+    return dates;
+  }, [currentWeekStart]);
+
+  // Fetch roster for selected outlet
+  const fetchRoster = useCallback(async () => {
+    if (!selectedOutlet) return;
+
     try {
       setLoading(true);
-      const res = await schedulesApi.getCalendar(currentYear, currentMonth, selectedOutlet || undefined);
-      setSchedules(res.data.schedules || {});
+      const startDate = currentWeekStart.toISOString().split('T')[0];
+      const res = await schedulesApi.getWeeklyRoster(selectedOutlet.id, startDate);
+      setRoster(res.data.roster || []);
+
+      // Fetch public holidays for the week
+      const year = currentWeekStart.getFullYear();
+      const month = currentWeekStart.getMonth() + 1;
+      try {
+        const phRes = await leaveApi.getHolidays({ year, limit: 100 });
+        setPublicHolidays(phRes.data || []);
+      } catch (e) {
+        setPublicHolidays([]);
+      }
     } catch (error) {
-      console.error('Error fetching calendar data:', error);
+      console.error('Error fetching roster:', error);
+      setRoster([]);
     } finally {
       setLoading(false);
     }
-  }, [currentYear, currentMonth, selectedOutlet]);
+  }, [selectedOutlet, currentWeekStart]);
 
   useEffect(() => {
-    fetchCalendarData();
-  }, [fetchCalendarData]);
+    fetchRoster();
+  }, [fetchRoster]);
 
-  // Fetch extra shift requests
-  const fetchExtraShiftRequests = useCallback(async () => {
+  // Fetch pending requests (admin only)
+  const fetchRequests = useCallback(async () => {
+    if (!isAdmin || !selectedOutlet) return;
+
     try {
-      setRequestsLoading(true);
-      const res = await schedulesApi.getExtraShiftRequests({
-        status: 'pending',
-        outlet_id: selectedOutlet || undefined
-      });
-      setExtraShiftRequests(res.data || []);
+      const [extraRes, swapRes] = await Promise.all([
+        schedulesApi.getExtraShiftRequests({ status: 'pending', outlet_id: selectedOutlet.id }),
+        schedulesApi.getPendingSwapRequests(selectedOutlet.id)
+      ]);
+      setExtraShiftRequests(extraRes.data || []);
+      setSwapRequests(swapRes.data || []);
     } catch (error) {
-      console.error('Error fetching extra shift requests:', error);
-    } finally {
-      setRequestsLoading(false);
+      console.error('Error fetching requests:', error);
     }
-  }, [selectedOutlet]);
+  }, [isAdmin, selectedOutlet]);
 
   useEffect(() => {
-    if (activeTab === 'requests') {
-      fetchExtraShiftRequests();
-    } else if (activeTab === 'swaps') {
-      fetchSwapRequests();
+    if (activeTab === 'requests' || activeTab === 'swaps') {
+      fetchRequests();
     }
-  }, [activeTab, fetchExtraShiftRequests]);
+  }, [activeTab, fetchRequests]);
 
-  // Fetch swap requests
-  const fetchSwapRequests = useCallback(async () => {
-    try {
-      setSwapsLoading(true);
-      const res = await schedulesApi.getPendingSwapRequests(selectedOutlet || undefined);
-      setSwapRequests(res.data || []);
-    } catch (error) {
-      console.error('Error fetching swap requests:', error);
-    } finally {
-      setSwapsLoading(false);
+  // Navigation
+  const goToPrevWeek = () => {
+    const newStart = new Date(currentWeekStart);
+    newStart.setDate(newStart.getDate() - 7);
+    setCurrentWeekStart(newStart);
+  };
+
+  const goToNextWeek = () => {
+    const newStart = new Date(currentWeekStart);
+    newStart.setDate(newStart.getDate() + 7);
+    setCurrentWeekStart(newStart);
+  };
+
+  const goToThisWeek = () => {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+    setCurrentWeekStart(new Date(today.setDate(diff)));
+  };
+
+  // Check if date is public holiday
+  const isPublicHoliday = (dateStr) => {
+    return publicHolidays.some(ph => ph.date?.split('T')[0] === dateStr);
+  };
+
+  // Get shift code/color for display
+  const getShiftDisplay = (shift) => {
+    if (!shift || !shift.shift_code) return null;
+    return {
+      code: shift.shift_code,
+      color: shift.shift_color || '#94a3b8'
+    };
+  };
+
+  // Handle shift cell click - cycle through shifts
+  const handleShiftClick = async (employeeId, date) => {
+    if (saving) return;
+
+    const employee = roster.find(e => e.employee_id === employeeId);
+    if (!employee) return;
+
+    const currentShift = employee.shifts.find(s => s.date === date);
+    const workTemplates = templates.filter(t => !t.is_off);
+
+    // Find next template in cycle: template1 -> template2 -> OFF -> template1
+    let nextTemplateIndex = -1;
+    if (!currentShift?.shift_template_id) {
+      nextTemplateIndex = 0;
+    } else {
+      const currentIndex = workTemplates.findIndex(t => t.id === currentShift.shift_template_id);
+      nextTemplateIndex = currentIndex + 1;
+      if (nextTemplateIndex >= workTemplates.length) {
+        nextTemplateIndex = -1; // OFF
+      }
     }
-  }, [selectedOutlet]);
-
-  // Calendar navigation
-  const goToPrevMonth = () => {
-    setCurrentDate(new Date(currentYear, currentMonth - 2, 1));
-  };
-
-  const goToNextMonth = () => {
-    setCurrentDate(new Date(currentYear, currentMonth, 1));
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-
-  // Generate calendar days
-  const generateCalendarDays = () => {
-    const firstDay = new Date(currentYear, currentMonth - 1, 1);
-    const lastDay = new Date(currentYear, currentMonth, 0);
-    const startPadding = firstDay.getDay(); // 0 = Sunday
-    const totalDays = lastDay.getDate();
-
-    const days = [];
-
-    // Add padding for days before month start
-    for (let i = 0; i < startPadding; i++) {
-      days.push({ date: null, isCurrentMonth: false });
-    }
-
-    // Add days of the month
-    for (let day = 1; day <= totalDays; day++) {
-      const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const daySchedules = schedules[dateStr] || [];
-      days.push({
-        date: day,
-        dateStr,
-        isCurrentMonth: true,
-        isToday: dateStr === new Date().toISOString().split('T')[0],
-        schedules: daySchedules
-      });
-    }
-
-    return days;
-  };
-
-  // Handle cell click
-  const handleCellClick = (day) => {
-    if (!day.isCurrentMonth || !day.date) return;
-
-    setSelectedDate(day.dateStr);
-    setFormData(prev => ({
-      ...prev,
-      schedule_date: day.dateStr,
-      end_date: day.dateStr
-    }));
-    setModalMode('create');
-    setSelectedSchedule(null);
-    setShowModal(true);
-  };
-
-  // Handle schedule click (for editing)
-  const handleScheduleClick = (e, schedule, dateStr) => {
-    e.stopPropagation();
-    setSelectedSchedule(schedule);
-    setSelectedDate(dateStr);
-    setFormData({
-      employee_id: schedule.employee_id,
-      schedule_date: dateStr,
-      shift_start: schedule.shift_start,
-      shift_end: schedule.shift_end,
-      break_duration: schedule.break_duration || 60,
-      repeat_weekly: false,
-      end_date: '',
-      days_of_week: []
-    });
-    setModalMode('edit');
-    setShowModal(true);
-  };
-
-  // Handle form submit
-  const handleSubmit = async (e) => {
-    e.preventDefault();
 
     try {
-      if (modalMode === 'create') {
-        if (formData.repeat_weekly && formData.end_date) {
-          // Bulk create
-          await schedulesApi.bulkCreate({
-            employee_id: formData.employee_id,
-            start_date: formData.schedule_date,
-            end_date: formData.end_date,
-            shift_start: formData.shift_start,
-            shift_end: formData.shift_end,
-            break_duration: formData.break_duration,
-            days_of_week: formData.days_of_week
-          });
-        } else {
-          // Single create
-          await schedulesApi.create({
-            employee_id: formData.employee_id,
-            schedule_date: formData.schedule_date,
-            shift_start: formData.shift_start,
-            shift_end: formData.shift_end,
-            break_duration: formData.break_duration
-          });
-        }
+      setSaving(true);
+      if (nextTemplateIndex === -1) {
+        // Clear the schedule (OFF)
+        await schedulesApi.clearSchedule(employeeId, date);
       } else {
-        // Update
-        await schedulesApi.update(selectedSchedule.id, {
-          shift_start: formData.shift_start,
-          shift_end: formData.shift_end,
-          break_duration: formData.break_duration
+        // Assign shift
+        await schedulesApi.assignShift({
+          employee_id: employeeId,
+          schedule_date: date,
+          shift_template_id: workTemplates[nextTemplateIndex].id,
+          outlet_id: selectedOutlet.id
         });
       }
 
-      setShowModal(false);
-      fetchCalendarData();
+      // Update local state
+      setRoster(prev => prev.map(emp => {
+        if (emp.employee_id !== employeeId) return emp;
+
+        const shiftIndex = emp.shifts.findIndex(s => s.date === date);
+        let newShifts = [...emp.shifts];
+
+        if (nextTemplateIndex === -1) {
+          // OFF - clear the shift
+          if (shiftIndex >= 0) {
+            newShifts[shiftIndex] = { date, shift_code: null, shift_color: null, shift_template_id: null };
+          }
+        } else {
+          const t = workTemplates[nextTemplateIndex];
+          const newShift = {
+            date,
+            shift_template_id: t.id,
+            shift_code: t.code,
+            shift_color: t.color,
+            is_off: false
+          };
+          if (shiftIndex >= 0) {
+            newShifts[shiftIndex] = newShift;
+          } else {
+            newShifts.push(newShift);
+          }
+        }
+
+        return { ...emp, shifts: newShifts };
+      }));
     } catch (error) {
-      console.error('Error saving schedule:', error);
-      const errData = error.response?.data;
-      const errMsg = errData?.details
-        ? `${errData.error}: ${errData.details}`
-        : (errData?.error || 'Failed to save schedule');
-      alert(errMsg);
+      console.error('Error updating shift:', error);
+      alert(error.response?.data?.error || 'Failed to update shift');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Handle delete schedule
-  const handleDelete = async () => {
-    if (!selectedSchedule || !window.confirm('Delete this schedule?')) return;
+  // Calculate coverage for a day
+  const getCoverage = (date) => {
+    const working = roster.filter(emp => {
+      const shift = emp.shifts.find(s => s.date === date);
+      return shift?.shift_code && !shift?.is_off;
+    }).length;
+
+    const required = selectedOutlet?.min_staff || 2; // Default minimum staff
+    return { working, required };
+  };
+
+  // Get outlet summary (for admin view)
+  const getOutletSummary = (outlet) => {
+    // This would ideally come from an API call, but for now we'll calculate if we have the data
+    // For simplicity, just show the outlet and a placeholder
+    const isSelected = selectedOutlet?.id === outlet.id;
+    return {
+      name: outlet.name,
+      isSelected,
+      needsAttention: false // Would need API to determine this
+    };
+  };
+
+  // Copy last week's schedule
+  const copyLastWeek = async () => {
+    if (!selectedOutlet) return;
+
+    if (!window.confirm('Copy last week\'s schedule to this week? This will overwrite existing assignments.')) {
+      return;
+    }
 
     try {
-      await schedulesApi.delete(selectedSchedule.id);
-      setShowModal(false);
-      fetchCalendarData();
+      setSaving(true);
+
+      // Calculate last week's dates
+      const lastWeekStart = new Date(currentWeekStart);
+      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+      // Get last week's roster
+      const lastWeekRes = await schedulesApi.getWeeklyRoster(
+        selectedOutlet.id,
+        lastWeekStart.toISOString().split('T')[0]
+      );
+
+      const lastWeekRoster = lastWeekRes.data.roster || [];
+      const weekDates = getWeekDates();
+
+      // Create assignments for this week based on last week
+      const assignments = [];
+      lastWeekRoster.forEach(emp => {
+        emp.shifts.forEach((shift, index) => {
+          if (shift.shift_template_id) {
+            assignments.push({
+              employee_id: emp.employee_id,
+              schedule_date: weekDates[index].date,
+              shift_template_id: shift.shift_template_id
+            });
+          }
+        });
+      });
+
+      if (assignments.length > 0) {
+        await schedulesApi.bulkAssignShifts(selectedOutlet.id, assignments);
+      }
+
+      fetchRoster();
+      alert('Schedule copied successfully!');
     } catch (error) {
-      console.error('Error deleting schedule:', error);
-      const errData = error.response?.data;
-      const errMsg = errData?.details
-        ? `${errData.error}: ${errData.details}`
-        : (errData?.error || 'Failed to delete schedule');
-      alert(errMsg);
+      console.error('Error copying schedule:', error);
+      alert(error.response?.data?.error || 'Failed to copy schedule');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Handle extra shift approval
+  // Handle request approvals
   const handleApproveExtraShift = async (id) => {
     try {
       await schedulesApi.approveExtraShift(id);
-      fetchExtraShiftRequests();
-      fetchCalendarData();
+      fetchRequests();
+      fetchRoster();
     } catch (error) {
-      console.error('Error approving request:', error);
-      alert(error.response?.data?.error || 'Failed to approve request');
+      alert(error.response?.data?.error || 'Failed to approve');
     }
   };
 
   const handleRejectExtraShift = async (id) => {
     const reason = prompt('Rejection reason:');
     if (!reason) return;
-
     try {
       await schedulesApi.rejectExtraShift(id, reason);
-      fetchExtraShiftRequests();
+      fetchRequests();
     } catch (error) {
-      console.error('Error rejecting request:', error);
-      alert(error.response?.data?.error || 'Failed to reject request');
+      alert(error.response?.data?.error || 'Failed to reject');
     }
   };
 
-  // Handle swap request approval
   const handleApproveSwap = async (id) => {
-    if (!window.confirm('Approve this shift swap? Both employees\' schedules will be updated.')) return;
-
+    if (!window.confirm('Approve this shift swap?')) return;
     try {
       await schedulesApi.approveSwap(id);
-      fetchSwapRequests();
-      fetchCalendarData();
-      alert('Shift swap approved. Schedules have been updated.');
+      fetchRequests();
+      fetchRoster();
+      alert('Shift swap approved!');
     } catch (error) {
-      console.error('Error approving swap:', error);
-      alert(error.response?.data?.error || 'Failed to approve swap');
+      alert(error.response?.data?.error || 'Failed to approve');
     }
   };
 
   const handleRejectSwap = async (id) => {
-    const reason = prompt('Rejection reason (optional):');
-
+    const reason = prompt('Rejection reason:');
     try {
       await schedulesApi.rejectSwap(id, reason || '');
-      fetchSwapRequests();
+      fetchRequests();
     } catch (error) {
-      console.error('Error rejecting swap:', error);
-      alert(error.response?.data?.error || 'Failed to reject swap');
+      alert(error.response?.data?.error || 'Failed to reject');
     }
   };
 
-  const calendarDays = generateCalendarDays();
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
-
-  // Filter employees by selected outlet
-  const filteredEmployees = selectedOutlet
-    ? employees.filter(e => e.outlet_id === parseInt(selectedOutlet))
-    : employees;
+  const weekDates = getWeekDates();
+  const weekLabel = `${weekDates[0].dayNum} - ${weekDates[6].dayNum} ${new Date(weekDates[0].date).toLocaleDateString('en-MY', { month: 'short', year: 'numeric' })}`;
 
   return (
     <Layout>
-      <div className="schedules-page">
+      <div className="schedules-page-v2">
         <header className="page-header">
           <div>
-            <h1>Employee Schedules</h1>
-            <p>Manage staff work schedules</p>
+            <h1>Staff Schedules</h1>
+            <p>{isAdmin ? 'Manage all outlet schedules' : `${selectedOutlet?.name || 'Your Outlet'} Schedule`}</p>
           </div>
         </header>
 
-        {/* Tabs */}
-        <div className="schedule-tabs">
-          <button
-            className={activeTab === 'calendar' ? 'active' : ''}
-            onClick={() => setActiveTab('calendar')}
-          >
-            Calendar
-          </button>
-          <button
-            className={activeTab === 'requests' ? 'active' : ''}
-            onClick={() => setActiveTab('requests')}
-          >
-            Extra Shifts
-            {extraShiftRequests.length > 0 && (
-              <span className="badge">{extraShiftRequests.length}</span>
-            )}
-          </button>
-          <button
-            className={activeTab === 'swaps' ? 'active' : ''}
-            onClick={() => setActiveTab('swaps')}
-          >
-            Swap Requests
-            {swapRequests.length > 0 && (
-              <span className="badge">{swapRequests.length}</span>
-            )}
-          </button>
-        </div>
-
-        {/* Filters */}
-        <div className="schedule-filters">
-          <select
-            value={selectedOutlet}
-            onChange={(e) => setSelectedOutlet(e.target.value)}
-          >
-            <option value="">All Outlets</option>
-            {outlets.map(outlet => (
-              <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
-            ))}
-          </select>
-
-          {activeTab === 'calendar' && (
-            <div className="calendar-nav">
-              <button onClick={goToPrevMonth}>&lt;</button>
-              <span className="current-month">
-                {monthNames[currentMonth - 1]} {currentYear}
-              </span>
-              <button onClick={goToNextMonth}>&gt;</button>
-              <button onClick={goToToday} className="today-btn">Today</button>
-            </div>
-          )}
-        </div>
-
-        {/* Calendar View */}
-        {activeTab === 'calendar' && (
-          <div className="calendar-container">
-            {loading ? (
-              <div className="loading">Loading schedules...</div>
-            ) : (
-              <div className="calendar-grid">
-                {/* Day headers */}
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="calendar-header">{day}</div>
-                ))}
-
-                {/* Calendar cells */}
-                {calendarDays.map((day, index) => (
-                  <div
-                    key={index}
-                    className={`calendar-cell ${day.isCurrentMonth ? '' : 'other-month'} ${day.isToday ? 'today' : ''}`}
-                    onClick={() => handleCellClick(day)}
-                  >
-                    {day.date && (
-                      <>
-                        <span className="day-number">{day.date}</span>
-                        <div className="cell-schedules">
-                          {day.schedules?.slice(0, 3).map((schedule, i) => (
-                            <div
-                              key={i}
-                              className={`schedule-chip ${schedule.status}`}
-                              onClick={(e) => handleScheduleClick(e, schedule, day.dateStr)}
-                              title={`${schedule.employee_name}: ${schedule.shift_start}-${schedule.shift_end}`}
-                            >
-                              <span className="emp-name">{schedule.employee_name?.split(' ')[0]}</span>
-                              <span className="shift-time">{schedule.shift_start}</span>
-                            </div>
-                          ))}
-                          {day.schedules?.length > 3 && (
-                            <div className="more-schedules">
-                              +{day.schedules.length - 3} more
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+        {/* Tabs - Admin only sees requests tabs */}
+        {isAdmin && (
+          <div className="schedule-tabs">
+            <button
+              className={activeTab === 'schedule' ? 'active' : ''}
+              onClick={() => setActiveTab('schedule')}
+            >
+              Schedule
+            </button>
+            <button
+              className={activeTab === 'requests' ? 'active' : ''}
+              onClick={() => setActiveTab('requests')}
+            >
+              Extra Shifts
+              {extraShiftRequests.length > 0 && <span className="badge">{extraShiftRequests.length}</span>}
+            </button>
+            <button
+              className={activeTab === 'swaps' ? 'active' : ''}
+              onClick={() => setActiveTab('swaps')}
+            >
+              Swap Requests
+              {swapRequests.length > 0 && <span className="badge">{swapRequests.length}</span>}
+            </button>
           </div>
         )}
 
-        {/* Extra Shift Requests */}
+        {activeTab === 'schedule' && (
+          <div className={`schedule-layout ${isAdmin ? 'admin-view' : 'supervisor-view'}`}>
+            {/* Left Panel - Outlet List (Admin only) */}
+            {isAdmin && (
+              <div className="outlet-list-panel">
+                <h3>Outlets</h3>
+                <div className="outlet-items">
+                  {outlets.map(outlet => {
+                    const summary = getOutletSummary(outlet);
+                    return (
+                      <button
+                        key={outlet.id}
+                        className={`outlet-item ${summary.isSelected ? 'selected' : ''} ${summary.needsAttention ? 'warning' : ''}`}
+                        onClick={() => setSelectedOutlet(outlet)}
+                      >
+                        <span className="outlet-indicator">{summary.isSelected ? '●' : '○'}</span>
+                        <span className="outlet-name">{outlet.name}</span>
+                        {summary.needsAttention && <span className="warning-icon">⚠️</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Right Panel - Schedule Grid */}
+            <div className="schedule-grid-panel">
+              {/* Week Navigation */}
+              <div className="week-nav">
+                <div className="outlet-title">
+                  {selectedOutlet?.name || 'Select Outlet'}
+                </div>
+                <div className="week-controls">
+                  <button onClick={goToPrevWeek} className="nav-btn">&lt;</button>
+                  <span className="week-label">Week: {weekLabel}</span>
+                  <button onClick={goToNextWeek} className="nav-btn">&gt;</button>
+                  <button onClick={goToThisWeek} className="today-btn">This Week</button>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="loading">Loading schedule...</div>
+              ) : !selectedOutlet ? (
+                <div className="no-data">Select an outlet to view schedule</div>
+              ) : (
+                <>
+                  {/* Schedule Grid */}
+                  <div className="roster-grid">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th className="staff-col">Staff</th>
+                          {weekDates.map(d => (
+                            <th key={d.date} className={`day-col ${d.isWeekend ? 'weekend' : ''}`}>
+                              <div className="day-header">
+                                <span className="day-name">{d.dayName}</span>
+                                <span className="day-num">{d.dayNum}</span>
+                                {isPublicHoliday(d.date) && <span className="ph-marker">★PH</span>}
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {roster.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="no-staff">No staff assigned to this outlet</td>
+                          </tr>
+                        ) : (
+                          roster.map(emp => (
+                            <tr key={emp.employee_id}>
+                              <td className="staff-name">{emp.name.split(' ')[0]}</td>
+                              {weekDates.map((d, idx) => {
+                                const shift = emp.shifts.find(s => s.date === d.date);
+                                const display = getShiftDisplay(shift);
+
+                                return (
+                                  <td
+                                    key={d.date}
+                                    className={`shift-cell ${d.isWeekend ? 'weekend' : ''} ${display ? 'has-shift' : 'off'}`}
+                                    onClick={() => handleShiftClick(emp.employee_id, d.date)}
+                                  >
+                                    {display ? (
+                                      <span
+                                        className="shift-badge"
+                                        style={{ backgroundColor: display.color }}
+                                      >
+                                        {display.code}
+                                      </span>
+                                    ) : (
+                                      <span className="off-badge">⚪</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))
+                        )}
+
+                        {/* Coverage Row */}
+                        <tr className="coverage-row">
+                          <td className="coverage-label">Coverage</td>
+                          {weekDates.map(d => {
+                            const coverage = getCoverage(d.date);
+                            const isLow = coverage.working < coverage.required;
+                            return (
+                              <td key={d.date} className={`coverage-cell ${isLow ? 'low' : 'ok'}`}>
+                                {coverage.working}/{coverage.required}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Legend and Actions */}
+                  <div className="schedule-footer">
+                    <div className="shift-legend">
+                      <span className="legend-label">Shifts:</span>
+                      {templates.filter(t => !t.is_off).map(t => (
+                        <span
+                          key={t.id}
+                          className="legend-item"
+                          style={{ backgroundColor: t.color }}
+                        >
+                          {t.code}
+                        </span>
+                      ))}
+                      <span className="legend-item off">⚪ OFF</span>
+                    </div>
+                    <div className="schedule-actions">
+                      <button
+                        onClick={copyLastWeek}
+                        className="copy-btn"
+                        disabled={saving}
+                      >
+                        Copy Last Week
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Help text */}
+                  <div className="help-text">
+                    Click on a cell to cycle through shifts: {templates.filter(t => !t.is_off).map(t => t.code).join(' → ')} → OFF
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Extra Shift Requests Tab */}
         {activeTab === 'requests' && (
           <div className="requests-container">
-            {requestsLoading ? (
-              <div className="loading">Loading requests...</div>
-            ) : extraShiftRequests.length === 0 ? (
+            {extraShiftRequests.length === 0 ? (
               <div className="no-data">No pending extra shift requests</div>
             ) : (
               <div className="requests-list">
-                {extraShiftRequests.map(request => (
-                  <div key={request.id} className="request-card">
+                {extraShiftRequests.map(req => (
+                  <div key={req.id} className="request-card">
                     <div className="request-info">
-                      <div className="request-header">
-                        <strong>{request.employee_name}</strong>
-                        <span className="employee-code">({request.employee_code})</span>
-                      </div>
-                      <div className="request-details">
-                        <span className="date">
-                          {new Date(request.request_date).toLocaleDateString('en-MY', {
-                            weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
-                          })}
-                        </span>
-                        <span className="time">{request.shift_start} - {request.shift_end}</span>
-                        {request.outlet_name && (
-                          <span className="outlet">{request.outlet_name}</span>
-                        )}
-                      </div>
-                      {request.reason && (
-                        <p className="reason">{request.reason}</p>
-                      )}
-                      <small className="created-at">
-                        Requested: {new Date(request.created_at).toLocaleString('en-MY')}
-                      </small>
+                      <strong>{req.employee_name}</strong>
+                      <span className="date">
+                        {new Date(req.request_date).toLocaleDateString('en-MY', {
+                          weekday: 'short', day: 'numeric', month: 'short'
+                        })}
+                      </span>
+                      <span className="time">{req.shift_start} - {req.shift_end}</span>
+                      {req.reason && <p className="reason">{req.reason}</p>}
                     </div>
                     <div className="request-actions">
-                      <button
-                        className="btn-approve"
-                        onClick={() => handleApproveExtraShift(request.id)}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="btn-reject"
-                        onClick={() => handleRejectExtraShift(request.id)}
-                      >
-                        Reject
-                      </button>
+                      <button className="btn-approve" onClick={() => handleApproveExtraShift(req.id)}>Approve</button>
+                      <button className="btn-reject" onClick={() => handleRejectExtraShift(req.id)}>Reject</button>
                     </div>
                   </div>
                 ))}
@@ -485,235 +596,40 @@ function Schedules() {
           </div>
         )}
 
-        {/* Swap Requests */}
+        {/* Swap Requests Tab */}
         {activeTab === 'swaps' && (
           <div className="requests-container">
-            {swapsLoading ? (
-              <div className="loading">Loading swap requests...</div>
-            ) : swapRequests.length === 0 ? (
+            {swapRequests.length === 0 ? (
               <div className="no-data">No pending shift swap requests</div>
             ) : (
               <div className="requests-list">
-                {swapRequests.map(request => (
-                  <div key={request.id} className="request-card swap-request">
+                {swapRequests.map(req => (
+                  <div key={req.id} className="request-card swap-request">
                     <div className="request-info">
                       <div className="swap-header">
-                        <strong>{request.requester_name}</strong>
-                        <span className="swap-arrow">wants to swap with</span>
-                        <strong>{request.target_name}</strong>
+                        <strong>{req.requester_name}</strong>
+                        <span className="swap-arrow">↔</span>
+                        <strong>{req.target_name}</strong>
                       </div>
-                      <div className="swap-details-grid">
-                        <div className="swap-shift-box">
-                          <span className="swap-label">Requester gives:</span>
-                          <span className="swap-date">
-                            {new Date(request.requester_shift_date).toLocaleDateString('en-MY', {
-                              weekday: 'short', day: 'numeric', month: 'short'
-                            })}
-                          </span>
-                          <span className="swap-time">{request.requester_shift_start} - {request.requester_shift_end}</span>
+                      <div className="swap-details">
+                        <div className="swap-shift">
+                          <span className="label">Gives:</span>
+                          {new Date(req.requester_shift_date).toLocaleDateString('en-MY', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </div>
-                        <div className="swap-shift-box">
-                          <span className="swap-label">Requester takes:</span>
-                          <span className="swap-date">
-                            {new Date(request.target_shift_date).toLocaleDateString('en-MY', {
-                              weekday: 'short', day: 'numeric', month: 'short'
-                            })}
-                          </span>
-                          <span className="swap-time">{request.target_shift_start} - {request.target_shift_end}</span>
+                        <div className="swap-shift">
+                          <span className="label">Takes:</span>
+                          {new Date(req.target_shift_date).toLocaleDateString('en-MY', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </div>
                       </div>
-                      {request.outlet_name && (
-                        <span className="outlet">{request.outlet_name}</span>
-                      )}
-                      {request.reason && (
-                        <p className="reason">Note: {request.reason}</p>
-                      )}
-                      <small className="swap-status-info">
-                        Both employees agreed. Awaiting your approval.
-                      </small>
                     </div>
                     <div className="request-actions">
-                      <button
-                        className="btn-approve"
-                        onClick={() => handleApproveSwap(request.id)}
-                      >
-                        Approve Swap
-                      </button>
-                      <button
-                        className="btn-reject"
-                        onClick={() => handleRejectSwap(request.id)}
-                      >
-                        Reject
-                      </button>
+                      <button className="btn-approve" onClick={() => handleApproveSwap(req.id)}>Approve</button>
+                      <button className="btn-reject" onClick={() => handleRejectSwap(req.id)}>Reject</button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        )}
-
-        {/* Schedule Modal */}
-        {showModal && (
-          <div className="modal-overlay" onClick={() => setShowModal(false)}>
-            <div className="modal schedule-modal" onClick={e => e.stopPropagation()}>
-              <div className="modal-header">
-                <h2>{modalMode === 'create' ? 'Add Schedule' : 'Edit Schedule'}</h2>
-                <button className="close-btn" onClick={() => setShowModal(false)}>&times;</button>
-              </div>
-
-              <form onSubmit={handleSubmit}>
-                <div className="modal-body">
-                  {modalMode === 'create' && (
-                    <div className="form-group">
-                      <label>Employee</label>
-                      <select
-                        value={formData.employee_id}
-                        onChange={(e) => setFormData(prev => ({ ...prev, employee_id: e.target.value }))}
-                        required
-                      >
-                        <option value="">Select Employee</option>
-                        {filteredEmployees.map(emp => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.name} ({emp.employee_id})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {modalMode === 'edit' && (
-                    <div className="form-group">
-                      <label>Employee</label>
-                      <input type="text" value={selectedSchedule?.employee_name || ''} disabled />
-                    </div>
-                  )}
-
-                  <div className="form-group">
-                    <label>Date</label>
-                    <input
-                      type="date"
-                      value={formData.schedule_date}
-                      onChange={(e) => setFormData(prev => ({ ...prev, schedule_date: e.target.value }))}
-                      required
-                      disabled={modalMode === 'edit'}
-                    />
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Shift Start</label>
-                      <input
-                        type="time"
-                        value={formData.shift_start}
-                        onChange={(e) => setFormData(prev => ({ ...prev, shift_start: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Shift End</label>
-                      <input
-                        type="time"
-                        value={formData.shift_end}
-                        onChange={(e) => setFormData(prev => ({ ...prev, shift_end: e.target.value }))}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Break Duration (minutes)</label>
-                    <input
-                      type="number"
-                      value={formData.break_duration}
-                      onChange={(e) => setFormData(prev => ({ ...prev, break_duration: parseInt(e.target.value) }))}
-                      min="0"
-                      max="120"
-                    />
-                  </div>
-
-                  {modalMode === 'create' && (
-                    <>
-                      <div className="form-group checkbox-group">
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={formData.repeat_weekly}
-                            onChange={(e) => setFormData(prev => ({ ...prev, repeat_weekly: e.target.checked }))}
-                          />
-                          Repeat weekly
-                        </label>
-                      </div>
-
-                      {formData.repeat_weekly && (
-                        <>
-                          <div className="form-group">
-                            <label>End Date</label>
-                            <input
-                              type="date"
-                              value={formData.end_date}
-                              onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                              min={formData.schedule_date}
-                              required={formData.repeat_weekly}
-                            />
-                          </div>
-
-                          <div className="form-group">
-                            <label>Days of Week</label>
-                            <div className="days-selector">
-                              {[
-                                { value: 0, label: 'Sun' },
-                                { value: 1, label: 'Mon' },
-                                { value: 2, label: 'Tue' },
-                                { value: 3, label: 'Wed' },
-                                { value: 4, label: 'Thu' },
-                                { value: 5, label: 'Fri' },
-                                { value: 6, label: 'Sat' }
-                              ].map(day => (
-                                <label key={day.value} className="day-checkbox">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.days_of_week.includes(day.value)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setFormData(prev => ({
-                                          ...prev,
-                                          days_of_week: [...prev.days_of_week, day.value].sort()
-                                        }));
-                                      } else {
-                                        setFormData(prev => ({
-                                          ...prev,
-                                          days_of_week: prev.days_of_week.filter(d => d !== day.value)
-                                        }));
-                                      }
-                                    }}
-                                  />
-                                  {day.label}
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                <div className="modal-footer">
-                  {modalMode === 'edit' && (
-                    <button type="button" className="btn-danger" onClick={handleDelete}>
-                      Delete
-                    </button>
-                  )}
-                  <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn-primary">
-                    {modalMode === 'create' ? 'Create Schedule' : 'Update Schedule'}
-                  </button>
-                </div>
-              </form>
-            </div>
           </div>
         )}
       </div>
