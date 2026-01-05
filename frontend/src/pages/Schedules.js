@@ -191,6 +191,12 @@ function Schedules() {
     const currentShift = employee.shifts.find(s => s.date === date);
     const workTemplates = templates.filter(t => !t.is_off);
 
+    // If no templates available, show error
+    if (workTemplates.length === 0) {
+      alert('No shift templates found. Please set up shift templates first.');
+      return;
+    }
+
     // Find next template in cycle: template1 -> template2 -> OFF -> template1
     let nextTemplateIndex = -1;
     if (!currentShift?.shift_template_id) {
@@ -210,33 +216,35 @@ function Schedules() {
         await schedulesApi.clearSchedule(employeeId, date);
       } else {
         // Assign shift
+        const template = workTemplates[nextTemplateIndex];
         await schedulesApi.assignShift({
           employee_id: employeeId,
           schedule_date: date,
-          shift_template_id: workTemplates[nextTemplateIndex].id,
+          shift_template_id: template.id,
           outlet_id: selectedOutlet.id
         });
       }
 
       // Update local state
+      const assignedTemplate = nextTemplateIndex >= 0 ? workTemplates[nextTemplateIndex] : null;
+
       setRoster(prev => prev.map(emp => {
         if (emp.employee_id !== employeeId) return emp;
 
         const shiftIndex = emp.shifts.findIndex(s => s.date === date);
         let newShifts = [...emp.shifts];
 
-        if (nextTemplateIndex === -1) {
+        if (!assignedTemplate) {
           // OFF - clear the shift
           if (shiftIndex >= 0) {
             newShifts[shiftIndex] = { date, shift_code: null, shift_color: null, shift_template_id: null };
           }
         } else {
-          const t = workTemplates[nextTemplateIndex];
           const newShift = {
             date,
-            shift_template_id: t.id,
-            shift_code: t.code,
-            shift_color: t.color,
+            shift_template_id: assignedTemplate.id,
+            shift_code: assignedTemplate.code,
+            shift_color: assignedTemplate.color,
             is_off: false
           };
           if (shiftIndex >= 0) {
