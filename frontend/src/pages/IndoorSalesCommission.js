@@ -5,8 +5,8 @@ import './IndoorSalesCommission.css';
 
 function IndoorSalesCommission() {
   const [loading, setLoading] = useState(true);
-  const [outlets, setOutlets] = useState([]);
-  const [selectedOutlet, setSelectedOutlet] = useState('');
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [salesData, setSalesData] = useState(null);
@@ -41,30 +41,30 @@ function IndoorSalesCommission() {
     };
   };
 
-  // Fetch indoor sales outlets
+  // Fetch Indoor Sales departments
   useEffect(() => {
-    const fetchOutlets = async () => {
+    const fetchDepartments = async () => {
       try {
-        const res = await commissionApi.getIndoorSalesOutlets();
-        setOutlets(res.data || []);
+        const res = await commissionApi.getIndoorSalesDepartments();
+        setDepartments(res.data || []);
         if (res.data?.length > 0) {
-          setSelectedOutlet(res.data[0].id.toString());
+          setSelectedDepartment(res.data[0].id.toString());
         }
       } catch (error) {
-        console.error('Error fetching outlets:', error);
+        console.error('Error fetching departments:', error);
       }
     };
-    fetchOutlets();
+    fetchDepartments();
   }, []);
 
   // Fetch sales data for selected period
   const fetchSalesData = useCallback(async () => {
-    if (!selectedOutlet) return;
+    if (!selectedDepartment) return;
 
     try {
       setLoading(true);
       const res = await commissionApi.getSales({
-        outlet_id: selectedOutlet,
+        department_id: selectedDepartment,
         year: selectedYear,
         month: selectedMonth
       });
@@ -84,7 +84,7 @@ function IndoorSalesCommission() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOutlet, selectedYear, selectedMonth]);
+  }, [selectedDepartment, selectedYear, selectedMonth]);
 
   useEffect(() => {
     fetchSalesData();
@@ -100,7 +100,7 @@ function IndoorSalesCommission() {
     try {
       setSaving(true);
       await commissionApi.saveSales({
-        outlet_id: parseInt(selectedOutlet),
+        department_id: parseInt(selectedDepartment),
         period_month: selectedMonth,
         period_year: selectedYear,
         total_sales: parseFloat(totalSales),
@@ -230,14 +230,14 @@ function IndoorSalesCommission() {
         {/* Controls */}
         <div className="commission-controls">
           <div className="control-group">
-            <label>Outlet:</label>
+            <label>Department:</label>
             <select
-              value={selectedOutlet}
-              onChange={(e) => setSelectedOutlet(e.target.value)}
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
             >
-              {outlets.map(outlet => (
-                <option key={outlet.id} value={outlet.id}>
-                  {outlet.name}
+              {departments.map(dept => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name}
                 </option>
               ))}
             </select>

@@ -354,16 +354,21 @@ export const schedulesApi = {
   updateTemplate: (id, data) => api.put(`/schedules/templates/${id}`, data),
   deleteTemplate: (id) => api.delete(`/schedules/templates/${id}`),
 
-  // Weekly Roster (Indoor Sales)
+  // Weekly Roster (Outlet-based)
   getWeeklyRoster: (outletId, startDate) => api.get('/schedules/roster/weekly', { params: { outlet_id: outletId, start_date: startDate } }),
   assignShift: (data) => api.post('/schedules/roster/assign', data),
   bulkAssignShifts: (outletId, assignments) => api.post('/schedules/roster/bulk-assign', { outlet_id: outletId, assignments }),
   clearSchedule: (employeeId, date) => api.delete('/schedules/roster/clear', { data: { employee_id: employeeId, schedule_date: date } }),
+
+  // Department-based Roster (Indoor Sales)
+  getDepartmentRoster: (departmentId, startDate) => api.get('/schedules/roster/department/weekly', { params: { department_id: departmentId, start_date: startDate } }),
+  assignDepartmentShift: (data) => api.post('/schedules/roster/department/assign', data),
+  bulkAssignDepartmentShifts: (departmentId, assignments) => api.post('/schedules/roster/department/bulk-assign', { department_id: departmentId, assignments }),
 };
 
-// Commission API (Indoor Sales)
+// Commission API (Indoor Sales - Department-based)
 export const commissionApi = {
-  // Outlet Sales
+  // Department Sales
   getSales: (params) => api.get('/commission/sales', { params }),
   getSalesById: (id) => api.get(`/commission/sales/${id}`),
   saveSales: (data) => api.post('/commission/sales', data),
@@ -375,8 +380,8 @@ export const commissionApi = {
   // Commission Payouts
   getEmployeePayouts: (employeeId, year) => api.get(`/commission/payouts/employee/${employeeId}`, { params: { year } }),
 
-  // Indoor Sales Outlets
-  getIndoorSalesOutlets: () => api.get('/commission/outlets'),
+  // Indoor Sales Departments
+  getIndoorSalesDepartments: () => api.get('/commission/departments'),
 };
 
 // Company Management

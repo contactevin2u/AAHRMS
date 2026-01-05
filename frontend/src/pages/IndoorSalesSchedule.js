@@ -5,8 +5,8 @@ import './IndoorSalesSchedule.css';
 
 function IndoorSalesSchedule() {
   const [loading, setLoading] = useState(true);
-  const [outlets, setOutlets] = useState([]);
-  const [selectedOutlet, setSelectedOutlet] = useState('');
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
   const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStart(new Date()));
   const [roster, setRoster] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -21,29 +21,29 @@ function IndoorSalesSchedule() {
     return new Date(d.setDate(diff)).toISOString().split('T')[0];
   }
 
-  // Fetch indoor sales outlets
+  // Fetch Indoor Sales department
   useEffect(() => {
-    const fetchOutlets = async () => {
+    const fetchDepartments = async () => {
       try {
-        const res = await commissionApi.getIndoorSalesOutlets();
-        setOutlets(res.data || []);
+        const res = await commissionApi.getIndoorSalesDepartments();
+        setDepartments(res.data || []);
         if (res.data?.length > 0) {
-          setSelectedOutlet(res.data[0].id.toString());
+          setSelectedDepartment(res.data[0].id.toString());
         }
       } catch (error) {
-        console.error('Error fetching outlets:', error);
+        console.error('Error fetching departments:', error);
       }
     };
-    fetchOutlets();
+    fetchDepartments();
   }, []);
 
   // Fetch weekly roster
   const fetchRoster = useCallback(async () => {
-    if (!selectedOutlet) return;
+    if (!selectedDepartment) return;
 
     try {
       setLoading(true);
-      const res = await schedulesApi.getWeeklyRoster(selectedOutlet, currentWeekStart);
+      const res = await schedulesApi.getDepartmentRoster(selectedDepartment, currentWeekStart);
       setRoster(res.data.roster || []);
       setTemplates(res.data.templates || []);
       setDates(res.data.dates || []);
@@ -52,7 +52,7 @@ function IndoorSalesSchedule() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOutlet, currentWeekStart]);
+  }, [selectedDepartment, currentWeekStart]);
 
   useEffect(() => {
     fetchRoster();
@@ -98,11 +98,11 @@ function IndoorSalesSchedule() {
         await schedulesApi.clearSchedule(employeeId, date);
       } else {
         // Assign shift template
-        await schedulesApi.assignShift({
+        await schedulesApi.assignDepartmentShift({
           employee_id: employeeId,
           schedule_date: date,
           shift_template_id: templates[nextTemplateIndex].id,
-          outlet_id: parseInt(selectedOutlet)
+          department_id: parseInt(selectedDepartment)
         });
       }
 
@@ -142,11 +142,11 @@ function IndoorSalesSchedule() {
 
     try {
       setSaving(true);
-      await schedulesApi.assignShift({
+      await schedulesApi.assignDepartmentShift({
         employee_id: employeeId,
         schedule_date: date,
         shift_template_id: currentShift.shift_template_id,
-        outlet_id: parseInt(selectedOutlet),
+        department_id: parseInt(selectedDepartment),
         is_public_holiday: !currentShift.is_public_holiday
       });
 
@@ -178,7 +178,7 @@ function IndoorSalesSchedule() {
 
     try {
       setSaving(true);
-      const prevRes = await schedulesApi.getWeeklyRoster(selectedOutlet, prevWeekStartStr);
+      const prevRes = await schedulesApi.getDepartmentRoster(selectedDepartment, prevWeekStartStr);
       const prevRoster = prevRes.data.roster || [];
 
       const assignments = [];
@@ -199,7 +199,7 @@ function IndoorSalesSchedule() {
       });
 
       if (assignments.length > 0) {
-        await schedulesApi.bulkAssignShifts(selectedOutlet, assignments);
+        await schedulesApi.bulkAssignDepartmentShifts(selectedDepartment, assignments);
         fetchRoster();
       } else {
         alert('No schedules found in previous week to copy.');
@@ -253,14 +253,14 @@ function IndoorSalesSchedule() {
         {/* Controls */}
         <div className="schedule-controls">
           <div className="outlet-select">
-            <label>Outlet:</label>
+            <label>Department:</label>
             <select
-              value={selectedOutlet}
-              onChange={(e) => setSelectedOutlet(e.target.value)}
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
             >
-              {outlets.map(outlet => (
-                <option key={outlet.id} value={outlet.id}>
-                  {outlet.name} {outlet.supervisor_name && `(${outlet.supervisor_name})`}
+              {departments.map(dept => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name} ({dept.employee_count} staff)
                 </option>
               ))}
             </select>
@@ -303,8 +303,8 @@ function IndoorSalesSchedule() {
           <div className="loading">Loading roster...</div>
         ) : roster.length === 0 ? (
           <div className="no-data">
-            No employees assigned to this outlet.
-            <p>Add employees to this outlet in the Employees page.</p>
+            No employees in Indoor Sales department.
+            <p>Assign employees to the Indoor Sales department in the Employees page.</p>
           </div>
         ) : (
           <div className="roster-table-container">

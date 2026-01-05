@@ -910,6 +910,264 @@ router.delete('/roster/clear', authenticateAdmin, async (req, res) => {
 });
 
 // =====================================================
+// DEPARTMENT-BASED ROSTER (for Indoor Sales)
+// =====================================================
+
+// Get weekly roster for a department (Indoor Sales)
+router.get('/roster/department/weekly', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = getCompanyFilter(req);
+    const { department_id, start_date } = req.query;
+
+    if (!department_id || !start_date) {
+      return res.status(400).json({ error: 'Department ID and start_date are required' });
+    }
+
+    // Calculate end of week (7 days from start)
+    const startDateObj = new Date(start_date);
+    const endDateObj = new Date(startDateObj);
+    endDateObj.setDate(startDateObj.getDate() + 6);
+    const endDate = endDateObj.toISOString().split('T')[0];
+
+    // Get all employees in this department
+    let empQuery = `
+      SELECT e.id, e.employee_id, e.name, e.employee_role
+      FROM employees e
+      WHERE e.department_id = $1 AND e.status = 'active'
+    `;
+    let empParams = [department_id];
+
+    if (companyId !== null) {
+      empQuery += ' AND e.company_id = $2';
+      empParams.push(companyId);
+    }
+
+    empQuery += ' ORDER BY e.name';
+
+    const employees = await pool.query(empQuery, empParams);
+
+    // Get all schedules for these employees in the date range
+    let schedQuery = `
+      SELECT s.*, st.code as shift_code, st.color as shift_color, st.is_off
+      FROM schedules s
+      LEFT JOIN shift_templates st ON s.shift_template_id = st.id
+      WHERE s.department_id = $1
+        AND s.schedule_date BETWEEN $2 AND $3
+    `;
+    let schedParams = [department_id, start_date, endDate];
+
+    if (companyId !== null) {
+      schedQuery += ' AND s.company_id = $4';
+      schedParams.push(companyId);
+    }
+
+    const schedules = await pool.query(schedQuery, schedParams);
+
+    // Get shift templates for the company
+    let templatesQuery = 'SELECT * FROM shift_templates WHERE is_active = true';
+    let templatesParams = [];
+    if (companyId !== null) {
+      templatesQuery += ' AND company_id = $1';
+      templatesParams.push(companyId);
+    }
+    const templates = await pool.query(templatesQuery, templatesParams);
+
+    // Build schedule map by employee_id and date
+    const scheduleMap = {};
+    schedules.rows.forEach(s => {
+      const dateKey = s.schedule_date.toISOString().split('T')[0];
+      const key = `${s.employee_id}_${dateKey}`;
+      scheduleMap[key] = {
+        id: s.id,
+        shift_template_id: s.shift_template_id,
+        shift_code: s.shift_code,
+        shift_color: s.shift_color,
+        is_off: s.is_off,
+        is_public_holiday: s.is_public_holiday,
+        shift_start: formatTime(s.shift_start),
+        shift_end: formatTime(s.shift_end)
+      };
+    });
+
+    // Generate date headers
+    const dates = [];
+    const current = new Date(start_date);
+    for (let i = 0; i < 7; i++) {
+      dates.push({
+        date: current.toISOString().split('T')[0],
+        day: current.toLocaleDateString('en-MY', { weekday: 'short' }),
+        dayNum: current.getDate()
+      });
+      current.setDate(current.getDate() + 1);
+    }
+
+    // Build roster grid
+    const roster = employees.rows.map(emp => ({
+      employee_id: emp.id,
+      employee_code: emp.employee_id,
+      name: emp.name,
+      role: emp.employee_role,
+      shifts: dates.map(d => {
+        const key = `${emp.id}_${d.date}`;
+        return {
+          date: d.date,
+          ...scheduleMap[key] || { id: null, shift_code: null, shift_color: null }
+        };
+      })
+    }));
+
+    res.json({
+      department_id: parseInt(department_id),
+      start_date,
+      end_date: endDate,
+      dates,
+      templates: templates.rows.map(t => ({
+        ...t,
+        start_time: formatTime(t.start_time),
+        end_time: formatTime(t.end_time)
+      })),
+      roster
+    });
+  } catch (error) {
+    console.error('Error fetching department weekly roster:', error);
+    res.status(500).json({ error: 'Failed to fetch weekly roster' });
+  }
+});
+
+// Assign shift to employee in department
+router.post('/roster/department/assign', authenticateAdmin, async (req, res) => {
+  try {
+    const { employee_id, schedule_date, shift_template_id, department_id, is_public_holiday } = req.body;
+    const companyId = req.companyId || req.admin?.company_id;
+    const adminId = req.admin?.id;
+
+    if (!employee_id || !schedule_date || !shift_template_id || !department_id) {
+      return res.status(400).json({ error: 'Employee, date, shift template, and department are required' });
+    }
+
+    // Get shift template details
+    const template = await pool.query('SELECT * FROM shift_templates WHERE id = $1', [shift_template_id]);
+    if (template.rows.length === 0) {
+      return res.status(404).json({ error: 'Shift template not found' });
+    }
+
+    const t = template.rows[0];
+
+    // Check for existing schedule on this date
+    const existing = await pool.query(
+      'SELECT id FROM schedules WHERE employee_id = $1 AND schedule_date = $2',
+      [employee_id, schedule_date]
+    );
+
+    let result;
+    if (existing.rows.length > 0) {
+      // Update existing schedule
+      result = await pool.query(
+        `UPDATE schedules
+         SET shift_template_id = $1,
+             shift_start = $2,
+             shift_end = $3,
+             is_public_holiday = $4,
+             status = $5,
+             department_id = $6,
+             updated_at = NOW()
+         WHERE id = $7
+         RETURNING *`,
+        [shift_template_id, t.start_time, t.end_time, is_public_holiday || false,
+         t.is_off ? 'off' : 'scheduled', department_id, existing.rows[0].id]
+      );
+    } else {
+      // Create new schedule
+      result = await pool.query(
+        `INSERT INTO schedules
+          (employee_id, company_id, department_id, schedule_date, shift_template_id,
+           shift_start, shift_end, is_public_holiday, status, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING *`,
+        [employee_id, companyId, department_id, schedule_date, shift_template_id,
+         t.start_time, t.end_time, is_public_holiday || false,
+         t.is_off ? 'off' : 'scheduled', adminId]
+      );
+    }
+
+    res.json({
+      ...result.rows[0],
+      shift_code: t.code,
+      shift_color: t.color,
+      is_off: t.is_off
+    });
+  } catch (error) {
+    console.error('Error assigning department shift:', error);
+    res.status(500).json({ error: 'Failed to assign shift' });
+  }
+});
+
+// Bulk assign shifts for department
+router.post('/roster/department/bulk-assign', authenticateAdmin, async (req, res) => {
+  try {
+    const { department_id, assignments } = req.body;
+    const companyId = req.companyId || req.admin?.company_id;
+    const adminId = req.admin?.id;
+
+    if (!department_id || !assignments || !Array.isArray(assignments)) {
+      return res.status(400).json({ error: 'Department ID and assignments array are required' });
+    }
+
+    const results = { created: 0, updated: 0, errors: [] };
+
+    for (const a of assignments) {
+      try {
+        const template = await pool.query('SELECT * FROM shift_templates WHERE id = $1', [a.shift_template_id]);
+        if (template.rows.length === 0) {
+          results.errors.push({ employee_id: a.employee_id, date: a.schedule_date, error: 'Invalid shift template' });
+          continue;
+        }
+
+        const t = template.rows[0];
+
+        const existing = await pool.query(
+          'SELECT id FROM schedules WHERE employee_id = $1 AND schedule_date = $2',
+          [a.employee_id, a.schedule_date]
+        );
+
+        if (existing.rows.length > 0) {
+          await pool.query(
+            `UPDATE schedules
+             SET shift_template_id = $1, shift_start = $2, shift_end = $3,
+                 is_public_holiday = $4, status = $5, department_id = $6, updated_at = NOW()
+             WHERE id = $7`,
+            [a.shift_template_id, t.start_time, t.end_time,
+             a.is_public_holiday || false, t.is_off ? 'off' : 'scheduled', department_id, existing.rows[0].id]
+          );
+          results.updated++;
+        } else {
+          await pool.query(
+            `INSERT INTO schedules
+              (employee_id, company_id, department_id, schedule_date, shift_template_id,
+               shift_start, shift_end, is_public_holiday, status, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [a.employee_id, companyId, department_id, a.schedule_date, a.shift_template_id,
+             t.start_time, t.end_time, a.is_public_holiday || false,
+             t.is_off ? 'off' : 'scheduled', adminId]
+          );
+          results.created++;
+        }
+      } catch (err) {
+        results.errors.push({ employee_id: a.employee_id, date: a.schedule_date, error: err.message });
+      }
+    }
+
+    res.json({
+      message: `Processed ${results.created + results.updated} assignments`,
+      ...results
+    });
+  } catch (error) {
+    console.error('Error bulk assigning department shifts:', error);
+    res.status(500).json({ error: 'Failed to bulk assign shifts' });
+  }
+});
+
+// =====================================================
 // EXTRA SHIFT REQUESTS
 // =====================================================
 
