@@ -204,10 +204,6 @@ function Employees() {
         positionsApi.getAll()
       ]);
 
-      // Store in window for debugging
-      window._debug = { deptRes, outletsRes, companyId, isMimix };
-      alert('DEBUG: Departments=' + (deptRes.data?.length || 0) + ', Outlets=' + (outletsRes.data?.length || 0) + ', CompanyID=' + companyId + ', isMimix=' + isMimix);
-
       setEmployees(empRes.data);
       setDepartments(deptRes.data || []);
       setOutlets(outletsRes.data || []);
@@ -217,7 +213,6 @@ function Employees() {
       setPositions(positionsRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
-      alert('ERROR fetching data: ' + error.message);
     } finally {
       setLoading(false);
     }
