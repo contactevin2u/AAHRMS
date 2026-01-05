@@ -106,6 +106,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
       id: row.id,
       name: row.name,
       salary_type: row.salary_type,
+      payroll_structure_code: row.payroll_structure_code,
       company_id: row.company_id,
       created_at: row.created_at,
       employee_count: parseInt(row.employee_count) || 0,
