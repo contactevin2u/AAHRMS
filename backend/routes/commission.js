@@ -192,9 +192,18 @@ router.post('/sales/:id/calculate', authenticateAdmin, async (req, res) => {
 
     const sales = salesResult.rows[0];
 
-    // Get first and last day of the period
-    const startDate = `${sales.period_year}-${String(sales.period_month).padStart(2, '0')}-01`;
-    const endDate = new Date(sales.period_year, sales.period_month, 0).toISOString().split('T')[0];
+    // Commission period is 15th to 14th
+    // period_month = payout month (when commission is paid with salary)
+    // Schedule range: (previous month) 15th to (period_month) 14th
+    // Example: January payout = Dec 15 to Jan 14
+    let startYear = sales.period_year;
+    let startMonth = sales.period_month - 1; // Previous month
+    if (startMonth === 0) {
+      startMonth = 12;
+      startYear = sales.period_year - 1;
+    }
+    const startDate = `${startYear}-${String(startMonth).padStart(2, '0')}-15`;
+    const endDate = `${sales.period_year}-${String(sales.period_month).padStart(2, '0')}-14`;
 
     // Get all schedules for this outlet in the period
     // Count normal shifts and PH shifts separately
@@ -274,6 +283,10 @@ router.post('/sales/:id/calculate', authenticateAdmin, async (req, res) => {
     res.json({
       outlet_sales_id: parseInt(id),
       period: `${sales.period_year}-${String(sales.period_month).padStart(2, '0')}`,
+      period_label: `${startDate} to ${endDate}`,
+      period_start: startDate,
+      period_end: endDate,
+      payout_month: `${sales.period_year}-${String(sales.period_month).padStart(2, '0')}`,
       total_sales: parseFloat(sales.total_sales),
       commission_rate: parseFloat(sales.commission_rate),
       commission_pool: parseFloat(sales.commission_pool),

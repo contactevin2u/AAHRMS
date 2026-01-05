@@ -968,8 +968,20 @@ router.get('/my-commission/:year/:month', authenticateEmployee, asyncHandler(asy
 
   const payout = result.rows[0];
 
+  // Calculate period dates (15th to 14th)
+  let startYear = payout.period_year;
+  let startMonth = payout.period_month - 1;
+  if (startMonth === 0) {
+    startMonth = 12;
+    startYear = payout.period_year - 1;
+  }
+  const periodStart = `${startYear}-${String(startMonth).padStart(2, '0')}-15`;
+  const periodEnd = `${payout.period_year}-${String(payout.period_month).padStart(2, '0')}-14`;
+
   res.json({
     period: `${payout.period_year}-${String(payout.period_month).padStart(2, '0')}`,
+    period_label: `${periodStart} to ${periodEnd}`,
+    payout_month: `${payout.period_year}-${String(payout.period_month).padStart(2, '0')}`,
     outlet_name: payout.outlet_name,
     my_shifts: {
       normal: payout.normal_shifts,

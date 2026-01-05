@@ -23,6 +23,24 @@ function IndoorSalesCommission() {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
 
+  const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  // Calculate period range (15th of previous month to 14th of selected month)
+  const getPeriodRange = (month, year) => {
+    let startMonth = month - 1;
+    let startYear = year;
+    if (startMonth === 0) {
+      startMonth = 12;
+      startYear = year - 1;
+    }
+    return {
+      label: `${shortMonthNames[startMonth - 1]} 15 - ${shortMonthNames[month - 1]} 14`,
+      startDate: `${startYear}-${String(startMonth).padStart(2, '0')}-15`,
+      endDate: `${year}-${String(month).padStart(2, '0')}-14`
+    };
+  };
+
   // Fetch indoor sales outlets
   useEffect(() => {
     const fetchOutlets = async () => {
@@ -252,7 +270,12 @@ function IndoorSalesCommission() {
         ) : (
           <div className="sales-form-card">
             <div className="form-header">
-              <h2>{monthNames[selectedMonth - 1]} {selectedYear}</h2>
+              <div>
+                <h2>{monthNames[selectedMonth - 1]} {selectedYear} Payout</h2>
+                <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>
+                  Period: {getPeriodRange(selectedMonth, selectedYear).label}, {selectedYear}
+                </p>
+              </div>
               {salesData && (
                 <span className={`status-badge ${salesData.status}`}>
                   {salesData.status === 'finalized' ? 'Finalized' : 'Draft'}
@@ -389,6 +412,7 @@ function IndoorSalesCommission() {
         <div className="formula-card">
           <h3>Commission Calculation Formula</h3>
           <div className="formula">
+            <p><strong>Period:</strong> 15th of previous month to 14th of payout month</p>
             <p><strong>Commission Pool</strong> = Total Sales x Commission Rate (default 6%)</p>
             <p><strong>Per-Shift Value</strong> = Commission Pool / Total Effective Shifts</p>
             <p><strong>Effective Shifts</strong> = Normal Shifts + (PH Shifts x 2)</p>
@@ -401,7 +425,12 @@ function IndoorSalesCommission() {
           <div className="modal-overlay" onClick={() => setShowPayoutsModal(false)}>
             <div className="modal payouts-modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <h2>Commission Payouts - {monthNames[selectedMonth - 1]} {selectedYear}</h2>
+                <div>
+                  <h2>Commission Payouts - {monthNames[selectedMonth - 1]} {selectedYear}</h2>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+                    Period: {getPeriodRange(selectedMonth, selectedYear).label}, {selectedYear}
+                  </p>
+                </div>
                 <button className="close-btn" onClick={() => setShowPayoutsModal(false)}>&times;</button>
               </div>
 
