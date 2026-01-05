@@ -140,6 +140,9 @@ router.post('/', authenticateAdmin, async (req, res) => {
       additional_outlet_ids
     } = { ...req.body, ...sanitizedBody };
 
+    // Helper function to convert empty strings to null for integer fields
+    const toNullableInt = (val) => (val === '' || val === undefined || val === null) ? null : val;
+
     // Get company_id from authenticated user - REQUIRED for tenant isolation
     const companyId = req.companyId;
     if (!companyId) {
@@ -153,7 +156,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
     if (!ic_number) {
       return res.status(400).json({ error: 'IC Number is required (for employee login)' });
     }
-    if (!department_id && !outlet_id) {
+    if (!toNullableInt(department_id) && !toNullableInt(outlet_id)) {
       return res.status(400).json({ error: 'Department or Outlet is required' });
     }
     if (!join_date) {
@@ -196,14 +199,14 @@ router.post('/', authenticateAdmin, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41)
        RETURNING *`,
       [
-        employee_id, name || null, email || null, phone || null, ic_number, department_id || null, outlet_id || null, position || null, position_id || null, join_date,
+        employee_id, name || null, email || null, phone || null, ic_number, toNullableInt(department_id), toNullableInt(outlet_id), position || null, toNullableInt(position_id), join_date,
         address || null, bank_name || null, bank_account_no || null, bank_account_holder || null,
         epf_number || null, socso_number || null, tax_number || null, epf_contribution_type || 'normal',
-        marital_status || 'single', spouse_working || false, children_count || 0, date_of_birth || null,
+        marital_status || 'single', spouse_working || false, children_count || 0, toNullableInt(date_of_birth),
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
         default_bonus || 0, default_incentive || 0,
         empType, probMonths, probation_end_date, empType === 'confirmed' ? 'confirmed' : 'ongoing',
-        salary_before_confirmation || null, salary_after_confirmation || null, calcIncrement || null,
+        toNullableInt(salary_before_confirmation), toNullableInt(salary_after_confirmation), toNullableInt(calcIncrement),
         companyId, false, passwordHash, true
       ]
     );
@@ -272,6 +275,9 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       probation_notes
     } = { ...req.body, ...sanitizedBody };
 
+    // Helper function to convert empty strings to null for integer fields
+    const toNullableInt = (val) => (val === '' || val === undefined || val === null) ? null : val;
+
     // Get current employee data to check if we need to recalculate probation_end_date
     const currentEmp = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
     if (currentEmp.rows.length === 0) {
@@ -315,15 +321,15 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
        WHERE id = $38
        RETURNING *`,
       [
-        employee_id, name, email, phone, ic_number, department_id, outlet_id || null, position, join_date, status,
+        employee_id, name, email, phone, ic_number, toNullableInt(department_id), toNullableInt(outlet_id), position, join_date, status,
         address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
-        marital_status, spouse_working, children_count, date_of_birth,
+        marital_status, spouse_working, children_count, toNullableInt(date_of_birth),
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0,
         per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
         default_bonus || 0, default_incentive || 0,
         newEmpType, newProbMonths, probation_end_date,
-        salary_before_confirmation, salary_after_confirmation, calcIncrement,
+        toNullableInt(salary_before_confirmation), toNullableInt(salary_after_confirmation), toNullableInt(calcIncrement),
         probation_notes, id
       ]
     );
