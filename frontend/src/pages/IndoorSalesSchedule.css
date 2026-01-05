@@ -127,66 +127,33 @@
   cursor: not-allowed;
 }
 
-/* Employee Selector */
-.employee-selector {
-  margin-bottom: 16px;
-  padding: 16px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.employee-selector label {
-  display: block;
-  font-weight: 500;
-  color: #475569;
-  margin-bottom: 12px;
-}
-
-.employee-chips {
+/* View Toggle */
+.view-toggle {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 16px;
 }
 
-.employee-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px 16px;
+.toggle-btn {
+  padding: 10px 20px;
   background: #f1f5f9;
   border: 2px solid transparent;
   border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.employee-chip:hover {
+.toggle-btn:hover {
   background: #e2e8f0;
 }
 
-.employee-chip.active {
+.toggle-btn.active {
   background: #dbeafe;
   border-color: #3b82f6;
-}
-
-.chip-name {
-  font-weight: 500;
-  color: #1e293b;
-  font-size: 13px;
-}
-
-.chip-count {
-  font-size: 11px;
-  color: #64748b;
-}
-
-.employee-chip.active .chip-name {
   color: #1d4ed8;
-}
-
-.employee-chip.active .chip-count {
-  color: #3b82f6;
 }
 
 /* Legend */
@@ -225,44 +192,15 @@
   color: white;
 }
 
-/* Employee Stats */
-.employee-stats {
+/* Schedule Content - Calendar + Side Panel */
+.schedule-content {
   display: flex;
-  gap: 24px;
-  margin-bottom: 16px;
-  padding: 16px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.stat-label {
-  color: #64748b;
-  font-size: 14px;
-}
-
-.stat-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.stat-item.ph .stat-value {
-  color: #f59e0b;
-}
-
-.stat-item.total .stat-value {
-  color: #10b981;
+  gap: 20px;
 }
 
 /* Calendar Grid */
 .calendar-container {
+  flex: 1;
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -274,7 +212,7 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
-  min-width: 600px;
+  min-width: 500px;
 }
 
 .calendar-header {
@@ -293,8 +231,8 @@
 }
 
 .calendar-cell {
-  min-height: 80px;
-  padding: 8px;
+  min-height: 70px;
+  padding: 6px;
   background: #f8fafc;
   border-radius: 6px;
   cursor: pointer;
@@ -339,11 +277,58 @@
   background: #f8fafc;
 }
 
+.calendar-cell.selected {
+  box-shadow: 0 0 0 2px #8b5cf6;
+  background: #f5f3ff;
+}
+
+/* Overview cell specific */
+.overview-cell {
+  justify-content: flex-start;
+  gap: 4px;
+}
+
+.work-count {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.work-count.none {
+  color: #94a3b8;
+  background: #f1f5f9;
+}
+
+.work-count.low {
+  color: #f59e0b;
+  background: #fef3c7;
+}
+
+.work-count.good {
+  color: #10b981;
+  background: #d1fae5;
+}
+
+.staff-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;
+}
+
+.staff-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: white;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
 .cell-date {
   font-size: 14px;
   font-weight: 600;
   color: #64748b;
-  margin-bottom: 4px;
 }
 
 .calendar-cell.today .cell-date {
@@ -359,12 +344,11 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border-radius: 6px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   color: white;
-  min-width: 50px;
 }
 
 .cell-shift.ph {
@@ -381,8 +365,193 @@
 
 .cell-off {
   color: #94a3b8;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
+}
+
+/* Side Panel */
+.side-panel {
+  width: 280px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  height: fit-content;
+  position: sticky;
+  top: 20px;
+}
+
+.side-panel h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Day Detail Panel */
+.day-detail .staff-count {
+  text-align: center;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.staff-count .count-num {
+  display: block;
+  font-size: 36px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.staff-count .count-label {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.staff-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.staff-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.staff-item:last-child {
+  border-bottom: none;
+}
+
+.staff-shift-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  min-width: 32px;
+  text-align: center;
+}
+
+.staff-name {
+  flex: 1;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.ph-indicator {
+  background: #f59e0b;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.no-staff {
+  text-align: center;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 20px;
+}
+
+/* Employee Panel */
+.employee-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.employee-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.employee-item:hover {
+  background: #f1f5f9;
+}
+
+.employee-item.active {
+  background: #dbeafe;
+  border-color: #3b82f6;
+}
+
+.employee-item .emp-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.employee-item .emp-days {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.employee-item.active .emp-name {
+  color: #1d4ed8;
+}
+
+.employee-stats {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.stat-row span {
+  color: #64748b;
+}
+
+.stat-row strong {
+  color: #1e293b;
+}
+
+.stat-row.ph strong {
+  color: #f59e0b;
+}
+
+.stat-row.total strong {
+  color: #10b981;
+}
+
+.edit-instructions {
+  font-size: 12px;
+  color: #64748b;
+  padding: 12px;
+  background: #f0fdf4;
+  border-radius: 6px;
+}
+
+.edit-instructions p {
+  margin: 4px 0;
+}
+
+.edit-instructions strong {
+  color: #15803d;
 }
 
 /* Loading & No Data */
@@ -395,30 +564,22 @@
   border-radius: 8px;
 }
 
-.no-data p {
-  margin-top: 8px;
-  font-size: 14px;
-}
-
-/* Instructions */
-.instructions {
-  margin-top: 16px;
-  padding: 16px;
-  background: #f0fdf4;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #166534;
-}
-
-.instructions p {
-  margin: 4px 0;
-}
-
-.instructions strong {
-  color: #15803d;
-}
-
 /* Responsive */
+@media (max-width: 900px) {
+  .schedule-content {
+    flex-direction: column;
+  }
+
+  .side-panel {
+    width: 100%;
+    position: static;
+  }
+
+  .employee-list {
+    max-height: 200px;
+  }
+}
+
 @media (max-width: 768px) {
   .schedule-controls {
     flex-direction: column;
@@ -434,13 +595,12 @@
     justify-content: center;
   }
 
-  .employee-stats {
-    flex-wrap: wrap;
-    gap: 12px;
+  .view-toggle {
+    flex-direction: column;
   }
 
   .calendar-cell {
-    min-height: 60px;
+    min-height: 50px;
     padding: 4px;
   }
 
@@ -449,7 +609,7 @@
   }
 
   .cell-shift {
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: 2px 6px;
+    font-size: 11px;
   }
 }

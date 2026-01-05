@@ -14,7 +14,11 @@ function IndoorSalesSchedule() {
   const [roster, setRoster] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [saving, setSaving] = useState(false);
+
+  // View mode: 'overview' shows all employees per day, 'employee' shows one employee's month
+  const [viewMode, setViewMode] = useState('overview');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
 
   // Get all days in month
   const getDaysInMonth = (yearMonth) => {
@@ -23,13 +27,11 @@ function IndoorSalesSchedule() {
     const lastDay = new Date(year, month, 0);
     const days = [];
 
-    // Add empty cells for days before first day of month
-    const startDayOfWeek = firstDay.getDay(); // 0 = Sunday
+    const startDayOfWeek = firstDay.getDay();
     for (let i = 0; i < startDayOfWeek; i++) {
       days.push({ date: null, dayNum: null, isCurrentMonth: false });
     }
 
-    // Add all days of the month
     for (let d = 1; d <= lastDay.getDate(); d++) {
       const date = new Date(year, month - 1, d);
       days.push({
@@ -44,7 +46,7 @@ function IndoorSalesSchedule() {
     return days;
   };
 
-  // Fetch Indoor Sales department
+  // Fetch departments
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
@@ -69,17 +71,12 @@ function IndoorSalesSchedule() {
       const res = await schedulesApi.getDepartmentMonthRoster(selectedDepartment, currentMonth);
       setRoster(res.data.roster || []);
       setTemplates(res.data.templates || []);
-
-      // Auto-select first employee
-      if (res.data.roster?.length > 0 && !selectedEmployee) {
-        setSelectedEmployee(res.data.roster[0].employee_id);
-      }
     } catch (error) {
       console.error('Error fetching roster:', error);
     } finally {
       setLoading(false);
     }
-  }, [selectedDepartment, currentMonth, selectedEmployee]);
+  }, [selectedDepartment, currentMonth]);
 
   useEffect(() => {
     fetchRoster();
@@ -103,7 +100,22 @@ function IndoorSalesSchedule() {
     setCurrentMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
   };
 
-  // Handle shift click - cycle through work shifts only (no OFF)
+  // Get employees working on a specific date
+  const getEmployeesOnDate = (date) => {
+    if (!date) return [];
+    return roster.filter(emp => {
+      const shift = emp.shifts.find(s => s.date === date);
+      return shift?.shift_code && !shift?.is_off;
+    }).map(emp => {
+      const shift = emp.shifts.find(s => s.date === date);
+      return {
+        ...emp,
+        shift
+      };
+    });
+  };
+
+  // Handle shift click for employee view
   const handleShiftClick = async (employeeId, date) => {
     if (saving || !date) return;
 
@@ -111,11 +123,8 @@ function IndoorSalesSchedule() {
     if (!employee) return;
 
     const currentShift = employee.shifts.find(s => s.date === date) || {};
-
-    // Filter out OFF templates - only cycle through work shifts
     const workTemplates = templates.filter(t => !t.is_off);
 
-    // Cycle: empty -> first work template -> second -> ... -> empty
     let nextTemplateIndex = -1;
     if (!currentShift.shift_template_id) {
       nextTemplateIndex = 0;
@@ -123,7 +132,7 @@ function IndoorSalesSchedule() {
       const currentIndex = workTemplates.findIndex(t => t.id === currentShift.shift_template_id);
       nextTemplateIndex = currentIndex + 1;
       if (nextTemplateIndex >= workTemplates.length) {
-        nextTemplateIndex = -1; // Clear = OFF
+        nextTemplateIndex = -1;
       }
     }
 
@@ -140,7 +149,6 @@ function IndoorSalesSchedule() {
         });
       }
 
-      // Update local state
       setRoster(prev => prev.map(emp => {
         if (emp.employee_id !== employeeId) return emp;
 
@@ -148,7 +156,6 @@ function IndoorSalesSchedule() {
         let newShifts = [...emp.shifts];
 
         if (nextTemplateIndex === -1) {
-          // Remove shift
           if (existingShiftIndex >= 0) {
             newShifts[existingShiftIndex] = { date, shift_template_id: null, shift_code: null, shift_color: null };
           }
@@ -178,7 +185,7 @@ function IndoorSalesSchedule() {
     }
   };
 
-  // Handle right-click for public holiday toggle
+  // Handle right-click for public holiday
   const handleRightClick = async (e, employeeId, date) => {
     e.preventDefault();
     if (!date) return;
@@ -263,6 +270,12 @@ function IndoorSalesSchedule() {
     return dateStr === new Date().toISOString().split('T')[0];
   };
 
+  const formatDateFull = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   const days = getDaysInMonth(currentMonth);
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -275,6 +288,7 @@ function IndoorSalesSchedule() {
 
   const selectedEmployeeData = roster.find(e => e.employee_id === selectedEmployee);
   const selectedEmployeeTotals = selectedEmployeeData ? calculateTotals(selectedEmployeeData.shifts) : null;
+  const employeesOnSelectedDate = selectedDate ? getEmployeesOnDate(selectedDate) : [];
 
   return (
     <Layout>
@@ -282,7 +296,7 @@ function IndoorSalesSchedule() {
         <header className="page-header">
           <div>
             <h1>Indoor Sales Schedule</h1>
-            <p>Monthly calendar view - Empty = OFF day</p>
+            <p>Monthly calendar view - Click on a day to see who's working</p>
           </div>
         </header>
 
@@ -316,125 +330,204 @@ function IndoorSalesSchedule() {
           </div>
         </div>
 
-        {/* Employee Selector */}
-        <div className="employee-selector">
-          <label>Select Employee:</label>
-          <div className="employee-chips">
-            {roster.map(emp => {
-              const totals = calculateTotals(emp.shifts);
-              return (
-                <button
-                  key={emp.employee_id}
-                  className={`employee-chip ${selectedEmployee === emp.employee_id ? 'active' : ''}`}
-                  onClick={() => setSelectedEmployee(emp.employee_id)}
-                >
-                  <span className="chip-name">{emp.name}</span>
-                  <span className="chip-count">{totals.total} days</span>
-                </button>
-              );
-            })}
-          </div>
+        {/* View Toggle */}
+        <div className="view-toggle">
+          <button
+            className={`toggle-btn ${viewMode === 'overview' ? 'active' : ''}`}
+            onClick={() => { setViewMode('overview'); setSelectedEmployee(null); }}
+          >
+            Overview (Who's Working)
+          </button>
+          <button
+            className={`toggle-btn ${viewMode === 'employee' ? 'active' : ''}`}
+            onClick={() => setViewMode('employee')}
+          >
+            Edit by Employee
+          </button>
         </div>
 
         {/* Legend */}
         <div className="shift-legend">
-          <span className="legend-label">Click to assign:</span>
+          <span className="legend-label">Shifts:</span>
           {templates.filter(t => !t.is_off).map(t => (
             <div
               key={t.id}
               className="legend-item"
               style={{ backgroundColor: t.color }}
             >
-              {t.code} - {t.name}
-              {t.start_time && ` (${t.start_time.slice(0,5)}-${t.end_time.slice(0,5)})`}
+              {t.code}
             </div>
           ))}
-          <div className="legend-item empty-legend">
-            Empty = OFF
-          </div>
-          <div className="legend-item ph-badge">
-            Right-click = PH (2x)
-          </div>
+          <div className="legend-item empty-legend">Empty = OFF</div>
+          <div className="legend-item ph-badge">PH = 2x</div>
         </div>
 
-        {/* Calendar Grid */}
         {loading ? (
           <div className="loading">Loading schedule...</div>
-        ) : !selectedEmployee ? (
-          <div className="no-data">Select an employee to view their schedule.</div>
         ) : (
-          <>
-            {/* Employee Stats */}
-            {selectedEmployeeTotals && (
-              <div className="employee-stats">
-                <div className="stat-item">
-                  <span className="stat-label">Working Days:</span>
-                  <span className="stat-value">{selectedEmployeeTotals.normal}</span>
-                </div>
-                {selectedEmployeeTotals.ph > 0 && (
-                  <div className="stat-item ph">
-                    <span className="stat-label">PH Days:</span>
-                    <span className="stat-value">{selectedEmployeeTotals.ph}</span>
-                  </div>
-                )}
-                <div className="stat-item total">
-                  <span className="stat-label">Effective Days:</span>
-                  <span className="stat-value">{selectedEmployeeTotals.effective}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Calendar */}
+          <div className="schedule-content">
+            {/* Calendar Grid */}
             <div className="calendar-container">
               <div className="calendar-grid">
-                {/* Week day headers */}
                 {weekDays.map(day => (
                   <div key={day} className={`calendar-header ${day === 'Sun' || day === 'Sat' ? 'weekend' : ''}`}>
                     {day}
                   </div>
                 ))}
 
-                {/* Calendar days */}
                 {days.map((day, idx) => {
                   if (!day.isCurrentMonth) {
                     return <div key={idx} className="calendar-cell empty"></div>;
                   }
 
-                  const shift = getShift(selectedEmployee, day.date);
-                  const hasShift = shift?.shift_code && !shift?.is_off;
+                  const employeesWorking = getEmployeesOnDate(day.date);
+                  const workCount = employeesWorking.length;
 
-                  return (
-                    <div
-                      key={idx}
-                      className={`calendar-cell ${isToday(day.date) ? 'today' : ''} ${day.isWeekend ? 'weekend' : ''} ${hasShift ? 'has-shift' : 'off-day'}`}
-                      onClick={() => handleShiftClick(selectedEmployee, day.date)}
-                      onContextMenu={(e) => handleRightClick(e, selectedEmployee, day.date)}
-                    >
-                      <div className="cell-date">{day.dayNum}</div>
-                      {hasShift ? (
-                        <div
-                          className={`cell-shift ${shift.is_public_holiday ? 'ph' : ''}`}
-                          style={{ backgroundColor: shift.shift_color }}
-                        >
-                          {shift.shift_code}
-                          {shift.is_public_holiday && <span className="ph-tag">PH</span>}
+                  if (viewMode === 'overview') {
+                    return (
+                      <div
+                        key={idx}
+                        className={`calendar-cell overview-cell ${isToday(day.date) ? 'today' : ''} ${day.isWeekend ? 'weekend' : ''} ${selectedDate === day.date ? 'selected' : ''}`}
+                        onClick={() => setSelectedDate(day.date)}
+                      >
+                        <div className="cell-date">{day.dayNum}</div>
+                        <div className={`work-count ${workCount === 0 ? 'none' : workCount >= 3 ? 'good' : 'low'}`}>
+                          {workCount > 0 ? `${workCount} staff` : 'OFF'}
                         </div>
-                      ) : (
-                        <div className="cell-off">OFF</div>
-                      )}
-                    </div>
-                  );
+                        {workCount > 0 && workCount <= 3 && (
+                          <div className="staff-preview">
+                            {employeesWorking.slice(0, 3).map(emp => (
+                              <span
+                                key={emp.employee_id}
+                                className="staff-badge"
+                                style={{ backgroundColor: emp.shift?.shift_color || '#94a3b8' }}
+                                title={emp.name}
+                              >
+                                {emp.name.split(' ')[0].slice(0, 3)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  } else {
+                    // Employee view
+                    const shift = selectedEmployee ? getShift(selectedEmployee, day.date) : null;
+                    const hasShift = shift?.shift_code && !shift?.is_off;
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`calendar-cell ${isToday(day.date) ? 'today' : ''} ${day.isWeekend ? 'weekend' : ''} ${hasShift ? 'has-shift' : 'off-day'}`}
+                        onClick={() => selectedEmployee && handleShiftClick(selectedEmployee, day.date)}
+                        onContextMenu={(e) => selectedEmployee && handleRightClick(e, selectedEmployee, day.date)}
+                      >
+                        <div className="cell-date">{day.dayNum}</div>
+                        {selectedEmployee ? (
+                          hasShift ? (
+                            <div
+                              className={`cell-shift ${shift.is_public_holiday ? 'ph' : ''}`}
+                              style={{ backgroundColor: shift.shift_color }}
+                            >
+                              {shift.shift_code}
+                              {shift.is_public_holiday && <span className="ph-tag">PH</span>}
+                            </div>
+                          ) : (
+                            <div className="cell-off">OFF</div>
+                          )
+                        ) : (
+                          <div className="cell-off">-</div>
+                        )}
+                      </div>
+                    );
+                  }
                 })}
               </div>
             </div>
-          </>
-        )}
 
-        {/* Instructions */}
-        <div className="instructions">
-          <p><strong>Click</strong> on a day to cycle through shifts: OFF &rarr; {templates.filter(t => !t.is_off).map(t => t.code).join(' → ')} &rarr; OFF</p>
-          <p><strong>Right-click</strong> on a working day to mark as Public Holiday (PH = 2x commission)</p>
-        </div>
+            {/* Side Panel */}
+            <div className="side-panel">
+              {viewMode === 'overview' ? (
+                // Day Detail Panel
+                <div className="day-detail">
+                  <h3>{selectedDate ? formatDateFull(selectedDate) : 'Select a day'}</h3>
+                  {selectedDate && (
+                    <>
+                      <div className="staff-count">
+                        <span className="count-num">{employeesOnSelectedDate.length}</span>
+                        <span className="count-label">Staff Working</span>
+                      </div>
+                      {employeesOnSelectedDate.length > 0 ? (
+                        <ul className="staff-list">
+                          {employeesOnSelectedDate.map(emp => (
+                            <li key={emp.employee_id} className="staff-item">
+                              <span
+                                className="staff-shift-badge"
+                                style={{ backgroundColor: emp.shift?.shift_color || '#94a3b8' }}
+                              >
+                                {emp.shift?.shift_code}
+                              </span>
+                              <span className="staff-name">{emp.name}</span>
+                              {emp.shift?.is_public_holiday && (
+                                <span className="ph-indicator">PH</span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="no-staff">No staff scheduled - All OFF</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : (
+                // Employee Selector Panel
+                <div className="employee-panel">
+                  <h3>Select Employee</h3>
+                  <div className="employee-list">
+                    {roster.map(emp => {
+                      const totals = calculateTotals(emp.shifts);
+                      return (
+                        <button
+                          key={emp.employee_id}
+                          className={`employee-item ${selectedEmployee === emp.employee_id ? 'active' : ''}`}
+                          onClick={() => setSelectedEmployee(emp.employee_id)}
+                        >
+                          <span className="emp-name">{emp.name}</span>
+                          <span className="emp-days">{totals.total} days</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {selectedEmployeeTotals && (
+                    <div className="employee-stats">
+                      <div className="stat-row">
+                        <span>Working:</span>
+                        <strong>{selectedEmployeeTotals.normal}</strong>
+                      </div>
+                      {selectedEmployeeTotals.ph > 0 && (
+                        <div className="stat-row ph">
+                          <span>PH:</span>
+                          <strong>{selectedEmployeeTotals.ph}</strong>
+                        </div>
+                      )}
+                      <div className="stat-row total">
+                        <span>Effective:</span>
+                        <strong>{selectedEmployeeTotals.effective}</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="edit-instructions">
+                    <p><strong>Click</strong> day to toggle shift</p>
+                    <p><strong>Right-click</strong> for PH</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
