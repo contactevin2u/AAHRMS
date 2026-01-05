@@ -1034,6 +1034,193 @@ router.get('/roster/department/weekly', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get monthly roster for a department (Indoor Sales - Calendar View)
+router.get('/roster/department/monthly', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = getCompanyFilter(req);
+    const { department_id, month } = req.query;
+
+    if (!department_id || !month) {
+      return res.status(400).json({ error: 'Department ID and month (YYYY-MM) are required' });
+    }
+
+    // Parse month and calculate date range
+    const [year, monthNum] = month.split('-').map(Number);
+    const startDate = new Date(year, monthNum - 1, 1);
+    const endDate = new Date(year, monthNum, 0); // Last day of month
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+
+    // Get all employees in this department
+    let empQuery = `
+      SELECT e.id, e.employee_id, e.name, e.employee_role
+      FROM employees e
+      WHERE e.department_id = $1 AND e.status = 'active'
+    `;
+    let empParams = [department_id];
+
+    if (companyId !== null) {
+      empQuery += ' AND e.company_id = $2';
+      empParams.push(companyId);
+    }
+
+    empQuery += ' ORDER BY e.name';
+
+    const employees = await pool.query(empQuery, empParams);
+
+    // Get all schedules for these employees in the month
+    let schedQuery = `
+      SELECT s.*, st.code as shift_code, st.color as shift_color, st.is_off
+      FROM schedules s
+      LEFT JOIN shift_templates st ON s.shift_template_id = st.id
+      WHERE s.department_id = $1
+        AND s.schedule_date BETWEEN $2 AND $3
+    `;
+    let schedParams = [department_id, startDateStr, endDateStr];
+
+    if (companyId !== null) {
+      schedQuery += ' AND s.company_id = $4';
+      schedParams.push(companyId);
+    }
+
+    const schedules = await pool.query(schedQuery, schedParams);
+
+    // Get shift templates for the company
+    let templatesQuery = 'SELECT * FROM shift_templates WHERE is_active = true';
+    let templatesParams = [];
+    if (companyId !== null) {
+      templatesQuery += ' AND company_id = $1';
+      templatesParams.push(companyId);
+    }
+    const templates = await pool.query(templatesQuery, templatesParams);
+
+    // Build schedule map by employee_id and date
+    const scheduleMap = {};
+    schedules.rows.forEach(s => {
+      const dateKey = s.schedule_date.toISOString().split('T')[0];
+      const key = `${s.employee_id}_${dateKey}`;
+      scheduleMap[key] = {
+        id: s.id,
+        date: dateKey,
+        shift_template_id: s.shift_template_id,
+        shift_code: s.shift_code,
+        shift_color: s.shift_color,
+        is_off: s.is_off,
+        is_public_holiday: s.is_public_holiday
+      };
+    });
+
+    // Build roster with all shifts for each employee
+    const roster = employees.rows.map(emp => {
+      const empShifts = [];
+      Object.keys(scheduleMap).forEach(key => {
+        if (key.startsWith(`${emp.id}_`)) {
+          empShifts.push(scheduleMap[key]);
+        }
+      });
+      return {
+        employee_id: emp.id,
+        employee_code: emp.employee_id,
+        name: emp.name,
+        role: emp.employee_role,
+        shifts: empShifts
+      };
+    });
+
+    res.json({
+      department_id: parseInt(department_id),
+      month,
+      start_date: startDateStr,
+      end_date: endDateStr,
+      templates: templates.rows.map(t => ({
+        ...t,
+        start_time: formatTime(t.start_time),
+        end_time: formatTime(t.end_time)
+      })),
+      roster
+    });
+  } catch (error) {
+    console.error('Error fetching department monthly roster:', error);
+    res.status(500).json({ error: 'Failed to fetch monthly roster' });
+  }
+});
+
+// Copy schedule from one month to another for a department
+router.post('/roster/department/copy-month', authenticateAdmin, async (req, res) => {
+  try {
+    const { department_id, from_month, to_month } = req.body;
+    const companyId = req.companyId || req.admin?.company_id;
+    const adminId = req.admin?.id;
+
+    if (!department_id || !from_month || !to_month) {
+      return res.status(400).json({ error: 'Department ID, from_month, and to_month are required' });
+    }
+
+    // Parse months
+    const [fromYear, fromMonthNum] = from_month.split('-').map(Number);
+    const [toYear, toMonthNum] = to_month.split('-').map(Number);
+
+    const fromStartDate = new Date(fromYear, fromMonthNum - 1, 1);
+    const fromEndDate = new Date(fromYear, fromMonthNum, 0);
+    const toStartDate = new Date(toYear, toMonthNum - 1, 1);
+
+    // Get schedules from source month
+    let schedQuery = `
+      SELECT employee_id, schedule_date, shift_template_id
+      FROM schedules
+      WHERE department_id = $1
+        AND schedule_date BETWEEN $2 AND $3
+        AND shift_template_id IS NOT NULL
+    `;
+    let schedParams = [department_id, fromStartDate.toISOString().split('T')[0], fromEndDate.toISOString().split('T')[0]];
+
+    if (companyId) {
+      schedQuery += ' AND company_id = $4';
+      schedParams.push(companyId);
+    }
+
+    const sourceSchedules = await pool.query(schedQuery, schedParams);
+
+    if (sourceSchedules.rows.length === 0) {
+      return res.status(400).json({ error: 'No schedules found in source month to copy' });
+    }
+
+    // Calculate day offset
+    const dayOffset = Math.round((toStartDate - fromStartDate) / (1000 * 60 * 60 * 24));
+
+    // Clear existing schedules in target month
+    const toEndDate = new Date(toYear, toMonthNum, 0);
+    await pool.query(
+      `DELETE FROM schedules WHERE department_id = $1 AND schedule_date BETWEEN $2 AND $3 AND company_id = $4`,
+      [department_id, toStartDate.toISOString().split('T')[0], toEndDate.toISOString().split('T')[0], companyId]
+    );
+
+    // Copy schedules to new month
+    let copiedCount = 0;
+    for (const schedule of sourceSchedules.rows) {
+      const sourceDate = new Date(schedule.schedule_date);
+      const targetDate = new Date(sourceDate);
+      targetDate.setDate(targetDate.getDate() + dayOffset);
+
+      // Only copy if target date is within target month
+      if (targetDate.getMonth() === toMonthNum - 1) {
+        await pool.query(
+          `INSERT INTO schedules (employee_id, schedule_date, shift_template_id, department_id, company_id, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (employee_id, schedule_date) DO UPDATE SET shift_template_id = $3`,
+          [schedule.employee_id, targetDate.toISOString().split('T')[0], schedule.shift_template_id, department_id, companyId, adminId]
+        );
+        copiedCount++;
+      }
+    }
+
+    res.json({ message: `Copied ${copiedCount} schedules from ${from_month} to ${to_month}` });
+  } catch (error) {
+    console.error('Error copying month schedule:', error);
+    res.status(500).json({ error: 'Failed to copy schedule' });
+  }
+});
+
 // Assign shift to employee in department
 router.post('/roster/department/assign', authenticateAdmin, async (req, res) => {
   try {

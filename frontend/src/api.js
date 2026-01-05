@@ -362,8 +362,10 @@ export const schedulesApi = {
 
   // Department-based Roster (Indoor Sales)
   getDepartmentRoster: (departmentId, startDate) => api.get('/schedules/roster/department/weekly', { params: { department_id: departmentId, start_date: startDate } }),
+  getDepartmentMonthRoster: (departmentId, month) => api.get('/schedules/roster/department/monthly', { params: { department_id: departmentId, month } }),
   assignDepartmentShift: (data) => api.post('/schedules/roster/department/assign', data),
   bulkAssignDepartmentShifts: (departmentId, assignments) => api.post('/schedules/roster/department/bulk-assign', { department_id: departmentId, assignments }),
+  copyMonthSchedule: (departmentId, fromMonth, toMonth) => api.post('/schedules/roster/department/copy-month', { department_id: departmentId, from_month: fromMonth, to_month: toMonth }),
 };
 
 // Commission API (Indoor Sales - Department-based)

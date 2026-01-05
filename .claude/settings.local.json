@@ -68,7 +68,12 @@
       "Bash(npx vercel --prod --yes)",
       "Bash(npx vercel login)",
       "Bash(where:*)",
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\test-duplicate.js\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\update-templates.js\")",
+      "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\create-mimix-depts.js\")",
+      "Bash(del:*)"
     ],
     "deny": [],
     "ask": []
