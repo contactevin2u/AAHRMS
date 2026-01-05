@@ -301,6 +301,20 @@ function Layout({ children }) {
             </>
           )}
 
+          {/* Indoor Sales for AA Alive */}
+          {isAAAlive() && (
+            <>
+              <NavLink to="/admin/indoor-sales/schedule" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                <span className="nav-icon">📊</span>
+                <span>Indoor Sales Roster</span>
+              </NavLink>
+              <NavLink to="/admin/indoor-sales/commission" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                <span className="nav-icon">💰</span>
+                <span>Sales Commission</span>
+              </NavLink>
+            </>
+          )}
+
           {/* SYSTEM SECTION - Only for authorized users */}
           {(canManageUsers() || isSuperAdmin()) && (
             <div className="nav-section">

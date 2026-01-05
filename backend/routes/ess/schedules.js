@@ -779,4 +779,213 @@ router.post('/team-extra-shift-requests/:id/reject', authenticateEmployee, async
   res.json({ message: 'Extra shift request rejected' });
 }));
 
+// ============================================
+// INDOOR SALES - My Weekly Schedule
+// ============================================
+
+// Get weekly roster view for Indoor Sales employee
+router.get('/my-weekly-roster', authenticateEmployee, asyncHandler(async (req, res) => {
+  const employeeId = req.employee.id;
+  const { start_date } = req.query;
+
+  // Default to current week's Monday
+  let startDate;
+  if (start_date) {
+    startDate = start_date;
+  } else {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    startDate = new Date(now.setDate(diff)).toISOString().split('T')[0];
+  }
+
+  // Calculate end of week
+  const startDateObj = new Date(startDate);
+  const endDateObj = new Date(startDateObj);
+  endDateObj.setDate(startDateObj.getDate() + 6);
+  const endDate = endDateObj.toISOString().split('T')[0];
+
+  // Get schedules for the week
+  const result = await pool.query(
+    `SELECT s.*,
+            st.code as shift_code,
+            st.color as shift_color,
+            st.is_off,
+            o.name as outlet_name
+     FROM schedules s
+     LEFT JOIN shift_templates st ON s.shift_template_id = st.id
+     LEFT JOIN outlets o ON s.outlet_id = o.id
+     WHERE s.employee_id = $1
+       AND s.schedule_date BETWEEN $2 AND $3
+     ORDER BY s.schedule_date`,
+    [employeeId, startDate, endDate]
+  );
+
+  // Build schedule map by date
+  const scheduleMap = {};
+  result.rows.forEach(s => {
+    const dateKey = s.schedule_date.toISOString().split('T')[0];
+    scheduleMap[dateKey] = {
+      id: s.id,
+      shift_code: s.shift_code,
+      shift_color: s.shift_color,
+      is_off: s.is_off,
+      is_public_holiday: s.is_public_holiday,
+      shift_start: formatTime(s.shift_start),
+      shift_end: formatTime(s.shift_end),
+      outlet_name: s.outlet_name
+    };
+  });
+
+  // Generate date array
+  const dates = [];
+  const current = new Date(startDate);
+  for (let i = 0; i < 7; i++) {
+    const dateStr = current.toISOString().split('T')[0];
+    dates.push({
+      date: dateStr,
+      day: current.toLocaleDateString('en-MY', { weekday: 'short' }),
+      dayNum: current.getDate(),
+      schedule: scheduleMap[dateStr] || null
+    });
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Calculate summary
+  let normalShifts = 0;
+  let phShifts = 0;
+  dates.forEach(d => {
+    if (d.schedule && !d.schedule.is_off) {
+      if (d.schedule.is_public_holiday) {
+        phShifts++;
+      } else {
+        normalShifts++;
+      }
+    }
+  });
+
+  res.json({
+    start_date: startDate,
+    end_date: endDate,
+    dates,
+    summary: {
+      normal_shifts: normalShifts,
+      ph_shifts: phShifts,
+      effective_shifts: normalShifts + (phShifts * 2)
+    }
+  });
+}));
+
+// ============================================
+// INDOOR SALES - My Commission
+// ============================================
+
+// Get my commission payouts
+router.get('/my-commission', authenticateEmployee, asyncHandler(async (req, res) => {
+  const employeeId = req.employee.id;
+  const { year } = req.query;
+  const selectedYear = year || new Date().getFullYear();
+
+  // Get all commission payouts for this employee
+  const result = await pool.query(
+    `SELECT cp.*,
+            os.period_month,
+            os.period_year,
+            os.total_sales,
+            os.commission_rate,
+            os.commission_pool,
+            os.per_shift_value,
+            os.status as sales_status,
+            o.name as outlet_name
+     FROM commission_payouts cp
+     JOIN outlet_sales os ON cp.outlet_sales_id = os.id
+     LEFT JOIN outlets o ON os.outlet_id = o.id
+     WHERE cp.employee_id = $1
+       AND os.period_year = $2
+       AND os.status = 'finalized'
+     ORDER BY os.period_year DESC, os.period_month DESC`,
+    [employeeId, selectedYear]
+  );
+
+  // Calculate totals
+  let totalCommission = 0;
+  let totalShifts = 0;
+  result.rows.forEach(r => {
+    totalCommission += parseFloat(r.commission_amount) || 0;
+    totalShifts += parseInt(r.effective_shifts) || 0;
+  });
+
+  res.json({
+    year: parseInt(selectedYear),
+    payouts: result.rows.map(r => ({
+      period: `${r.period_year}-${String(r.period_month).padStart(2, '0')}`,
+      outlet_name: r.outlet_name,
+      normal_shifts: r.normal_shifts,
+      ph_shifts: r.ph_shifts,
+      effective_shifts: r.effective_shifts,
+      per_shift_value: parseFloat(r.per_shift_value),
+      commission_amount: parseFloat(r.commission_amount),
+      total_sales: parseFloat(r.total_sales),
+      commission_pool: parseFloat(r.commission_pool)
+    })),
+    summary: {
+      total_commission: totalCommission,
+      total_effective_shifts: totalShifts
+    }
+  });
+}));
+
+// Get commission payout detail for a specific month
+router.get('/my-commission/:year/:month', authenticateEmployee, asyncHandler(async (req, res) => {
+  const employeeId = req.employee.id;
+  const { year, month } = req.params;
+
+  // Get outlet sales and payout for this period
+  const result = await pool.query(
+    `SELECT cp.*,
+            os.period_month,
+            os.period_year,
+            os.total_sales,
+            os.commission_rate,
+            os.commission_pool,
+            os.per_shift_value,
+            os.total_effective_shifts as outlet_total_shifts,
+            os.status as sales_status,
+            o.name as outlet_name
+     FROM commission_payouts cp
+     JOIN outlet_sales os ON cp.outlet_sales_id = os.id
+     LEFT JOIN outlets o ON os.outlet_id = o.id
+     WHERE cp.employee_id = $1
+       AND os.period_year = $2
+       AND os.period_month = $3
+       AND os.status = 'finalized'`,
+    [employeeId, year, month]
+  );
+
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'No commission data found for this period' });
+  }
+
+  const payout = result.rows[0];
+
+  res.json({
+    period: `${payout.period_year}-${String(payout.period_month).padStart(2, '0')}`,
+    outlet_name: payout.outlet_name,
+    my_shifts: {
+      normal: payout.normal_shifts,
+      public_holiday: payout.ph_shifts,
+      effective: payout.effective_shifts
+    },
+    outlet_summary: {
+      total_sales: parseFloat(payout.total_sales),
+      commission_rate: parseFloat(payout.commission_rate),
+      commission_pool: parseFloat(payout.commission_pool),
+      total_effective_shifts: parseFloat(payout.outlet_total_shifts),
+      per_shift_value: parseFloat(payout.per_shift_value)
+    },
+    my_commission: parseFloat(payout.commission_amount),
+    calculation: `${payout.effective_shifts} shifts x RM${parseFloat(payout.per_shift_value).toFixed(2)} = RM${parseFloat(payout.commission_amount).toFixed(2)}`
+  });
+}));
+
 module.exports = router;

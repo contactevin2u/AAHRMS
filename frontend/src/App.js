@@ -42,6 +42,8 @@ import StaffClockIn from './pages/StaffClockIn';
 // New Unified ESS PWA (6 main pages + auth + support pages)
 import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSProfile, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters } from './pages/ess';
 import Schedules from './pages/Schedules';
+import IndoorSalesSchedule from './pages/IndoorSalesSchedule';
+import IndoorSalesCommission from './pages/IndoorSalesCommission';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -268,6 +270,22 @@ function App() {
           element={
             <ProtectedRoute>
               <Schedules />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/indoor-sales/schedule"
+          element={
+            <ProtectedRoute>
+              <IndoorSalesSchedule />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/indoor-sales/commission"
+          element={
+            <ProtectedRoute>
+              <IndoorSalesCommission />
             </ProtectedRoute>
           }
         />

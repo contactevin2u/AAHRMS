@@ -347,6 +347,36 @@ export const schedulesApi = {
   getPendingSwapCount: () => api.get('/shift-swap/pending-count'),
   approveSwap: (id) => api.post(`/shift-swap/${id}/approve`),
   rejectSwap: (id, reason) => api.post(`/shift-swap/${id}/reject`, { reason }),
+
+  // Shift Templates (Indoor Sales)
+  getTemplates: () => api.get('/schedules/templates'),
+  createTemplate: (data) => api.post('/schedules/templates', data),
+  updateTemplate: (id, data) => api.put(`/schedules/templates/${id}`, data),
+  deleteTemplate: (id) => api.delete(`/schedules/templates/${id}`),
+
+  // Weekly Roster (Indoor Sales)
+  getWeeklyRoster: (outletId, startDate) => api.get('/schedules/roster/weekly', { params: { outlet_id: outletId, start_date: startDate } }),
+  assignShift: (data) => api.post('/schedules/roster/assign', data),
+  bulkAssignShifts: (outletId, assignments) => api.post('/schedules/roster/bulk-assign', { outlet_id: outletId, assignments }),
+  clearSchedule: (employeeId, date) => api.delete('/schedules/roster/clear', { data: { employee_id: employeeId, schedule_date: date } }),
+};
+
+// Commission API (Indoor Sales)
+export const commissionApi = {
+  // Outlet Sales
+  getSales: (params) => api.get('/commission/sales', { params }),
+  getSalesById: (id) => api.get(`/commission/sales/${id}`),
+  saveSales: (data) => api.post('/commission/sales', data),
+  calculateCommissions: (id) => api.post(`/commission/sales/${id}/calculate`),
+  finalizeSales: (id) => api.post(`/commission/sales/${id}/finalize`),
+  revertSales: (id) => api.post(`/commission/sales/${id}/revert`),
+  deleteSales: (id) => api.delete(`/commission/sales/${id}`),
+
+  // Commission Payouts
+  getEmployeePayouts: (employeeId, year) => api.get(`/commission/payouts/employee/${employeeId}`, { params: { year } }),
+
+  // Indoor Sales Outlets
+  getIndoorSalesOutlets: () => api.get('/commission/outlets'),
 };
 
 // Company Management
@@ -508,6 +538,13 @@ export const essApi = {
   createSwapRequest: (data) => api.post('/ess/shift-swap/request', data, essApiConfig),
   respondToSwap: (id, response) => api.post(`/ess/shift-swap/${id}/respond`, { response }, essApiConfig),
   cancelSwapRequest: (id) => api.delete(`/ess/shift-swap/${id}`, essApiConfig),
+
+  // Indoor Sales - Weekly Roster
+  getMyWeeklyRoster: (startDate) => api.get('/ess/schedules/my-weekly-roster', { params: { start_date: startDate }, ...essApiConfig }),
+
+  // Indoor Sales - Commission
+  getMyCommission: (year) => api.get('/ess/schedules/my-commission', { params: { year }, ...essApiConfig }),
+  getMyCommissionDetail: (year, month) => api.get(`/ess/schedules/my-commission/${year}/${month}`, essApiConfig),
 };
 
 export default api;

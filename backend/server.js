@@ -30,6 +30,7 @@ const retentionRoutes = require('./routes/admin/retention');
 const schedulesRoutes = require('./routes/schedules');
 const positionsRoutes = require('./routes/positions');
 const shiftSwapRoutes = require('./routes/shiftSwap');
+const commissionRoutes = require('./routes/commission');  // Indoor Sales commissions
 
 // Scheduled jobs
 const { initScheduler, triggerAutoClockOut } = require('./jobs/scheduler');
@@ -77,6 +78,7 @@ app.use('/api/admin/retention', retentionRoutes);  // Data Retention Policy Mana
 app.use('/api/schedules', schedulesRoutes);  // Employee Schedules (Mimix)
 app.use('/api/positions', positionsRoutes);  // Job Positions
 app.use('/api/shift-swap', shiftSwapRoutes);  // Shift Swap Requests
+app.use('/api/commission', commissionRoutes);  // Indoor Sales commissions
 
 // Health check
 app.get('/api/health', (req, res) => {
