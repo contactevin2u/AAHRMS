@@ -206,6 +206,12 @@ function Employees() {
       console.log('Departments response:', deptRes.data);
       console.log('Outlets response:', outletsRes.data);
       console.log('Company ID:', companyId, 'isMimix:', isMimix);
+      // Debug alert - remove after testing
+      if (deptRes.data && deptRes.data.length > 0) {
+        console.log('Departments loaded:', deptRes.data.length);
+      } else {
+        alert('DEBUG: No departments returned from API. Check console for details.');
+      }
       setEmployees(empRes.data);
       setDepartments(deptRes.data || []);
       setOutlets(outletsRes.data || []);
