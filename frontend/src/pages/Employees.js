@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { employeeApi, departmentApi, probationApi, earningsApi, positionsApi } from '../api';
+import { employeeApi, departmentApi, probationApi, earningsApi, positionsApi, outletsApi } from '../api';
 import Layout from '../components/Layout';
 import * as XLSX from 'xlsx';
 import './Employees.css';
@@ -10,11 +10,49 @@ function Employees() {
   const navigate = useNavigate();
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [outlets, setOutlets] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Get company_id from adminInfo (or selectedCompanyId for super_admin)
+  const [companyId, setCompanyId] = useState(() => {
+    try {
+      const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+      // For super_admin, check selectedCompanyId first
+      if (adminInfo.role === 'super_admin') {
+        const selectedCompanyId = localStorage.getItem('selectedCompanyId');
+        return selectedCompanyId ? parseInt(selectedCompanyId) : null;
+      }
+      return adminInfo.company_id;
+    } catch {
+      return null;
+    }
+  });
+
+  // Listen for company changes (for super_admin switching companies)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+        if (adminInfo.role === 'super_admin') {
+          const selectedCompanyId = localStorage.getItem('selectedCompanyId');
+          setCompanyId(selectedCompanyId ? parseInt(selectedCompanyId) : null);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    // Also check on mount
+    handleStorageChange();
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  const isMimix = companyId === 3;
   const [showModal, setShowModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [filter, setFilter] = useState({
     department_id: searchParams.get('department_id') || '',
+    outlet_id: searchParams.get('outlet_id') || '',
     status: 'active',
     search: '',
     employment_type: ''
@@ -48,6 +86,7 @@ function Employees() {
   const [viewMode, setViewMode] = useState('simple'); // 'simple' or 'detailed'
   const [bulkEditForm, setBulkEditForm] = useState({
     department_id: '',
+    outlet_id: '',
     position: '',
     status: '',
     bank_name: '',
@@ -111,6 +150,7 @@ function Employees() {
     phone: '',
     ic_number: '',
     department_id: '',
+    outlet_id: '',
     position_id: '',
     position: '',  // Keep for backward compatibility display
     join_date: '',
@@ -154,16 +194,21 @@ function Employees() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [empRes, deptRes, statsRes, commTypesRes, allowTypesRes, positionsRes] = await Promise.all([
+      const [empRes, deptRes, outletsRes, statsRes, commTypesRes, allowTypesRes, positionsRes] = await Promise.all([
         employeeApi.getAll(filter),
         departmentApi.getAll(),
+        outletsApi.getAll(),
         employeeApi.getStats(),
         earningsApi.getCommissionTypes(),
         earningsApi.getAllowanceTypes(),
         positionsApi.getAll()
       ]);
+      console.log('Departments response:', deptRes.data);
+      console.log('Outlets response:', outletsRes.data);
+      console.log('Company ID:', companyId, 'isMimix:', isMimix);
       setEmployees(empRes.data);
-      setDepartments(deptRes.data);
+      setDepartments(deptRes.data || []);
+      setOutlets(outletsRes.data || []);
       setStats(statsRes.data);
       setCommissionTypes(commTypesRes.data);
       setAllowanceTypes(allowTypesRes.data);
@@ -215,6 +260,7 @@ function Employees() {
       phone: emp.phone || '',
       ic_number: emp.ic_number || '',
       department_id: emp.department_id || '',
+      outlet_id: emp.outlet_id || '',
       position_id: emp.position_id || '',
       position: emp.position || '',
       join_date: emp.join_date ? emp.join_date.split('T')[0] : '',
@@ -313,6 +359,7 @@ function Employees() {
       phone: '',
       ic_number: '',
       department_id: '',
+      outlet_id: '',
       position_id: '',
       position: '',
       join_date: '',
@@ -614,6 +661,7 @@ function Employees() {
   const openBulkEditModal = () => {
     setBulkEditForm({
       department_id: '',
+      outlet_id: '',
       position: '',
       status: '',
       bank_name: '',
@@ -819,15 +867,27 @@ function Employees() {
             value={filter.search}
             onChange={(e) => setFilter({ ...filter, search: e.target.value })}
           />
-          <select
-            value={filter.department_id}
-            onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}
-          >
-            <option value="">All Departments</option>
-            {departments.map(d => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
+          {isMimix ? (
+            <select
+              value={filter.outlet_id}
+              onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value })}
+            >
+              <option value="">All Outlets</option>
+              {outlets.map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={filter.department_id}
+              onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}
+            >
+              <option value="">All Departments</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          )}
           <select
             value={filter.status}
             onChange={(e) => setFilter({ ...filter, status: e.target.value })}
@@ -883,7 +943,7 @@ function Employees() {
                   </th>
                   <th>ID</th>
                   <th>Name</th>
-                  <th>Department</th>
+                  <th>{isMimix ? 'Outlet' : 'Department'}</th>
                   <th>Position</th>
                   <th>Employment</th>
                   <th>Status</th>
@@ -913,7 +973,9 @@ function Employees() {
                         <td><strong>{emp.employee_id}</strong></td>
                         <td>{emp.name}</td>
                         <td>
-                          {emp.department_name ? (
+                          {isMimix ? (
+                            emp.outlet_name || '-'
+                          ) : emp.department_name ? (
                             <span
                               className="department-link"
                               onClick={goToDepartments}
@@ -976,7 +1038,7 @@ function Employees() {
                     <th>IC Number</th>
                     <th>Phone</th>
                     <th>Email</th>
-                    <th>Department</th>
+                    <th>{isMimix ? 'Outlet' : 'Department'}</th>
                     <th>Position</th>
                     <th>Join Date</th>
                     <th>Basic Salary</th>
@@ -1011,7 +1073,7 @@ function Employees() {
                         <td>{emp.ic_number || '-'}</td>
                         <td>{emp.phone || '-'}</td>
                         <td>{emp.email || '-'}</td>
-                        <td>{emp.department_name || '-'}</td>
+                        <td>{isMimix ? (emp.outlet_name || '-') : (emp.department_name || '-')}</td>
                         <td>{emp.position || '-'}</td>
                         <td>{emp.join_date ? new Date(emp.join_date).toLocaleDateString('en-MY') : '-'}</td>
                         <td className="money-col">RM {parseFloat(emp.default_basic_salary || 0).toFixed(2)}</td>
@@ -1072,19 +1134,35 @@ function Employees() {
                 </div>
 
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>Department *</label>
-                    <select
-                      value={form.department_id}
-                      onChange={(e) => handleDepartmentChange(e.target.value)}
-                      required
-                    >
-                      <option value="">Select department</option>
-                      {departments.map(d => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {isMimix ? (
+                    <div className="form-group">
+                      <label>Outlet *</label>
+                      <select
+                        value={form.outlet_id}
+                        onChange={(e) => setForm({ ...form, outlet_id: e.target.value })}
+                        required
+                      >
+                        <option value="">Select outlet</option>
+                        {outlets.map(o => (
+                          <option key={o.id} value={o.id}>{o.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="form-group">
+                      <label>Department *</label>
+                      <select
+                        value={form.department_id}
+                        onChange={(e) => handleDepartmentChange(e.target.value)}
+                        required
+                      >
+                        <option value="">Select department</option>
+                        {departments.map(d => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="form-group">
                     <label>Position *</label>
                     <select
@@ -1751,18 +1829,33 @@ function Employees() {
               <form onSubmit={handleBulkEditSubmit}>
                 <div className="form-section-title">Basic Info</div>
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>Department</label>
-                    <select
-                      value={bulkEditForm.department_id}
-                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, department_id: e.target.value })}
-                    >
-                      <option value="">-- No Change --</option>
-                      {departments.map(d => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {isMimix ? (
+                    <div className="form-group">
+                      <label>Outlet</label>
+                      <select
+                        value={bulkEditForm.outlet_id}
+                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, outlet_id: e.target.value })}
+                      >
+                        <option value="">-- No Change --</option>
+                        {outlets.map(o => (
+                          <option key={o.id} value={o.id}>{o.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="form-group">
+                      <label>Department</label>
+                      <select
+                        value={bulkEditForm.department_id}
+                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, department_id: e.target.value })}
+                      >
+                        <option value="">-- No Change --</option>
+                        {departments.map(d => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="form-group">
                     <label>Position</label>
                     <input
