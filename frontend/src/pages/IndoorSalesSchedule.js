@@ -15,10 +15,13 @@ function IndoorSalesSchedule() {
   const [templates, setTemplates] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  // View mode: 'overview' shows all employees per day, 'employee' shows one employee's month
+  // View mode: 'overview' shows staff per day, 'employee' edits one employee's schedule
   const [viewMode, setViewMode] = useState('overview');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+
+  // Public holiday marking mode
+  const [phMarkingMode, setPhMarkingMode] = useState(false);
 
   // Get all days in month
   const getDaysInMonth = (yearMonth) => {
@@ -123,6 +126,17 @@ function IndoorSalesSchedule() {
     if (!employee) return;
 
     const currentShift = employee.shifts.find(s => s.date === date) || {};
+
+    // If PH marking mode is on, toggle PH status instead of shift
+    if (phMarkingMode) {
+      if (!currentShift.shift_template_id) {
+        alert('Cannot mark PH on a day without shift. Assign a shift first.');
+        return;
+      }
+      await togglePH(employeeId, date);
+      return;
+    }
+
     const workTemplates = templates.filter(t => !t.is_off);
 
     let nextTemplateIndex = -1;
@@ -185,10 +199,9 @@ function IndoorSalesSchedule() {
     }
   };
 
-  // Handle right-click for public holiday
-  const handleRightClick = async (e, employeeId, date) => {
-    e.preventDefault();
-    if (!date) return;
+  // Toggle public holiday status
+  const togglePH = async (employeeId, date) => {
+    if (saving || !date) return;
 
     const employee = roster.find(emp => emp.employee_id === employeeId);
     if (!employee) return;
@@ -218,9 +231,16 @@ function IndoorSalesSchedule() {
       }));
     } catch (error) {
       console.error('Error toggling PH:', error);
+      alert('Failed to toggle public holiday status');
     } finally {
       setSaving(false);
     }
+  };
+
+  // Handle right-click for public holiday (alternative method)
+  const handleRightClick = async (e, employeeId, date) => {
+    e.preventDefault();
+    await togglePH(employeeId, date);
   };
 
   // Copy previous month
@@ -334,16 +354,28 @@ function IndoorSalesSchedule() {
         <div className="view-toggle">
           <button
             className={`toggle-btn ${viewMode === 'overview' ? 'active' : ''}`}
-            onClick={() => { setViewMode('overview'); setSelectedEmployee(null); }}
+            onClick={() => { setViewMode('overview'); setSelectedEmployee(null); setPhMarkingMode(false); }}
           >
-            Overview (Who's Working)
+            View Schedule
           </button>
           <button
             className={`toggle-btn ${viewMode === 'employee' ? 'active' : ''}`}
             onClick={() => setViewMode('employee')}
           >
-            Edit by Employee
+            Edit Schedule
           </button>
+        </div>
+
+        {/* Mode Description */}
+        <div className="mode-description">
+          {viewMode === 'overview' ? (
+            <p>Click any date to see who is working that day. Staff count shown on each date.</p>
+          ) : (
+            <p>
+              Select an employee from the right panel, then click calendar dates to assign shifts.
+              {phMarkingMode && <span className="ph-mode-active"> PH Mode ON - clicking toggles Public Holiday</span>}
+            </p>
+          )}
         </div>
 
         {/* Legend */}
@@ -519,9 +551,26 @@ function IndoorSalesSchedule() {
                     </div>
                   )}
 
+                  {/* PH Toggle Button */}
+                  <button
+                    className={`ph-toggle-btn ${phMarkingMode ? 'active' : ''}`}
+                    onClick={() => setPhMarkingMode(!phMarkingMode)}
+                  >
+                    {phMarkingMode ? 'Exit PH Mode' : 'Mark Public Holiday'}
+                  </button>
+
                   <div className="edit-instructions">
-                    <p><strong>Click</strong> day to toggle shift</p>
-                    <p><strong>Right-click</strong> for PH</p>
+                    {!phMarkingMode ? (
+                      <>
+                        <p><strong>Click</strong> date to cycle through shifts (A1 → A2 → OFF)</p>
+                        <p>Or click <strong>"Mark Public Holiday"</strong> above to mark PH days</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="ph-mode-info">PH MODE: Click any shift to toggle Public Holiday status</p>
+                        <p>PH days count as 2x for commission calculation</p>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

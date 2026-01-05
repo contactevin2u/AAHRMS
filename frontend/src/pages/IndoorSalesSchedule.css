@@ -538,6 +538,59 @@
   color: #10b981;
 }
 
+/* Mode Description */
+.mode-description {
+  padding: 10px 16px;
+  background: #f0f9ff;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  border-left: 4px solid #3b82f6;
+}
+
+.mode-description p {
+  margin: 0;
+  font-size: 13px;
+  color: #1e40af;
+}
+
+.ph-mode-active {
+  background: #fef3c7;
+  color: #b45309;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+  font-weight: 600;
+}
+
+/* PH Toggle Button */
+.ph-toggle-btn {
+  width: 100%;
+  padding: 12px 16px;
+  background: #f59e0b;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+}
+
+.ph-toggle-btn:hover {
+  background: #d97706;
+}
+
+.ph-toggle-btn.active {
+  background: #dc2626;
+  animation: pulse-ph 1.5s infinite;
+}
+
+@keyframes pulse-ph {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+}
+
 .edit-instructions {
   font-size: 12px;
   color: #64748b;
@@ -552,6 +605,14 @@
 
 .edit-instructions strong {
   color: #15803d;
+}
+
+.edit-instructions .ph-mode-info {
+  color: #b45309;
+  font-weight: 600;
+  background: #fef3c7;
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
 /* Loading & No Data */
