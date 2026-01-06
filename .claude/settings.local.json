@@ -74,7 +74,8 @@
       "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\update-templates.js\")",
       "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\create-mimix-depts.js\")",
       "Bash(del:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []
