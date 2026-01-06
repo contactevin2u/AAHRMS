@@ -73,7 +73,8 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\update-templates.js\")",
       "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\create-mimix-depts.js\")",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": []

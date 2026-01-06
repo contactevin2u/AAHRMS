@@ -995,6 +995,7 @@ function Employees() {
                   <th>Name</th>
                   <th>{isMimix ? 'Outlet' : 'Department'}</th>
                   <th>Position</th>
+                  <th>Gender</th>
                   <th>Employment</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -1003,7 +1004,7 @@ function Employees() {
               <tbody>
                 {employees.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="no-data">No employees found</td>
+                    <td colSpan="9" className="no-data">No employees found</td>
                   </tr>
                 ) : (
                   employees.map(emp => {
@@ -1062,6 +1063,19 @@ function Employees() {
                             {positions.map(p => (
                               <option key={p.id} value={p.id}>{p.name}</option>
                             ))}
+                          </select>
+                        </td>
+                        {/* Inline Gender Dropdown */}
+                        <td className="inline-edit-cell">
+                          <select
+                            className={`inline-select gender-select ${emp.gender || ''} ${updatingCell === `${emp.id}-gender` ? 'updating' : ''}`}
+                            value={emp.gender || ''}
+                            onChange={(e) => handleInlineUpdate(emp.id, 'gender', e.target.value)}
+                            disabled={updatingCell === `${emp.id}-gender`}
+                          >
+                            <option value="">-- Select --</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
                           </select>
                         </td>
                         {/* Inline Employment Type Dropdown */}
@@ -1132,6 +1146,7 @@ function Employees() {
                     <th>Email</th>
                     <th>{isMimix ? 'Outlet' : 'Department'}</th>
                     <th>Position</th>
+                    <th>Gender</th>
                     <th>Join Date</th>
                     <th>Basic Salary</th>
                     <th>Allowance</th>
@@ -1148,7 +1163,7 @@ function Employees() {
                 <tbody>
                   {employees.length === 0 ? (
                     <tr>
-                      <td colSpan="19" className="no-data">No employees found</td>
+                      <td colSpan="20" className="no-data">No employees found</td>
                     </tr>
                   ) : (
                     employees.map(emp => (
@@ -1167,6 +1182,7 @@ function Employees() {
                         <td>{emp.email || '-'}</td>
                         <td>{isMimix ? (emp.outlet_name || '-') : (emp.department_name || '-')}</td>
                         <td>{emp.position || '-'}</td>
+                        <td className="capitalize">{emp.gender || '-'}</td>
                         <td>{emp.join_date ? new Date(emp.join_date).toLocaleDateString('en-MY') : '-'}</td>
                         <td className="money-col">RM {parseFloat(emp.default_basic_salary || 0).toFixed(2)}</td>
                         <td className="money-col">RM {parseFloat(emp.default_allowance || 0).toFixed(2)}</td>

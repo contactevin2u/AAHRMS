@@ -294,6 +294,28 @@ tr:hover {
   color: #64748b;
 }
 
+/* Gender dropdown colors */
+.inline-select.gender-select {
+  min-width: 80px;
+}
+
+.inline-select.gender-select.male {
+  background-color: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.inline-select.gender-select.female {
+  background-color: #fce7f3;
+  border-color: #f9a8d4;
+  color: #be185d;
+}
+
+/* Capitalize text */
+.capitalize {
+  text-transform: capitalize;
+}
+
 /* Review button next to employment dropdown */
 .inline-edit-cell .review-btn {
   display: inline-block;
