@@ -178,15 +178,13 @@ function ESSLayout({ children }) {
           </NavLink>
         )}
 
-        {!isMimix && (
-          <NavLink
-            to="/ess/payslips"
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <span className="nav-icon">&#x1F4B5;</span>
-            <span className="nav-label">Pay</span>
-          </NavLink>
-        )}
+        <NavLink
+          to="/ess/payslips"
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          <span className="nav-icon">&#x1F4B5;</span>
+          <span className="nav-label">Pay</span>
+        </NavLink>
 
         <NavLink
           to="/ess/profile"
