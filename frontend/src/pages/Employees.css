@@ -203,6 +203,121 @@ tr:hover {
   color: #64748b;
 }
 
+/* =====================================================
+   INLINE EDITING - Dropdowns in Table Cells
+   ===================================================== */
+
+.inline-edit-cell {
+  padding: 4px 8px !important;
+}
+
+.inline-select {
+  width: 100%;
+  padding: 6px 24px 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1e293b;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M2.5 4.5L6 8L9.5 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  min-width: 100px;
+}
+
+.inline-select:hover {
+  border-color: #94a3b8;
+}
+
+.inline-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.inline-select:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.inline-select.updating {
+  background-color: #f0f9ff;
+  border-color: #3b82f6;
+  animation: pulse-update 1s infinite;
+}
+
+@keyframes pulse-update {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Employment Type Select Styling */
+.inline-select.employment-select {
+  font-weight: 500;
+}
+
+.inline-select.employment-select.probation {
+  background-color: #fef3c7;
+  border-color: #f59e0b;
+  color: #b45309;
+}
+
+.inline-select.employment-select.confirmed {
+  background-color: #dcfce7;
+  border-color: #22c55e;
+  color: #15803d;
+}
+
+.inline-select.employment-select.contract {
+  background-color: #e0e7ff;
+  border-color: #6366f1;
+  color: #4338ca;
+}
+
+/* Status Select Styling */
+.inline-select.status-select {
+  font-weight: 500;
+}
+
+.inline-select.status-select.active {
+  background-color: #dcfce7;
+  border-color: #22c55e;
+  color: #15803d;
+}
+
+.inline-select.status-select.inactive {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+/* Review button next to employment dropdown */
+.inline-edit-cell .review-btn {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  vertical-align: middle;
+  animation: pulse-review 1.5s infinite;
+}
+
+@keyframes pulse-review {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.inline-edit-cell .review-btn:hover {
+  background: #dc2626;
+}
+
 /* Action Buttons */
 .edit-btn,
 .delete-btn,

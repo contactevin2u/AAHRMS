@@ -99,6 +99,9 @@ function Employees() {
   });
   const [bulkUpdating, setBulkUpdating] = useState(false);
 
+  // Inline editing state
+  const [updatingCell, setUpdatingCell] = useState(null);
+
   // Quick Add Employee state
   const [showQuickAddModal, setShowQuickAddModal] = useState(false);
   const [quickAddForm, setQuickAddForm] = useState({
@@ -327,6 +330,51 @@ function Employees() {
       } catch (error) {
         alert('Failed to deactivate employee');
       }
+    }
+  };
+
+  // Inline editing handler - update employee field directly from table
+  const handleInlineUpdate = async (empId, field, value) => {
+    const cellKey = `${empId}-${field}`;
+    setUpdatingCell(cellKey);
+
+    try {
+      // Build the update payload
+      const updateData = { [field]: value || null };
+
+      // For position, we need to handle position_id and also update position text
+      if (field === 'position_id') {
+        const selectedPosition = positions.find(p => p.id === parseInt(value));
+        updateData.position = selectedPosition?.name || '';
+      }
+
+      // Use PATCH for partial update (only updates specified fields)
+      await employeeApi.patch(empId, updateData);
+
+      // Update local state optimistically
+      setEmployees(prev => prev.map(emp => {
+        if (emp.id === empId) {
+          const updated = { ...emp, ...updateData };
+          // Update display names
+          if (field === 'outlet_id') {
+            const outlet = outlets.find(o => o.id === parseInt(value));
+            updated.outlet_name = outlet?.name || '';
+          }
+          if (field === 'position_id') {
+            const pos = positions.find(p => p.id === parseInt(value));
+            updated.position = pos?.name || '';
+          }
+          return updated;
+        }
+        return emp;
+      }));
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      alert(error.response?.data?.error || 'Failed to update');
+      // Refresh data on error to reset
+      fetchData();
+    } finally {
+      setUpdatingCell(null);
     }
   };
 
@@ -970,9 +1018,20 @@ function Employees() {
                         </td>
                         <td><strong>{emp.employee_id}</strong></td>
                         <td>{emp.name}</td>
-                        <td>
+                        {/* Inline Outlet/Department Dropdown */}
+                        <td className="inline-edit-cell">
                           {isMimix ? (
-                            emp.outlet_name || '-'
+                            <select
+                              className={`inline-select ${updatingCell === `${emp.id}-outlet_id` ? 'updating' : ''}`}
+                              value={emp.outlet_id || ''}
+                              onChange={(e) => handleInlineUpdate(emp.id, 'outlet_id', e.target.value)}
+                              disabled={updatingCell === `${emp.id}-outlet_id`}
+                            >
+                              <option value="">-- Select --</option>
+                              {outlets.map(o => (
+                                <option key={o.id} value={o.id}>{o.name}</option>
+                              ))}
+                            </select>
                           ) : emp.department_name ? (
                             <span
                               className="department-link"
@@ -983,12 +1042,32 @@ function Employees() {
                             </span>
                           ) : '-'}
                         </td>
-                        <td>{emp.position || '-'}</td>
-                        <td>
-                          <span className={`employment-badge ${emp.employment_type || 'probation'}`}>
-                            {emp.employment_type === 'confirmed' ? 'Confirmed' :
-                             emp.employment_type === 'contract' ? 'Contract' : 'Probation'}
-                          </span>
+                        {/* Inline Position Dropdown */}
+                        <td className="inline-edit-cell">
+                          <select
+                            className={`inline-select ${updatingCell === `${emp.id}-position_id` ? 'updating' : ''}`}
+                            value={emp.position_id || ''}
+                            onChange={(e) => handleInlineUpdate(emp.id, 'position_id', e.target.value)}
+                            disabled={updatingCell === `${emp.id}-position_id`}
+                          >
+                            <option value="">-- Select --</option>
+                            {positions.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </td>
+                        {/* Inline Employment Type Dropdown */}
+                        <td className="inline-edit-cell">
+                          <select
+                            className={`inline-select employment-select ${emp.employment_type || 'probation'} ${updatingCell === `${emp.id}-employment_type` ? 'updating' : ''}`}
+                            value={emp.employment_type || 'probation'}
+                            onChange={(e) => handleInlineUpdate(emp.id, 'employment_type', e.target.value)}
+                            disabled={updatingCell === `${emp.id}-employment_type`}
+                          >
+                            <option value="probation">Probation</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="contract">Contract</option>
+                          </select>
                           {isPendingReview && (
                             <button
                               className="review-btn"
@@ -999,10 +1078,17 @@ function Employees() {
                             </button>
                           )}
                         </td>
-                        <td>
-                          <span className={`status-badge ${emp.status}`}>
-                            {emp.status}
-                          </span>
+                        {/* Inline Status Dropdown */}
+                        <td className="inline-edit-cell">
+                          <select
+                            className={`inline-select status-select ${emp.status} ${updatingCell === `${emp.id}-status` ? 'updating' : ''}`}
+                            value={emp.status}
+                            onChange={(e) => handleInlineUpdate(emp.id, 'status', e.target.value)}
+                            disabled={updatingCell === `${emp.id}-status`}
+                          >
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                          </select>
                         </td>
                         <td>
                           <button onClick={() => handleEdit(emp)} className="edit-btn" title="Edit">✏️</button>

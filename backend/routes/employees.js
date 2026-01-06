@@ -262,7 +262,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     const sanitizedBody = sanitizeEmployeeData(req.body);
 
     const {
-      employee_id, name, email, phone, ic_number, department_id, outlet_id, position, join_date, status,
+      employee_id, name, email, phone, ic_number, department_id, outlet_id, position, position_id, join_date, status,
       address, bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
       marital_status, spouse_working, children_count, date_of_birth,
@@ -307,21 +307,21 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     const result = await pool.query(
       `UPDATE employees
        SET employee_id = $1, name = $2, email = $3, phone = $4, ic_number = $5,
-           department_id = $6, outlet_id = $7, position = $8, join_date = $9, status = $10,
-           address = $11, bank_name = $12, bank_account_no = $13, bank_account_holder = $14,
-           epf_number = $15, socso_number = $16, tax_number = $17, epf_contribution_type = $18,
-           marital_status = $19, spouse_working = $20, children_count = $21, date_of_birth = $22,
-           default_basic_salary = $23, default_allowance = $24, commission_rate = $25,
-           per_trip_rate = $26, ot_rate = $27, outstation_rate = $28,
-           default_bonus = $29, default_incentive = $30,
-           employment_type = $31, probation_months = $32, probation_end_date = $33,
-           salary_before_confirmation = $34, salary_after_confirmation = $35, increment_amount = $36,
-           probation_notes = $37,
+           department_id = $6, outlet_id = $7, position = $8, position_id = $9, join_date = $10, status = $11,
+           address = $12, bank_name = $13, bank_account_no = $14, bank_account_holder = $15,
+           epf_number = $16, socso_number = $17, tax_number = $18, epf_contribution_type = $19,
+           marital_status = $20, spouse_working = $21, children_count = $22, date_of_birth = $23,
+           default_basic_salary = $24, default_allowance = $25, commission_rate = $26,
+           per_trip_rate = $27, ot_rate = $28, outstation_rate = $29,
+           default_bonus = $30, default_incentive = $31,
+           employment_type = $32, probation_months = $33, probation_end_date = $34,
+           salary_before_confirmation = $35, salary_after_confirmation = $36, increment_amount = $37,
+           probation_notes = $38,
            updated_at = NOW()
-       WHERE id = $38
+       WHERE id = $39
        RETURNING *`,
       [
-        employee_id, name, toNullable(email), toNullable(phone), ic_number, toNullable(department_id), toNullable(outlet_id), toNullable(position), toNullable(join_date), status,
+        employee_id, name, toNullable(email), toNullable(phone), ic_number, toNullable(department_id), toNullable(outlet_id), toNullable(position), toNullable(position_id), toNullable(join_date), status,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
@@ -337,6 +337,66 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating employee:', error);
+    res.status(500).json({ error: 'Failed to update employee' });
+  }
+});
+
+// PATCH - Partial update (for inline editing)
+router.patch('/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // Allowed fields for partial update
+    const allowedFields = [
+      'outlet_id', 'position_id', 'position', 'employment_type', 'status',
+      'department_id', 'name', 'email', 'phone', 'address'
+    ];
+
+    // Build dynamic SET clause
+    const setClauses = [];
+    const values = [];
+    let paramCount = 1;
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key)) {
+        setClauses.push(`${key} = $${paramCount}`);
+        // Convert empty string to null for foreign keys
+        if (['outlet_id', 'position_id', 'department_id'].includes(key)) {
+          values.push(value === '' ? null : value);
+        } else {
+          values.push(value);
+        }
+        paramCount++;
+      }
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    // Add updated_at
+    setClauses.push(`updated_at = NOW()`);
+
+    // Add id as last parameter
+    values.push(id);
+
+    const query = `
+      UPDATE employees
+      SET ${setClauses.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating employee (PATCH):', error);
     res.status(500).json({ error: 'Failed to update employee' });
   }
 });

@@ -78,6 +78,7 @@ export const employeeApi = {
   create: (data) => api.post('/employees', data),
   quickAdd: (data) => api.post('/employees/quick-add', data),
   update: (id, data) => api.put(`/employees/${id}`, data),
+  patch: (id, data) => api.patch(`/employees/${id}`, data), // Partial update for inline editing
   delete: (id) => api.delete(`/employees/${id}`),
   getStats: () => api.get('/employees/stats/overview'),
   bulkImport: (employees) => api.post('/employees/bulk-import', { employees }),
