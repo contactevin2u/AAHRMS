@@ -3,7 +3,7 @@
  * Handles caching, offline functionality, and blocks clock-in when offline
  */
 
-const CACHE_NAME = 'ess-pwa-v2';
+const CACHE_NAME = 'ess-pwa-v3';
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = [

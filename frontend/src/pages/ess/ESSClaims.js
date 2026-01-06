@@ -1,38 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ESSLayout from '../../components/ESSLayout';
+import { essApi } from '../../api';
 
 function ESSClaims() {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
-  const [activeTab, setActiveTab] = useState('submit');
-  const [claims, setClaims] = useState([
-    { id: 1, type: 'Transport', amount: 150.00, date: '2026-01-02', status: 'pending', description: 'Grab to client meeting' },
-    { id: 2, type: 'Meal', amount: 45.50, date: '2025-12-28', status: 'approved', description: 'Lunch with client' }
-  ]);
+  const [claims, setClaims] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [submitForm, setSubmitForm] = useState({
-    type: '',
+    category: '',
     amount: '',
-    date: '',
+    claim_date: '',
     description: '',
     receipt: null
   });
 
   const claimTypes = ['Transport', 'Meal', 'Parking', 'Medical', 'Phone', 'Other'];
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    fetchClaims();
+  }, []);
+
+  const fetchClaims = async () => {
+    try {
+      const response = await essApi.getClaims();
+      setClaims(response.data || []);
+    } catch (error) {
+      console.error('Error fetching claims:', error);
+      setClaims([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const newClaim = {
-      id: claims.length + 1,
-      type: submitForm.type,
-      amount: parseFloat(submitForm.amount),
-      date: submitForm.date,
-      status: 'pending',
-      description: submitForm.description
-    };
-    setClaims([newClaim, ...claims]);
-    setShowSubmitModal(false);
-    setSubmitForm({ type: '', amount: '', date: '', description: '', receipt: null });
-    alert('Claim submitted successfully!');
+    setSubmitting(true);
+    try {
+      await essApi.submitClaim({
+        category: submitForm.category,
+        amount: parseFloat(submitForm.amount),
+        claim_date: submitForm.claim_date,
+        description: submitForm.description,
+        receipt_base64: submitForm.receipt
+      });
+      setShowSubmitModal(false);
+      setSubmitForm({ category: '', amount: '', claim_date: '', description: '', receipt: null });
+      alert('Claim submitted successfully!');
+      fetchClaims();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to submit claim');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReceiptChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSubmitForm({...submitForm, receipt: reader.result});
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const formatDate = (date) => {
@@ -57,8 +89,8 @@ function ESSClaims() {
     );
   };
 
-  const totalPending = claims.filter(c => c.status === 'pending').reduce((sum, c) => sum + c.amount, 0);
-  const totalApproved = claims.filter(c => c.status === 'approved').reduce((sum, c) => sum + c.amount, 0);
+  const totalPending = claims.filter(c => c.status === 'pending').reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+  const totalApproved = claims.filter(c => c.status === 'approved').reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
 
   return (
     <ESSLayout>
@@ -90,18 +122,23 @@ function ESSClaims() {
 
         {/* Claims List */}
         <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>Recent Claims</h3>
-        {claims.length === 0 ? (
-          <p style={{ color: '#64748b', textAlign: 'center', padding: '40px' }}>No claims submitted</p>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading claims...</div>
+        ) : claims.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+            <div style={{ color: '#64748b' }}>No claims submitted yet</div>
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {claims.map(claim => (
               <div key={claim.id} style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontWeight: '600', color: '#1e293b' }}>{claim.type}</span>
+                  <span style={{ fontWeight: '600', color: '#1e293b' }}>{claim.category}</span>
                   {getStatusBadge(claim.status)}
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: '700', color: '#1976d2', marginBottom: '8px' }}>{formatCurrency(claim.amount)}</div>
-                <div style={{ fontSize: '13px', color: '#64748b' }}>{formatDate(claim.date)} - {claim.description}</div>
+                <div style={{ fontSize: '13px', color: '#64748b' }}>{formatDate(claim.claim_date)} - {claim.description}</div>
               </div>
             ))}
           </div>
@@ -118,7 +155,7 @@ function ESSClaims() {
               <form onSubmit={handleSubmit} style={{ padding: '20px' }}>
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Claim Type *</label>
-                  <select value={submitForm.type} onChange={e => setSubmitForm({...submitForm, type: e.target.value})} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px' }}>
+                  <select value={submitForm.category} onChange={e => setSubmitForm({...submitForm, category: e.target.value})} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px' }}>
                     <option value="">Select type</option>
                     {claimTypes.map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
@@ -129,7 +166,7 @@ function ESSClaims() {
                 </div>
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Date *</label>
-                  <input type="date" value={submitForm.date} onChange={e => setSubmitForm({...submitForm, date: e.target.value})} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
+                  <input type="date" value={submitForm.claim_date} onChange={e => setSubmitForm({...submitForm, claim_date: e.target.value})} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Description *</label>
@@ -137,11 +174,13 @@ function ESSClaims() {
                 </div>
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Receipt (optional)</label>
-                  <input type="file" accept="image/*" style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
+                  <input type="file" accept="image/*" onChange={handleReceiptChange} style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                   <button type="button" onClick={() => setShowSubmitModal(false)} style={{ flex: 1, padding: '14px', border: '1px solid #e5e7eb', background: 'white', borderRadius: '8px', fontSize: '15px', cursor: 'pointer' }}>Cancel</button>
-                  <button type="submit" style={{ flex: 1, padding: '14px', border: 'none', background: 'linear-gradient(135deg, #1976d2, #1565c0)', color: 'white', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>Submit</button>
+                  <button type="submit" disabled={submitting} style={{ flex: 1, padding: '14px', border: 'none', background: 'linear-gradient(135deg, #1976d2, #1565c0)', color: 'white', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', opacity: submitting ? 0.7 : 1 }}>
+                    {submitting ? 'Submitting...' : 'Submit'}
+                  </button>
                 </div>
               </form>
             </div>
