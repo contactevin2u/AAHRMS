@@ -1021,7 +1021,25 @@ function Employees() {
                             onChange={() => handleSelectEmployee(emp.id)}
                           />
                         </td>
-                        <td><strong>{emp.employee_id}</strong></td>
+                        <td className="inline-edit-cell">
+                          <input
+                            type="text"
+                            className={`inline-input ${updatingCell === `${emp.id}-employee_id` ? 'updating' : ''}`}
+                            defaultValue={emp.employee_id || ''}
+                            onBlur={(e) => {
+                              if (e.target.value !== emp.employee_id) {
+                                handleInlineUpdate(emp.id, 'employee_id', e.target.value);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.target.blur();
+                              }
+                            }}
+                            disabled={updatingCell === `${emp.id}-employee_id`}
+                            style={{ fontWeight: 'bold', width: '80px' }}
+                          />
+                        </td>
                         <td>{emp.name}</td>
                         {/* Inline Outlet/Department Dropdown */}
                         <td className="inline-edit-cell">
@@ -1115,9 +1133,7 @@ function Employees() {
                         <td>
                           <button onClick={() => handleEdit(emp)} className="edit-btn" title="Edit">✏️</button>
                           <button onClick={() => handleResetPassword(emp)} className="reset-pwd-btn" title="Reset Password">🔑</button>
-                          {emp.status === 'active' && (
-                            <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Deactivate">🗑️</button>
-                          )}
+                          <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Delete">🗑️</button>
                         </td>
                       </tr>
                     );
@@ -1175,7 +1191,25 @@ function Employees() {
                             onChange={() => handleSelectEmployee(emp.id)}
                           />
                         </td>
-                        <td className="sticky-col"><strong>{emp.employee_id}</strong></td>
+                        <td className="sticky-col inline-edit-cell">
+                          <input
+                            type="text"
+                            className={`inline-input ${updatingCell === `${emp.id}-employee_id` ? 'updating' : ''}`}
+                            defaultValue={emp.employee_id || ''}
+                            onBlur={(e) => {
+                              if (e.target.value !== emp.employee_id) {
+                                handleInlineUpdate(emp.id, 'employee_id', e.target.value);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.target.blur();
+                              }
+                            }}
+                            disabled={updatingCell === `${emp.id}-employee_id`}
+                            style={{ fontWeight: 'bold', width: '80px' }}
+                          />
+                        </td>
                         <td className="sticky-col name-col">{emp.name}</td>
                         <td>{emp.ic_number || '-'}</td>
                         <td>{emp.phone || '-'}</td>
@@ -1200,9 +1234,7 @@ function Employees() {
                         <td className="sticky-col-right">
                           <button onClick={() => handleEdit(emp)} className="edit-btn" title="Edit">✏️</button>
                           <button onClick={() => handleResetPassword(emp)} className="reset-pwd-btn" title="Reset Password">🔑</button>
-                          {emp.status === 'active' && (
-                            <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Deactivate">🗑️</button>
-                          )}
+                          <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Delete">🗑️</button>
                         </td>
                       </tr>
                     ))

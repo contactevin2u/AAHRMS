@@ -211,6 +211,38 @@ tr:hover {
   padding: 4px 8px !important;
 }
 
+.inline-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1e293b;
+  background: white;
+  transition: all 0.15s ease;
+}
+
+.inline-input:hover {
+  border-color: #94a3b8;
+}
+
+.inline-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.inline-input:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.inline-input.updating {
+  background-color: #f0f9ff;
+  border-color: #3b82f6;
+  animation: pulse-update 1s infinite;
+}
+
 .inline-select {
   width: 100%;
   padding: 6px 24px 6px 10px;

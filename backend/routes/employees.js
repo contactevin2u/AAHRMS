@@ -349,7 +349,7 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
 
     // Allowed fields for partial update
     const allowedFields = [
-      'outlet_id', 'position_id', 'position', 'employment_type', 'status',
+      'employee_id', 'outlet_id', 'position_id', 'position', 'employment_type', 'status',
       'department_id', 'name', 'email', 'phone', 'address', 'gender'
     ];
 
