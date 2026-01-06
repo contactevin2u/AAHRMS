@@ -32,6 +32,18 @@ function Schedules() {
   const [extraShiftRequests, setExtraShiftRequests] = useState([]);
   const [swapRequests, setSwapRequests] = useState([]);
 
+  // Shift template management
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [templateForm, setTemplateForm] = useState({
+    code: '',
+    name: '',
+    color: '#22C55E',
+    start_time: '09:00',
+    end_time: '18:00',
+    is_off: false
+  });
+
   // Get user info on mount
   useEffect(() => {
     const storedInfo = localStorage.getItem('adminInfo');
@@ -383,6 +395,71 @@ function Schedules() {
     }
   };
 
+  // Template management functions
+  const openAddTemplate = () => {
+    setEditingTemplate(null);
+    setTemplateForm({
+      code: '',
+      name: '',
+      color: '#22C55E',
+      start_time: '09:00',
+      end_time: '18:00',
+      is_off: false
+    });
+    setShowTemplateModal(true);
+  };
+
+  const openEditTemplate = (template) => {
+    setEditingTemplate(template);
+    setTemplateForm({
+      code: template.code || '',
+      name: template.name || '',
+      color: template.color || '#22C55E',
+      start_time: template.start_time || '09:00',
+      end_time: template.end_time || '18:00',
+      is_off: template.is_off || false
+    });
+    setShowTemplateModal(true);
+  };
+
+  const handleSaveTemplate = async (e) => {
+    e.preventDefault();
+    if (!templateForm.code.trim()) {
+      alert('Please enter a shift code');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      if (editingTemplate) {
+        await schedulesApi.updateTemplate(editingTemplate.id, templateForm);
+      } else {
+        await schedulesApi.createTemplate(templateForm);
+      }
+
+      // Refresh templates
+      const res = await schedulesApi.getTemplates();
+      setTemplates(res.data || []);
+      setShowTemplateModal(false);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to save shift template');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (id) => {
+    if (!window.confirm('Delete this shift template? This will not affect existing schedules.')) return;
+
+    try {
+      await schedulesApi.deleteTemplate(id);
+      const res = await schedulesApi.getTemplates();
+      setTemplates(res.data || []);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to delete template');
+    }
+  };
+
   const weekDates = getWeekDates();
   const weekLabel = `${weekDates[0].dayNum} - ${weekDates[6].dayNum} ${new Date(weekDates[0].date).toLocaleDateString('en-MY', { month: 'short', year: 'numeric' })}`;
 
@@ -404,6 +481,12 @@ function Schedules() {
               onClick={() => setActiveTab('schedule')}
             >
               Schedule
+            </button>
+            <button
+              className={activeTab === 'shifts' ? 'active' : ''}
+              onClick={() => setActiveTab('shifts')}
+            >
+              Manage Shifts
             </button>
             <button
               className={activeTab === 'requests' ? 'active' : ''}
@@ -638,6 +721,156 @@ function Schedules() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Manage Shifts Tab */}
+        {activeTab === 'shifts' && (
+          <div className="shifts-management">
+            <div className="shifts-header">
+              <h3>Shift Templates</h3>
+              <p>Define the shift types available for scheduling</p>
+              <button className="add-shift-btn" onClick={openAddTemplate}>
+                + Add New Shift
+              </button>
+            </div>
+
+            <div className="shifts-grid">
+              {templates.length === 0 ? (
+                <div className="no-data">No shift templates found. Create your first shift template.</div>
+              ) : (
+                templates.map(template => (
+                  <div key={template.id} className={`shift-card ${template.is_off ? 'off-shift' : ''}`}>
+                    <div className="shift-card-header">
+                      <span
+                        className="shift-color-badge"
+                        style={{ backgroundColor: template.color }}
+                      >
+                        {template.code}
+                      </span>
+                      <div className="shift-card-actions">
+                        <button className="edit-btn" onClick={() => openEditTemplate(template)}>Edit</button>
+                        <button className="delete-btn" onClick={() => handleDeleteTemplate(template.id)}>Delete</button>
+                      </div>
+                    </div>
+                    <div className="shift-card-body">
+                      <h4>{template.name || template.code}</h4>
+                      {template.is_off ? (
+                        <p className="shift-time off">Day Off</p>
+                      ) : (
+                        <p className="shift-time">
+                          {template.start_time || '--:--'} - {template.end_time || '--:--'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Shift Template Modal */}
+        {showTemplateModal && (
+          <div className="modal-overlay" onClick={() => setShowTemplateModal(false)}>
+            <div className="modal shift-modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{editingTemplate ? 'Edit Shift' : 'Add New Shift'}</h2>
+                <button className="close-btn" onClick={() => setShowTemplateModal(false)}>&times;</button>
+              </div>
+
+              <form onSubmit={handleSaveTemplate}>
+                <div className="modal-body">
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Shift Code *</label>
+                      <input
+                        type="text"
+                        value={templateForm.code}
+                        onChange={e => setTemplateForm({ ...templateForm, code: e.target.value.toUpperCase() })}
+                        placeholder="e.g., AM, PM, EVE"
+                        maxLength={10}
+                        required
+                      />
+                      <small>Short code shown on calendar (max 10 chars)</small>
+                    </div>
+                    <div className="form-group">
+                      <label>Color</label>
+                      <div className="color-picker">
+                        <input
+                          type="color"
+                          value={templateForm.color}
+                          onChange={e => setTemplateForm({ ...templateForm, color: e.target.value })}
+                        />
+                        <span>{templateForm.color}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Shift Name</label>
+                    <input
+                      type="text"
+                      value={templateForm.name}
+                      onChange={e => setTemplateForm({ ...templateForm, name: e.target.value })}
+                      placeholder="e.g., Morning Shift, Afternoon Shift"
+                    />
+                  </div>
+
+                  <div className="form-group checkbox-inline">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={templateForm.is_off}
+                        onChange={e => setTemplateForm({ ...templateForm, is_off: e.target.checked })}
+                      />
+                      This is a day off (no working hours)
+                    </label>
+                  </div>
+
+                  {!templateForm.is_off && (
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Start Time</label>
+                        <input
+                          type="time"
+                          value={templateForm.start_time}
+                          onChange={e => setTemplateForm({ ...templateForm, start_time: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>End Time</label>
+                        <input
+                          type="time"
+                          value={templateForm.end_time}
+                          onChange={e => setTemplateForm({ ...templateForm, end_time: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview */}
+                  <div className="shift-preview">
+                    <span className="preview-label">Preview:</span>
+                    <span
+                      className="shift-badge preview"
+                      style={{ backgroundColor: templateForm.color }}
+                    >
+                      {templateForm.code || 'CODE'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button type="button" className="btn-secondary" onClick={() => setShowTemplateModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={saving}>
+                    {saving ? 'Saving...' : (editingTemplate ? 'Update Shift' : 'Create Shift')}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>
