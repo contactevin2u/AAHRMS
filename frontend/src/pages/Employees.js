@@ -360,6 +360,10 @@ function Employees() {
             const outlet = outlets.find(o => o.id === parseInt(value));
             updated.outlet_name = outlet?.name || '';
           }
+          if (field === 'department_id') {
+            const dept = departments.find(d => d.id === parseInt(value));
+            updated.department_name = dept?.name || '';
+          }
           if (field === 'position_id') {
             const pos = positions.find(p => p.id === parseInt(value));
             updated.position = pos?.name || '';
@@ -1032,15 +1036,19 @@ function Employees() {
                                 <option key={o.id} value={o.id}>{o.name}</option>
                               ))}
                             </select>
-                          ) : emp.department_name ? (
-                            <span
-                              className="department-link"
-                              onClick={goToDepartments}
-                              title="Go to Departments"
+                          ) : (
+                            <select
+                              className={`inline-select ${updatingCell === `${emp.id}-department_id` ? 'updating' : ''}`}
+                              value={emp.department_id || ''}
+                              onChange={(e) => handleInlineUpdate(emp.id, 'department_id', e.target.value)}
+                              disabled={updatingCell === `${emp.id}-department_id`}
                             >
-                              {emp.department_name}
-                            </span>
-                          ) : '-'}
+                              <option value="">-- Select --</option>
+                              {departments.map(d => (
+                                <option key={d.id} value={d.id}>{d.name}</option>
+                              ))}
+                            </select>
+                          )}
                         </td>
                         {/* Inline Position Dropdown */}
                         <td className="inline-edit-cell">
