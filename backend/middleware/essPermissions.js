@@ -92,6 +92,20 @@ const getManagedOutlets = async (employee) => {
 };
 
 /**
+ * Get department IDs that employee can manage (for AA Alive)
+ * - Supervisor/Manager: own department
+ * - Can be extended with employee_departments table in future
+ */
+const getManagedDepartments = async (employee) => {
+  if (!isSupervisorOrManager(employee)) {
+    return [];
+  }
+
+  // For now, supervisor/manager can manage their own department
+  return employee.department_id ? [employee.department_id] : [];
+};
+
+/**
  * Check if supervisor/manager can approve for a specific employee
  * @param {Object} approver - The supervisor/manager employee
  * @param {Object} targetEmployee - The employee whose request needs approval (with outlet_id, company_id)
@@ -206,6 +220,7 @@ module.exports = {
   canViewTeam,
   isMimixCompany,
   getManagedOutlets,
+  getManagedDepartments,
   getTeamEmployeeIds,
   requireSupervisorOrManager,
   requireMimixCompany,

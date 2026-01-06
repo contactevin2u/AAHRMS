@@ -11,9 +11,11 @@ const { asyncHandler, ValidationError } = require('../../middleware/errorHandler
 const {
   isSupervisorOrManager,
   getManagedOutlets,
+  getManagedDepartments,
   getTeamEmployeeIds,
   requireSupervisorOrManager,
-  requireMimixCompany
+  requireMimixCompany,
+  isMimixCompany
 } = require('../../middleware/essPermissions');
 
 // Middleware to verify employee token and load full employee info
@@ -330,34 +332,71 @@ router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
-  const managedOutlets = await getManagedOutlets(req.employee);
+  const isMimix = isMimixCompany(req.employee.company_id);
 
-  if (managedOutlets.length === 0) {
-    return res.json({ employees: [], outlets: [] });
+  if (isMimix) {
+    // Mimix: Outlet-based management
+    const managedOutlets = await getManagedOutlets(req.employee);
+
+    if (managedOutlets.length === 0) {
+      return res.json({ employees: [], outlets: [], departments: [] });
+    }
+
+    // Get employees in managed outlets
+    const empResult = await pool.query(
+      `SELECT e.id, e.employee_id, e.name, e.outlet_id, o.name as outlet_name
+       FROM employees e
+       LEFT JOIN outlets o ON e.outlet_id = o.id
+       WHERE e.outlet_id = ANY($1)
+         AND e.status = 'active'
+         AND e.company_id = $2
+       ORDER BY o.name, e.name`,
+      [managedOutlets, req.employee.company_id]
+    );
+
+    // Get outlet info
+    const outletResult = await pool.query(
+      `SELECT id, name FROM outlets WHERE id = ANY($1) ORDER BY name`,
+      [managedOutlets]
+    );
+
+    res.json({
+      employees: empResult.rows,
+      outlets: outletResult.rows,
+      departments: []
+    });
+  } else {
+    // AA Alive: Department-based management
+    const managedDepartments = await getManagedDepartments(req.employee);
+
+    if (managedDepartments.length === 0) {
+      return res.json({ employees: [], outlets: [], departments: [] });
+    }
+
+    // Get employees in managed departments
+    const empResult = await pool.query(
+      `SELECT e.id, e.employee_id, e.name, e.department_id, d.name as department_name
+       FROM employees e
+       LEFT JOIN departments d ON e.department_id = d.id
+       WHERE e.department_id = ANY($1)
+         AND e.status = 'active'
+         AND e.company_id = $2
+       ORDER BY d.name, e.name`,
+      [managedDepartments, req.employee.company_id]
+    );
+
+    // Get department info
+    const deptResult = await pool.query(
+      `SELECT id, name FROM departments WHERE id = ANY($1) ORDER BY name`,
+      [managedDepartments]
+    );
+
+    res.json({
+      employees: empResult.rows,
+      outlets: [],
+      departments: deptResult.rows
+    });
   }
-
-  // Get employees in managed outlets
-  const empResult = await pool.query(
-    `SELECT e.id, e.employee_id, e.name, e.outlet_id, o.name as outlet_name
-     FROM employees e
-     LEFT JOIN outlets o ON e.outlet_id = o.id
-     WHERE e.outlet_id = ANY($1)
-       AND e.status = 'active'
-       AND e.company_id = $2
-     ORDER BY o.name, e.name`,
-    [managedOutlets, req.employee.company_id]
-  );
-
-  // Get outlet info
-  const outletResult = await pool.query(
-    `SELECT id, name FROM outlets WHERE id = ANY($1) ORDER BY name`,
-    [managedOutlets]
-  );
-
-  res.json({
-    employees: empResult.rows,
-    outlets: outletResult.rows
-  });
 }));
 
 // Get team schedules (supervisor/manager only)
@@ -366,68 +405,128 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
-  const { year, month, outlet_id } = req.query;
-  const managedOutlets = await getManagedOutlets(req.employee);
-
-  if (managedOutlets.length === 0) {
-    return res.json({ schedules: {}, employees: [] });
-  }
-
-  // Filter by specific outlet if provided (must be in managed outlets)
-  let outletFilter = managedOutlets;
-  if (outlet_id && managedOutlets.includes(parseInt(outlet_id))) {
-    outletFilter = [parseInt(outlet_id)];
-  }
+  const { year, month, outlet_id, department_id } = req.query;
+  const isMimix = isMimixCompany(req.employee.company_id);
 
   const currentYear = year || new Date().getFullYear();
   const currentMonth = month || (new Date().getMonth() + 1);
   const startDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
   const endDate = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0];
 
-  // Get schedules
-  const schedResult = await pool.query(
-    `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, o.name as outlet_name
-     FROM schedules s
-     JOIN employees e ON s.employee_id = e.id
-     LEFT JOIN outlets o ON s.outlet_id = o.id
-     WHERE s.outlet_id = ANY($1)
-       AND s.schedule_date BETWEEN $2 AND $3
-     ORDER BY s.schedule_date, e.name`,
-    [outletFilter, startDate, endDate]
-  );
+  if (isMimix) {
+    // Mimix: Outlet-based
+    const managedOutlets = await getManagedOutlets(req.employee);
 
-  // Group by date
-  const schedules = {};
-  schedResult.rows.forEach(s => {
-    const dateKey = s.schedule_date.toISOString().split('T')[0];
-    if (!schedules[dateKey]) {
-      schedules[dateKey] = [];
+    if (managedOutlets.length === 0) {
+      return res.json({ schedules: {}, employees: [], outlets: [], departments: [] });
     }
-    schedules[dateKey].push({
-      ...s,
-      shift_start: formatTime(s.shift_start),
-      shift_end: formatTime(s.shift_end)
+
+    let outletFilter = managedOutlets;
+    if (outlet_id && managedOutlets.includes(parseInt(outlet_id))) {
+      outletFilter = [parseInt(outlet_id)];
+    }
+
+    const schedResult = await pool.query(
+      `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, o.name as outlet_name
+       FROM schedules s
+       JOIN employees e ON s.employee_id = e.id
+       LEFT JOIN outlets o ON s.outlet_id = o.id
+       WHERE s.outlet_id = ANY($1)
+         AND s.schedule_date BETWEEN $2 AND $3
+       ORDER BY s.schedule_date, e.name`,
+      [outletFilter, startDate, endDate]
+    );
+
+    const schedules = {};
+    schedResult.rows.forEach(s => {
+      const dateKey = s.schedule_date.toISOString().split('T')[0];
+      if (!schedules[dateKey]) schedules[dateKey] = [];
+      schedules[dateKey].push({
+        ...s,
+        shift_start: formatTime(s.shift_start),
+        shift_end: formatTime(s.shift_end)
+      });
     });
-  });
 
-  // Get employees in outlets
-  const empResult = await pool.query(
-    `SELECT e.id, e.employee_id, e.name, e.outlet_id, o.name as outlet_name
-     FROM employees e
-     LEFT JOIN outlets o ON e.outlet_id = o.id
-     WHERE e.outlet_id = ANY($1)
-       AND e.status = 'active'
-     ORDER BY e.name`,
-    [outletFilter]
-  );
+    const empResult = await pool.query(
+      `SELECT e.id, e.employee_id, e.name, e.outlet_id, o.name as outlet_name
+       FROM employees e
+       LEFT JOIN outlets o ON e.outlet_id = o.id
+       WHERE e.outlet_id = ANY($1) AND e.status = 'active'
+       ORDER BY e.name`,
+      [outletFilter]
+    );
 
-  res.json({
-    year: parseInt(currentYear),
-    month: parseInt(currentMonth),
-    schedules,
-    employees: empResult.rows,
-    outlets: outletFilter
-  });
+    res.json({
+      year: parseInt(currentYear),
+      month: parseInt(currentMonth),
+      schedules,
+      employees: empResult.rows,
+      outlets: outletFilter,
+      departments: []
+    });
+  } else {
+    // AA Alive: Department-based
+    const managedDepartments = await getManagedDepartments(req.employee);
+
+    if (managedDepartments.length === 0) {
+      return res.json({ schedules: {}, employees: [], outlets: [], departments: [] });
+    }
+
+    let deptFilter = managedDepartments;
+    if (department_id && managedDepartments.includes(parseInt(department_id))) {
+      deptFilter = [parseInt(department_id)];
+    }
+
+    // Get employee IDs in managed departments
+    const empIdsResult = await pool.query(
+      `SELECT id FROM employees WHERE department_id = ANY($1) AND status = 'active' AND company_id = $2`,
+      [deptFilter, req.employee.company_id]
+    );
+    const empIds = empIdsResult.rows.map(r => r.id);
+
+    let schedules = {};
+    if (empIds.length > 0) {
+      const schedResult = await pool.query(
+        `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, d.name as department_name
+         FROM schedules s
+         JOIN employees e ON s.employee_id = e.id
+         LEFT JOIN departments d ON e.department_id = d.id
+         WHERE s.employee_id = ANY($1)
+           AND s.schedule_date BETWEEN $2 AND $3
+         ORDER BY s.schedule_date, e.name`,
+        [empIds, startDate, endDate]
+      );
+
+      schedResult.rows.forEach(s => {
+        const dateKey = s.schedule_date.toISOString().split('T')[0];
+        if (!schedules[dateKey]) schedules[dateKey] = [];
+        schedules[dateKey].push({
+          ...s,
+          shift_start: formatTime(s.shift_start),
+          shift_end: formatTime(s.shift_end)
+        });
+      });
+    }
+
+    const empResult = await pool.query(
+      `SELECT e.id, e.employee_id, e.name, e.department_id, d.name as department_name
+       FROM employees e
+       LEFT JOIN departments d ON e.department_id = d.id
+       WHERE e.department_id = ANY($1) AND e.status = 'active' AND e.company_id = $2
+       ORDER BY e.name`,
+      [deptFilter, req.employee.company_id]
+    );
+
+    res.json({
+      year: parseInt(currentYear),
+      month: parseInt(currentMonth),
+      schedules,
+      employees: empResult.rows,
+      outlets: [],
+      departments: deptFilter
+    });
+  }
 }));
 
 // Create schedule for team member (supervisor/manager only)
@@ -442,11 +541,11 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
     throw new ValidationError('Employee, date, shift start and end are required');
   }
 
-  const managedOutlets = await getManagedOutlets(req.employee);
+  const isMimix = isMimixCompany(req.employee.company_id);
 
-  // Verify target employee is in managed outlet
+  // Verify target employee
   const empResult = await pool.query(
-    `SELECT id, outlet_id, company_id FROM employees
+    `SELECT id, outlet_id, department_id, company_id FROM employees
      WHERE id = $1 AND status = 'active'`,
     [employee_id]
   );
@@ -457,8 +556,17 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
 
   const targetEmployee = empResult.rows[0];
 
-  if (!managedOutlets.includes(targetEmployee.outlet_id)) {
-    throw new ValidationError('You can only create schedules for employees in your outlet(s)');
+  // Validate permission based on company type
+  if (isMimix) {
+    const managedOutlets = await getManagedOutlets(req.employee);
+    if (!managedOutlets.includes(targetEmployee.outlet_id)) {
+      throw new ValidationError('You can only create schedules for employees in your outlet(s)');
+    }
+  } else {
+    const managedDepartments = await getManagedDepartments(req.employee);
+    if (!managedDepartments.includes(targetEmployee.department_id)) {
+      throw new ValidationError('You can only create schedules for employees in your department');
+    }
   }
 
   // Check for existing schedule on same date
