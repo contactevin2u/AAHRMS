@@ -1,19 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ESSLayout from '../../components/ESSLayout';
+import { essApi } from '../../api';
 
 function ESSCalendar() {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
+  const [schedules, setSchedules] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  // Sample schedule data
-  const schedules = {
-    '2026-01-02': { shift: 'Morning', time: '8:00 AM - 4:00 PM', outlet: 'TEST OUTLET' },
-    '2026-01-03': { shift: 'Morning', time: '8:00 AM - 4:00 PM', outlet: 'TEST OUTLET' },
-    '2026-01-04': { shift: 'Afternoon', time: '2:00 PM - 10:00 PM', outlet: 'TEST OUTLET' },
-    '2026-01-05': { shift: 'Off', time: 'Day Off', outlet: '' },
-    '2026-01-06': { shift: 'Morning', time: '8:00 AM - 4:00 PM', outlet: 'TEST OUTLET' },
-    '2026-01-07': { shift: 'Morning', time: '8:00 AM - 4:00 PM', outlet: 'TEST OUTLET' }
+  useEffect(() => {
+    fetchSchedules();
+  }, [currentMonth]);
+
+  const fetchSchedules = async () => {
+    setLoading(true);
+    try {
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth() + 1;
+      const response = await essApi.getMySchedule(year, month);
+
+      // Convert API response to our format
+      const scheduleMap = {};
+      if (response.data && response.data.schedules) {
+        Object.entries(response.data.schedules).forEach(([dateKey, schedule]) => {
+          const shiftStart = schedule.shift_start || '09:00';
+          const shiftEnd = schedule.shift_end || '18:00';
+          const isOff = schedule.status === 'off' || (shiftStart === '00:00' && shiftEnd === '00:00');
+
+          // Determine shift type based on start time
+          let shiftType = 'Work';
+          if (isOff) {
+            shiftType = 'Off';
+          } else {
+            const startHour = parseInt(shiftStart.split(':')[0]);
+            if (startHour < 12) shiftType = 'Morning';
+            else if (startHour < 17) shiftType = 'Afternoon';
+            else shiftType = 'Night';
+          }
+
+          scheduleMap[dateKey] = {
+            shift: shiftType,
+            time: isOff ? 'Day Off' : `${formatTime(shiftStart)} - ${formatTime(shiftEnd)}`,
+            outlet: schedule.outlet_name || '',
+            attended: schedule.attended || false,
+            status: schedule.status
+          };
+        });
+      }
+      setSchedules(scheduleMap);
+    } catch (error) {
+      console.error('Error fetching schedules:', error);
+      setSchedules({});
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatTime = (time) => {
+    if (!time) return '';
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
   };
 
   const getDaysInMonth = (date) => {
@@ -46,7 +96,8 @@ function ESSCalendar() {
       'Morning': '#dbeafe',
       'Afternoon': '#fef3c7',
       'Night': '#e0e7ff',
-      'Off': '#fee2e2'
+      'Off': '#fee2e2',
+      'Work': '#d1fae5'
     };
     return colors[shift] || '#f1f5f9';
   };
@@ -85,51 +136,57 @@ function ESSCalendar() {
 
         {/* Calendar Grid */}
         <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-          {/* Day Headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '8px' }}>
-            {dayNames.map(day => (
-              <div key={day} style={{ textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#64748b', padding: '8px' }}>
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Days */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
-            {days.map((date, idx) => {
-              if (!date) {
-                return <div key={idx} style={{ padding: '8px' }}></div>;
-              }
-
-              const dateKey = formatDateKey(date);
-              const schedule = schedules[dateKey];
-              const isToday = formatDateKey(new Date()) === dateKey;
-
-              return (
-                <div
-                  key={idx}
-                  onClick={() => setSelectedDate({ date, schedule })}
-                  style={{
-                    padding: '8px',
-                    textAlign: 'center',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    background: schedule ? getShiftColor(schedule.shift) : (isToday ? '#f0f9ff' : 'transparent'),
-                    border: isToday ? '2px solid #1976d2' : 'none'
-                  }}
-                >
-                  <div style={{ fontSize: '14px', fontWeight: isToday ? '700' : '500', color: '#1e293b' }}>
-                    {date.getDate()}
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading schedule...</div>
+          ) : (
+            <>
+              {/* Day Headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '8px' }}>
+                {dayNames.map(day => (
+                  <div key={day} style={{ textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#64748b', padding: '8px' }}>
+                    {day}
                   </div>
-                  {schedule && (
-                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                      {schedule.shift === 'Off' ? 'Off' : schedule.shift.charAt(0)}
+                ))}
+              </div>
+
+              {/* Days */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+                {days.map((date, idx) => {
+                  if (!date) {
+                    return <div key={idx} style={{ padding: '8px' }}></div>;
+                  }
+
+                  const dateKey = formatDateKey(date);
+                  const schedule = schedules[dateKey];
+                  const isToday = formatDateKey(new Date()) === dateKey;
+
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => setSelectedDate({ date, schedule })}
+                      style={{
+                        padding: '8px',
+                        textAlign: 'center',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        background: schedule ? getShiftColor(schedule.shift) : (isToday ? '#f0f9ff' : 'transparent'),
+                        border: isToday ? '2px solid #1976d2' : 'none'
+                      }}
+                    >
+                      <div style={{ fontSize: '14px', fontWeight: isToday ? '700' : '500', color: '#1e293b' }}>
+                        {date.getDate()}
+                      </div>
+                      {schedule && (
+                        <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                          {schedule.shift === 'Off' ? 'Off' : schedule.shift.charAt(0)}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Legend */}
@@ -150,7 +207,19 @@ function ESSCalendar() {
             <div style={{ width: '16px', height: '16px', background: '#fee2e2', borderRadius: '4px' }}></div>
             <span>Off</span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
+            <div style={{ width: '16px', height: '16px', background: '#d1fae5', borderRadius: '4px' }}></div>
+            <span>Work</span>
+          </div>
         </div>
+
+        {/* No schedule message */}
+        {!loading && Object.keys(schedules).length === 0 && (
+          <div style={{ textAlign: 'center', padding: '24px', marginTop: '16px', background: '#f8fafc', borderRadius: '12px' }}>
+            <div style={{ fontSize: '32px', marginBottom: '8px' }}>📅</div>
+            <div style={{ color: '#64748b' }}>No schedule for this month</div>
+          </div>
+        )}
 
         {/* Selected Date Modal */}
         {selectedDate && (
@@ -164,6 +233,9 @@ function ESSCalendar() {
                   <div style={{ fontWeight: '600', fontSize: '16px', marginBottom: '8px' }}>{selectedDate.schedule.shift} Shift</div>
                   <div style={{ color: '#64748b' }}>{selectedDate.schedule.time}</div>
                   {selectedDate.schedule.outlet && <div style={{ color: '#64748b', marginTop: '4px' }}>{selectedDate.schedule.outlet}</div>}
+                  {selectedDate.schedule.attended && (
+                    <div style={{ marginTop: '8px', color: '#059669', fontWeight: '500' }}>Attended</div>
+                  )}
                 </div>
               ) : (
                 <div style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>No schedule for this day</div>
