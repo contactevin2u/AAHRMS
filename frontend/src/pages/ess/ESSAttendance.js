@@ -97,14 +97,16 @@ function ESSAttendanceContent() {
     checkCameraPermission();
   }, []);
 
-  // Check if feature is enabled
+  // Check if feature is enabled (Mimix via features.clockIn OR AA Alive via clock_in_required)
+  const hasClockInAccess = employeeInfo.features?.clockIn || employeeInfo.clock_in_required;
+
   useEffect(() => {
-    if (!employeeInfo.features?.clockIn) {
+    if (!hasClockInAccess) {
       navigate('/ess/dashboard');
       return;
     }
     fetchStatus();
-  }, [navigate]);
+  }, [navigate, hasClockInAccess]);
 
   // Update server time every second
   useEffect(() => {
@@ -138,14 +140,14 @@ function ESSAttendanceContent() {
     }
   };
 
-  // Fetch schedule on mount (for Mimix employees)
+  // Fetch schedule on mount (for employees with clock-in access)
   useEffect(() => {
-    if (employeeInfo?.features?.clockIn) {
+    if (hasClockInAccess) {
       fetchScheduleStatus();
     } else {
       setScheduleLoading(false);
     }
-  }, []);
+  }, [hasClockInAccess]);
 
   // Fetch history when history tab is active
   useEffect(() => {
