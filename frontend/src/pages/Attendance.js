@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { attendanceApi, employeeApi, outletsApi } from '../api';
+import { attendanceApi, employeeApi, outletsApi, departmentApi } from '../api';
 import { toast } from 'react-toastify';
 import './Attendance.css';
 
@@ -8,6 +8,7 @@ const Attendance = () => {
   const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [outlets, setOutlets] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedRecords, setSelectedRecords] = useState([]);
   const [filters, setFilters] = useState({
@@ -15,6 +16,7 @@ const Attendance = () => {
     year: new Date().getFullYear(),
     status: '',
     outlet_id: '',
+    department_id: '',
     employee_id: ''
   });
   const [gpsModal, setGpsModal] = useState(null);
@@ -46,14 +48,16 @@ const Attendance = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [recordsRes, employeesRes, outletsRes] = await Promise.all([
+      const [recordsRes, employeesRes, outletsRes, departmentsRes] = await Promise.all([
         attendanceApi.getAll(filters),
         employeeApi.getAll(),
-        outletsApi.getAll().catch(() => ({ data: [] }))
+        outletsApi.getAll().catch(() => ({ data: [] })),
+        departmentApi.getAll().catch(() => ({ data: [] }))
       ]);
       setRecords(recordsRes.data);
       setEmployees(employeesRes.data);
       setOutlets(outletsRes.data || []);
+      setDepartments(departmentsRes.data || []);
     } catch (error) {
       console.error('Error fetching attendance:', error);
     } finally {
@@ -342,7 +346,19 @@ const Attendance = () => {
           </select>
         </div>
 
-        {!isSupervisor && outlets.length > 0 && (
+        {!isSupervisor && isAAAlive && departments.length > 0 && (
+          <div className="filter-group">
+            <label>Department</label>
+            <select name="department_id" value={filters.department_id} onChange={handleFilterChange}>
+              <option value="">All Departments</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {!isSupervisor && !isAAAlive && outlets.length > 0 && (
           <div className="filter-group">
             <label>Outlet</label>
             <select name="outlet_id" value={filters.outlet_id} onChange={handleFilterChange}>
@@ -388,7 +404,7 @@ const Attendance = () => {
                 </th>
                 <th>Date</th>
                 <th>Employee</th>
-                {!isSupervisor && <th>Outlet</th>}
+                {!isSupervisor && <th>{isAAAlive ? 'Department' : 'Outlet'}</th>}
                 <th className="time-col">Clock In 1<br/><small>Start Work</small></th>
                 <th className="time-col">Clock Out 1<br/><small>Break</small></th>
                 <th className="time-col">Clock In 2<br/><small>Return</small></th>
@@ -427,7 +443,7 @@ const Attendance = () => {
                         <span className="emp-code">{record.emp_code}</span>
                       </div>
                     </td>
-                    {!isSupervisor && <td>{record.outlet_name || '-'}</td>}
+                    {!isSupervisor && <td>{isAAAlive ? (record.department_name || '-') : (record.outlet_name || '-')}</td>}
                     <td className="time-cell">
                       {formatTime(record.clock_in_1)}
                     </td>
