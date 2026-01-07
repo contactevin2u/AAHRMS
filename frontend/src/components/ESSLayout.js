@@ -70,14 +70,17 @@ function ESSLayout({ children }) {
 
   // Check if employee needs clock-in/attendance feature
   // Mimix: always enabled
-  // AA Alive: only if clock_in_required = true
-  const showAttendance = isMimix || employeeInfo?.clock_in_required === true;
+  // AA Alive: only if clock_in_required = true (handle boolean, string, or number)
+  const clockInRequired = employeeInfo?.clock_in_required === true ||
+                          employeeInfo?.clock_in_required === 'true' ||
+                          employeeInfo?.clock_in_required === 1;
+  const showAttendance = isMimix || clockInRequired;
 
   // Check if employee should see schedule/calendar
   // Mimix: always enabled
   // AA Alive: only for Indoor Sales staff or Indoor Sales Manager
   const isIndoorSales = employeeInfo?.position === 'Indoor Sales' || employeeInfo?.position === 'Manager';
-  const showCalendar = isMimix || (isIndoorSales && employeeInfo?.clock_in_required);
+  const showCalendar = isMimix || (isIndoorSales && clockInRequired);
 
   // Check if employee is supervisor/manager (can see team management features)
   const isSupOrMgr = isSupervisorOrManager(employeeInfo);
