@@ -552,78 +552,6 @@ function ESSProfile() {
           )}
         </section>
 
-        {/* Tax & Contributions */}
-        <section className="profile-section">
-          <div className="section-header">
-            <h2>Tax & Contributions</h2>
-            {!isProfileComplete && !isEditing && (
-              <button className="edit-btn small" onClick={() => setIsEditing(true)}>
-                Edit
-              </button>
-            )}
-          </div>
-          {isProfileComplete && (
-            <p className="section-note">Contact HR to update statutory details</p>
-          )}
-
-          {isEditing && !isProfileComplete ? (
-            <div className="edit-form">
-              <div className={`form-group ${isFieldMissing('epf_number') ? 'missing' : ''}`}>
-                <label>EPF Number *</label>
-                <input
-                  type="text"
-                  name="epf_number"
-                  value={editForm.epf_number}
-                  onChange={handleEditChange}
-                  placeholder="e.g., 12345678"
-                />
-              </div>
-              <div className={`form-group ${isFieldMissing('socso_number') ? 'missing' : ''}`}>
-                <label>SOCSO Number *</label>
-                <input
-                  type="text"
-                  name="socso_number"
-                  value={editForm.socso_number}
-                  onChange={handleEditChange}
-                  placeholder="e.g., A12345678"
-                />
-              </div>
-              <div className={`form-group ${isFieldMissing('tax_number') ? 'missing' : ''}`}>
-                <label>Tax Number (LHDN) *</label>
-                <input
-                  type="text"
-                  name="tax_number"
-                  value={editForm.tax_number}
-                  onChange={handleEditChange}
-                  placeholder="e.g., SG12345678100"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="info-grid">
-              <div className={`info-item ${isFieldMissing('epf_number') ? 'missing' : ''}`}>
-                <label>EPF Number</label>
-                <span className="mono">{profile.epf_number || <em className="empty">Not provided</em>}</span>
-                {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
-              </div>
-              <div className="info-item">
-                <label>EPF Contribution Type</label>
-                <span className="capitalize">{profile.epf_contribution_type || '-'}</span>
-              </div>
-              <div className={`info-item ${isFieldMissing('socso_number') ? 'missing' : ''}`}>
-                <label>SOCSO Number</label>
-                <span className="mono">{profile.socso_number || <em className="empty">Not provided</em>}</span>
-                {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
-              </div>
-              <div className={`info-item ${isFieldMissing('tax_number') ? 'missing' : ''}`}>
-                <label>Tax Number (LHDN)</label>
-                <span className="mono">{profile.tax_number || <em className="empty">Not provided</em>}</span>
-                {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
-              </div>
-            </div>
-          )}
-        </section>
-
         {/* Employment Details - Always Read Only */}
         <section className="profile-section">
           <h2>Employment Details</h2>
@@ -661,33 +589,6 @@ function ESSProfile() {
               <div className="info-item">
                 <label>Probation End Date</label>
                 <span>{formatDate(profile.probation_end_date)}</span>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Salary & Earnings - Always Read Only */}
-        <section className="profile-section">
-          <h2>Salary & Earnings</h2>
-          <div className="info-grid">
-            <div className="info-item">
-              <label>Basic Salary</label>
-              <span className="amount">{formatCurrency(profile.default_basic_salary)}</span>
-            </div>
-            <div className="info-item">
-              <label>Allowance</label>
-              <span className="amount">{formatCurrency(profile.default_allowance)}</span>
-            </div>
-            {profile.default_bonus > 0 && (
-              <div className="info-item">
-                <label>Bonus</label>
-                <span className="amount">{formatCurrency(profile.default_bonus)}</span>
-              </div>
-            )}
-            {profile.default_incentive > 0 && (
-              <div className="info-item">
-                <label>Incentive</label>
-                <span className="amount">{formatCurrency(profile.default_incentive)}</span>
               </div>
             )}
           </div>
