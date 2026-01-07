@@ -1,13 +1,22 @@
 import React, { useState } from 'react';
 import { getGenderFromIC } from './EmployeeForm';
 
-// Position enum values
-const POSITION_OPTIONS = [
+// Position enum values for AA Alive
+const AA_ALIVE_POSITION_OPTIONS = [
   { value: 'Indoor Sales', label: 'Indoor Sales' },
   { value: 'Outdoor Sales', label: 'Outdoor Sales' },
   { value: 'Driver', label: 'Driver' },
   { value: 'Office', label: 'Office' },
   { value: 'Manager', label: 'Manager' }
+];
+
+// Position enum values for Mimix
+const MIMIX_POSITION_OPTIONS = [
+  { value: 'Full Time', label: 'Full Time' },
+  { value: 'Part Time', label: 'Part Time' },
+  { value: 'Supervisor', label: 'Supervisor' },
+  { value: 'Manager', label: 'Manager' },
+  { value: 'Cashier', label: 'Cashier' }
 ];
 
 // Employment type enum values
@@ -320,7 +329,7 @@ const EmployeeTable = ({
                         className="inline-edit-select"
                       >
                         <option value="">-</option>
-                        {POSITION_OPTIONS.map(opt => (
+                        {(usesOutlets ? MIMIX_POSITION_OPTIONS : AA_ALIVE_POSITION_OPTIONS).map(opt => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
                         ))}
                       </select>
