@@ -1306,6 +1306,15 @@ Human Resources Department
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='work_type') THEN
           ALTER TABLE employees ADD COLUMN work_type VARCHAR(20) DEFAULT 'full_time';
         END IF;
+        -- Clock in required: determines if employee needs to clock in/out
+        -- Mimix (company_id=3): default TRUE (all must clock in)
+        -- AA Alive (company_id=1): default FALSE (only if enabled)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='clock_in_required') THEN
+          ALTER TABLE employees ADD COLUMN clock_in_required BOOLEAN DEFAULT FALSE;
+          -- Set defaults based on company
+          UPDATE employees SET clock_in_required = TRUE WHERE company_id = 3;
+          UPDATE employees SET clock_in_required = FALSE WHERE company_id = 1;
+        END IF;
       END $$;
 
       -- =====================================================

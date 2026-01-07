@@ -525,6 +525,196 @@ router.post('/bulk-approve', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Create manual attendance record (admin creates for employees who didn't clock in)
+router.post('/manual', authenticateAdmin, async (req, res) => {
+  try {
+    const {
+      employee_id,
+      work_date,
+      total_work_hours,
+      ot_hours,
+      notes
+    } = req.body;
+
+    const companyId = req.companyId || req.admin?.company_id || 1;
+    const adminId = req.admin?.id;
+
+    if (!employee_id || !work_date) {
+      return res.status(400).json({ error: 'Employee ID and work date are required' });
+    }
+
+    // Verify employee exists
+    const empCheck = await pool.query(
+      'SELECT id, name, outlet_id FROM employees WHERE id = $1',
+      [employee_id]
+    );
+
+    if (empCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const employee = empCheck.rows[0];
+
+    // Check if record already exists
+    const existing = await pool.query(
+      'SELECT id FROM clock_in_records WHERE employee_id = $1 AND work_date = $2',
+      [employee_id, work_date]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Attendance record already exists for this date. Use edit instead.' });
+    }
+
+    // Calculate minutes from hours
+    const totalMinutes = Math.round((parseFloat(total_work_hours) || 0) * 60);
+    const otMinutes = Math.round((parseFloat(ot_hours) || 0) * 60);
+
+    // Create manual record (no clock times, just hours)
+    const result = await pool.query(`
+      INSERT INTO clock_in_records
+      (employee_id, company_id, outlet_id, work_date, total_work_minutes, ot_minutes,
+       total_work_hours, ot_hours, notes, status, has_schedule, approved_by, approved_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'approved', false, $10, NOW())
+      RETURNING *
+    `, [
+      employee_id, companyId, employee.outlet_id, work_date,
+      totalMinutes, otMinutes,
+      total_work_hours || 0, ot_hours || 0,
+      notes || 'Manual entry by admin',
+      adminId
+    ]);
+
+    res.status(201).json({
+      message: 'Manual attendance record created and approved',
+      record: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error creating manual attendance:', error);
+    res.status(500).json({ error: 'Failed to create manual attendance record' });
+  }
+});
+
+// Edit attendance hours (admin can edit total_work_hours and ot_hours)
+router.patch('/:id/hours', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { total_work_hours, ot_hours, notes } = req.body;
+    const companyId = getCompanyFilter(req);
+
+    // Build update query
+    const updates = [];
+    const values = [];
+    let paramCount = 0;
+
+    if (total_work_hours !== undefined) {
+      paramCount++;
+      updates.push(`total_work_hours = $${paramCount}`);
+      values.push(parseFloat(total_work_hours) || 0);
+
+      paramCount++;
+      updates.push(`total_work_minutes = $${paramCount}`);
+      values.push(Math.round((parseFloat(total_work_hours) || 0) * 60));
+    }
+
+    if (ot_hours !== undefined) {
+      paramCount++;
+      updates.push(`ot_hours = $${paramCount}`);
+      values.push(parseFloat(ot_hours) || 0);
+
+      paramCount++;
+      updates.push(`ot_minutes = $${paramCount}`);
+      values.push(Math.round((parseFloat(ot_hours) || 0) * 60));
+    }
+
+    if (notes !== undefined) {
+      paramCount++;
+      updates.push(`notes = $${paramCount}`);
+      values.push(notes);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    updates.push('updated_at = NOW()');
+
+    paramCount++;
+    values.push(id);
+
+    let query = `UPDATE clock_in_records SET ${updates.join(', ')} WHERE id = $${paramCount}`;
+
+    if (companyId !== null) {
+      paramCount++;
+      query += ` AND company_id = $${paramCount}`;
+      values.push(companyId);
+    }
+
+    query += ' RETURNING *';
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attendance record not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating attendance hours:', error);
+    res.status(500).json({ error: 'Failed to update attendance hours' });
+  }
+});
+
+// Approve attendance without schedule (for AA Alive employees)
+router.post('/:id/approve-without-schedule', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { total_work_hours, ot_hours, notes } = req.body;
+    const adminId = req.admin?.id;
+    const companyId = getCompanyFilter(req);
+
+    // Calculate minutes
+    const totalMinutes = Math.round((parseFloat(total_work_hours) || 0) * 60);
+    const otMinutes = Math.round((parseFloat(ot_hours) || 0) * 60);
+
+    let query = `
+      UPDATE clock_in_records
+      SET status = 'approved',
+          approved_by = $1,
+          approved_at = NOW(),
+          has_schedule = false,
+          total_work_hours = COALESCE($2, total_work_hours),
+          ot_hours = COALESCE($3, ot_hours),
+          total_work_minutes = COALESCE($4, total_work_minutes),
+          ot_minutes = COALESCE($5, ot_minutes),
+          notes = COALESCE($6, notes),
+          updated_at = NOW()
+      WHERE id = $7
+    `;
+    let params = [adminId, total_work_hours, ot_hours, totalMinutes, otMinutes, notes, id];
+
+    if (companyId !== null) {
+      query += ' AND company_id = $8';
+      params.push(companyId);
+    }
+
+    query += ' RETURNING *';
+
+    const result = await pool.query(query, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attendance record not found' });
+    }
+
+    res.json({
+      message: 'Attendance approved (without schedule)',
+      record: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error approving attendance without schedule:', error);
+    res.status(500).json({ error: 'Failed to approve attendance' });
+  }
+});
+
 // Delete attendance record - ENABLED for testing mode
 // TODO: Disable this after real data starts - change back to 403
 router.delete('/:id', authenticateAdmin, async (req, res) => {

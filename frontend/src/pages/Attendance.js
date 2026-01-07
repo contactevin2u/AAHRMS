@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { attendanceApi, employeeApi, outletsApi } from '../api';
+import { toast } from 'react-toastify';
 import './Attendance.css';
 
 const Attendance = () => {
@@ -16,12 +17,27 @@ const Attendance = () => {
     outlet_id: '',
     employee_id: ''
   });
-  const [editModal, setEditModal] = useState(null);
-  const [gpsModal, setGpsModal] = useState(null); // For showing GPS coordinates
-  const [photoModal, setPhotoModal] = useState(null); // For showing selfie photos
+  const [gpsModal, setGpsModal] = useState(null);
+  const [photoModal, setPhotoModal] = useState(null);
+
+  // Manual attendance modal
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    employee_id: '',
+    work_date: new Date().toISOString().split('T')[0],
+    total_work_hours: '',
+    ot_hours: '',
+    notes: ''
+  });
+
+  // Inline editing state
+  const [editingCell, setEditingCell] = useState(null); // { recordId, field }
+  const [editValue, setEditValue] = useState('');
 
   const admin = JSON.parse(localStorage.getItem('admin') || '{}');
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
   const isSupervisor = admin.role === 'supervisor';
+  const isAAAlive = adminInfo.company_id === 1;
 
   useEffect(() => {
     fetchData();
@@ -68,9 +84,10 @@ const Attendance = () => {
   const handleApprove = async (id) => {
     try {
       await attendanceApi.approve(id);
+      toast.success('Attendance approved');
       fetchData();
     } catch (error) {
-      alert('Failed to approve');
+      toast.error('Failed to approve');
     }
   };
 
@@ -79,42 +96,105 @@ const Attendance = () => {
     if (reason === null) return;
     try {
       await attendanceApi.reject(id, reason);
+      toast.success('Attendance rejected');
       fetchData();
     } catch (error) {
-      alert('Failed to reject');
+      toast.error('Failed to reject');
     }
   };
 
-  // Delete attendance record - Testing mode only
-  // TODO: Remove this after real data starts
   const handleDelete = async (id) => {
     if (window.confirm('Delete this attendance record? This action cannot be undone.')) {
       try {
         await attendanceApi.delete(id);
+        toast.success('Record deleted');
         fetchData();
       } catch (error) {
-        alert(error.response?.data?.error || 'Failed to delete');
+        toast.error(error.response?.data?.error || 'Failed to delete');
       }
     }
   };
 
   const handleBulkApprove = async () => {
     if (selectedRecords.length === 0) {
-      alert('Select records to approve');
+      toast.warning('Select records to approve');
       return;
     }
     try {
       await attendanceApi.bulkApprove(selectedRecords);
       setSelectedRecords([]);
+      toast.success(`Approved ${selectedRecords.length} records`);
       fetchData();
     } catch (error) {
-      alert('Failed to bulk approve');
+      toast.error('Failed to bulk approve');
     }
+  };
+
+  // Handle manual attendance creation
+  const handleCreateManual = async (e) => {
+    e.preventDefault();
+    try {
+      await attendanceApi.createManual(manualForm);
+      toast.success('Manual attendance created and approved');
+      setShowManualModal(false);
+      setManualForm({
+        employee_id: '',
+        work_date: new Date().toISOString().split('T')[0],
+        total_work_hours: '',
+        ot_hours: '',
+        notes: ''
+      });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to create manual attendance');
+    }
+  };
+
+  // Start inline edit
+  const startEdit = (recordId, field, currentValue) => {
+    setEditingCell({ recordId, field });
+    setEditValue(currentValue?.toString() || '');
+  };
+
+  // Save inline edit
+  const saveEdit = async () => {
+    if (!editingCell) return;
+
+    try {
+      const data = { [editingCell.field]: parseFloat(editValue) || 0 };
+      await attendanceApi.editHours(editingCell.recordId, data);
+      toast.success('Hours updated');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to update hours');
+    }
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  // Cancel inline edit
+  const cancelEdit = () => {
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  // Handle key press
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      saveEdit();
+    } else if (e.key === 'Escape') {
+      cancelEdit();
+    }
+  };
+
+  // Check if cell is being edited
+  const isEditing = (recordId, field) => {
+    return editingCell?.recordId === recordId && editingCell?.field === field;
   };
 
   const formatTime = (time) => {
     if (!time) return '-';
-    return time.substring(0, 5); // HH:MM
+    return time.substring(0, 5);
   };
 
   const formatDate = (date) => {
@@ -146,11 +226,9 @@ const Attendance = () => {
 
   const pendingCount = records.filter(r => r.status === 'pending').length;
 
-  // Parse GPS location string to get coordinates
   const parseLocation = (locationStr) => {
     if (!locationStr) return null;
     try {
-      // Format could be "lat,lng" or JSON object
       if (typeof locationStr === 'string' && locationStr.includes(',')) {
         const [lat, lng] = locationStr.split(',').map(s => parseFloat(s.trim()));
         return { lat, lng };
@@ -165,31 +243,51 @@ const Attendance = () => {
     }
   };
 
-  // Format coordinates for display
-  const formatCoords = (coords) => {
-    if (!coords) return '-';
-    return `${coords.lat?.toFixed(6)}, ${coords.lng?.toFixed(6)}`;
-  };
-
-  // Open location in Google Maps
   const openInMaps = (coords) => {
     if (!coords) return;
     window.open(`https://www.google.com/maps?q=${coords.lat},${coords.lng}`, '_blank');
   };
 
-  // Show GPS modal with record details
   const showGpsDetails = (record) => {
     setGpsModal(record);
   };
 
-  // Show photo modal with selfie images
   const showPhotoDetails = (record) => {
     setPhotoModal(record);
   };
 
-  // Check if record has any photos
   const hasPhotos = (record) => {
     return record.photo_in_1 || record.photo_out_1 || record.photo_in_2 || record.photo_out_2;
+  };
+
+  // Render editable hours cell
+  const renderEditableHours = (record, field, value) => {
+    if (isEditing(record.id, field)) {
+      return (
+        <input
+          type="number"
+          step="0.1"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={saveEdit}
+          onKeyDown={handleKeyPress}
+          autoFocus
+          className="inline-edit-hours"
+          style={{ width: '60px', padding: '2px 4px' }}
+        />
+      );
+    }
+
+    const displayValue = value ? `${parseFloat(value).toFixed(1)}h` : '-';
+    return (
+      <span
+        className="editable-hours"
+        onClick={() => startEdit(record.id, field, value)}
+        title="Click to edit"
+      >
+        {displayValue}
+      </span>
+    );
   };
 
   return (
@@ -200,11 +298,19 @@ const Attendance = () => {
           <h1>Attendance Management</h1>
           <p>View and approve employee clock-in records</p>
         </div>
-        {pendingCount > 0 && (
-          <div className="pending-badge">
-            {pendingCount} Pending
-          </div>
-        )}
+        <div className="header-actions">
+          {pendingCount > 0 && (
+            <div className="pending-badge">
+              {pendingCount} Pending
+            </div>
+          )}
+          <button
+            className="create-manual-btn"
+            onClick={() => setShowManualModal(true)}
+          >
+            + Create Manual
+          </button>
+        </div>
       </div>
 
       <div className="filters-section">
@@ -337,7 +443,7 @@ const Attendance = () => {
                           onClick={() => showPhotoDetails(record)}
                           title="View Selfie Photos"
                         >
-                          📷 View
+                          View
                         </button>
                       ) : (
                         <span className="no-photo">-</span>
@@ -350,17 +456,17 @@ const Attendance = () => {
                           onClick={() => showGpsDetails(record)}
                           title="View GPS Coordinates"
                         >
-                          📍 View
+                          View
                         </button>
                       ) : (
                         <span className="no-gps">-</span>
                       )}
                     </td>
                     <td className="hours-cell">
-                      {record.total_hours ? `${parseFloat(record.total_hours).toFixed(1)}h` : '-'}
+                      {renderEditableHours(record, 'total_work_hours', record.total_hours)}
                     </td>
                     <td className="hours-cell ot">
-                      {record.ot_hours > 0 ? `${parseFloat(record.ot_hours).toFixed(1)}h` : '-'}
+                      {renderEditableHours(record, 'ot_hours', record.ot_hours)}
                     </td>
                     <td>
                       <span className={`status-badge ${getStatusBadge(record.status)}`}>
@@ -375,14 +481,14 @@ const Attendance = () => {
                             onClick={() => handleApprove(record.id)}
                             title="Approve"
                           >
-                            ✓
+                            Approve
                           </button>
                           <button
                             className="reject-btn"
                             onClick={() => handleReject(record.id)}
                             title="Reject"
                           >
-                            ✗
+                            Reject
                           </button>
                         </>
                       ) : (
@@ -390,14 +496,13 @@ const Attendance = () => {
                           {record.approved_by_name && `by ${record.approved_by_name}`}
                         </span>
                       )}
-                      {/* Delete button - Testing mode only */}
                       <button
                         className="delete-btn"
                         onClick={() => handleDelete(record.id)}
                         title="Delete"
                         style={{ marginLeft: '4px', background: '#dc2626', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
                       >
-                        🗑
+                        Del
                       </button>
                     </td>
                   </tr>
@@ -410,22 +515,106 @@ const Attendance = () => {
 
       <div className="attendance-legend">
         <div className="legend-item">
-          <span className="legend-icon">📷</span>
-          <span>Selfie photo recorded</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-icon">📍</span>
-          <span>GPS location recorded</span>
-        </div>
-        <div className="legend-item">
           <span className="legend-label">Standard hours:</span>
-          <span className="legend-value">8.5 hours</span>
+          <span className="legend-value">{isAAAlive ? '8 hours (+ 1hr break)' : '8.5 hours'}</span>
         </div>
         <div className="legend-item">
           <span className="legend-label">OT calculation:</span>
-          <span className="legend-value">Hours above 8.5h</span>
+          <span className="legend-value">{isAAAlive ? 'Hours above 8h @ 1.0x' : 'Hours above 8.5h'}</span>
+        </div>
+        <div className="legend-item">
+          <span className="legend-hint">Click on hours to edit</span>
         </div>
       </div>
+
+      {/* Manual Attendance Modal */}
+      {showManualModal && (
+        <div className="modal-overlay" onClick={() => setShowManualModal(false)}>
+          <div className="modal manual-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Create Manual Attendance</h2>
+              <button className="close-btn" onClick={() => setShowManualModal(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-subtitle">Create attendance record for employee who didn't clock in</p>
+
+              <form onSubmit={handleCreateManual}>
+                <div className="form-group">
+                  <label>Employee *</label>
+                  <select
+                    value={manualForm.employee_id}
+                    onChange={(e) => setManualForm({ ...manualForm, employee_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Select Employee</option>
+                    {employees.map(e => (
+                      <option key={e.id} value={e.id}>{e.employee_id} - {e.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Work Date *</label>
+                  <input
+                    type="date"
+                    value={manualForm.work_date}
+                    onChange={(e) => setManualForm({ ...manualForm, work_date: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Total Work Hours *</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="24"
+                      value={manualForm.total_work_hours}
+                      onChange={(e) => setManualForm({ ...manualForm, total_work_hours: e.target.value })}
+                      placeholder="e.g., 8"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>OT Hours</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="16"
+                      value={manualForm.ot_hours}
+                      onChange={(e) => setManualForm({ ...manualForm, ot_hours: e.target.value })}
+                      placeholder="e.g., 2"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Notes</label>
+                  <textarea
+                    value={manualForm.notes}
+                    onChange={(e) => setManualForm({ ...manualForm, notes: e.target.value })}
+                    placeholder="Reason for manual entry..."
+                    rows="3"
+                  />
+                </div>
+
+                <div className="modal-actions">
+                  <button type="button" className="cancel-btn" onClick={() => setShowManualModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="save-btn">
+                    Create & Approve
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* GPS Location Modal */}
       {gpsModal && (
@@ -450,16 +639,13 @@ const Attendance = () => {
                     </div>
                     {gpsModal.address_in_1 && (
                       <div className="gps-address">
-                        <span className="address-icon">📍</span>
                         <span className="address-text">{gpsModal.address_in_1}</span>
                       </div>
                     )}
                     <div className="gps-coords">
-                      <span className="coords-label">Latitude:</span>
+                      <span className="coords-label">Lat:</span>
                       <span className="coords-value">{parseLocation(gpsModal.location_in_1)?.lat?.toFixed(6) || '-'}</span>
-                    </div>
-                    <div className="gps-coords">
-                      <span className="coords-label">Longitude:</span>
+                      <span className="coords-label">Lng:</span>
                       <span className="coords-value">{parseLocation(gpsModal.location_in_1)?.lng?.toFixed(6) || '-'}</span>
                     </div>
                     <button
@@ -479,16 +665,13 @@ const Attendance = () => {
                     </div>
                     {gpsModal.address_out_2 && (
                       <div className="gps-address">
-                        <span className="address-icon">📍</span>
                         <span className="address-text">{gpsModal.address_out_2}</span>
                       </div>
                     )}
                     <div className="gps-coords">
-                      <span className="coords-label">Latitude:</span>
+                      <span className="coords-label">Lat:</span>
                       <span className="coords-value">{parseLocation(gpsModal.location_out_2)?.lat?.toFixed(6) || '-'}</span>
-                    </div>
-                    <div className="gps-coords">
-                      <span className="coords-label">Longitude:</span>
+                      <span className="coords-label">Lng:</span>
                       <span className="coords-value">{parseLocation(gpsModal.location_out_2)?.lng?.toFixed(6) || '-'}</span>
                     </div>
                     <button
@@ -596,6 +779,116 @@ const Attendance = () => {
           </div>
         </div>
       )}
+
+      <style>{`
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .create-manual-btn {
+          background: #1976d2;
+          color: white;
+          border: none;
+          padding: 10px 16px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+        .create-manual-btn:hover {
+          background: #1565c0;
+        }
+        .editable-hours {
+          cursor: pointer;
+          padding: 4px 8px;
+          border-radius: 4px;
+          transition: background-color 0.2s;
+        }
+        .editable-hours:hover {
+          background-color: #e3f2fd;
+        }
+        .inline-edit-hours {
+          border: 1px solid #1976d2;
+          border-radius: 4px;
+          font-size: 13px;
+        }
+        .manual-modal .form-row {
+          display: flex;
+          gap: 16px;
+        }
+        .manual-modal .form-row .form-group {
+          flex: 1;
+        }
+        .manual-modal .form-group {
+          margin-bottom: 16px;
+        }
+        .manual-modal label {
+          display: block;
+          margin-bottom: 6px;
+          font-weight: 500;
+        }
+        .manual-modal input,
+        .manual-modal select,
+        .manual-modal textarea {
+          width: 100%;
+          padding: 10px;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          font-size: 14px;
+        }
+        .manual-modal .modal-subtitle {
+          color: #666;
+          margin-bottom: 20px;
+        }
+        .modal-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          margin-top: 24px;
+        }
+        .cancel-btn {
+          padding: 10px 20px;
+          border: 1px solid #ddd;
+          background: white;
+          border-radius: 6px;
+          cursor: pointer;
+        }
+        .save-btn {
+          padding: 10px 20px;
+          background: #1976d2;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+        }
+        .save-btn:hover {
+          background: #1565c0;
+        }
+        .legend-hint {
+          font-style: italic;
+          color: #888;
+          font-size: 12px;
+        }
+        .approve-btn {
+          background: #4caf50;
+          color: white;
+          border: none;
+          padding: 4px 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+          margin-right: 4px;
+        }
+        .reject-btn {
+          background: #ff9800;
+          color: white;
+          border: none;
+          padding: 4px 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+        }
+      `}</style>
     </div>
     </Layout>
   );

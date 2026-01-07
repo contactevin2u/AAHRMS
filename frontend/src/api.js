@@ -290,6 +290,10 @@ export const attendanceApi = {
   reject: (id, reason) => api.post(`/clock-in/${id}/reject`, { notes: reason }),
   bulkApprove: (record_ids) => api.post('/clock-in/bulk-approve', { record_ids }),
   delete: (id) => api.delete(`/clock-in/${id}`),
+  // Manual attendance management
+  createManual: (data) => api.post('/clock-in/manual', data),
+  editHours: (id, data) => api.patch(`/clock-in/${id}/hours`, data),
+  approveWithoutSchedule: (id, data) => api.post(`/clock-in/${id}/approve-without-schedule`, data),
 };
 
 // Benefits In Kind (BIK) - for AA Alive

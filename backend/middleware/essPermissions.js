@@ -191,6 +191,26 @@ const getInitialApprovalLevel = (employee) => {
 };
 
 /**
+ * Check if employee is AA Alive Indoor Sales Manager
+ * Indoor Sales Manager position can manage schedules and approve OT
+ */
+const isAAAliveIndoorSalesManager = async (employee) => {
+  if (isMimixCompany(employee.company_id)) return false;
+  if (employee.employee_role !== ROLES.MANAGER) return false;
+
+  // Check if employee position is Indoor Sales or Manager with Indoor Sales team
+  const result = await pool.query(
+    `SELECT position FROM employees WHERE id = $1`,
+    [employee.id]
+  );
+
+  if (result.rows.length === 0) return false;
+
+  const position = result.rows[0].position;
+  return position === 'Indoor Sales' || position === 'Manager';
+};
+
+/**
  * Build permission flags for employee
  */
 const buildPermissionFlags = async (employee) => {
@@ -198,14 +218,19 @@ const buildPermissionFlags = async (employee) => {
   const isSupOrMgr = isSupervisorOrManager(employee);
   const managedOutlets = isSupOrMgr ? await getManagedOutlets(employee) : [];
 
+  // AA Alive Indoor Sales Manager can also approve OT and manage schedules
+  const isIndoorSalesManager = await isAAAliveIndoorSalesManager(employee);
+
   return {
     employee_role: employee.employee_role || ROLES.STAFF,
     can_approve_leave: isSupOrMgr && isMimix,
-    can_approve_ot: isSupOrMgr && isMimix,
+    can_approve_ot: (isSupOrMgr && isMimix) || isIndoorSalesManager,
     can_approve_swaps: isSupOrMgr && isMimix,
     can_view_team: isSupOrMgr,
+    can_manage_schedule: (isSupOrMgr && isMimix) || isIndoorSalesManager,
     managed_outlets: managedOutlets,
-    is_mimix: isMimix
+    is_mimix: isMimix,
+    is_indoor_sales_manager: isIndoorSalesManager
   };
 };
 
@@ -225,5 +250,6 @@ module.exports = {
   requireSupervisorOrManager,
   requireMimixCompany,
   getInitialApprovalLevel,
-  buildPermissionFlags
+  buildPermissionFlags,
+  isAAAliveIndoorSalesManager
 };

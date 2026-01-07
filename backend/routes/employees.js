@@ -350,7 +350,7 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
     // Allowed fields for partial update
     const allowedFields = [
       'employee_id', 'outlet_id', 'position_id', 'position', 'employment_type', 'status',
-      'department_id', 'name', 'email', 'phone', 'address', 'gender'
+      'department_id', 'name', 'email', 'phone', 'address', 'gender', 'clock_in_required'
     ];
 
     // Build dynamic SET clause
@@ -1285,6 +1285,99 @@ router.post('/init-clear-all-data', async (req, res) => {
     await client.query('ROLLBACK');
     console.error('Error clearing data:', error);
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Delete all test employees (employee_id starting with 'TEST')
+// Protected - requires super_admin role
+router.delete('/test-employees/all', authenticateAdmin, async (req, res) => {
+  // Only allow super_admin to delete test employees
+  if (req.admin.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Only super admin can delete test employees' });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    console.log('Starting removal of test employees...');
+
+    // Find all test employee IDs
+    const testEmployees = await client.query(`
+      SELECT id, employee_id, name
+      FROM employees
+      WHERE employee_id LIKE 'TEST%'
+      ORDER BY employee_id
+    `);
+
+    if (testEmployees.rows.length === 0) {
+      return res.json({ message: 'No test employees found', deleted: 0 });
+    }
+
+    const employeeIds = testEmployees.rows.map(e => e.id);
+    const deletedCounts = {};
+
+    // Start transaction
+    await client.query('BEGIN');
+
+    // Delete related records first (in order of dependencies)
+    const tables = [
+      { name: 'attendance_records', column: 'employee_id' },
+      { name: 'leave_requests', column: 'employee_id' },
+      { name: 'claim_requests', column: 'employee_id' },
+      { name: 'payroll_items', column: 'employee_id' },
+      { name: 'employee_letters', column: 'employee_id' },
+      { name: 'employee_benefits', column: 'employee_id' },
+      { name: 'employee_contributions', column: 'employee_id' },
+      { name: 'salary_details', column: 'employee_id' },
+      { name: 'schedule_assignments', column: 'employee_id' },
+      { name: 'shift_swaps', column: 'requester_id' },
+      { name: 'shift_swaps', column: 'target_id' },
+      { name: 'notifications', column: 'employee_id' },
+      { name: 'feedback', column: 'employee_id' },
+    ];
+
+    for (const table of tables) {
+      try {
+        const result = await client.query(`
+          DELETE FROM ${table.name}
+          WHERE ${table.column} = ANY($1::int[])
+        `, [employeeIds]);
+
+        if (result.rowCount > 0) {
+          deletedCounts[table.name] = (deletedCounts[table.name] || 0) + result.rowCount;
+        }
+      } catch (err) {
+        // Table might not exist, skip it
+        if (err.code !== '42P01') {
+          console.log(`Warning: Could not delete from ${table.name}: ${err.message}`);
+        }
+      }
+    }
+
+    // Finally, delete the employees
+    const deleteResult = await client.query(`
+      DELETE FROM employees
+      WHERE employee_id LIKE 'TEST%'
+    `);
+
+    // Commit transaction
+    await client.query('COMMIT');
+
+    console.log(`Deleted ${deleteResult.rowCount} test employees`);
+
+    res.json({
+      message: `Successfully deleted ${deleteResult.rowCount} test employees`,
+      deleted: deleteResult.rowCount,
+      employees: testEmployees.rows.map(e => ({ employee_id: e.employee_id, name: e.name })),
+      relatedRecords: deletedCounts
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error removing test employees:', error);
+    res.status(500).json({ error: 'Failed to remove test employees: ' + error.message });
   } finally {
     client.release();
   }

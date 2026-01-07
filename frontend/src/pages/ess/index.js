@@ -5,6 +5,9 @@
 //
 // Support Pages:
 // - Login, ChangePassword, Notifications, Letters, Benefits, Payslips
+//
+// Supervisor/Manager Pages:
+// - TeamSchedule, OTApproval
 
 // Auth
 export { default as ESSLogin } from './ESSLogin';
@@ -23,6 +26,10 @@ export { default as ESSPayslips } from './ESSPayslips';
 export { default as ESSNotifications } from './ESSNotifications';
 export { default as ESSLetters } from './ESSLetters';
 export { default as ESSBenefits } from './ESSBenefits';
+
+// Supervisor/Manager Pages
+export { default as ESSTeamSchedule } from './ESSTeamSchedule';
+export { default as ESSOTApproval } from './ESSOTApproval';
 
 // Deprecated (redirected to main pages)
 // ESSClockIn -> use ESSAttendance

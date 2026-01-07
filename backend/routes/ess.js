@@ -21,7 +21,9 @@ router.post('/login', async (req, res) => {
 
     // Find employee by email or employee_id, including company info
     const result = await pool.query(
-      `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled, e.department_id, e.company_id,
+      `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled,
+              e.department_id, e.company_id, e.position, e.employee_role, e.outlet_id,
+              e.clock_in_required,
               c.name as company_name, c.code as company_code, c.logo_url as company_logo
        FROM employees e
        LEFT JOIN companies c ON e.company_id = c.id
@@ -84,7 +86,11 @@ router.post('/login', async (req, res) => {
         company_id: employee.company_id,
         company_name: employee.company_name,
         company_code: employee.company_code,
-        company_logo: employee.company_logo
+        company_logo: employee.company_logo,
+        position: employee.position,
+        employee_role: employee.employee_role,
+        outlet_id: employee.outlet_id,
+        clock_in_required: employee.clock_in_required
       }
     });
   } catch (error) {

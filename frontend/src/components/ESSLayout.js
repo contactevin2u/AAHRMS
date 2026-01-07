@@ -68,6 +68,22 @@ function ESSLayout({ children }) {
   // Check if employee is from Mimix (has clock-in/schedule features)
   const isMimix = isMimixCompany(employeeInfo);
 
+  // Check if employee needs clock-in/attendance feature
+  // Mimix: always enabled
+  // AA Alive: only if clock_in_required = true
+  const showAttendance = isMimix || employeeInfo?.clock_in_required === true;
+
+  // Check if employee should see schedule/calendar
+  // Mimix: always enabled
+  // AA Alive: only for Indoor Sales staff or Indoor Sales Manager
+  const isIndoorSales = employeeInfo?.position === 'Indoor Sales' || employeeInfo?.position === 'Manager';
+  const showCalendar = isMimix || (isIndoorSales && employeeInfo?.clock_in_required);
+
+  // Check if employee is supervisor/manager (can see team management features)
+  const isSupOrMgr = isSupervisorOrManager(employeeInfo);
+  const isIndoorSalesManager = employeeInfo?.position === 'Manager' && employeeInfo?.employee_role === 'manager';
+  const showTeamFeatures = isSupOrMgr || isIndoorSalesManager;
+
   // Get company logo based on company
   const getCompanyLogo = () => {
     const companyId = employeeInfo?.company_id;
@@ -142,7 +158,7 @@ function ESSLayout({ children }) {
           <span className="nav-label">Home</span>
         </NavLink>
 
-        {isMimix && (
+        {showAttendance && (
           <NavLink
             to="/ess/attendance"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
@@ -168,7 +184,7 @@ function ESSLayout({ children }) {
           <span className="nav-label">Claims</span>
         </NavLink>
 
-        {isMimix && (
+        {showCalendar && (
           <NavLink
             to="/ess/calendar"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
@@ -193,6 +209,26 @@ function ESSLayout({ children }) {
           <span className="nav-icon">&#x1F464;</span>
           <span className="nav-label">Profile</span>
         </NavLink>
+
+        {showTeamFeatures && (
+          <NavLink
+            to="/ess/team-schedule"
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <span className="nav-icon">&#x1F4CB;</span>
+            <span className="nav-label">Team</span>
+          </NavLink>
+        )}
+
+        {showTeamFeatures && (
+          <NavLink
+            to="/ess/ot-approval"
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <span className="nav-icon">&#x2705;</span>
+            <span className="nav-label">OT</span>
+          </NavLink>
+        )}
       </nav>
     </div>
   );

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { employeeApi, departmentApi } from '../../api';
 import api from '../../api';
+import { toast } from 'react-toastify';
 import Layout from '../../components/Layout';
 
 // Import sub-components
@@ -135,6 +136,39 @@ function Employees() {
     resetQuickAdd();
   };
 
+  // Handle inline update of employee fields
+  const handleInlineUpdate = async (empId, field, value) => {
+    try {
+      await api.patch(`/employees/${empId}`, { [field]: value });
+
+      // Update local state
+      setEmployees(prev => prev.map(emp => {
+        if (emp.id === empId) {
+          const updated = { ...emp, [field]: value };
+
+          // Update display names for foreign keys
+          if (field === 'department_id') {
+            const dept = departments.find(d => d.id === parseInt(value));
+            updated.department_name = dept?.name || null;
+          }
+          if (field === 'outlet_id') {
+            const outlet = outlets.find(o => o.id === parseInt(value));
+            updated.outlet_name = outlet?.name || null;
+          }
+
+          return updated;
+        }
+        return emp;
+      }));
+
+      toast.success('Updated successfully');
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      toast.error(error.response?.data?.error || 'Failed to update');
+      throw error;
+    }
+  };
+
   return (
     <Layout>
       <div className="employees-page">
@@ -171,6 +205,9 @@ function Employees() {
           goToDepartments={goToDepartments}
           loading={loading}
           usesOutlets={usesOutlets}
+          departments={departments}
+          outlets={outlets}
+          onInlineUpdate={handleInlineUpdate}
         />
 
         {/* Employee Detail Modal */}
