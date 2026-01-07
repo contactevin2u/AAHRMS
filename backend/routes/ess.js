@@ -389,10 +389,11 @@ router.get('/leave/history', authenticateEmployee, async (req, res) => {
   }
 });
 
-// Apply for leave
+// Apply for leave - Updated 2026-01-07
 router.post('/leave/apply', authenticateEmployee, async (req, res) => {
   try {
-    console.log('Leave apply request body:', JSON.stringify(req.body));
+    console.log('=== LEAVE APPLY DEBUG ===');
+    console.log('Request body:', JSON.stringify(req.body));
     let { leave_type_id, leave_type, start_date, end_date, reason } = req.body;
     console.log('Parsed fields:', { leave_type_id, leave_type, start_date, end_date });
 
