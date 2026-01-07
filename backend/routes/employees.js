@@ -397,7 +397,14 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating employee (PATCH):', error);
-    res.status(500).json({ error: 'Failed to update employee' });
+    // Check for unique constraint violation
+    if (error.code === '23505') {
+      if (error.constraint?.includes('employee_id')) {
+        return res.status(400).json({ error: 'Employee ID already exists' });
+      }
+      return res.status(400).json({ error: 'Duplicate value not allowed' });
+    }
+    res.status(500).json({ error: 'Failed to update employee', details: error.message });
   }
 });
 
