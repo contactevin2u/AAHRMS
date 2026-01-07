@@ -12,7 +12,7 @@ const AA_ALIVE_POSITION_OPTIONS = [
 
 // Position enum values for Mimix
 const MIMIX_POSITION_OPTIONS = [
-  { value: 'Full Time', label: 'Full Time' },
+  { value: 'Full Time Service Crew', label: 'Full Time Service Crew' },
   { value: 'Part Time', label: 'Part Time' },
   { value: 'Supervisor', label: 'Supervisor' },
   { value: 'Manager', label: 'Manager' },
