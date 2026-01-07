@@ -392,9 +392,17 @@ router.get('/leave/history', authenticateEmployee, async (req, res) => {
 // Apply for leave
 router.post('/leave/apply', authenticateEmployee, async (req, res) => {
   try {
+    console.log('Leave apply request body:', JSON.stringify(req.body));
     let { leave_type_id, leave_type, start_date, end_date, reason } = req.body;
+    console.log('Parsed fields:', { leave_type_id, leave_type, start_date, end_date });
 
     if ((!leave_type_id && !leave_type) || !start_date || !end_date) {
+      console.log('Validation failed:', {
+        hasLeaveTypeId: !!leave_type_id,
+        hasLeaveType: !!leave_type,
+        hasStartDate: !!start_date,
+        hasEndDate: !!end_date
+      });
       return res.status(400).json({ error: 'Leave type, start date, and end date are required' });
     }
 
