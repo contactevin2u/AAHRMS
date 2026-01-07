@@ -219,30 +219,32 @@ function ESSLeave() {
                 <button className="close-btn" onClick={() => setShowApplyModal(false)}>&times;</button>
               </div>
               <form onSubmit={handleApply}>
-                <div className="form-group">
-                  <label>Leave Type *</label>
-                  <select value={applyForm.leave_type} onChange={e => setApplyForm({...applyForm, leave_type: e.target.value})} required>
-                    <option value="">Select leave type</option>
-                    {displayBalances.map((balance, idx) => (
-                      <option key={idx} value={balance.leave_type || balance.name}>
-                        {balance.leave_type || balance.name} ({balance.available || (balance.entitled || balance.balance || 0) - (balance.used || 0)} available)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-row">
+                <div className="modal-body">
                   <div className="form-group">
-                    <label>Start Date *</label>
-                    <input type="date" value={applyForm.start_date} onChange={e => setApplyForm({...applyForm, start_date: e.target.value})} required />
+                    <label>Leave Type *</label>
+                    <select value={applyForm.leave_type} onChange={e => setApplyForm({...applyForm, leave_type: e.target.value})} required>
+                      <option value="">Select leave type</option>
+                      {displayBalances.map((balance, idx) => (
+                        <option key={idx} value={balance.leave_type || balance.name}>
+                          {balance.leave_type || balance.name} ({balance.available || (balance.entitled || balance.balance || 0) - (balance.used || 0)} available)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Start Date *</label>
+                      <input type="date" value={applyForm.start_date} onChange={e => setApplyForm({...applyForm, start_date: e.target.value})} required />
+                    </div>
+                    <div className="form-group">
+                      <label>End Date *</label>
+                      <input type="date" value={applyForm.end_date} onChange={e => setApplyForm({...applyForm, end_date: e.target.value})} required />
+                    </div>
                   </div>
                   <div className="form-group">
-                    <label>End Date *</label>
-                    <input type="date" value={applyForm.end_date} onChange={e => setApplyForm({...applyForm, end_date: e.target.value})} required />
+                    <label>Reason *</label>
+                    <textarea value={applyForm.reason} onChange={e => setApplyForm({...applyForm, reason: e.target.value})} rows={3} required placeholder="Enter reason for leave" />
                   </div>
-                </div>
-                <div className="form-group">
-                  <label>Reason *</label>
-                  <textarea value={applyForm.reason} onChange={e => setApplyForm({...applyForm, reason: e.target.value})} rows={3} required placeholder="Enter reason for leave" />
                 </div>
                 <div className="modal-actions">
                   <button type="button" className="cancel-btn" onClick={() => setShowApplyModal(false)}>Cancel</button>
