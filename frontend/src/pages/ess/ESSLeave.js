@@ -140,7 +140,7 @@ function ESSLeave() {
                 {applications.map(app => (
                   <div key={app.id} className="application-card">
                     <div className="app-header">
-                      <span className="app-type">{app.leave_type || app.type}</span>
+                      <span className="app-type">{app.leave_type_name || app.leave_type || app.type}</span>
                       {getStatusBadge(app.status)}
                     </div>
                     <div className="app-dates">
@@ -162,19 +162,19 @@ function ESSLeave() {
             ) : (
               displayBalances.map((balance, idx) => (
                 <div key={idx} className="balance-card">
-                  <div className="balance-type">{balance.leave_type || balance.name}</div>
+                  <div className="balance-type">{balance.leave_type_name || balance.leave_type || balance.name}</div>
                   <div className="balance-info">
                     <div className="balance-item">
                       <span className="label">Entitled</span>
-                      <span className="value">{balance.entitled || balance.balance || 0}</span>
+                      <span className="value">{balance.entitled_days || balance.entitled || balance.balance || 0}</span>
                     </div>
                     <div className="balance-item">
                       <span className="label">Used</span>
-                      <span className="value">{balance.used || 0}</span>
+                      <span className="value">{balance.used_days || balance.used || 0}</span>
                     </div>
                     <div className="balance-item highlight">
                       <span className="label">Available</span>
-                      <span className="value">{balance.available || (balance.entitled || balance.balance || 0) - (balance.used || 0)}</span>
+                      <span className="value">{balance.available || (balance.entitled_days || balance.entitled || balance.balance || 0) - (balance.used_days || balance.used || 0)}</span>
                     </div>
                   </div>
                 </div>
@@ -199,7 +199,7 @@ function ESSLeave() {
                   <div key={app.id} className="history-card">
                     <div className="history-date">{formatDate(app.start_date)}</div>
                     <div className="history-details">
-                      <span className="history-type">{app.leave_type || app.type}</span>
+                      <span className="history-type">{app.leave_type_name || app.leave_type || app.type}</span>
                       <span className="history-days">{app.days || calculateDays(app.start_date, app.end_date)} day{(app.days || calculateDays(app.start_date, app.end_date)) > 1 ? 's' : ''}</span>
                     </div>
                     {getStatusBadge(app.status)}
@@ -225,8 +225,8 @@ function ESSLeave() {
                     <select value={applyForm.leave_type} onChange={e => setApplyForm({...applyForm, leave_type: e.target.value})} required>
                       <option value="">Select leave type</option>
                       {displayBalances.map((balance, idx) => (
-                        <option key={idx} value={balance.leave_type || balance.name}>
-                          {balance.leave_type || balance.name} ({balance.available || (balance.entitled || balance.balance || 0) - (balance.used || 0)} available)
+                        <option key={idx} value={balance.leave_type_name || balance.leave_type || balance.name}>
+                          {balance.leave_type_name || balance.leave_type || balance.name} ({balance.available || (balance.entitled_days || balance.entitled || balance.balance || 0) - (balance.used_days || balance.used || 0)} available)
                         </option>
                       ))}
                     </select>
