@@ -121,6 +121,31 @@ function ESSProfile() {
     }).format(amount);
   };
 
+  // Extract date of birth from IC number (Malaysian NRIC format: YYMMDD-XX-XXXX)
+  const extractDOBFromIC = (icNumber) => {
+    if (!icNumber) return null;
+    // Remove dashes and get first 6 digits
+    const cleanIC = icNumber.replace(/-/g, '');
+    if (cleanIC.length < 6) return null;
+
+    const yy = parseInt(cleanIC.substring(0, 2), 10);
+    const mm = cleanIC.substring(2, 4);
+    const dd = cleanIC.substring(4, 6);
+
+    // Determine century: if YY > current year's last 2 digits, it's 19XX, else 20XX
+    const currentYear = new Date().getFullYear();
+    const currentYY = currentYear % 100;
+    const century = yy > currentYY ? 1900 : 2000;
+    const fullYear = century + yy;
+
+    // Validate the date
+    const dateStr = `${fullYear}-${mm}-${dd}`;
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return null;
+
+    return date;
+  };
+
   const getStatusBadge = (status) => {
     const statusMap = {
       active: { label: 'Active', class: 'status-active' },
@@ -300,22 +325,13 @@ function ESSProfile() {
                 )}
               </div>
 
-              {/* Date of Birth */}
-              <div className={`form-group ${isFieldMissing('date_of_birth') ? 'missing' : ''}`}>
-                <label>Date of Birth *</label>
-                {isFieldEditable('date_of_birth') ? (
-                  <input
-                    type="date"
-                    name="date_of_birth"
-                    value={editForm.date_of_birth}
-                    onChange={handleEditChange}
-                  />
-                ) : (
-                  <div className="locked-field">
-                    <span>{formatDate(profile.date_of_birth)}</span>
-                    <span className="lock-icon">&#128274;</span>
-                  </div>
-                )}
+              {/* Date of Birth - Auto extracted from IC */}
+              <div className="form-group">
+                <label>Date of Birth (from IC)</label>
+                <div className="locked-field">
+                  <span>{extractDOBFromIC(profile.ic_number) ? formatDate(extractDOBFromIC(profile.ic_number)) : '-'}</span>
+                  <span className="lock-icon">&#128274;</span>
+                </div>
               </div>
 
               {/* Phone */}
@@ -432,9 +448,9 @@ function ESSProfile() {
                 <label>IC Number</label>
                 <span>{profile.ic_number || '-'}</span>
               </div>
-              <div className={`info-item ${isFieldMissing('date_of_birth') ? 'missing' : ''}`}>
-                <label>Date of Birth</label>
-                <span>{profile.date_of_birth ? formatDate(profile.date_of_birth) : <em className="empty">Not provided</em>}</span>
+              <div className="info-item">
+                <label>Date of Birth (from IC)</label>
+                <span>{extractDOBFromIC(profile.ic_number) ? formatDate(extractDOBFromIC(profile.ic_number)) : '-'}</span>
               </div>
               <div className="info-item">
                 <label>Email</label>
