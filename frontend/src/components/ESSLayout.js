@@ -76,9 +76,6 @@ function ESSLayout({ children }) {
                           employeeInfo?.clock_in_required === 1;
   const showAttendance = isMimix || clockInRequired;
 
-  // Debug log (can be removed after testing)
-  console.log('[ESSLayout] employeeInfo:', employeeInfo?.employee_id, 'clock_in_required:', employeeInfo?.clock_in_required, 'type:', typeof employeeInfo?.clock_in_required, 'showAttendance:', showAttendance);
-
   // Check if employee should see schedule/calendar
   // Mimix: always enabled
   // AA Alive: only for Indoor Sales staff or Indoor Sales Manager
