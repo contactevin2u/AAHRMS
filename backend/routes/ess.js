@@ -392,10 +392,22 @@ router.get('/leave/history', authenticateEmployee, async (req, res) => {
 // Apply for leave
 router.post('/leave/apply', authenticateEmployee, async (req, res) => {
   try {
-    const { leave_type_id, start_date, end_date, reason } = req.body;
+    let { leave_type_id, leave_type, start_date, end_date, reason } = req.body;
 
-    if (!leave_type_id || !start_date || !end_date) {
+    if ((!leave_type_id && !leave_type) || !start_date || !end_date) {
       return res.status(400).json({ error: 'Leave type, start date, and end date are required' });
+    }
+
+    // If leave_type (string name) is provided but not leave_type_id, look up the ID
+    if (!leave_type_id && leave_type) {
+      const leaveTypeResult = await pool.query(
+        'SELECT id FROM leave_types WHERE LOWER(name) = LOWER($1)',
+        [leave_type]
+      );
+      if (leaveTypeResult.rows.length === 0) {
+        return res.status(400).json({ error: `Leave type "${leave_type}" not found` });
+      }
+      leave_type_id = leaveTypeResult.rows[0].id;
     }
 
     // Calculate total days (simple calculation, excludes weekends in basic version)
