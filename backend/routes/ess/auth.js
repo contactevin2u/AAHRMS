@@ -61,7 +61,7 @@ router.post('/login', asyncHandler(async (req, res) => {
   const result = await pool.query(
     `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled,
             e.department_id, e.company_id, e.outlet_id, e.must_change_password,
-            e.employee_role,
+            e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings
      FROM employees e
@@ -145,6 +145,8 @@ router.post('/login', asyncHandler(async (req, res) => {
       company_grouping_type: employee.company_grouping_type,
       outlet_id: employee.outlet_id,
       employee_role: employee.employee_role || 'staff',
+      position: employee.position,
+      clock_in_required: employee.clock_in_required,
       features,
       permissions
     }
@@ -247,7 +249,7 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
   const result = await pool.query(
     `SELECT e.id, e.employee_id, e.name, e.email, e.ic_number, e.status, e.ess_enabled,
             e.department_id, e.outlet_id, e.company_id, e.must_change_password,
-            e.employee_role,
+            e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings,
             o.name as outlet_name
@@ -326,6 +328,8 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
       outlet_id: employee.outlet_id,
       outlet_name: employee.outlet_name,
       employee_role: employee.employee_role || 'staff',
+      position: employee.position,
+      clock_in_required: employee.clock_in_required,
       features,
       permissions
     }
@@ -347,7 +351,7 @@ router.post('/login-name', asyncHandler(async (req, res) => {
   const result = await pool.query(
     `SELECT e.id, e.employee_id, e.name, e.email, e.ic_number, e.status, e.ess_enabled,
             e.department_id, e.outlet_id, e.company_id, e.must_change_password,
-            e.employee_role,
+            e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings,
             o.name as outlet_name
@@ -426,6 +430,8 @@ router.post('/login-name', asyncHandler(async (req, res) => {
       outlet_id: employee.outlet_id,
       outlet_name: employee.outlet_name,
       employee_role: employee.employee_role || 'staff',
+      position: employee.position,
+      clock_in_required: employee.clock_in_required,
       features,
       permissions
     }
@@ -479,7 +485,7 @@ router.get('/me', authenticateEmployee, asyncHandler(async (req, res) => {
   // Fetch fresh employee data
   const result = await pool.query(
     `SELECT e.id, e.employee_id, e.name, e.email, e.status, e.department_id, e.outlet_id, e.company_id,
-            e.employee_role,
+            e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings,
             o.name as outlet_name
@@ -519,6 +525,8 @@ router.get('/me', authenticateEmployee, asyncHandler(async (req, res) => {
       outlet_id: employee.outlet_id,
       outlet_name: employee.outlet_name,
       employee_role: employee.employee_role || 'staff',
+      position: employee.position,
+      clock_in_required: employee.clock_in_required,
       features,
       permissions
     }
