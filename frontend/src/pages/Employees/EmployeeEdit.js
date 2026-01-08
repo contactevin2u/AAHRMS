@@ -6,6 +6,18 @@ import Layout from '../../components/Layout';
 import EmployeeForm, { INITIAL_FORM_STATE } from './EmployeeForm';
 import '../Employees.css';
 
+// Helper to detect ID type from IC number
+const detectIDType = (idNumber) => {
+  if (!idNumber) return 'ic';
+  const clean = idNumber.replace(/[-\s]/g, '');
+  if (!/^\d{12}$/.test(clean)) return 'passport';
+  const month = parseInt(clean.substring(2, 4));
+  const day = parseInt(clean.substring(4, 6));
+  if (month < 1 || month > 12) return 'passport';
+  if (day < 1 || day > 31) return 'passport';
+  return 'ic';
+};
+
 function EmployeeEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -61,6 +73,9 @@ function EmployeeEdit() {
       const employee = empRes.data;
       setEditingEmployee(employee);
 
+      // Auto-detect ID type from ic_number
+      const detectedIdType = employee.id_type || detectIDType(employee.ic_number);
+
       // Populate form with employee data
       setForm({
         employee_id: employee.employee_id || '',
@@ -68,6 +83,7 @@ function EmployeeEdit() {
         email: employee.email || '',
         phone: employee.phone || '',
         ic_number: employee.ic_number || '',
+        id_type: detectedIdType,
         department_id: employee.department_id || '',
         outlet_id: employee.outlet_id || '',
         position: employee.position || '',

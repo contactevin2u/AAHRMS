@@ -226,9 +226,38 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
       WHERE id = $2
     `, [r.last_working_day, r.employee_id]);
 
+    // Auto-delete future schedules (after last working day)
+    const deleteSchedulesResult = await client.query(`
+      DELETE FROM schedules
+      WHERE employee_id = $1 AND schedule_date > $2
+      RETURNING id
+    `, [r.employee_id, r.last_working_day]);
+
+    const deletedSchedulesCount = deleteSchedulesResult.rows.length;
+
+    // Cancel any pending leave requests that start after last working day
+    const cancelLeaveResult = await client.query(`
+      UPDATE leave_requests
+      SET status = 'cancelled',
+          rejection_reason = 'Auto-cancelled due to resignation',
+          updated_at = NOW()
+      WHERE employee_id = $1
+        AND status = 'pending'
+        AND start_date > $2
+      RETURNING id
+    `, [r.employee_id, r.last_working_day]);
+
+    const cancelledLeaveCount = cancelLeaveResult.rows.length;
+
     await client.query('COMMIT');
 
-    res.json({ message: 'Resignation processed successfully. Employee status updated to resigned.' });
+    res.json({
+      message: 'Resignation processed successfully. Employee status updated to resigned.',
+      cleanup: {
+        future_schedules_deleted: deletedSchedulesCount,
+        pending_leave_cancelled: cancelledLeaveCount
+      }
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error processing resignation:', error);

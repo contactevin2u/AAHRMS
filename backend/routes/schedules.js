@@ -217,6 +217,30 @@ router.post('/', authenticateAdmin, async (req, res) => {
       });
     }
 
+    // Check if employee is resigned - cannot schedule resigned employees
+    const empCheck = await pool.query(
+      'SELECT status, resign_date FROM employees WHERE id = $1',
+      [employee_id]
+    );
+
+    if (empCheck.rows.length > 0) {
+      const emp = empCheck.rows[0];
+      if (emp.status === 'resigned') {
+        return res.status(400).json({
+          error: 'Cannot create schedules for resigned employees'
+        });
+      }
+      // Also check if schedule_date is after employee's resign_date (for pending resignations)
+      if (emp.resign_date) {
+        const resignDate = new Date(emp.resign_date);
+        if (scheduleDate > resignDate) {
+          return res.status(400).json({
+            error: `Cannot create schedules after employee's last working day (${emp.resign_date.toISOString().split('T')[0]})`
+          });
+        }
+      }
+    }
+
     // Check if schedule already exists for this date
     const existing = await pool.query(
       'SELECT id FROM schedules WHERE employee_id = $1 AND schedule_date = $2',
@@ -285,6 +309,7 @@ router.post('/bulk', authenticateAdmin, async (req, res) => {
 
     // Check if start_date is in the past (admin can bypass this restriction)
     const startDateObj = new Date(start_date);
+    const endDateObj = new Date(end_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (startDateObj < today && !isAdmin(req)) {
@@ -293,11 +318,37 @@ router.post('/bulk', authenticateAdmin, async (req, res) => {
       });
     }
 
+    // Check if employee is resigned - cannot schedule resigned employees
+    const empCheck = await pool.query(
+      'SELECT status, resign_date, outlet_id FROM employees WHERE id = $1',
+      [employee_id]
+    );
+
+    if (empCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const empData = empCheck.rows[0];
+    if (empData.status === 'resigned') {
+      return res.status(400).json({
+        error: 'Cannot create schedules for resigned employees'
+      });
+    }
+
+    // Check if any dates fall after employee's resign_date (for pending resignations)
+    if (empData.resign_date) {
+      const resignDate = new Date(empData.resign_date);
+      if (endDateObj > resignDate) {
+        return res.status(400).json({
+          error: `Cannot create schedules after employee's last working day (${empData.resign_date.toISOString().split('T')[0]}). Please adjust the end date.`
+        });
+      }
+    }
+
     // Get employee's outlet if not specified
     let effectiveOutletId = outlet_id;
     if (!effectiveOutletId) {
-      const emp = await pool.query('SELECT outlet_id FROM employees WHERE id = $1', [employee_id]);
-      effectiveOutletId = emp.rows[0]?.outlet_id;
+      effectiveOutletId = empData.outlet_id;
     }
 
     // Generate all dates in range that match days_of_week
@@ -752,6 +803,34 @@ router.post('/roster/assign', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Employee, date, and shift template are required' });
     }
 
+    // Check if employee is resigned - cannot schedule resigned employees
+    const empCheck = await pool.query(
+      'SELECT status, resign_date, outlet_id FROM employees WHERE id = $1',
+      [employee_id]
+    );
+
+    if (empCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const empData = empCheck.rows[0];
+    if (empData.status === 'resigned') {
+      return res.status(400).json({
+        error: 'Cannot assign shifts to resigned employees'
+      });
+    }
+
+    // Check if schedule_date is after employee's resign_date
+    if (empData.resign_date) {
+      const scheduleDate = new Date(schedule_date);
+      const resignDate = new Date(empData.resign_date);
+      if (scheduleDate > resignDate) {
+        return res.status(400).json({
+          error: `Cannot assign shifts after employee's last working day (${empData.resign_date.toISOString().split('T')[0]})`
+        });
+      }
+    }
+
     // Get shift template details
     const template = await pool.query('SELECT * FROM shift_templates WHERE id = $1', [shift_template_id]);
     if (template.rows.length === 0) {
@@ -763,8 +842,7 @@ router.post('/roster/assign', authenticateAdmin, async (req, res) => {
     // Get employee's outlet if not specified
     let effectiveOutletId = outlet_id;
     if (!effectiveOutletId) {
-      const emp = await pool.query('SELECT outlet_id FROM employees WHERE id = $1', [employee_id]);
-      effectiveOutletId = emp.rows[0]?.outlet_id;
+      effectiveOutletId = empData.outlet_id;
     }
 
     // Check for existing schedule on this date
@@ -1230,6 +1308,34 @@ router.post('/roster/department/assign', authenticateAdmin, async (req, res) => 
 
     if (!employee_id || !schedule_date || !shift_template_id || !department_id) {
       return res.status(400).json({ error: 'Employee, date, shift template, and department are required' });
+    }
+
+    // Check if employee is resigned - cannot schedule resigned employees
+    const empCheck = await pool.query(
+      'SELECT status, resign_date FROM employees WHERE id = $1',
+      [employee_id]
+    );
+
+    if (empCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const empData = empCheck.rows[0];
+    if (empData.status === 'resigned') {
+      return res.status(400).json({
+        error: 'Cannot assign shifts to resigned employees'
+      });
+    }
+
+    // Check if schedule_date is after employee's resign_date
+    if (empData.resign_date) {
+      const scheduleDateObj = new Date(schedule_date);
+      const resignDate = new Date(empData.resign_date);
+      if (scheduleDateObj > resignDate) {
+        return res.status(400).json({
+          error: `Cannot assign shifts after employee's last working day (${empData.resign_date.toISOString().split('T')[0]})`
+        });
+      }
     }
 
     // Get shift template details

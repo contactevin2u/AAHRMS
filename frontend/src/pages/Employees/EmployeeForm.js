@@ -280,13 +280,13 @@ const EmployeeForm = ({
           <small style={{ color: '#64748b', fontSize: '11px' }}>Auto-detected from ID number</small>
         </div>
         <div className="form-group">
-          <label>{form.id_type === 'ic' ? 'IC Number' : 'Passport Number'} *</label>
+          <label>{(form.id_type || 'ic') === 'ic' ? 'IC Number' : 'Passport Number'} *</label>
           <input
             type="text"
             value={form.ic_number}
             onChange={(e) => {
               let value = e.target.value;
-              if (form.id_type === 'ic') {
+              if ((form.id_type || 'ic') === 'ic') {
                 // Only allow digits and dashes for IC
                 value = value.replace(/[^0-9-]/g, '');
                 // Auto-format if 12 digits entered
@@ -310,9 +310,9 @@ const EmployeeForm = ({
                 }
               }
             }}
-            placeholder={form.id_type === 'ic' ? 'e.g. 901234-56-7890' : 'e.g. A12345678'}
+            placeholder={(form.id_type || 'ic') === 'ic' ? 'e.g. 901234-56-7890' : 'e.g. A12345678'}
             required
-            maxLength={form.id_type === 'ic' ? 14 : 20}
+            maxLength={(form.id_type || 'ic') === 'ic' ? 14 : 20}
           />
           <small style={{ color: '#64748b', fontSize: '11px' }}>Required for employee login</small>
         </div>
@@ -321,25 +321,33 @@ const EmployeeForm = ({
       <div className="form-row">
         <div className="form-group">
           <label>Gender</label>
-          <input
-            type="text"
-            value={
-              form.id_type === 'ic' && getGenderFromIC(form.ic_number)
-                ? getGenderFromIC(form.ic_number) === 'male' ? 'Male' : 'Female'
-                : form.id_type === 'passport' ? 'N/A (Passport)' : 'Auto-detected from IC'
-            }
-            disabled
-            style={{
-              backgroundColor: form.id_type === 'ic' && getGenderFromIC(form.ic_number)
-                ? (getGenderFromIC(form.ic_number) === 'male' ? '#e3f2fd' : '#fce4ec')
-                : '#f5f5f5',
-              color: form.id_type === 'ic' && getGenderFromIC(form.ic_number) ? '#333' : '#999',
-              fontWeight: form.id_type === 'ic' && getGenderFromIC(form.ic_number) ? '500' : 'normal'
-            }}
-          />
-          <small style={{ color: '#666', fontSize: '11px' }}>
-            {form.id_type === 'ic' ? 'Based on IC last digit (odd=Male, even=Female)' : 'Not available for passport'}
-          </small>
+          {(() => {
+            const idType = form.id_type || 'ic';
+            const gender = getGenderFromIC(form.ic_number);
+            return (
+              <>
+                <input
+                  type="text"
+                  value={
+                    idType === 'ic' && gender
+                      ? gender === 'male' ? 'Male' : 'Female'
+                      : idType === 'passport' ? 'N/A (Passport)' : 'Auto-detected from IC'
+                  }
+                  disabled
+                  style={{
+                    backgroundColor: idType === 'ic' && gender
+                      ? (gender === 'male' ? '#e3f2fd' : '#fce4ec')
+                      : '#f5f5f5',
+                    color: idType === 'ic' && gender ? '#333' : '#999',
+                    fontWeight: idType === 'ic' && gender ? '500' : 'normal'
+                  }}
+                />
+                <small style={{ color: '#666', fontSize: '11px' }}>
+                  {idType === 'ic' ? 'Based on IC last digit (odd=Male, even=Female)' : 'Not available for passport'}
+                </small>
+              </>
+            );
+          })()}
         </div>
         <div className="form-group" />
       </div>

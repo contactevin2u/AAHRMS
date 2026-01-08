@@ -20,14 +20,19 @@ router.post('/login', async (req, res) => {
     }
 
     // Find employee by email or employee_id, including company info
+    // Allow active employees OR resigned employees within 30-day grace period
     const result = await pool.query(
       `SELECT e.id, e.employee_id, e.name, e.email, e.password_hash, e.status, e.ess_enabled,
               e.department_id, e.company_id, e.position, e.employee_role, e.outlet_id,
-              e.clock_in_required,
+              e.clock_in_required, e.resign_date,
               c.name as company_name, c.code as company_code, c.logo_url as company_logo
        FROM employees e
        LEFT JOIN companies c ON e.company_id = c.id
-       WHERE (e.email = $1 OR e.employee_id = $1) AND e.status = 'active'`,
+       WHERE (e.email = $1 OR e.employee_id = $1)
+         AND (
+           e.status = 'active'
+           OR (e.status = 'resigned' AND e.resign_date >= CURRENT_DATE - INTERVAL '30 days')
+         )`,
       [login]
     );
 
@@ -36,6 +41,22 @@ router.post('/login', async (req, res) => {
     }
 
     const employee = result.rows[0];
+
+    // Check if resigned employee is within grace period
+    const isResigned = employee.status === 'resigned';
+    let gracePeriodInfo = null;
+    if (isResigned && employee.resign_date) {
+      const resignDate = new Date(employee.resign_date);
+      const graceEndDate = new Date(resignDate);
+      graceEndDate.setDate(graceEndDate.getDate() + 30);
+      const today = new Date();
+      const daysRemaining = Math.ceil((graceEndDate - today) / (1000 * 60 * 60 * 24));
+      gracePeriodInfo = {
+        resign_date: employee.resign_date,
+        grace_end_date: graceEndDate.toISOString().split('T')[0],
+        days_remaining: Math.max(0, daysRemaining)
+      };
+    }
 
     // Check if ESS is enabled for this employee
     if (!employee.ess_enabled) {
@@ -90,7 +111,10 @@ router.post('/login', async (req, res) => {
         position: employee.position,
         employee_role: employee.employee_role,
         outlet_id: employee.outlet_id,
-        clock_in_required: employee.clock_in_required
+        clock_in_required: employee.clock_in_required,
+        status: employee.status,
+        is_resigned: isResigned,
+        grace_period: gracePeriodInfo
       }
     });
   } catch (error) {
@@ -389,7 +413,7 @@ router.get('/leave/history', authenticateEmployee, async (req, res) => {
   }
 });
 
-// Apply for leave - Updated 2026-01-07
+// Apply for leave - Updated 2026-01-08
 router.post('/leave/apply', authenticateEmployee, async (req, res) => {
   try {
     console.log('=== LEAVE APPLY DEBUG ===');
@@ -405,6 +429,18 @@ router.post('/leave/apply', authenticateEmployee, async (req, res) => {
         hasEndDate: !!end_date
       });
       return res.status(400).json({ error: 'Leave type, start date, and end date are required' });
+    }
+
+    // Check if employee is resigned - block leave applications for resigned employees
+    const empResult = await pool.query(
+      'SELECT status, resign_date FROM employees WHERE id = $1',
+      [req.employee.id]
+    );
+
+    if (empResult.rows.length > 0 && empResult.rows[0].status === 'resigned') {
+      return res.status(400).json({
+        error: 'Leave applications are not allowed for resigned employees. Please contact HR if you have any queries.'
+      });
     }
 
     // If leave_type (string name) is provided but not leave_type_id, look up the ID
@@ -535,6 +571,29 @@ router.post('/claims', authenticateEmployee, async (req, res) => {
 
     if (!claim_date || !category || !amount) {
       return res.status(400).json({ error: 'Claim date, category, and amount are required' });
+    }
+
+    // Check if employee is resigned and validate claim_date against resign_date
+    const empResult = await pool.query(
+      'SELECT status, resign_date FROM employees WHERE id = $1',
+      [req.employee.id]
+    );
+
+    if (empResult.rows.length > 0 && empResult.rows[0].status === 'resigned') {
+      const resignDate = empResult.rows[0].resign_date;
+      if (resignDate) {
+        const claimDateObj = new Date(claim_date);
+        const resignDateObj = new Date(resignDate);
+        // Set times to midnight for accurate date comparison
+        claimDateObj.setHours(0, 0, 0, 0);
+        resignDateObj.setHours(0, 0, 0, 0);
+
+        if (claimDateObj > resignDateObj) {
+          return res.status(400).json({
+            error: `Claim date cannot be after your last working day (${resignDate.toISOString().split('T')[0]}). Please select a date on or before your last working day.`
+          });
+        }
+      }
     }
 
     const result = await pool.query(
@@ -732,14 +791,37 @@ router.get('/dashboard', authenticateEmployee, async (req, res) => {
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth() + 1;
 
-    // Get employee info
+    // Get employee info including resignation status
     const empResult = await pool.query(
-      `SELECT e.name, e.employee_id, e.position, d.name as department_name
+      `SELECT e.name, e.employee_id, e.position, e.status, e.resign_date,
+              d.name as department_name
        FROM employees e
        LEFT JOIN departments d ON e.department_id = d.id
        WHERE e.id = $1`,
       [req.employee.id]
     );
+
+    // Calculate grace period info if resigned
+    let gracePeriodInfo = null;
+    const emp = empResult.rows[0];
+    if (emp && emp.status === 'resigned' && emp.resign_date) {
+      const resignDate = new Date(emp.resign_date);
+      const graceEndDate = new Date(resignDate);
+      graceEndDate.setDate(graceEndDate.getDate() + 30);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const daysRemaining = Math.ceil((graceEndDate - today) / (1000 * 60 * 60 * 24));
+      gracePeriodInfo = {
+        is_resigned: true,
+        resign_date: emp.resign_date,
+        last_working_day: emp.resign_date,
+        grace_end_date: graceEndDate.toISOString().split('T')[0],
+        days_remaining: Math.max(0, daysRemaining),
+        message: daysRemaining > 0
+          ? `Your ESS access will expire in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''}. Please download any payslips or documents you need.`
+          : 'Your ESS access has expired. Please contact HR if you need assistance.'
+      };
+    }
 
     // Get latest payslip
     const payslipResult = await pool.query(
@@ -794,7 +876,8 @@ router.get('/dashboard', authenticateEmployee, async (req, res) => {
       pendingLeaveRequests: parseInt(pendingLeaveResult.rows[0].count),
       pendingClaims: parseInt(pendingClaimsResult.rows[0].count),
       unreadNotifications: parseInt(unreadResult.rows[0].count),
-      unreadLetters: parseInt(unreadLettersResult.rows[0].count)
+      unreadLetters: parseInt(unreadLettersResult.rows[0].count),
+      gracePeriod: gracePeriodInfo
     });
   } catch (error) {
     console.error('Error fetching dashboard:', error);
