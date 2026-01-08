@@ -95,8 +95,11 @@ function ESSOTApproval() {
     <ESSLayout>
       <div style={{ paddingBottom: '80px' }}>
         <div style={{ marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>OT Approval</h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>Review and approve overtime records</p>
+          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>
+            <span style={{ marginRight: '8px' }}>&#x23F0;</span>
+            Overtime Approval
+          </h1>
+          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>Approve or reject staff overtime requests</p>
         </div>
 
         {/* Filters */}
@@ -125,8 +128,8 @@ function ESSOTApproval() {
         {/* Pending Count */}
         {pendingOT.length > 0 && (
           <div style={{ background: '#fef3c7', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '20px' }}>&#x23F0;</span>
-            <span style={{ fontWeight: '500', color: '#92400e' }}>{pendingOT.length} pending OT approval{pendingOT.length > 1 ? 's' : ''}</span>
+            <span style={{ fontSize: '20px' }}>&#x1F4DD;</span>
+            <span style={{ fontWeight: '500', color: '#92400e' }}>{pendingOT.length} overtime request{pendingOT.length > 1 ? 's' : ''} awaiting approval</span>
           </div>
         )}
 
@@ -136,9 +139,9 @@ function ESSOTApproval() {
             <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
           ) : pendingOT.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#x2705;</div>
-              <h3 style={{ color: '#1e293b', margin: '0 0 8px 0' }}>All Caught Up!</h3>
-              <p style={{ color: '#64748b', margin: 0 }}>No pending OT approvals</p>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#x23F0;</div>
+              <h3 style={{ color: '#1e293b', margin: '0 0 8px 0' }}>No Overtime Requests</h3>
+              <p style={{ color: '#64748b', margin: 0 }}>There are no pending overtime approvals from your team</p>
             </div>
           ) : (
             <div>
@@ -161,24 +164,24 @@ function ESSOTApproval() {
                     </div>
                   </div>
 
-                  {/* Work Details */}
-                  <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
+                  {/* OT Details */}
+                  <div style={{ background: '#fef3c7', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#92400e' }}>Overtime Request</span>
+                      <span style={{ fontSize: '20px', fontWeight: '700', color: '#f59e0b' }}>
+                        {record.ot_hours ? `${parseFloat(record.ot_hours).toFixed(1)}h OT` : '-'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px', color: '#78716c' }}>
                       <div>
-                        <span style={{ color: '#64748b' }}>Clock In: </span>
-                        <span style={{ fontWeight: '500' }}>{formatTime(record.clock_in_1)}</span>
+                        <span>Work Time: </span>
+                        <span style={{ fontWeight: '500', color: '#44403c' }}>
+                          {formatTime(record.clock_in_1)} - {formatTime(record.clock_out_2)}
+                        </span>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>Clock Out: </span>
-                        <span style={{ fontWeight: '500' }}>{formatTime(record.clock_out_2)}</span>
-                      </div>
-                      <div>
-                        <span style={{ color: '#64748b' }}>Total Hours: </span>
-                        <span style={{ fontWeight: '500' }}>{record.total_hours ? `${parseFloat(record.total_hours).toFixed(1)}h` : '-'}</span>
-                      </div>
-                      <div>
-                        <span style={{ color: '#64748b' }}>OT Hours: </span>
-                        <span style={{ fontWeight: '600', color: '#f59e0b' }}>{record.ot_hours ? `${parseFloat(record.ot_hours).toFixed(1)}h` : '-'}</span>
+                        <span>Total Worked: </span>
+                        <span style={{ fontWeight: '500', color: '#44403c' }}>{record.total_hours ? `${parseFloat(record.total_hours).toFixed(1)}h` : '-'}</span>
                       </div>
                     </div>
                   </div>
