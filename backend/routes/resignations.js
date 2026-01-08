@@ -309,6 +309,95 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Cleanup future leaves for already-processed resignations
+// Use this to fix resignations that were processed before the leave cancellation logic was added
+router.post('/:id/cleanup-leaves', authenticateAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    // Get resignation details
+    const resignation = await client.query(
+      'SELECT * FROM resignations WHERE id = $1',
+      [id]
+    );
+
+    if (resignation.rows.length === 0) {
+      return res.status(404).json({ error: 'Resignation not found' });
+    }
+
+    const r = resignation.rows[0];
+    console.log('[Resignation Cleanup] Starting for employee:', r.employee_id, 'last_working_day:', r.last_working_day);
+
+    await client.query('BEGIN');
+
+    // Cancel pending leaves after last working day
+    const cancelPendingResult = await client.query(`
+      UPDATE leave_requests
+      SET status = 'cancelled',
+          rejection_reason = 'Auto-cancelled due to resignation (cleanup)',
+          updated_at = NOW()
+      WHERE employee_id = $1
+        AND status = 'pending'
+        AND start_date > $2
+      RETURNING id
+    `, [r.employee_id, r.last_working_day]);
+
+    // Get approved leaves to cancel and restore balance
+    const approvedLeavesToCancel = await client.query(`
+      SELECT lr.id, lr.leave_type_id, lr.total_days, lr.start_date, lt.is_paid
+      FROM leave_requests lr
+      JOIN leave_types lt ON lr.leave_type_id = lt.id
+      WHERE lr.employee_id = $1
+        AND lr.status = 'approved'
+        AND lr.start_date > $2
+    `, [r.employee_id, r.last_working_day]);
+
+    console.log('[Resignation Cleanup] Found approved leaves to cancel:', approvedLeavesToCancel.rows.length);
+
+    // Restore leave balance for each cancelled approved leave
+    for (const leave of approvedLeavesToCancel.rows) {
+      if (leave.is_paid) {
+        const year = new Date(leave.start_date).getFullYear();
+        await client.query(`
+          UPDATE leave_balances
+          SET used_days = used_days - $1, updated_at = NOW()
+          WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4
+        `, [leave.total_days, r.employee_id, leave.leave_type_id, year]);
+        console.log('[Resignation Cleanup] Restored balance:', { leave_type_id: leave.leave_type_id, days: leave.total_days });
+      }
+    }
+
+    // Cancel the approved leaves
+    const cancelApprovedResult = await client.query(`
+      UPDATE leave_requests
+      SET status = 'cancelled',
+          rejection_reason = 'Auto-cancelled due to resignation (cleanup)',
+          updated_at = NOW()
+      WHERE employee_id = $1
+        AND status = 'approved'
+        AND start_date > $2
+      RETURNING id
+    `, [r.employee_id, r.last_working_day]);
+
+    await client.query('COMMIT');
+
+    res.json({
+      message: 'Leave cleanup completed',
+      cancelled: {
+        pending: cancelPendingResult.rows.length,
+        approved: cancelApprovedResult.rows.length
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in resignation cleanup:', error);
+    res.status(500).json({ error: 'Failed to cleanup leaves' });
+  } finally {
+    client.release();
+  }
+});
+
 // Calculate final settlement
 // Returns detailed breakdown without saving
 router.get('/:id/settlement', authenticateAdmin, async (req, res) => {
