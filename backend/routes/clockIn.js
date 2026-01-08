@@ -844,6 +844,251 @@ router.get('/auto-clockout-stats', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get attendance summary grouped by outlet > position > employee (for Mimix)
+router.get('/summary', authenticateAdmin, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const companyId = getCompanyFilter(req);
+
+    const m = month || (new Date().getMonth() + 1);
+    const y = year || new Date().getFullYear();
+
+    let query = `
+      SELECT
+        o.id as outlet_id,
+        o.name as outlet_name,
+        p.id as position_id,
+        p.name as position_name,
+        e.id as employee_id,
+        e.employee_id as emp_code,
+        e.name as employee_name,
+        COUNT(cr.id) as total_records,
+        COUNT(cr.id) FILTER (WHERE cr.status = 'approved') as approved_records,
+        COUNT(cr.id) FILTER (WHERE cr.status = 'pending') as pending_records,
+        COUNT(cr.id) FILTER (WHERE cr.has_schedule = false OR cr.has_schedule IS NULL) as no_schedule_records,
+        COALESCE(SUM(cr.total_hours) FILTER (WHERE cr.status = 'approved'), 0) as total_approved_hours,
+        COALESCE(SUM(cr.ot_hours) FILTER (WHERE cr.status = 'approved'), 0) as total_approved_ot,
+        COALESCE(SUM(cr.total_hours), 0) as total_all_hours,
+        COALESCE(SUM(cr.ot_hours), 0) as total_all_ot,
+        COALESCE(SUM(cr.ot_hours) FILTER (WHERE cr.ot_approved = true), 0) as approved_ot_hours,
+        COALESCE(SUM(cr.ot_hours) FILTER (WHERE cr.ot_approved IS NULL AND cr.ot_hours > 0), 0) as pending_ot_hours
+      FROM employees e
+      LEFT JOIN outlets o ON e.outlet_id = o.id
+      LEFT JOIN positions p ON e.position_id = p.id
+      LEFT JOIN clock_in_records cr ON cr.employee_id = e.id
+        AND EXTRACT(MONTH FROM cr.work_date) = $1
+        AND EXTRACT(YEAR FROM cr.work_date) = $2
+      WHERE e.status = 'active'
+    `;
+    let params = [m, y];
+
+    if (companyId !== null) {
+      query += ' AND e.company_id = $3';
+      params.push(companyId);
+    }
+
+    query += `
+      GROUP BY o.id, o.name, p.id, p.name, e.id, e.employee_id, e.name
+      ORDER BY o.name NULLS LAST, p.name NULLS LAST, e.name
+    `;
+
+    const result = await pool.query(query, params);
+
+    // Group the results by outlet > position > employee
+    const grouped = {};
+    let grandTotals = {
+      total_records: 0,
+      approved_records: 0,
+      pending_records: 0,
+      no_schedule_records: 0,
+      total_approved_hours: 0,
+      total_approved_ot: 0,
+      approved_ot_hours: 0,
+      pending_ot_hours: 0
+    };
+
+    result.rows.forEach(row => {
+      const outletKey = row.outlet_id || 'no_outlet';
+      const outletName = row.outlet_name || 'No Outlet';
+      const positionKey = row.position_id || 'no_position';
+      const positionName = row.position_name || 'No Position';
+
+      if (!grouped[outletKey]) {
+        grouped[outletKey] = {
+          outlet_id: row.outlet_id,
+          outlet_name: outletName,
+          positions: {},
+          totals: {
+            total_records: 0,
+            approved_records: 0,
+            pending_records: 0,
+            no_schedule_records: 0,
+            total_approved_hours: 0,
+            total_approved_ot: 0,
+            approved_ot_hours: 0,
+            pending_ot_hours: 0
+          }
+        };
+      }
+
+      if (!grouped[outletKey].positions[positionKey]) {
+        grouped[outletKey].positions[positionKey] = {
+          position_id: row.position_id,
+          position_name: positionName,
+          employees: [],
+          totals: {
+            total_records: 0,
+            approved_records: 0,
+            pending_records: 0,
+            no_schedule_records: 0,
+            total_approved_hours: 0,
+            total_approved_ot: 0,
+            approved_ot_hours: 0,
+            pending_ot_hours: 0
+          }
+        };
+      }
+
+      // Add employee
+      grouped[outletKey].positions[positionKey].employees.push({
+        employee_id: row.employee_id,
+        emp_code: row.emp_code,
+        employee_name: row.employee_name,
+        total_records: parseInt(row.total_records) || 0,
+        approved_records: parseInt(row.approved_records) || 0,
+        pending_records: parseInt(row.pending_records) || 0,
+        no_schedule_records: parseInt(row.no_schedule_records) || 0,
+        total_approved_hours: parseFloat(row.total_approved_hours) || 0,
+        total_approved_ot: parseFloat(row.total_approved_ot) || 0,
+        approved_ot_hours: parseFloat(row.approved_ot_hours) || 0,
+        pending_ot_hours: parseFloat(row.pending_ot_hours) || 0
+      });
+
+      // Update position totals
+      const posTotals = grouped[outletKey].positions[positionKey].totals;
+      posTotals.total_records += parseInt(row.total_records) || 0;
+      posTotals.approved_records += parseInt(row.approved_records) || 0;
+      posTotals.pending_records += parseInt(row.pending_records) || 0;
+      posTotals.no_schedule_records += parseInt(row.no_schedule_records) || 0;
+      posTotals.total_approved_hours += parseFloat(row.total_approved_hours) || 0;
+      posTotals.total_approved_ot += parseFloat(row.total_approved_ot) || 0;
+      posTotals.approved_ot_hours += parseFloat(row.approved_ot_hours) || 0;
+      posTotals.pending_ot_hours += parseFloat(row.pending_ot_hours) || 0;
+
+      // Update outlet totals
+      const outletTotals = grouped[outletKey].totals;
+      outletTotals.total_records += parseInt(row.total_records) || 0;
+      outletTotals.approved_records += parseInt(row.approved_records) || 0;
+      outletTotals.pending_records += parseInt(row.pending_records) || 0;
+      outletTotals.no_schedule_records += parseInt(row.no_schedule_records) || 0;
+      outletTotals.total_approved_hours += parseFloat(row.total_approved_hours) || 0;
+      outletTotals.total_approved_ot += parseFloat(row.total_approved_ot) || 0;
+      outletTotals.approved_ot_hours += parseFloat(row.approved_ot_hours) || 0;
+      outletTotals.pending_ot_hours += parseFloat(row.pending_ot_hours) || 0;
+
+      // Update grand totals
+      grandTotals.total_records += parseInt(row.total_records) || 0;
+      grandTotals.approved_records += parseInt(row.approved_records) || 0;
+      grandTotals.pending_records += parseInt(row.pending_records) || 0;
+      grandTotals.no_schedule_records += parseInt(row.no_schedule_records) || 0;
+      grandTotals.total_approved_hours += parseFloat(row.total_approved_hours) || 0;
+      grandTotals.total_approved_ot += parseFloat(row.total_approved_ot) || 0;
+      grandTotals.approved_ot_hours += parseFloat(row.approved_ot_hours) || 0;
+      grandTotals.pending_ot_hours += parseFloat(row.pending_ot_hours) || 0;
+    });
+
+    res.json({
+      month: parseInt(m),
+      year: parseInt(y),
+      outlets: Object.values(grouped),
+      grand_totals: grandTotals
+    });
+  } catch (error) {
+    console.error('Error fetching attendance summary:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance summary' });
+  }
+});
+
+// Approve OT for a record
+router.post('/:id/approve-ot', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.admin?.id;
+    const companyId = getCompanyFilter(req);
+
+    let query = `
+      UPDATE clock_in_records
+      SET ot_approved = true,
+          ot_approved_by = $1,
+          ot_approved_at = NOW(),
+          updated_at = NOW()
+      WHERE id = $2 AND ot_hours > 0
+    `;
+    let params = [adminId, id];
+
+    if (companyId !== null) {
+      query += ' AND company_id = $3';
+      params.push(companyId);
+    }
+
+    query += ' RETURNING *';
+
+    const result = await pool.query(query, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Record not found or no OT to approve' });
+    }
+
+    res.json({
+      message: 'OT approved successfully',
+      record: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error approving OT:', error);
+    res.status(500).json({ error: 'Failed to approve OT' });
+  }
+});
+
+// Bulk approve OT
+router.post('/bulk-approve-ot', authenticateAdmin, async (req, res) => {
+  try {
+    const { record_ids } = req.body;
+    const adminId = req.admin?.id;
+    const companyId = getCompanyFilter(req);
+
+    if (!record_ids || !Array.isArray(record_ids) || record_ids.length === 0) {
+      return res.status(400).json({ error: 'Record IDs array is required' });
+    }
+
+    let query = `
+      UPDATE clock_in_records
+      SET ot_approved = true,
+          ot_approved_by = $1,
+          ot_approved_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ANY($2) AND ot_hours > 0 AND (ot_approved IS NULL OR ot_approved = false)
+    `;
+    let params = [adminId, record_ids];
+
+    if (companyId !== null) {
+      query += ' AND company_id = $3';
+      params.push(companyId);
+    }
+
+    query += ' RETURNING id';
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      message: `Approved OT for ${result.rowCount} records`,
+      approved_count: result.rowCount
+    });
+  } catch (error) {
+    console.error('Error bulk approving OT:', error);
+    res.status(500).json({ error: 'Failed to bulk approve OT' });
+  }
+});
+
 // Get OT summary for payroll
 router.get('/ot-for-payroll/:year/:month', authenticateAdmin, async (req, res) => {
   try {

@@ -296,6 +296,11 @@ export const attendanceApi = {
   createManual: (data) => api.post('/clock-in/manual', data),
   editHours: (id, data) => api.patch(`/clock-in/${id}/hours`, data),
   approveWithoutSchedule: (id, data) => api.post(`/clock-in/${id}/approve-without-schedule`, data),
+  // OT Approval
+  approveOT: (id) => api.post(`/clock-in/${id}/approve-ot`),
+  bulkApproveOT: (record_ids) => api.post('/clock-in/bulk-approve-ot', { record_ids }),
+  // Summary (grouped by outlet > position > employee)
+  getSummary: (params) => api.get('/clock-in/summary', { params }),
 };
 
 // Benefits In Kind (BIK) - for AA Alive

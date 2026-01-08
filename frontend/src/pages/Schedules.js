@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
-import { schedulesApi, outletsApi, employeeApi, leaveApi } from '../api';
+import { schedulesApi, outletsApi, employeeApi, leaveApi, attendanceApi } from '../api';
 import './Schedules.css';
 
 function Schedules() {
@@ -32,6 +32,9 @@ function Schedules() {
   const [activeTab, setActiveTab] = useState('schedule');
   const [extraShiftRequests, setExtraShiftRequests] = useState([]);
   const [swapRequests, setSwapRequests] = useState([]);
+
+  // Workers without schedule (for suggestion notes)
+  const [workersWithoutSchedule, setWorkersWithoutSchedule] = useState([]);
 
   // Shift template management
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -143,6 +146,60 @@ function Schedules() {
   useEffect(() => {
     fetchRoster();
   }, [fetchRoster]);
+
+  // Fetch workers who clocked in without schedule (for suggestion notes)
+  const fetchWorkersWithoutSchedule = useCallback(async () => {
+    if (!selectedOutlet || !isAdmin) {
+      setWorkersWithoutSchedule([]);
+      return;
+    }
+
+    try {
+      const weekDates = getWeekDates();
+      const startDate = weekDates[0].date;
+      const endDate = weekDates[6].date;
+
+      // Fetch attendance records for this outlet and date range
+      const res = await attendanceApi.getAll({
+        outlet_id: selectedOutlet.id,
+        start_date: startDate,
+        end_date: endDate
+      });
+
+      // Filter records that have no schedule (has_schedule = false or null)
+      const noScheduleRecords = (res.data || []).filter(r =>
+        r.has_schedule === false || r.has_schedule === null
+      );
+
+      // Group by employee and date
+      const grouped = {};
+      noScheduleRecords.forEach(r => {
+        const key = `${r.employee_id}-${r.work_date}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            employee_id: r.employee_id,
+            employee_name: r.employee_name,
+            emp_code: r.emp_code,
+            work_date: r.work_date,
+            clock_in_1: r.clock_in_1,
+            clock_out_2: r.clock_out_2,
+            total_hours: r.total_hours
+          };
+        }
+      });
+
+      setWorkersWithoutSchedule(Object.values(grouped));
+    } catch (error) {
+      console.error('Error fetching workers without schedule:', error);
+      setWorkersWithoutSchedule([]);
+    }
+  }, [selectedOutlet, isAdmin, getWeekDates]);
+
+  useEffect(() => {
+    if (activeTab === 'schedule') {
+      fetchWorkersWithoutSchedule();
+    }
+  }, [activeTab, fetchWorkersWithoutSchedule, currentWeekStart]);
 
   // Fetch pending requests (admin only)
   const fetchRequests = useCallback(async () => {
@@ -701,6 +758,43 @@ function Schedules() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Suggestion Notes - Workers without schedule */}
+                  {isAdmin && workersWithoutSchedule.length > 0 && (
+                    <div className="schedule-suggestions">
+                      <div className="suggestion-header">
+                        <span className="warning-icon">⚠️</span>
+                        <h4>Employees Clocked In Without Schedule</h4>
+                        <span className="suggestion-count">{workersWithoutSchedule.length} records</span>
+                      </div>
+                      <p className="suggestion-desc">
+                        The following employees have clock-in records but no scheduled shift. Consider adding schedules or reviewing their attendance.
+                      </p>
+                      <div className="suggestion-list">
+                        {workersWithoutSchedule.map((record, idx) => (
+                          <div key={idx} className="suggestion-item">
+                            <div className="suggestion-employee">
+                              <span className="emp-name">{record.employee_name}</span>
+                              <span className="emp-code">{record.emp_code}</span>
+                            </div>
+                            <div className="suggestion-date">
+                              {new Date(record.work_date).toLocaleDateString('en-MY', {
+                                weekday: 'short',
+                                day: 'numeric',
+                                month: 'short'
+                              })}
+                            </div>
+                            <div className="suggestion-time">
+                              {record.clock_in_1?.substring(0, 5) || '--:--'} - {record.clock_out_2?.substring(0, 5) || '--:--'}
+                            </div>
+                            <div className="suggestion-hours">
+                              {record.total_hours ? `${parseFloat(record.total_hours).toFixed(1)}h` : '-'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Help text */}
                   <div className="help-text">
