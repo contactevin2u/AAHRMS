@@ -217,10 +217,10 @@ async function uploadMCToCloudinary(fileBuffer, employeeId) {
 
 // Apply for leave with MC upload support
 router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandler(async (req, res) => {
-  const { leave_type_id, start_date, end_date, reason, half_day, child_number } = req.body;
+  const { leave_type_id, leave_type, start_date, end_date, reason, half_day, child_number } = req.body;
   const mcFile = req.file;
 
-  if (!leave_type_id || !start_date || !end_date) {
+  if ((!leave_type_id && !leave_type) || !start_date || !end_date) {
     throw new ValidationError('Leave type, start date, and end date are required');
   }
 
@@ -250,11 +250,20 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
 
   const employee = empResult.rows[0];
 
-  // Get leave type details
-  const leaveTypeResult = await pool.query(
-    'SELECT * FROM leave_types WHERE id = $1',
-    [leave_type_id]
-  );
+  // Get leave type details - support both leave_type_id (number) and leave_type (name string)
+  let leaveTypeResult;
+  if (leave_type_id) {
+    leaveTypeResult = await pool.query(
+      'SELECT * FROM leave_types WHERE id = $1',
+      [leave_type_id]
+    );
+  } else {
+    // Look up by name (case-insensitive) within the employee's company
+    leaveTypeResult = await pool.query(
+      'SELECT * FROM leave_types WHERE LOWER(name) = LOWER($1) AND company_id = $2',
+      [leave_type, employee.company_id]
+    );
+  }
 
   if (leaveTypeResult.rows.length === 0) {
     throw new ValidationError('Invalid leave type');
