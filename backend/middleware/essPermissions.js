@@ -19,6 +19,130 @@ const COMPANIES = {
   MIMIX: 3
 };
 
+// Position hierarchy levels (higher number = higher rank)
+// admin > manager > supervisor > assistant supervisor > crew/part timer/cashier
+const POSITION_HIERARCHY = {
+  // Admin roles (from admin_users table) - handled separately
+  'admin': 100,
+  'super_admin': 100,
+  'boss': 100,
+  'director': 90,
+
+  // Manager level
+  'manager': 80,
+
+  // Supervisor level
+  'supervisor': 60,
+
+  // Assistant supervisor level
+  'assistant supervisor': 40,
+  'assistant_supervisor': 40,
+  'asst supervisor': 40,
+  'asst. supervisor': 40,
+
+  // Crew level (all equal)
+  'ft service crew': 20,
+  'full time service crew': 20,
+  'service crew': 20,
+  'part timer': 20,
+  'part time': 20,
+  'pt': 20,
+  'cashier': 20,
+  'barista': 20,
+  'crew': 20,
+  'staff': 20,
+
+  // Default for unknown positions
+  'default': 10
+};
+
+/**
+ * Get hierarchy level for a position/role
+ * Checks both employee_role and position name
+ */
+const getHierarchyLevel = (employeeRole, positionName, positionRole) => {
+  // First check position role from positions table (most specific)
+  if (positionRole) {
+    const role = positionRole.toLowerCase();
+    if (POSITION_HIERARCHY[role] !== undefined) {
+      return POSITION_HIERARCHY[role];
+    }
+  }
+
+  // Then check employee_role
+  if (employeeRole) {
+    const role = employeeRole.toLowerCase();
+    if (POSITION_HIERARCHY[role] !== undefined) {
+      return POSITION_HIERARCHY[role];
+    }
+  }
+
+  // Then check position name
+  if (positionName) {
+    const name = positionName.toLowerCase().trim();
+    if (POSITION_HIERARCHY[name] !== undefined) {
+      return POSITION_HIERARCHY[name];
+    }
+
+    // Check for partial matches
+    for (const [key, level] of Object.entries(POSITION_HIERARCHY)) {
+      if (name.includes(key) || key.includes(name)) {
+        return level;
+      }
+    }
+  }
+
+  return POSITION_HIERARCHY['default'];
+};
+
+/**
+ * Check if approver can approve for target employee based on hierarchy
+ * Approver must have HIGHER hierarchy level than target
+ */
+const canApproveBasedOnHierarchy = async (approverId, targetEmployeeId) => {
+  // Get approver info with position details
+  const approverResult = await pool.query(`
+    SELECT e.id, e.employee_role, e.position, p.role as position_role, p.name as position_name
+    FROM employees e
+    LEFT JOIN positions p ON e.position_id = p.id
+    WHERE e.id = $1
+  `, [approverId]);
+
+  if (approverResult.rows.length === 0) {
+    return { canApprove: false, reason: 'Approver not found' };
+  }
+
+  const approver = approverResult.rows[0];
+
+  // Get target employee info with position details
+  const targetResult = await pool.query(`
+    SELECT e.id, e.employee_role, e.position, e.name, p.role as position_role, p.name as position_name
+    FROM employees e
+    LEFT JOIN positions p ON e.position_id = p.id
+    WHERE e.id = $1
+  `, [targetEmployeeId]);
+
+  if (targetResult.rows.length === 0) {
+    return { canApprove: false, reason: 'Target employee not found' };
+  }
+
+  const target = targetResult.rows[0];
+
+  // Get hierarchy levels
+  const approverLevel = getHierarchyLevel(approver.employee_role, approver.position || approver.position_name, approver.position_role);
+  const targetLevel = getHierarchyLevel(target.employee_role, target.position || target.position_name, target.position_role);
+
+  // Approver must have HIGHER level than target
+  if (approverLevel <= targetLevel) {
+    return {
+      canApprove: false,
+      reason: `You cannot approve requests for ${target.name}. Your position level (${approverLevel}) must be higher than theirs (${targetLevel}).`
+    };
+  }
+
+  return { canApprove: true };
+};
+
 /**
  * Check if employee is a supervisor for a given outlet
  */
@@ -237,10 +361,13 @@ const buildPermissionFlags = async (employee) => {
 module.exports = {
   ROLES,
   COMPANIES,
+  POSITION_HIERARCHY,
   isSupervisor,
   isManager,
   canApproveForOutlet,
   canApproveForEmployee,
+  canApproveBasedOnHierarchy,
+  getHierarchyLevel,
   isSupervisorOrManager,
   canViewTeam,
   isMimixCompany,

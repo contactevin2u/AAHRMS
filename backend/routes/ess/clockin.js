@@ -59,7 +59,8 @@ const {
   isSupervisorOrManager,
   getManagedOutlets,
   isMimixCompany,
-  canApproveForOutlet
+  canApproveForOutlet,
+  canApproveBasedOnHierarchy
 } = require('../../middleware/essPermissions');
 
 // Standard work time: 8.5 hours = 510 minutes
@@ -826,13 +827,33 @@ router.get('/pending-ot', authenticateEmployee, asyncHandler(async (req, res) =>
     return res.json([]);
   }
 
+  // Get approver's hierarchy level
+  const approverInfoResult = await pool.query(`
+    SELECT e.employee_role, e.position, p.role as position_role, p.name as position_name
+    FROM employees e
+    LEFT JOIN positions p ON e.position_id = p.id
+    WHERE e.id = $1
+  `, [req.employee.id]);
+
+  const approverInfo = approverInfoResult.rows[0] || {};
+  const { getHierarchyLevel } = require('../../middleware/essPermissions');
+  const approverLevel = getHierarchyLevel(
+    approverInfo.employee_role,
+    approverInfo.position || approverInfo.position_name,
+    approverInfo.position_role
+  );
+
   // Get records with OT flagged but not yet approved/rejected
+  // Include employee position info for hierarchy filtering
   const result = await pool.query(
     `SELECT cir.*, e.name as employee_name, e.employee_id as emp_code,
-            e.outlet_id, o.name as outlet_name
+            e.outlet_id, e.employee_role, e.position, e.id as emp_id,
+            o.name as outlet_name,
+            p.role as position_role, p.name as position_name
      FROM clock_in_records cir
      JOIN employees e ON cir.employee_id = e.id
      LEFT JOIN outlets o ON e.outlet_id = o.id
+     LEFT JOIN positions p ON e.position_id = p.id
      WHERE e.outlet_id = ANY($1)
        AND cir.ot_flagged = TRUE
        AND cir.ot_approved IS NULL
@@ -840,11 +861,17 @@ router.get('/pending-ot', authenticateEmployee, asyncHandler(async (req, res) =>
     [outletIds]
   );
 
-  const records = result.rows.map(r => ({
-    ...r,
-    total_hours: r.total_work_minutes ? (r.total_work_minutes / 60).toFixed(2) : null,
-    ot_hours: r.ot_minutes ? (r.ot_minutes / 60).toFixed(2) : null
-  }));
+  // Filter to only include employees with LOWER hierarchy level than approver
+  const records = result.rows
+    .filter(r => {
+      const empLevel = getHierarchyLevel(r.employee_role, r.position || r.position_name, r.position_role);
+      return empLevel < approverLevel; // Only show employees at lower level
+    })
+    .map(r => ({
+      ...r,
+      total_hours: r.total_work_minutes ? (r.total_work_minutes / 60).toFixed(2) : null,
+      ot_hours: r.ot_minutes ? (r.ot_minutes / 60).toFixed(2) : null
+    }));
 
   res.json(records);
 }));
@@ -893,7 +920,13 @@ router.post('/:id/approve-ot', authenticateEmployee, asyncHandler(async (req, re
   // Verify approver can approve for this outlet
   const canApprove = await canApproveForOutlet(approver, record.employee_outlet_id);
   if (!canApprove) {
-    return res.status(403).json({ error: 'You cannot approve OT for this employee' });
+    return res.status(403).json({ error: 'You cannot approve OT for employees outside your outlet' });
+  }
+
+  // Check hierarchy - approver must be higher level than the employee
+  const hierarchyCheck = await canApproveBasedOnHierarchy(req.employee.id, record.emp_id);
+  if (!hierarchyCheck.canApprove) {
+    return res.status(403).json({ error: hierarchyCheck.reason || 'You cannot approve OT for employees at the same or higher level than you' });
   }
 
   // Approve OT
@@ -964,7 +997,13 @@ router.post('/:id/reject-ot', authenticateEmployee, asyncHandler(async (req, res
   // Verify approver can reject for this outlet
   const canApprove = await canApproveForOutlet(approver, record.employee_outlet_id);
   if (!canApprove) {
-    return res.status(403).json({ error: 'You cannot reject OT for this employee' });
+    return res.status(403).json({ error: 'You cannot reject OT for employees outside your outlet' });
+  }
+
+  // Check hierarchy - approver must be higher level than the employee
+  const hierarchyCheck = await canApproveBasedOnHierarchy(req.employee.id, record.emp_id);
+  if (!hierarchyCheck.canApprove) {
+    return res.status(403).json({ error: hierarchyCheck.reason || 'You cannot reject OT for employees at the same or higher level than you' });
   }
 
   // Reject OT
