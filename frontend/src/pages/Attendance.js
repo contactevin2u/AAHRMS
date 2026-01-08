@@ -265,7 +265,7 @@ const Attendance = () => {
   };
 
   // Render editable hours cell
-  const renderEditableHours = (record, field, value) => {
+  const renderEditableHours = (record, field, value, isWorkHours = false) => {
     if (isEditing(record.id, field)) {
       return (
         <input
@@ -282,12 +282,17 @@ const Attendance = () => {
       );
     }
 
-    const displayValue = value ? `${parseFloat(value).toFixed(1)}h` : '-';
+    const numValue = parseFloat(value) || 0;
+    const displayValue = value ? `${numValue.toFixed(1)}h` : '-';
+    // Show red if work hours less than 8 (not including break)
+    const isUnderHours = isWorkHours && numValue > 0 && numValue < 8;
+
     return (
       <span
-        className="editable-hours"
+        className={`editable-hours ${isUnderHours ? 'under-hours' : ''}`}
         onClick={() => startEdit(record.id, field, value)}
-        title="Click to edit"
+        title={isUnderHours ? 'Under 8 hours - Click to edit' : 'Click to edit'}
+        style={isUnderHours ? { color: '#dc2626', fontWeight: 'bold' } : {}}
       >
         {displayValue}
       </span>
@@ -479,10 +484,10 @@ const Attendance = () => {
                       )}
                     </td>
                     <td className="hours-cell">
-                      {renderEditableHours(record, 'total_work_hours', record.total_hours)}
+                      {renderEditableHours(record, 'total_work_hours', record.total_hours, true)}
                     </td>
                     <td className="hours-cell ot">
-                      {renderEditableHours(record, 'ot_hours', record.ot_hours)}
+                      {renderEditableHours(record, 'ot_hours', record.ot_hours, false)}
                     </td>
                     <td>
                       <span className={`status-badge ${getStatusBadge(record.status)}`}>
