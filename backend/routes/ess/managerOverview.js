@@ -1,6 +1,6 @@
 /**
- * ESS Manager Overview Routes
- * Comprehensive overview for managers - all data grouped by outlet
+ * ESS Team Overview Routes
+ * Comprehensive overview for supervisors/managers - all data grouped by outlet
  */
 
 const express = require('express');
@@ -11,13 +11,15 @@ const { asyncHandler } = require('../../middleware/errorHandler');
 const { isSupervisorOrManager, getManagedOutlets, isMimixCompany } = require('../../middleware/essPermissions');
 
 /**
- * Get complete manager overview with all outlets
+ * Get complete team overview with all outlets
  * Returns team, pending approvals, attendance all grouped by outlet
+ * Supervisors see level 1 approvals, Managers see level 2 approvals
  */
 router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
-  // Check if user is manager
-  if (req.employee.employee_role !== 'manager') {
-    return res.status(403).json({ error: 'Access denied. Manager role required.' });
+  // Check if user is supervisor or manager
+  const role = req.employee.employee_role;
+  if (role !== 'manager' && role !== 'supervisor') {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
   // Get employee's company

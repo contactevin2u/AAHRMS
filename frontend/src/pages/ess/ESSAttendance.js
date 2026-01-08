@@ -751,7 +751,9 @@ function ESSAttendanceContent() {
                 <p>You've completed your attendance for today.</p>
                 {status.record && (
                   <p className="hours-worked">
-                    Total: {status.record.total_hours || 0} hours
+                    Total: <span style={(status.record.total_hours || 0) < 8 && (status.record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>
+                      {status.record.total_hours || 0} hours
+                    </span>
                     {status.record.ot_hours > 0 && ` (OT: ${status.record.ot_hours}h)`}
                   </p>
                 )}
@@ -789,7 +791,7 @@ function ESSAttendanceContent() {
                       </span>
                     </div>
                     <div className="history-hours">
-                      <span className="total">{record.total_hours || 0}h</span>
+                      <span className="total" style={(record.total_hours || 0) < 8 && (record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>{record.total_hours || 0}h</span>
                       {record.ot_hours > 0 && (
                         <span className={`ot ${record.ot_approved === true ? 'approved' : record.ot_approved === false ? 'rejected' : 'pending'}`}>
                           +{record.ot_hours}h OT
@@ -836,7 +838,7 @@ function ESSAttendanceContent() {
                           </div>
                           <div className="ot-details">
                             <span className="ot-hours">{record.ot_hours}h overtime</span>
-                            <span className="total-hours">Total: {record.total_hours}h</span>
+                            <span className="total-hours" style={(record.total_hours || 0) < 8 && (record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>Total: {record.total_hours}h</span>
                           </div>
                           <div className="ot-actions">
                             <button
@@ -885,7 +887,7 @@ function ESSAttendanceContent() {
                             </span>
                           </div>
                           <div className="team-hours">
-                            <span className="total">{record.total_hours || '-'}h</span>
+                            <span className="total" style={(record.total_hours || 0) < 8 && (record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>{record.total_hours || '-'}h</span>
                             {record.ot_flagged && (
                               <span className={`ot-badge ${record.ot_approved === true ? 'approved' : record.ot_approved === false ? 'rejected' : 'pending'}`}>
                                 OT: {record.ot_hours}h
