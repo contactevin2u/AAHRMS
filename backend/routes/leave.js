@@ -543,12 +543,39 @@ router.post('/requests/:id/approve', authenticateAdmin, async (req, res) => {
     // If final approval, update leave balance for paid leave
     if (finalApproval && lr.is_paid) {
       const year = new Date(lr.start_date).getFullYear();
-      await pool.query(
-        `UPDATE leave_balances
-         SET used_days = used_days + $1, updated_at = NOW()
-         WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4`,
-        [lr.total_days, lr.employee_id, lr.leave_type_id, year]
+      console.log('[Leave Approve] Deducting balance:', { employee_id: lr.employee_id, leave_type_id: lr.leave_type_id, year, total_days: lr.total_days });
+
+      // Check if balance exists, if not create it first
+      const balanceCheck = await pool.query(
+        'SELECT id FROM leave_balances WHERE employee_id = $1 AND leave_type_id = $2 AND year = $3',
+        [lr.employee_id, lr.leave_type_id, year]
       );
+
+      if (balanceCheck.rows.length === 0) {
+        // Get default entitlement from leave type
+        const leaveTypeResult = await pool.query('SELECT default_days FROM leave_types WHERE id = $1', [lr.leave_type_id]);
+        const defaultDays = leaveTypeResult.rows[0]?.default_days || 0;
+
+        // Create balance row
+        await pool.query(
+          `INSERT INTO leave_balances (employee_id, leave_type_id, year, entitled_days, used_days, carried_forward)
+           VALUES ($1, $2, $3, $4, $5, 0)`,
+          [lr.employee_id, lr.leave_type_id, year, defaultDays, lr.total_days]
+        );
+        console.log('[Leave Approve] Created new balance row with used_days:', lr.total_days);
+      } else {
+        // Update existing balance
+        const updateResult = await pool.query(
+          `UPDATE leave_balances
+           SET used_days = used_days + $1, updated_at = NOW()
+           WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4
+           RETURNING used_days`,
+          [lr.total_days, lr.employee_id, lr.leave_type_id, year]
+        );
+        console.log('[Leave Approve] Updated balance, new used_days:', updateResult.rows[0]?.used_days);
+      }
+    } else {
+      console.log('[Leave Approve] Skipping balance deduction:', { finalApproval, is_paid: lr.is_paid });
     }
 
     const status = finalApproval ? 'approved' : 'pending_director_approval';
@@ -640,12 +667,33 @@ router.post('/requests/:id/director-approve', authenticateAdmin, async (req, res
     // Update leave balance for paid leave
     if (lr.is_paid) {
       const year = new Date(lr.start_date).getFullYear();
-      await pool.query(
-        `UPDATE leave_balances
-         SET used_days = used_days + $1, updated_at = NOW()
-         WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4`,
-        [lr.total_days, lr.employee_id, lr.leave_type_id, year]
+      console.log('[Director Approve] Deducting balance:', { employee_id: lr.employee_id, leave_type_id: lr.leave_type_id, year, total_days: lr.total_days });
+
+      // Check if balance exists, if not create it first
+      const balanceCheck = await pool.query(
+        'SELECT id FROM leave_balances WHERE employee_id = $1 AND leave_type_id = $2 AND year = $3',
+        [lr.employee_id, lr.leave_type_id, year]
       );
+
+      if (balanceCheck.rows.length === 0) {
+        const leaveTypeResult = await pool.query('SELECT default_days FROM leave_types WHERE id = $1', [lr.leave_type_id]);
+        const defaultDays = leaveTypeResult.rows[0]?.default_days || 0;
+
+        await pool.query(
+          `INSERT INTO leave_balances (employee_id, leave_type_id, year, entitled_days, used_days, carried_forward)
+           VALUES ($1, $2, $3, $4, $5, 0)`,
+          [lr.employee_id, lr.leave_type_id, year, defaultDays, lr.total_days]
+        );
+        console.log('[Director Approve] Created new balance row');
+      } else {
+        await pool.query(
+          `UPDATE leave_balances
+           SET used_days = used_days + $1, updated_at = NOW()
+           WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4`,
+          [lr.total_days, lr.employee_id, lr.leave_type_id, year]
+        );
+        console.log('[Director Approve] Updated existing balance');
+      }
     }
 
     res.json({ message: 'Leave request fully approved by director' });
