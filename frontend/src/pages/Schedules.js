@@ -18,6 +18,7 @@ function Schedules() {
   const [roster, setRoster] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [publicHolidays, setPublicHolidays] = useState([]);
+  const [schedulePermissions, setSchedulePermissions] = useState(null);
 
   // Week navigation
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
@@ -60,10 +61,16 @@ function Schedules() {
     const fetchInitialData = async () => {
       try {
         setLoading(true);
-        const [outletsRes, templatesRes] = await Promise.all([
+        const [outletsRes, templatesRes, permissionsRes] = await Promise.all([
           outletsApi.getAll(),
-          schedulesApi.getTemplates()
+          schedulesApi.getTemplates(),
+          schedulesApi.getPermissions().catch(() => ({ data: null }))
         ]);
+
+        // Set schedule permissions
+        if (permissionsRes.data) {
+          setSchedulePermissions(permissionsRes.data);
+        }
 
         const allOutlets = outletsRes.data || [];
         setOutlets(allOutlets);
@@ -184,6 +191,40 @@ function Schedules() {
     return publicHolidays.some(ph => ph.date?.split('T')[0] === dateStr);
   };
 
+  // Check if a date can be edited based on permissions
+  const canEditDate = (dateStr) => {
+    if (!schedulePermissions) return true; // If permissions not loaded, allow (backend will enforce)
+
+    // Full access - can edit all dates
+    if (schedulePermissions.can_edit_all) return true;
+
+    // Restricted access (supervisor) - can only edit T+3 onwards
+    if (schedulePermissions.can_edit_future_only && schedulePermissions.min_edit_date) {
+      return dateStr >= schedulePermissions.min_edit_date;
+    }
+
+    // No edit access
+    return false;
+  };
+
+  // Get restriction message for a date
+  const getDateRestrictionMessage = (dateStr) => {
+    if (!schedulePermissions) return null;
+    if (schedulePermissions.can_edit_all) return null;
+
+    if (schedulePermissions.can_edit_future_only && schedulePermissions.min_edit_date) {
+      if (dateStr < schedulePermissions.min_edit_date) {
+        return schedulePermissions.restriction_message || 'You cannot edit this date';
+      }
+    }
+
+    if (!schedulePermissions.can_edit_all && !schedulePermissions.can_edit_future_only) {
+      return schedulePermissions.restriction_message || 'You do not have permission to edit schedules';
+    }
+
+    return null;
+  };
+
   // Get shift code/color for display
   const getShiftDisplay = (shift) => {
     if (!shift || !shift.shift_code) return null;
@@ -196,6 +237,13 @@ function Schedules() {
   // Handle shift cell click - cycle through shifts
   const handleShiftClick = async (employeeId, date) => {
     if (saving) return;
+
+    // Check edit permission for this date
+    if (!canEditDate(date)) {
+      const message = getDateRestrictionMessage(date);
+      alert(message || 'You cannot edit this schedule');
+      return;
+    }
 
     const employee = roster.find(e => e.employee_id === employeeId);
     if (!employee) return;
@@ -580,12 +628,18 @@ function Schedules() {
                               {weekDates.map((d, idx) => {
                                 const shift = emp.shifts.find(s => s.date === d.date);
                                 const display = getShiftDisplay(shift);
+                                const isLocked = !canEditDate(d.date);
 
                                 return (
                                   <td
                                     key={d.date}
-                                    className={`shift-cell ${d.isWeekend ? 'weekend' : ''} ${display ? 'has-shift' : 'off'}`}
+                                    className={`shift-cell ${d.isWeekend ? 'weekend' : ''} ${display ? 'has-shift' : 'off'} ${isLocked ? 'locked' : ''}`}
                                     onClick={() => handleShiftClick(emp.employee_id, d.date)}
+                                    style={{
+                                      cursor: isLocked ? 'not-allowed' : 'pointer',
+                                      opacity: isLocked ? 0.6 : 1
+                                    }}
+                                    title={isLocked ? getDateRestrictionMessage(d.date) : 'Click to change shift'}
                                   >
                                     {display ? (
                                       <span
@@ -597,6 +651,7 @@ function Schedules() {
                                     ) : (
                                       <span className="off-badge">⚪</span>
                                     )}
+                                    {isLocked && <span className="lock-icon">🔒</span>}
                                   </td>
                                 );
                               })}

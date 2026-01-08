@@ -78,10 +78,16 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Valid position roles for permission control
+// manager: Full access to schedules, can edit any schedule
+// supervisor: Can view team schedules, can only edit future schedules (T+3 onwards)
+// crew: Regular employee, no schedule edit access
+const VALID_ROLES = ['manager', 'supervisor', 'crew'];
+
 // Create position
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
-    const { name, department_id, is_multi_outlet } = req.body;
+    const { name, department_id, is_multi_outlet, role } = req.body;
     const companyId = req.companyId;
 
     if (!companyId) {
@@ -92,11 +98,14 @@ router.post('/', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Position name is required' });
     }
 
+    // Validate role if provided
+    const positionRole = role && VALID_ROLES.includes(role.toLowerCase()) ? role.toLowerCase() : 'crew';
+
     const result = await pool.query(
-      `INSERT INTO positions (company_id, department_id, name, is_multi_outlet)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO positions (company_id, department_id, name, is_multi_outlet, role)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [companyId, department_id || null, name.trim(), is_multi_outlet || false]
+      [companyId, department_id || null, name.trim(), is_multi_outlet || false, positionRole]
     );
 
     res.status(201).json(result.rows[0]);
@@ -113,25 +122,28 @@ router.post('/', authenticateAdmin, async (req, res) => {
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, department_id, is_multi_outlet } = req.body;
+    const { name, department_id, is_multi_outlet, role } = req.body;
     const companyId = getCompanyFilter(req);
 
     if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Position name is required' });
     }
 
+    // Validate role if provided
+    const positionRole = role && VALID_ROLES.includes(role.toLowerCase()) ? role.toLowerCase() : 'crew';
+
     let query = `
       UPDATE positions
-      SET name = $1, department_id = $2, is_multi_outlet = $3
-      WHERE id = $4
+      SET name = $1, department_id = $2, is_multi_outlet = $3, role = $4
+      WHERE id = $5
     `;
-    const params = [name.trim(), department_id || null, is_multi_outlet || false, id];
+    const params = [name.trim(), department_id || null, is_multi_outlet || false, positionRole, id];
 
     if (companyId !== null) {
       query = `
         UPDATE positions
-        SET name = $1, department_id = $2, is_multi_outlet = $3
-        WHERE id = $4 AND company_id = $5
+        SET name = $1, department_id = $2, is_multi_outlet = $3, role = $4
+        WHERE id = $5 AND company_id = $6
       `;
       params.push(companyId);
     }

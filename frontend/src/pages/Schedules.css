@@ -1012,3 +1012,21 @@
     max-height: calc(100vh - 20px);
   }
 }
+
+/* Locked cells (permission-based restrictions) */
+.shift-cell.locked {
+  position: relative;
+  background-color: #f1f5f9;
+}
+
+.shift-cell.locked:hover {
+  background-color: #f1f5f9;
+}
+
+.lock-icon {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 10px;
+  opacity: 0.7;
+}

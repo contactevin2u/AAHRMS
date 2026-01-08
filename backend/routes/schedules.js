@@ -10,6 +10,70 @@ const formatTime = (time) => {
   return time.substring(0, 5); // HH:MM
 };
 
+// Helper to check schedule edit permissions based on position role
+// Returns { allowed: boolean, reason: string }
+const checkScheduleEditPermission = async (adminId, scheduleDate) => {
+  try {
+    // Get admin user info with position role
+    const adminResult = await pool.query(`
+      SELECT au.role as admin_role, au.outlet_id, e.position_id, p.role as position_role
+      FROM admin_users au
+      LEFT JOIN employees e ON au.employee_id = e.id
+      LEFT JOIN positions p ON e.position_id = p.id
+      WHERE au.id = $1
+    `, [adminId]);
+
+    if (adminResult.rows.length === 0) {
+      return { allowed: false, reason: 'User not found' };
+    }
+
+    const user = adminResult.rows[0];
+    const adminRole = user.admin_role;
+    const positionRole = user.position_role;
+
+    // Super admin, boss, admin, director have full access
+    if (['super_admin', 'boss', 'admin', 'director'].includes(adminRole)) {
+      return { allowed: true };
+    }
+
+    // Manager position has full access
+    if (positionRole === 'manager') {
+      return { allowed: true };
+    }
+
+    // Supervisor position - restricted access
+    if (positionRole === 'supervisor') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const scheduleDateObj = new Date(scheduleDate);
+      scheduleDateObj.setHours(0, 0, 0, 0);
+
+      // Calculate T+2 (2 days from today)
+      const tPlus2 = new Date(today);
+      tPlus2.setDate(tPlus2.getDate() + 2);
+
+      // Cannot edit past schedules
+      if (scheduleDateObj < today) {
+        return { allowed: false, reason: 'Supervisors cannot edit past schedules' };
+      }
+
+      // Cannot edit T+0, T+1, T+2 (today, tomorrow, day after tomorrow)
+      if (scheduleDateObj <= tPlus2) {
+        return { allowed: false, reason: 'Supervisors can only edit schedules 3 or more days in advance' };
+      }
+
+      return { allowed: true };
+    }
+
+    // Crew or unknown position - no edit access
+    return { allowed: false, reason: 'You do not have permission to edit schedules' };
+  } catch (error) {
+    console.error('Error checking schedule permission:', error);
+    return { allowed: false, reason: 'Permission check failed' };
+  }
+};
+
 // Get all schedules with filters
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
@@ -831,6 +895,12 @@ router.post('/roster/assign', authenticateAdmin, async (req, res) => {
       }
     }
 
+    // Check position-based edit permissions (supervisor restrictions)
+    const permission = await checkScheduleEditPermission(adminId, schedule_date);
+    if (!permission.allowed) {
+      return res.status(403).json({ error: permission.reason });
+    }
+
     // Get shift template details
     const template = await pool.query('SELECT * FROM shift_templates WHERE id = $1', [shift_template_id]);
     if (template.rows.length === 0) {
@@ -905,10 +975,18 @@ router.post('/roster/bulk-assign', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Outlet ID and assignments array are required' });
     }
 
-    const results = { created: 0, updated: 0, errors: [] };
+    const results = { created: 0, updated: 0, errors: [], skipped: 0 };
 
     for (const a of assignments) {
       try {
+        // Check position-based edit permissions for this date
+        const permission = await checkScheduleEditPermission(adminId, a.schedule_date);
+        if (!permission.allowed) {
+          results.errors.push({ employee_id: a.employee_id, date: a.schedule_date, error: permission.reason });
+          results.skipped++;
+          continue;
+        }
+
         // Get shift template
         const template = await pool.query('SELECT * FROM shift_templates WHERE id = $1', [a.shift_template_id]);
         if (template.rows.length === 0) {
@@ -1338,6 +1416,12 @@ router.post('/roster/department/assign', authenticateAdmin, async (req, res) => 
       }
     }
 
+    // Check position-based edit permissions (supervisor restrictions)
+    const permission = await checkScheduleEditPermission(adminId, schedule_date);
+    if (!permission.allowed) {
+      return res.status(403).json({ error: permission.reason });
+    }
+
     // Get shift template details
     const template = await pool.query('SELECT * FROM shift_templates WHERE id = $1', [shift_template_id]);
     if (template.rows.length === 0) {
@@ -1634,6 +1718,75 @@ router.post('/extra-shift-requests/:id/reject', authenticateAdmin, async (req, r
   } catch (error) {
     console.error('Error rejecting extra shift request:', error);
     res.status(500).json({ error: 'Failed to reject request' });
+  }
+});
+
+// Get user's schedule edit permissions
+// Returns what dates can be edited based on user's position role
+router.get('/permissions', authenticateAdmin, async (req, res) => {
+  try {
+    const adminId = req.admin?.id;
+
+    // Get admin user info with position role
+    const adminResult = await pool.query(`
+      SELECT au.role as admin_role, au.outlet_id, e.position_id, p.role as position_role, p.name as position_name
+      FROM admin_users au
+      LEFT JOIN employees e ON au.employee_id = e.id
+      LEFT JOIN positions p ON e.position_id = p.id
+      WHERE au.id = $1
+    `, [adminId]);
+
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = adminResult.rows[0];
+    const adminRole = user.admin_role;
+    const positionRole = user.position_role;
+
+    // Calculate restriction dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tPlus2 = new Date(today);
+    tPlus2.setDate(tPlus2.getDate() + 2);
+
+    const tPlus3 = new Date(today);
+    tPlus3.setDate(tPlus3.getDate() + 3);
+
+    let permissions = {
+      admin_role: adminRole,
+      position_role: positionRole,
+      position_name: user.position_name,
+      can_edit_all: false,
+      can_edit_future_only: false,
+      min_edit_date: null,
+      restriction_message: null
+    };
+
+    // Super admin, boss, admin, director have full access
+    if (['super_admin', 'boss', 'admin', 'director'].includes(adminRole)) {
+      permissions.can_edit_all = true;
+    }
+    // Manager position has full access
+    else if (positionRole === 'manager') {
+      permissions.can_edit_all = true;
+    }
+    // Supervisor position - restricted access
+    else if (positionRole === 'supervisor') {
+      permissions.can_edit_future_only = true;
+      permissions.min_edit_date = tPlus3.toISOString().split('T')[0];
+      permissions.restriction_message = 'You can only edit schedules 3 or more days in advance (T+3 onwards)';
+    }
+    // Others - no edit access
+    else {
+      permissions.restriction_message = 'You do not have permission to edit schedules';
+    }
+
+    res.json(permissions);
+  } catch (error) {
+    console.error('Error fetching schedule permissions:', error);
+    res.status(500).json({ error: 'Failed to fetch permissions' });
   }
 });
 

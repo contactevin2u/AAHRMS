@@ -33,6 +33,7 @@ function EmployeeEdit() {
   // Reference data
   const [departments, setDepartments] = useState([]);
   const [outlets, setOutlets] = useState([]);
+  const [positions, setPositions] = useState([]);
   const [commissionTypes, setCommissionTypes] = useState([]);
   const [allowanceTypes, setAllowanceTypes] = useState([]);
   const [employeeCommissions, setEmployeeCommissions] = useState([]);
@@ -56,13 +57,17 @@ function EmployeeEdit() {
         earningsApi.getAllowanceTypes().catch(() => ({ data: [] }))
       ]);
 
-      // Fetch outlets if needed
+      // Fetch outlets and positions if needed (for outlet-based companies like Mimix)
       if (usesOutlets) {
         try {
-          const outletRes = await api.get('/outlets');
+          const [outletRes, positionsRes] = await Promise.all([
+            api.get('/outlets'),
+            api.get('/positions')
+          ]);
           setOutlets(outletRes.data || []);
+          setPositions(positionsRes.data || []);
         } catch (e) {
-          console.error('Error fetching outlets:', e);
+          console.error('Error fetching outlets/positions:', e);
         }
       }
 
@@ -243,6 +248,7 @@ function EmployeeEdit() {
             departments={departments}
             outlets={outlets}
             usesOutlets={usesOutlets}
+            positions={positions}
             commissionTypes={commissionTypes}
             allowanceTypes={allowanceTypes}
             employeeCommissions={employeeCommissions}

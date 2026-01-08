@@ -128,6 +128,7 @@ const EmployeeForm = ({
   departments,
   outlets,
   usesOutlets,
+  positions = [],  // Position dropdown options for outlet-based companies
   commissionTypes,
   allowanceTypes,
   employeeCommissions,
@@ -235,13 +236,37 @@ const EmployeeForm = ({
           </div>
         )}
         <div className="form-group">
-          <label>Position</label>
-          <input
-            type="text"
-            value={form.position}
-            onChange={(e) => setForm({ ...form, position: e.target.value })}
-            placeholder="Job title"
-          />
+          <label>Position{usesOutlets && positions.length > 0 ? ' *' : ''}</label>
+          {usesOutlets && positions.length > 0 ? (
+            // Dropdown for outlet-based companies (like Mimix)
+            <select
+              value={form.position_id || ''}
+              onChange={(e) => {
+                const selectedPos = positions.find(p => p.id === parseInt(e.target.value));
+                setForm({
+                  ...form,
+                  position_id: e.target.value,
+                  position: selectedPos?.name || ''
+                });
+              }}
+              required
+            >
+              <option value="">Select position</option>
+              {positions.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} {p.role ? `(${p.role})` : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            // Text input for department-based companies
+            <input
+              type="text"
+              value={form.position}
+              onChange={(e) => setForm({ ...form, position: e.target.value })}
+              placeholder="Job title"
+            />
+          )}
         </div>
       </div>
 
