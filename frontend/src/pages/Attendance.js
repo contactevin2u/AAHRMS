@@ -740,7 +740,7 @@ const Attendance = () => {
                         )}
                       </td>
                       <td className="gps-cell">
-                        {(record.location_in_1 || record.location_out_2) ? (
+                        {(record.location_in_1 || record.location_out_1 || record.location_in_2 || record.location_out_2) ? (
                           <button
                             className="gps-btn"
                             onClick={() => showGpsDetails(record)}
@@ -958,7 +958,7 @@ const Attendance = () => {
                 {gpsModal.location_in_1 && (
                   <div className="gps-location-item">
                     <div className="gps-location-header">
-                      <span className="gps-label">Clock In (Start Work)</span>
+                      <span className="gps-label">Clock In 1 (Start Work)</span>
                       <span className="gps-time">{formatTime(gpsModal.clock_in_1)}</span>
                     </div>
                     {gpsModal.address_in_1 && (
@@ -981,10 +981,62 @@ const Attendance = () => {
                   </div>
                 )}
 
+                {gpsModal.location_out_1 && (
+                  <div className="gps-location-item">
+                    <div className="gps-location-header">
+                      <span className="gps-label">Clock Out 1 (Break Start)</span>
+                      <span className="gps-time">{formatTime(gpsModal.clock_out_1)}</span>
+                    </div>
+                    {gpsModal.address_out_1 && (
+                      <div className="gps-address">
+                        <span className="address-text">{gpsModal.address_out_1}</span>
+                      </div>
+                    )}
+                    <div className="gps-coords">
+                      <span className="coords-label">Lat:</span>
+                      <span className="coords-value">{parseLocation(gpsModal.location_out_1)?.lat?.toFixed(6) || '-'}</span>
+                      <span className="coords-label">Lng:</span>
+                      <span className="coords-value">{parseLocation(gpsModal.location_out_1)?.lng?.toFixed(6) || '-'}</span>
+                    </div>
+                    <button
+                      className="open-map-btn"
+                      onClick={() => openInMaps(parseLocation(gpsModal.location_out_1))}
+                    >
+                      Open in Google Maps
+                    </button>
+                  </div>
+                )}
+
+                {gpsModal.location_in_2 && (
+                  <div className="gps-location-item">
+                    <div className="gps-location-header">
+                      <span className="gps-label">Clock In 2 (Return from Break)</span>
+                      <span className="gps-time">{formatTime(gpsModal.clock_in_2)}</span>
+                    </div>
+                    {gpsModal.address_in_2 && (
+                      <div className="gps-address">
+                        <span className="address-text">{gpsModal.address_in_2}</span>
+                      </div>
+                    )}
+                    <div className="gps-coords">
+                      <span className="coords-label">Lat:</span>
+                      <span className="coords-value">{parseLocation(gpsModal.location_in_2)?.lat?.toFixed(6) || '-'}</span>
+                      <span className="coords-label">Lng:</span>
+                      <span className="coords-value">{parseLocation(gpsModal.location_in_2)?.lng?.toFixed(6) || '-'}</span>
+                    </div>
+                    <button
+                      className="open-map-btn"
+                      onClick={() => openInMaps(parseLocation(gpsModal.location_in_2))}
+                    >
+                      Open in Google Maps
+                    </button>
+                  </div>
+                )}
+
                 {gpsModal.location_out_2 && (
                   <div className="gps-location-item">
                     <div className="gps-location-header">
-                      <span className="gps-label">Clock Out (End Work)</span>
+                      <span className="gps-label">Clock Out 2 (End Work)</span>
                       <span className="gps-time">{formatTime(gpsModal.clock_out_2)}</span>
                     </div>
                     {gpsModal.address_out_2 && (
@@ -1007,7 +1059,7 @@ const Attendance = () => {
                   </div>
                 )}
 
-                {!gpsModal.location_in_1 && !gpsModal.location_out_2 && (
+                {!gpsModal.location_in_1 && !gpsModal.location_out_1 && !gpsModal.location_in_2 && !gpsModal.location_out_2 && (
                   <p className="no-gps-data">No GPS data recorded for this entry</p>
                 )}
               </div>
