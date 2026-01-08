@@ -562,6 +562,11 @@ export const essApi = {
   // Indoor Sales - Commission
   getMyCommission: (year) => api.get('/ess/schedules/my-commission', { params: { year }, ...essApiConfig }),
   getMyCommissionDetail: (year, month) => api.get(`/ess/schedules/my-commission/${year}/${month}`, essApiConfig),
+
+  // Manager Overview (Manager only - all outlets)
+  getManagerOverview: () => api.get('/ess/manager-overview', essApiConfig),
+  getOutletStaff: (outletId) => api.get(`/ess/manager-overview/outlet/${outletId}/staff`, essApiConfig),
+  getOutletAttendance: (outletId, date) => api.get(`/ess/manager-overview/outlet/${outletId}/attendance`, { params: { date }, ...essApiConfig }),
 };
 
 export default api;

@@ -30,6 +30,7 @@ export { default as ESSBenefits } from './ESSBenefits';
 // Supervisor/Manager Pages
 export { default as ESSTeamSchedule } from './ESSTeamSchedule';
 export { default as ESSOTApproval } from './ESSOTApproval';
+export { default as ESSManagerOverview } from './ESSManagerOverview';
 
 // Deprecated (redirected to main pages)
 // ESSClockIn -> use ESSAttendance

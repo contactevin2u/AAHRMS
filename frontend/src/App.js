@@ -40,7 +40,7 @@ import EmployeeLetters from './pages/EmployeeLetters';
 import MimixLogin from './pages/MimixLogin';
 import StaffClockIn from './pages/StaffClockIn';
 // New Unified ESS PWA (6 main pages + auth + support pages)
-import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSProfile, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters, ESSTeamSchedule, ESSOTApproval } from './pages/ess';
+import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSProfile, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters, ESSTeamSchedule, ESSOTApproval, ESSManagerOverview } from './pages/ess';
 import Schedules from './pages/Schedules';
 import IndoorSalesSchedule from './pages/IndoorSalesSchedule';
 import IndoorSalesCommission from './pages/IndoorSalesCommission';
@@ -477,6 +477,14 @@ function App() {
           element={
             <ESSProtectedRoute>
               <ESSOTApproval />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/manager-overview"
+          element={
+            <ESSProtectedRoute>
+              <ESSManagerOverview />
             </ESSProtectedRoute>
           }
         />
