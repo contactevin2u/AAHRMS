@@ -13,17 +13,17 @@ const { authenticateEmployee } = require('../../middleware/auth');
 const { asyncHandler, NotFoundError } = require('../../middleware/errorHandler');
 
 // Required fields for profile to be marked complete
+// Note: EPF, SOCSO, Tax numbers are handled by admin, not required for employee self-service
 const PROFILE_REQUIRED_FIELDS = [
   'name', 'ic_number', 'date_of_birth', 'phone', 'address',
-  'bank_name', 'bank_account_no',
-  'epf_number', 'socso_number', 'tax_number'
+  'bank_name', 'bank_account_no'
 ];
 
 // Fields employee can edit BEFORE profile is complete (during onboarding)
+// Note: EPF, SOCSO, Tax numbers are handled by admin
 const EDITABLE_BEFORE_COMPLETE = [
   'name', 'date_of_birth', 'address', 'phone', 'email',
   'bank_name', 'bank_account_no', 'bank_account_holder',
-  'epf_number', 'socso_number', 'tax_number',
   'marital_status', 'spouse_working', 'children_count'
 ];
 
@@ -104,7 +104,7 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
 router.get('/completion-status', authenticateEmployee, asyncHandler(async (req, res) => {
   const result = await pool.query(
     `SELECT name, ic_number, date_of_birth, phone, address,
-            bank_name, bank_account_no, epf_number, socso_number, tax_number,
+            bank_name, bank_account_no,
             join_date, profile_completed, profile_completed_at
      FROM employees WHERE id = $1`,
     [req.employee.id]
