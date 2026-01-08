@@ -236,7 +236,7 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
     const deletedSchedulesCount = deleteSchedulesResult.rows.length;
 
     // Cancel any pending leave requests that start after last working day
-    const cancelLeaveResult = await client.query(`
+    const cancelPendingLeaveResult = await client.query(`
       UPDATE leave_requests
       SET status = 'cancelled',
           rejection_reason = 'Auto-cancelled due to resignation',
@@ -247,7 +247,43 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
       RETURNING id
     `, [r.employee_id, r.last_working_day]);
 
-    const cancelledLeaveCount = cancelLeaveResult.rows.length;
+    // Also cancel APPROVED leave requests that start after last working day
+    // First get the approved leaves to restore balance
+    const approvedLeavesToCancel = await client.query(`
+      SELECT lr.id, lr.leave_type_id, lr.total_days, lr.start_date, lt.is_paid
+      FROM leave_requests lr
+      JOIN leave_types lt ON lr.leave_type_id = lt.id
+      WHERE lr.employee_id = $1
+        AND lr.status = 'approved'
+        AND lr.start_date > $2
+    `, [r.employee_id, r.last_working_day]);
+
+    // Restore leave balance for each cancelled approved leave
+    for (const leave of approvedLeavesToCancel.rows) {
+      if (leave.is_paid) {
+        const year = new Date(leave.start_date).getFullYear();
+        await client.query(`
+          UPDATE leave_balances
+          SET used_days = used_days - $1, updated_at = NOW()
+          WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4
+        `, [leave.total_days, r.employee_id, leave.leave_type_id, year]);
+        console.log('[Resignation] Restored leave balance:', { employee_id: r.employee_id, leave_type_id: leave.leave_type_id, days: leave.total_days });
+      }
+    }
+
+    // Cancel the approved leaves
+    const cancelApprovedLeaveResult = await client.query(`
+      UPDATE leave_requests
+      SET status = 'cancelled',
+          rejection_reason = 'Auto-cancelled due to resignation (after last working day)',
+          updated_at = NOW()
+      WHERE employee_id = $1
+        AND status = 'approved'
+        AND start_date > $2
+      RETURNING id
+    `, [r.employee_id, r.last_working_day]);
+
+    const cancelledLeaveCount = cancelPendingLeaveResult.rows.length + cancelApprovedLeaveResult.rows.length;
 
     await client.query('COMMIT');
 

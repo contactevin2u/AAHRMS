@@ -472,6 +472,7 @@ router.post('/requests/:id/approve', authenticateAdmin, async (req, res) => {
     }
 
     const lr = request.rows[0];
+    console.log('[Leave Approve] Request data:', { id, status: lr.status, is_paid: lr.is_paid, employee_role: lr.employee_role, leave_type_id: lr.leave_type_id, total_days: lr.total_days });
 
     if (lr.status === 'approved') {
       return res.status(400).json({ error: 'Leave request already approved' });
