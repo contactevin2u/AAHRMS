@@ -70,7 +70,7 @@ function ESSManagerOverview() {
       <ESSLayout>
         <div className="ess-loading">
           <div className="spinner"></div>
-          <p>Loading manager overview...</p>
+          <p>Loading team overview...</p>
         </div>
       </ESSLayout>
     );
@@ -97,8 +97,8 @@ function ESSManagerOverview() {
       <div className="manager-overview">
         <header className="overview-header">
           <div>
-            <h1>Manager Overview</h1>
-            <p>All outlets at a glance</p>
+            <h1>Team Overview</h1>
+            <p>Your outlets at a glance</p>
           </div>
         </header>
 

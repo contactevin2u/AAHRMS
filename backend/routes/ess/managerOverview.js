@@ -30,10 +30,14 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
   const companyId = empResult.rows[0]?.company_id;
 
   if (!isMimixCompany(companyId)) {
-    return res.status(403).json({ error: 'Manager overview is only available for outlet-based companies.' });
+    return res.status(403).json({ error: 'Team overview is only available for outlet-based companies.' });
   }
 
-  // Get all outlets managed by this manager
+  // Determine approval level based on role
+  // Supervisors see level 1 approvals, Managers see level 2 approvals
+  const approvalLevel = role === 'manager' ? 2 : 1;
+
+  // Get all outlets managed by this supervisor/manager
   const employee = { ...req.employee, company_id: companyId };
   const outletIds = await getManagedOutlets(employee);
 
@@ -75,7 +79,7 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
         e.name
     `, [outlet.id, req.employee.id]);
 
-    // Get pending leave requests for this outlet (at manager level = 2)
+    // Get pending leave requests for this outlet at current approver's level
     const pendingLeaveResult = await pool.query(`
       SELECT lr.id, lr.start_date, lr.end_date, lr.total_days, lr.reason,
              lt.name as leave_type_name, lt.code as leave_type_code,
@@ -85,9 +89,9 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
       JOIN employees e ON lr.employee_id = e.id
       WHERE e.outlet_id = $1
         AND lr.status = 'pending'
-        AND lr.approval_level = 2
+        AND lr.approval_level = $2
       ORDER BY lr.created_at ASC
-    `, [outlet.id]);
+    `, [outlet.id, approvalLevel]);
 
     // Get pending claims for this outlet
     const pendingClaimsResult = await pool.query(`

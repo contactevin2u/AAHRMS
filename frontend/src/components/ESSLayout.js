@@ -87,9 +87,6 @@ function ESSLayout({ children }) {
   const isIndoorSalesManager = employeeInfo?.position === 'Manager' && employeeInfo?.employee_role === 'manager';
   const showTeamFeatures = isSupOrMgr || isIndoorSalesManager;
 
-  // Check if employee is manager (for Manager Overview - managers only, not supervisors)
-  const isManager = employeeInfo?.employee_role === 'manager';
-
   // Get company logo based on company
   const getCompanyLogo = () => {
     const companyId = employeeInfo?.company_id;
@@ -236,7 +233,7 @@ function ESSLayout({ children }) {
           </NavLink>
         )}
 
-        {isManager && (
+        {isSupOrMgr && isMimix && (
           <NavLink
             to="/ess/manager-overview"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
