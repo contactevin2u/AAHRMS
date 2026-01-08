@@ -186,6 +186,8 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
     const { id } = req.params;
     const { final_salary_amount, settlement_date } = req.body;
 
+    console.log('[Resignation Process] Starting process for ID:', id);
+
     await client.query('BEGIN');
 
     // Get resignation details
@@ -196,10 +198,12 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
 
     if (resignation.rows.length === 0) {
       await client.query('ROLLBACK');
+      console.log('[Resignation Process] Not found:', id);
       return res.status(404).json({ error: 'Resignation not found' });
     }
 
     const r = resignation.rows[0];
+    console.log('[Resignation Process] Found resignation:', { employee_id: r.employee_id, status: r.status, last_working_day: r.last_working_day });
 
     if (r.status === 'completed') {
       await client.query('ROLLBACK');
@@ -284,8 +288,10 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
     `, [r.employee_id, r.last_working_day]);
 
     const cancelledLeaveCount = cancelPendingLeaveResult.rows.length + cancelApprovedLeaveResult.rows.length;
+    console.log('[Resignation Process] Cancelled leaves:', { pending: cancelPendingLeaveResult.rows.length, approved: cancelApprovedLeaveResult.rows.length });
 
     await client.query('COMMIT');
+    console.log('[Resignation Process] Completed successfully for employee:', r.employee_id);
 
     res.json({
       message: 'Resignation processed successfully. Employee status updated to resigned.',
