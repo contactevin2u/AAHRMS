@@ -220,6 +220,9 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
   const { leave_type_id, leave_type, start_date, end_date, reason, half_day, child_number } = req.body;
   const mcFile = req.file;
 
+  console.log('[Leave Apply] Request body:', { leave_type_id, leave_type, start_date, end_date, reason });
+  console.log('[Leave Apply] Employee ID:', req.employee?.id);
+
   if ((!leave_type_id && !leave_type) || !start_date || !end_date) {
     throw new ValidationError('Leave type, start date, and end date are required');
   }
@@ -249,6 +252,7 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
   }
 
   const employee = empResult.rows[0];
+  console.log('[Leave Apply] Employee company_id:', employee.company_id);
 
   // Get leave type details - support both leave_type_id (number) and leave_type (name string)
   let leaveTypeResult;
@@ -259,14 +263,22 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
     );
   } else {
     // Look up by name (case-insensitive) within the employee's company
+    console.log('[Leave Apply] Looking up leave type by name:', leave_type, 'for company:', employee.company_id);
     leaveTypeResult = await pool.query(
       'SELECT * FROM leave_types WHERE LOWER(name) = LOWER($1) AND company_id = $2',
       [leave_type, employee.company_id]
     );
+    console.log('[Leave Apply] Leave type lookup result:', leaveTypeResult.rows.length, 'rows');
   }
 
   if (leaveTypeResult.rows.length === 0) {
-    throw new ValidationError('Invalid leave type');
+    // Debug: show available leave types for this company
+    const availableTypes = await pool.query(
+      'SELECT id, name FROM leave_types WHERE company_id = $1',
+      [employee.company_id]
+    );
+    console.log('[Leave Apply] Available leave types for company:', availableTypes.rows);
+    throw new ValidationError(`Invalid leave type: "${leave_type}". Available types: ${availableTypes.rows.map(t => t.name).join(', ')}`);
   }
 
   const leaveType = leaveTypeResult.rows[0];
