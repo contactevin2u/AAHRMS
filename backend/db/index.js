@@ -1307,8 +1307,8 @@ Human Resources Department
 
       -- =====================================================
       -- AUTO-SET employment_type = 'confirmed' FOR HIGH-LEVEL POSITIONS
-      -- Positions above level 40 (above assistant supervisor) should have employment_type = 'confirmed'
-      -- This includes: supervisor (60), manager (80), director (90), admin/boss (100)
+      -- Positions at level >= 40 (assistant supervisor and above) should have employment_type = 'confirmed'
+      -- This includes: assistant supervisor (40), supervisor (60), manager (80), director (90), admin/boss (100)
       -- =====================================================
 
       -- Update employees with high-level roles to have confirmed employment_type
@@ -1320,13 +1320,14 @@ Human Resources Department
           EXISTS (
             SELECT 1 FROM positions p
             WHERE p.id = e.position_id
-            AND p.role IN ('manager', 'supervisor', 'admin', 'director')
+            AND p.role IN ('manager', 'supervisor', 'admin', 'director', 'assistant supervisor', 'assistant_supervisor')
           )
-          -- Or check by employee_role directly
-          OR e.employee_role IN ('supervisor', 'manager', 'director', 'admin', 'boss', 'super_admin')
-          -- Or check by position name containing these keywords
-          OR LOWER(e.position) LIKE '%manager%'
+          -- Or check by employee_role directly (includes assistant supervisor variations)
+          OR e.employee_role IN ('supervisor', 'manager', 'director', 'admin', 'boss', 'super_admin',
+                                 'assistant supervisor', 'assistant_supervisor', 'asst supervisor', 'asst. supervisor')
+          -- Or check by position name containing these keywords (supervisor covers assistant supervisor too)
           OR LOWER(e.position) LIKE '%supervisor%'
+          OR LOWER(e.position) LIKE '%manager%'
           OR LOWER(e.position) LIKE '%director%'
           OR LOWER(e.position) LIKE '%admin%'
           OR LOWER(e.position) LIKE '%boss%'

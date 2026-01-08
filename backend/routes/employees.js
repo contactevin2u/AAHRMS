@@ -11,12 +11,13 @@ const { formatIC, detectIDType } = require('../utils/statutory');
 
 /**
  * Check if a position requires confirmed employment status
- * Positions above level 40 (above assistant supervisor) should have employment_type = 'confirmed'
- * This includes: supervisor (60), manager (80), director (90), admin/boss (100)
+ * Positions at level >= 40 (assistant supervisor and above) should have employment_type = 'confirmed'
+ * This includes: assistant supervisor (40), supervisor (60), manager (80), director (90), admin/boss (100)
  */
 const isHighLevelPosition = async (positionId, positionName, employeeRole) => {
-  // High-level roles that should be auto-confirmed (level > 40)
-  const highLevelRoles = ['supervisor', 'manager', 'director', 'admin', 'boss', 'super_admin'];
+  // High-level roles that should be auto-confirmed (level >= 40)
+  const highLevelRoles = ['assistant supervisor', 'assistant_supervisor', 'asst supervisor', 'asst. supervisor',
+                          'supervisor', 'manager', 'director', 'admin', 'boss', 'super_admin'];
 
   // Check employee_role directly
   if (employeeRole && highLevelRoles.includes(employeeRole.toLowerCase())) {
@@ -26,8 +27,9 @@ const isHighLevelPosition = async (positionId, positionName, employeeRole) => {
   // Check position name for keywords
   if (positionName) {
     const lowerName = positionName.toLowerCase();
-    if (lowerName.includes('manager') ||
-        lowerName.includes('supervisor') ||
+    // Check for assistant supervisor first (includes 'supervisor' keyword)
+    if (lowerName.includes('supervisor') ||
+        lowerName.includes('manager') ||
         lowerName.includes('director') ||
         lowerName.includes('admin') ||
         lowerName.includes('boss')) {
@@ -43,7 +45,7 @@ const isHighLevelPosition = async (positionId, positionName, employeeRole) => {
     );
     if (posResult.rows.length > 0) {
       const role = posResult.rows[0].role;
-      if (role && ['manager', 'supervisor', 'admin', 'director'].includes(role.toLowerCase())) {
+      if (role && ['manager', 'supervisor', 'admin', 'director', 'assistant supervisor', 'assistant_supervisor'].includes(role.toLowerCase())) {
         return true;
       }
     }
