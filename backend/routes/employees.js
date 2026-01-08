@@ -10,6 +10,47 @@ const { sanitizeEmployeeData, escapeHtml } = require('../middleware/sanitize');
 const { formatIC, detectIDType } = require('../utils/statutory');
 
 /**
+ * Check if a position is Manager level or above (should NOT have outlet_id)
+ * Positions at level >= 80 (manager, director, admin) should have outlet_id = NULL
+ */
+const isManagerOrAbove = async (positionId, positionName, employeeRole) => {
+  const managerRoles = ['manager', 'director', 'admin', 'boss', 'super_admin'];
+
+  // Check employee_role directly
+  if (employeeRole && managerRoles.some(r => employeeRole.toLowerCase().includes(r))) {
+    return true;
+  }
+
+  // Check position name for keywords
+  if (positionName) {
+    const lowerName = positionName.toLowerCase();
+    if (managerRoles.some(role => lowerName.includes(role))) {
+      return true;
+    }
+  }
+
+  // Check position_id linking to positions table
+  if (positionId) {
+    try {
+      const posResult = await pool.query(
+        'SELECT role FROM positions WHERE id = $1',
+        [positionId]
+      );
+      if (posResult.rows.length > 0) {
+        const role = posResult.rows[0].role?.toLowerCase();
+        if (role && managerRoles.some(r => role.includes(r))) {
+          return true;
+        }
+      }
+    } catch (err) {
+      console.error('Error checking position role for manager:', err);
+    }
+  }
+
+  return false;
+};
+
+/**
  * Check if a position requires confirmed employment status
  * Positions at level >= 40 (assistant supervisor and above) should have employment_type = 'confirmed'
  * This includes: assistant supervisor (40), supervisor (60), manager (80), director (90), admin/boss (100)
@@ -241,6 +282,13 @@ router.post('/', authenticateAdmin, async (req, res) => {
       empType = 'confirmed';
     }
 
+    // Check if this is a manager or above - if so, outlet_id should be NULL
+    let finalOutletId = toNullable(outlet_id);
+    const isManager = await isManagerOrAbove(toNullable(position_id), position, null);
+    if (isManager) {
+      finalOutletId = null;
+    }
+
     if (join_date && empType === 'probation') {
       const joinDateObj = new Date(join_date);
       joinDateObj.setMonth(joinDateObj.getMonth() + probMonths);
@@ -268,7 +316,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
        RETURNING *`,
       [
-        employee_id, toNullable(name), toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), toNullable(outlet_id), toNullable(position), toNullable(position_id), join_date,
+        employee_id, toNullable(name), toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(position), toNullable(position_id), join_date,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
@@ -387,6 +435,13 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       newEmpType = 'confirmed';
     }
 
+    // Check if this is a manager or above - if so, outlet_id should be NULL
+    let finalOutletId = outlet_id !== undefined ? toNullable(outlet_id) : current.outlet_id;
+    const isManager = await isManagerOrAbove(toNullable(position_id) || current.position_id, position || current.position, null);
+    if (isManager) {
+      finalOutletId = null;
+    }
+
     // Recalculate if still on probation and dates/months changed
     if (newEmpType === 'probation' && newJoinDate) {
       const joinDateObj = new Date(newJoinDate);
@@ -420,7 +475,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
        WHERE id = $41
        RETURNING *`,
       [
-        employee_id, name, toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), toNullable(outlet_id), toNullable(position), toNullable(position_id), toNullable(join_date), status,
+        employee_id, name, toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(position), toNullable(position_id), toNullable(join_date), status,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
@@ -490,6 +545,14 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
         paramCount++;
         setClauses.push(`probation_status = $${paramCount}`);
         values.push('confirmed');
+        paramCount++;
+      }
+
+      // Check if this is a manager or above - if so, outlet_id should be NULL
+      const isManager = await isManagerOrAbove(positionId, positionName, employeeRole);
+      if (isManager) {
+        setClauses.push(`outlet_id = $${paramCount}`);
+        values.push(null);
         paramCount++;
       }
     }

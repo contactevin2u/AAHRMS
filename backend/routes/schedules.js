@@ -751,11 +751,14 @@ router.get('/roster/weekly', authenticateAdmin, async (req, res) => {
     endDateObj.setDate(startDateObj.getDate() + 6);
     const endDate = endDateObj.toISOString().split('T')[0];
 
-    // Get all employees for this outlet
+    // Get all employees for this outlet (exclude managers who operate at company level)
     let empQuery = `
       SELECT e.id, e.employee_id, e.name, e.employee_role
       FROM employees e
+      LEFT JOIN positions p ON e.position_id = p.id
       WHERE e.outlet_id = $1 AND e.status = 'active'
+        AND (p.role IS NULL OR p.role NOT IN ('manager', 'admin', 'director', 'boss', 'super_admin'))
+        AND (e.employee_role IS NULL OR e.employee_role NOT IN ('manager', 'director', 'admin', 'boss', 'super_admin'))
     `;
     let empParams = [outlet_id];
 

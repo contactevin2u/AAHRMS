@@ -1334,6 +1334,31 @@ Human Resources Department
         );
 
       -- =====================================================
+      -- SET outlet_id = NULL FOR MANAGERS AND ABOVE
+      -- Positions at level >= 80 (manager, director, admin) should NOT have outlet_id
+      -- Managers operate at company level, not outlet level
+      -- =====================================================
+
+      UPDATE employees e
+      SET outlet_id = NULL
+      WHERE e.outlet_id IS NOT NULL
+        AND (
+          -- Check by position_id linking to positions table with manager+ role
+          EXISTS (
+            SELECT 1 FROM positions p
+            WHERE p.id = e.position_id
+            AND p.role IN ('manager', 'admin', 'director', 'boss', 'super_admin')
+          )
+          -- Or check by employee_role directly
+          OR e.employee_role IN ('manager', 'director', 'admin', 'boss', 'super_admin')
+          -- Or check by position name containing manager keywords
+          OR LOWER(e.position) LIKE '%manager%'
+          OR LOWER(e.position) LIKE '%director%'
+          OR LOWER(e.position) LIKE '%admin%'
+          OR LOWER(e.position) LIKE '%boss%'
+        );
+
+      -- =====================================================
       -- EMPLOYEE_OUTLETS TABLE (for multi-outlet managers)
       -- =====================================================
       CREATE TABLE IF NOT EXISTS employee_outlets (
