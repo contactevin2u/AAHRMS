@@ -64,22 +64,30 @@ const checkProfileComplete = (employee) => {
  * Deadline is always 28th of the month (for payroll processing)
  * - If join_date is on or before 28th → deadline is 28th of that month
  * - If join_date is after 28th → deadline is 28th of next month
+ * - Minimum deadline is 28/02/2026 for all existing employees (system launch grace period)
  */
+const SYSTEM_LAUNCH_DEADLINE = new Date(2026, 1, 28); // 28 Feb 2026
+
 const calculateDeadline = (joinDate) => {
-  if (!joinDate) return null;
+  if (!joinDate) return SYSTEM_LAUNCH_DEADLINE;
 
   const date = new Date(joinDate);
   const day = date.getDate();
   const month = date.getMonth();
   const year = date.getFullYear();
 
+  let calculatedDeadline;
   if (day <= 28) {
     // Same month, 28th
-    return new Date(year, month, 28);
+    calculatedDeadline = new Date(year, month, 28);
   } else {
     // Next month, 28th
-    return new Date(year, month + 1, 28);
+    calculatedDeadline = new Date(year, month + 1, 28);
   }
+
+  // Use the later of: system launch deadline OR calculated deadline
+  // This gives existing employees until 28/02/2026 to complete profile
+  return calculatedDeadline > SYSTEM_LAUNCH_DEADLINE ? calculatedDeadline : SYSTEM_LAUNCH_DEADLINE;
 };
 
 // Get current employee profile
