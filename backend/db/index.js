@@ -1355,6 +1355,18 @@ Human Resources Department
         END IF;
       END $$;
 
+      -- =====================================================
+      -- AUTO-LINK position text to position_id
+      -- For employees who have position text but no position_id
+      -- =====================================================
+      UPDATE employees e
+      SET position_id = p.id
+      FROM positions p
+      WHERE e.position_id IS NULL
+        AND e.position IS NOT NULL
+        AND LOWER(TRIM(e.position)) = LOWER(TRIM(p.name))
+        AND e.company_id = p.company_id;
+
       -- Add must_change_password flag to employees (for first login with IC)
       DO $$
       BEGIN

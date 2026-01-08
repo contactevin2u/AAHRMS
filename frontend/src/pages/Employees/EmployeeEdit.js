@@ -58,6 +58,7 @@ function EmployeeEdit() {
       ]);
 
       // Fetch outlets and positions if needed (for outlet-based companies like Mimix)
+      let fetchedPositions = [];
       if (usesOutlets) {
         try {
           const [outletRes, positionsRes] = await Promise.all([
@@ -65,7 +66,8 @@ function EmployeeEdit() {
             api.get('/positions')
           ]);
           setOutlets(outletRes.data || []);
-          setPositions(positionsRes.data || []);
+          fetchedPositions = positionsRes.data || [];
+          setPositions(fetchedPositions);
         } catch (e) {
           console.error('Error fetching outlets/positions:', e);
         }
@@ -81,6 +83,19 @@ function EmployeeEdit() {
       // Auto-detect ID type from ic_number
       const detectedIdType = employee.id_type || detectIDType(employee.ic_number);
 
+      // Auto-match position text to position_id if position_id is not set
+      let matchedPositionId = employee.position_id || '';
+      if (!matchedPositionId && employee.position && fetchedPositions.length > 0) {
+        // Try to find a matching position by name (case-insensitive)
+        const positionText = employee.position.toLowerCase().trim();
+        const matchedPos = fetchedPositions.find(p =>
+          p.name.toLowerCase().trim() === positionText
+        );
+        if (matchedPos) {
+          matchedPositionId = matchedPos.id;
+        }
+      }
+
       // Populate form with employee data
       setForm({
         employee_id: employee.employee_id || '',
@@ -92,7 +107,7 @@ function EmployeeEdit() {
         department_id: employee.department_id || '',
         outlet_id: employee.outlet_id || '',
         position: employee.position || '',
-        position_id: employee.position_id || '',
+        position_id: matchedPositionId,
         join_date: employee.join_date ? employee.join_date.split('T')[0] : '',
         status: employee.status || 'active',
         address: employee.address || '',
