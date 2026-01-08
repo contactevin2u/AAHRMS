@@ -59,6 +59,29 @@ const checkProfileComplete = (employee) => {
   return { complete: missing.length === 0, missing };
 };
 
+/**
+ * Calculate profile completion deadline based on join_date
+ * Deadline is always 28th of the month (for payroll processing)
+ * - If join_date is on or before 28th → deadline is 28th of that month
+ * - If join_date is after 28th → deadline is 28th of next month
+ */
+const calculateDeadline = (joinDate) => {
+  if (!joinDate) return null;
+
+  const date = new Date(joinDate);
+  const day = date.getDate();
+  const month = date.getMonth();
+  const year = date.getFullYear();
+
+  if (day <= 28) {
+    // Same month, 28th
+    return new Date(year, month, 28);
+  } else {
+    // Next month, 28th
+    return new Date(year, month + 1, 28);
+  }
+};
+
 // Get current employee profile
 router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
   const result = await pool.query(
@@ -82,12 +105,8 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
   // Check profile completion status
   const { complete, missing } = checkProfileComplete(employee);
 
-  // Calculate deadline (1 month from join_date)
-  let deadline = null;
-  if (employee.join_date) {
-    const joinDate = new Date(employee.join_date);
-    deadline = new Date(joinDate.setMonth(joinDate.getMonth() + 1));
-  }
+  // Calculate deadline (28th of the month for payroll)
+  const deadline = calculateDeadline(employee.join_date);
 
   res.json({
     ...sanitizedEmployee,
@@ -117,13 +136,12 @@ router.get('/completion-status', authenticateEmployee, asyncHandler(async (req, 
   const employee = result.rows[0];
   const { complete, missing } = checkProfileComplete(employee);
 
-  // Calculate deadline (1 month from join_date)
-  let deadline = null;
+  // Calculate deadline (28th of the month for payroll)
+  const deadline = calculateDeadline(employee.join_date);
   let daysRemaining = null;
-  if (employee.join_date) {
-    const joinDate = new Date(employee.join_date);
-    deadline = new Date(joinDate.setMonth(joinDate.getMonth() + 1));
+  if (deadline) {
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time for accurate day calculation
     daysRemaining = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
   }
 
