@@ -1146,3 +1146,53 @@
     flex: 1;
   }
 }
+
+/* Assign button in suggestions */
+.suggestion-assign-btn {
+  background: #1976d2;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.suggestion-assign-btn:hover {
+  background: #1565c0;
+}
+
+/* Assign Schedule Modal */
+.assign-modal {
+  max-width: 450px;
+  width: 100%;
+}
+
+.assign-info {
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.assign-info p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.shift-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.assign-note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+}

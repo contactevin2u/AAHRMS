@@ -715,6 +715,121 @@ router.post('/:id/approve-without-schedule', authenticateAdmin, async (req, res)
   }
 });
 
+// Approve attendance and assign schedule (for Mimix - records without schedule)
+router.post('/:id/approve-with-schedule', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { shift_template_id, notes } = req.body;
+    const adminId = req.admin?.id;
+    const companyId = getCompanyFilter(req);
+
+    if (!shift_template_id) {
+      return res.status(400).json({ error: 'Shift template is required' });
+    }
+
+    // Get the clock-in record
+    let recordQuery = 'SELECT * FROM clock_in_records WHERE id = $1';
+    const recordParams = [id];
+    if (companyId !== null) {
+      recordQuery += ' AND company_id = $2';
+      recordParams.push(companyId);
+    }
+
+    const recordResult = await pool.query(recordQuery, recordParams);
+    if (recordResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Attendance record not found' });
+    }
+
+    const record = recordResult.rows[0];
+
+    // Get the shift template
+    const templateResult = await pool.query(
+      'SELECT * FROM shift_templates WHERE id = $1',
+      [shift_template_id]
+    );
+
+    if (templateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Shift template not found' });
+    }
+
+    const template = templateResult.rows[0];
+
+    // Create or update schedule for this employee/date
+    const scheduleResult = await pool.query(
+      `INSERT INTO schedules (employee_id, schedule_date, shift_template_id, outlet_id, status, created_by)
+       VALUES ($1, $2, $3, $4, 'scheduled', $5)
+       ON CONFLICT (employee_id, schedule_date)
+       DO UPDATE SET shift_template_id = $3, status = 'scheduled', updated_at = NOW()
+       RETURNING id`,
+      [record.employee_id, record.work_date, shift_template_id, record.outlet_id, adminId]
+    );
+
+    const scheduleId = scheduleResult.rows[0].id;
+
+    // Calculate work hours based on template
+    const parseTime = (timeStr) => {
+      if (!timeStr) return null;
+      const parts = timeStr.toString().split(':');
+      return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    };
+
+    // Recalculate work hours using actual clock times
+    const t1_in = parseTime(record.clock_in_1);
+    const t1_out = parseTime(record.clock_out_1);
+    const t2_in = parseTime(record.clock_in_2);
+    const t2_out = parseTime(record.clock_out_2);
+
+    let totalMinutes = 0;
+
+    if (t1_in !== null && t1_out !== null) {
+      totalMinutes += Math.max(0, t1_out - t1_in);
+    }
+    if (t2_in !== null && t2_out !== null) {
+      totalMinutes += Math.max(0, t2_out - t2_in);
+    }
+    if (t1_in !== null && t2_out !== null && t1_out === null && t2_in === null) {
+      totalMinutes = Math.max(0, t2_out - t1_in);
+    }
+
+    // Calculate OT (hours above 8.5h = 510 minutes)
+    const otMinutes = Math.max(0, totalMinutes - STANDARD_WORK_MINUTES);
+    const totalHours = Math.round(totalMinutes / 60 * 100) / 100;
+    const otHours = Math.round(otMinutes / 60 * 100) / 100;
+
+    // Update the clock-in record
+    const updateResult = await pool.query(
+      `UPDATE clock_in_records
+       SET status = 'approved',
+           approved_by = $1,
+           approved_at = NOW(),
+           has_schedule = true,
+           schedule_id = $2,
+           total_work_minutes = $3,
+           ot_minutes = $4,
+           total_work_hours = $5,
+           ot_hours = $6,
+           notes = COALESCE($7, notes),
+           updated_at = NOW()
+       WHERE id = $8
+       RETURNING *`,
+      [adminId, scheduleId, totalMinutes, otMinutes, totalHours, otHours, notes, id]
+    );
+
+    res.json({
+      message: 'Attendance approved with schedule assigned',
+      record: updateResult.rows[0],
+      schedule: {
+        id: scheduleId,
+        shift_code: template.code,
+        shift_name: template.name
+      }
+    });
+  } catch (error) {
+    console.error('Error approving attendance with schedule:', error);
+    res.status(500).json({ error: 'Failed to approve attendance' });
+  }
+});
+
 // Delete attendance record - ENABLED for testing mode
 // TODO: Disable this after real data starts - change back to 403
 router.delete('/:id', authenticateAdmin, async (req, res) => {

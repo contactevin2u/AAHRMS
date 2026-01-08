@@ -36,6 +36,11 @@ function Schedules() {
   // Workers without schedule (for suggestion notes)
   const [workersWithoutSchedule, setWorkersWithoutSchedule] = useState([]);
 
+  // Assign schedule modal (for workers without schedule)
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assigningRecord, setAssigningRecord] = useState(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+
   // Shift template management
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
@@ -177,6 +182,7 @@ function Schedules() {
         const key = `${r.employee_id}-${r.work_date}`;
         if (!grouped[key]) {
           grouped[key] = {
+            id: r.id,  // clock_in_record id for API call
             employee_id: r.employee_id,
             employee_name: r.employee_name,
             emp_code: r.emp_code,
@@ -500,6 +506,33 @@ function Schedules() {
     }
   };
 
+  // Assign schedule for workers without schedule
+  const openAssignScheduleModal = (record) => {
+    setAssigningRecord(record);
+    setSelectedTemplateId('');
+    setShowAssignModal(true);
+  };
+
+  const handleAssignSchedule = async () => {
+    if (!selectedTemplateId) {
+      alert('Please select a shift template');
+      return;
+    }
+
+    try {
+      await attendanceApi.approveWithSchedule(assigningRecord.record_id || assigningRecord.id, {
+        shift_template_id: parseInt(selectedTemplateId)
+      });
+      alert('Schedule assigned and attendance approved!');
+      setShowAssignModal(false);
+      setAssigningRecord(null);
+      fetchWorkersWithoutSchedule();
+      fetchRoster();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to assign schedule');
+    }
+  };
+
   // Template management functions
   const openAddTemplate = () => {
     setEditingTemplate(null);
@@ -790,6 +823,12 @@ function Schedules() {
                             <div className="suggestion-hours">
                               {record.total_hours ? `${parseFloat(record.total_hours).toFixed(1)}h` : '-'}
                             </div>
+                            <button
+                              className="suggestion-assign-btn"
+                              onClick={() => openAssignScheduleModal(record)}
+                            >
+                              Assign
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -1019,6 +1058,49 @@ function Schedules() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Assign Schedule Modal */}
+        {showAssignModal && assigningRecord && (
+          <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
+            <div className="modal assign-modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Assign Schedule</h3>
+                <button className="close-btn" onClick={() => setShowAssignModal(false)}>&times;</button>
+              </div>
+              <div className="modal-body">
+                <div className="assign-info">
+                  <p><strong>Employee:</strong> {assigningRecord.employee_name}</p>
+                  <p><strong>Date:</strong> {new Date(assigningRecord.work_date).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                  <p><strong>Clock Time:</strong> {assigningRecord.clock_in_1?.substring(0, 5) || '--:--'} - {assigningRecord.clock_out_2?.substring(0, 5) || '--:--'}</p>
+                </div>
+
+                <div className="form-group">
+                  <label>Select Shift Template</label>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={e => setSelectedTemplateId(e.target.value)}
+                    className="shift-select"
+                  >
+                    <option value="">-- Select Shift --</option>
+                    {templates.filter(t => !t.is_off).map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.code} - {t.name} ({t.shift_start?.substring(0, 5)} - {t.shift_end?.substring(0, 5)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <p className="assign-note">
+                  This will create a schedule for this date and approve the attendance.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-secondary" onClick={() => setShowAssignModal(false)}>Cancel</button>
+                <button className="btn-primary" onClick={handleAssignSchedule}>Assign & Approve</button>
+              </div>
             </div>
           </div>
         )}

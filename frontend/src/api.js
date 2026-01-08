@@ -301,6 +301,8 @@ export const attendanceApi = {
   bulkApproveOT: (record_ids) => api.post('/clock-in/bulk-approve-ot', { record_ids }),
   // Summary (grouped by outlet > position > employee)
   getSummary: (params) => api.get('/clock-in/summary', { params }),
+  // Approve with schedule assignment (for records without schedule)
+  approveWithSchedule: (id, data) => api.post(`/clock-in/${id}/approve-with-schedule`, data),
 };
 
 // Benefits In Kind (BIK) - for AA Alive

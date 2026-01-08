@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { attendanceApi, employeeApi, outletsApi, departmentApi } from '../api';
+import { attendanceApi, employeeApi, outletsApi, departmentApi, schedulesApi } from '../api';
 import { toast } from 'react-toastify';
 import './Attendance.css';
 
@@ -40,6 +40,12 @@ const Attendance = () => {
   const [editingCell, setEditingCell] = useState(null); // { recordId, field }
   const [editValue, setEditValue] = useState('');
 
+  // Assign schedule modal state
+  const [showAssignScheduleModal, setShowAssignScheduleModal] = useState(false);
+  const [assignScheduleRecord, setAssignScheduleRecord] = useState(null);
+  const [shiftTemplates, setShiftTemplates] = useState([]);
+  const [selectedShiftTemplate, setSelectedShiftTemplate] = useState('');
+
   const admin = JSON.parse(localStorage.getItem('admin') || '{}');
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
   const isSupervisor = admin.role === 'supervisor';
@@ -54,6 +60,22 @@ const Attendance = () => {
       fetchSummary();
     }
   }, [activeTab, filters.month, filters.year]);
+
+  // Fetch shift templates for Mimix (outlet-based companies)
+  useEffect(() => {
+    if (!isAAAlive) {
+      fetchShiftTemplates();
+    }
+  }, [isAAAlive]);
+
+  const fetchShiftTemplates = async () => {
+    try {
+      const res = await schedulesApi.getTemplates();
+      setShiftTemplates(res.data || []);
+    } catch (error) {
+      console.error('Error fetching shift templates:', error);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -194,6 +216,33 @@ const Attendance = () => {
       fetchData();
     } catch (error) {
       toast.error('Failed to bulk approve OT');
+    }
+  };
+
+  // Open assign schedule modal
+  const openAssignScheduleModal = (record) => {
+    setAssignScheduleRecord(record);
+    setSelectedShiftTemplate('');
+    setShowAssignScheduleModal(true);
+  };
+
+  // Handle assign schedule submission
+  const handleAssignSchedule = async () => {
+    if (!selectedShiftTemplate) {
+      toast.warning('Please select a shift template');
+      return;
+    }
+
+    try {
+      await attendanceApi.approveWithSchedule(assignScheduleRecord.id, {
+        shift_template_id: parseInt(selectedShiftTemplate)
+      });
+      toast.success('Schedule assigned and attendance approved');
+      setShowAssignScheduleModal(false);
+      setAssignScheduleRecord(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to assign schedule');
     }
   };
 
@@ -819,6 +868,15 @@ const Attendance = () => {
                             OT ✓
                           </button>
                         )}
+                        {!isAAAlive && !record.has_schedule && (
+                          <button
+                            className="assign-schedule-btn"
+                            onClick={() => openAssignScheduleModal(record)}
+                            title="Assign Schedule"
+                          >
+                            +Sched
+                          </button>
+                        )}
                         <button
                           className="delete-btn"
                           onClick={() => handleDelete(record.id)}
@@ -1151,6 +1209,53 @@ const Attendance = () => {
                   <p className="no-photo-data">No selfie photos recorded for this entry</p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Schedule Modal */}
+      {showAssignScheduleModal && assignScheduleRecord && (
+        <div className="modal-overlay" onClick={() => setShowAssignScheduleModal(false)}>
+          <div className="modal assign-schedule-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Assign Schedule</h2>
+              <button className="close-btn" onClick={() => setShowAssignScheduleModal(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div className="assign-schedule-info">
+                <p><strong>Employee:</strong> {assignScheduleRecord.employee_name}</p>
+                <p><strong>Date:</strong> {formatDate(assignScheduleRecord.work_date)}</p>
+                <p><strong>Clock In:</strong> {formatTime(assignScheduleRecord.clock_in_1)} - <strong>Clock Out:</strong> {formatTime(assignScheduleRecord.clock_out_2) || 'Not yet'}</p>
+              </div>
+
+              <div className="form-group">
+                <label>Select Shift Template *</label>
+                <select
+                  value={selectedShiftTemplate}
+                  onChange={(e) => setSelectedShiftTemplate(e.target.value)}
+                  className="shift-select"
+                >
+                  <option value="">-- Select Shift --</option>
+                  {shiftTemplates.filter(t => !t.is_off).map(template => (
+                    <option key={template.id} value={template.id}>
+                      {template.code} - {template.name} ({template.shift_start?.substring(0,5)} - {template.shift_end?.substring(0,5)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <p className="assign-schedule-note">
+                This will create a schedule for this date and approve the attendance record.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowAssignScheduleModal(false)}>
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={handleAssignSchedule}>
+                Assign & Approve
+              </button>
             </div>
           </div>
         </div>
@@ -1520,6 +1625,83 @@ const Attendance = () => {
         }
         .position-employees-table .success {
           color: #2e7d32;
+        }
+
+        /* Assign Schedule Button */
+        .assign-schedule-btn {
+          background: #ff9800;
+          color: white;
+          border: none;
+          padding: 4px 6px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 10px;
+          margin-left: 4px;
+          white-space: nowrap;
+        }
+        .assign-schedule-btn:hover {
+          background: #f57c00;
+        }
+
+        /* Assign Schedule Modal */
+        .assign-schedule-modal {
+          max-width: 450px;
+          width: 100%;
+        }
+        .assign-schedule-info {
+          background: #f5f5f5;
+          padding: 12px;
+          border-radius: 6px;
+          margin-bottom: 16px;
+        }
+        .assign-schedule-info p {
+          margin: 4px 0;
+          font-size: 14px;
+        }
+        .shift-select {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          font-size: 14px;
+        }
+        .assign-schedule-note {
+          margin-top: 12px;
+          font-size: 12px;
+          color: #666;
+          font-style: italic;
+        }
+        .modal-footer {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          padding: 16px 20px;
+          border-top: 1px solid #e0e0e0;
+          background: #fafafa;
+        }
+        .btn-secondary {
+          background: #e0e0e0;
+          color: #333;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+        }
+        .btn-secondary:hover {
+          background: #bdbdbd;
+        }
+        .btn-primary {
+          background: #1976d2;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+        }
+        .btn-primary:hover {
+          background: #1565c0;
         }
       `}</style>
     </div>
