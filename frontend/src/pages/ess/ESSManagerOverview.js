@@ -22,7 +22,17 @@ function ESSManagerOverview() {
       setOverviewData(res.data);
     } catch (err) {
       console.error('Error fetching overview:', err);
-      setError(err.response?.data?.error || 'Failed to load team overview');
+      // Handle different error response formats
+      const errorData = err.response?.data;
+      let errorMessage = 'Failed to load team overview';
+      if (typeof errorData === 'string') {
+        errorMessage = errorData;
+      } else if (errorData?.error) {
+        errorMessage = errorData.error;
+      } else if (errorData?.message) {
+        errorMessage = errorData.message;
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

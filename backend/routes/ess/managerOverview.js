@@ -22,12 +22,13 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
-  // Get employee's company
+  // Get employee's company and outlet
   const empResult = await pool.query(
-    'SELECT company_id FROM employees WHERE id = $1',
+    'SELECT company_id, outlet_id FROM employees WHERE id = $1',
     [req.employee.id]
   );
   const companyId = empResult.rows[0]?.company_id;
+  const outletId = empResult.rows[0]?.outlet_id;
 
   if (!isMimixCompany(companyId)) {
     return res.status(403).json({ error: 'Team overview is only available for outlet-based companies.' });
@@ -38,7 +39,7 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
   const approvalLevel = role === 'manager' ? 2 : 1;
 
   // Get all outlets managed by this supervisor/manager
-  const employee = { ...req.employee, company_id: companyId };
+  const employee = { ...req.employee, company_id: companyId, outlet_id: outletId };
   const outletIds = await getManagedOutlets(employee);
 
   if (outletIds.length === 0) {
