@@ -38,12 +38,12 @@ function buildFeatureFlags(employee, company) {
     notifications: true,
     claims: true,
     letters: true,
+    clockIn: true,                                // Attendance available for all companies
 
     // Company-specific features
-    clockIn: groupingType === 'outlet',           // Mimix only (outlet-based)
-    clockInRequiresGPS: true,
-    clockInRequiresPhoto: true,
-    clockInRequiresFace: true,
+    clockInRequiresGPS: groupingType === 'outlet',    // Mimix requires GPS
+    clockInRequiresPhoto: groupingType === 'outlet',  // Mimix requires photo
+    clockInRequiresFace: groupingType === 'outlet',   // Mimix requires face
     benefitsInKind: companyId === 1,              // AA Alive only
     lettersWithPDF: companyId === 1               // AA Alive only (has letterhead)
   };
