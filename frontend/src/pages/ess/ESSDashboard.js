@@ -167,7 +167,7 @@ function ESSDashboard() {
                 </Link>
               )}
               {pendingApprovals.ot > 0 && (
-                <Link to="/ess/attendance" className="approval-card ot">
+                <Link to="/ess/ot-approval" className="approval-card ot">
                   <div className="approval-badge">{pendingApprovals.ot}</div>
                   <div className="approval-icon">&#x23F0;</div>
                   <span className="approval-label">OT Approvals</span>
