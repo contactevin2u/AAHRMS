@@ -814,9 +814,24 @@ const Attendance = () => {
                       )}
                       <td className="hours-cell">
                         {renderEditableHours(record, 'total_work_hours', record.total_hours, true)}
+                        {/* Show combined total if OT is approved */}
+                        {!isAAAlive && record.ot_approved && record.ot_hours > 0 && (
+                          <span className="combined-total" title="Total + Approved OT">
+                            = {((parseFloat(record.total_hours) || 0) + (parseFloat(record.ot_hours) || 0)).toFixed(1)}h
+                          </span>
+                        )}
                       </td>
                       <td className="hours-cell ot">
                         {renderEditableHours(record, 'ot_hours', record.ot_hours, false)}
+                        {!isAAAlive && record.ot_hours > 0 && !record.ot_approved && (
+                          <button
+                            className="inline-approve-ot-btn"
+                            onClick={() => handleApproveOT(record.id)}
+                            title="Approve OT"
+                          >
+                            ✓
+                          </button>
+                        )}
                       </td>
                       {!isAAAlive && (
                         <td className="ot-status-cell">
@@ -1424,6 +1439,31 @@ const Attendance = () => {
         }
         .approve-ot-btn:hover {
           background: #7b1fa2;
+        }
+
+        /* Inline Approve OT Button (next to OT hours) */
+        .inline-approve-ot-btn {
+          background: #9c27b0;
+          color: white;
+          border: none;
+          padding: 2px 6px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+          margin-left: 4px;
+          font-weight: bold;
+        }
+        .inline-approve-ot-btn:hover {
+          background: #7b1fa2;
+        }
+
+        /* Combined Total Display */
+        .combined-total {
+          display: inline-block;
+          margin-left: 6px;
+          color: #2e7d32;
+          font-weight: bold;
+          font-size: 12px;
         }
 
         /* Calc Hours Cell */

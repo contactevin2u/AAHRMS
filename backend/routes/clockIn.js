@@ -88,6 +88,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
 
     let query = `
       SELECT cr.*,
+             cr.total_work_hours as total_hours,
              e.name as employee_name,
              e.employee_id as emp_code,
              d.name as department_name,
