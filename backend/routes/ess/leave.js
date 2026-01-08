@@ -334,7 +334,7 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
      FROM leave_balances lb
      JOIN leave_types lt ON lb.leave_type_id = lt.id
      WHERE lb.employee_id = $1 AND lb.leave_type_id = $2 AND lb.year = $3`,
-    [req.employee.id, leave_type_id, currentYear]
+    [req.employee.id, leaveType.id, currentYear]
   );
 
   if (balanceResult.rows.length > 0) {
@@ -369,7 +369,7 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
        (employee_id, leave_type_id, start_date, end_date, total_days, reason, status, approval_level, mc_url, half_day, child_number)
      VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10)
      RETURNING *`,
-    [req.employee.id, leave_type_id, start_date, end_date, totalDays, reason, approvalLevel, mcUrl, half_day || null, child_number || null]
+    [req.employee.id, leaveType.id, start_date, end_date, totalDays, reason, approvalLevel, mcUrl, half_day || null, child_number || null]
   );
 
   // Create notification for supervisor if Mimix
