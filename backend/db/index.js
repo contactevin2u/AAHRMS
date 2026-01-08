@@ -119,6 +119,14 @@ const initDb = async () => {
           -- Migrate existing non-super_admin users to default company
           UPDATE admin_users SET company_id = 1 WHERE role != 'super_admin' AND company_id IS NULL;
         END IF;
+        -- Link admin_users to employees for position-based permissions
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='employee_id') THEN
+          ALTER TABLE admin_users ADD COLUMN employee_id INTEGER REFERENCES employees(id);
+        END IF;
+        -- Outlet restriction for supervisor/manager roles
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_users' AND column_name='outlet_id') THEN
+          ALTER TABLE admin_users ADD COLUMN outlet_id INTEGER REFERENCES outlets(id);
+        END IF;
       END $$;
 
       -- Roles table for permission management
@@ -1272,11 +1280,24 @@ Human Resources Department
         department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
         name VARCHAR(100) NOT NULL,
         is_multi_outlet BOOLEAN DEFAULT FALSE,
+        role VARCHAR(20) DEFAULT 'crew',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company_id);
       CREATE INDEX IF NOT EXISTS idx_positions_department ON positions(department_id);
+
+      -- Add role column to positions if not exists
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='positions' AND column_name='role') THEN
+          ALTER TABLE positions ADD COLUMN role VARCHAR(20) DEFAULT 'crew';
+        END IF;
+      END $$;
+
+      -- Update existing positions with appropriate roles based on name
+      UPDATE positions SET role = 'manager' WHERE LOWER(name) LIKE '%manager%' AND (role IS NULL OR role = 'crew');
+      UPDATE positions SET role = 'supervisor' WHERE LOWER(name) LIKE '%supervisor%' AND (role IS NULL OR role = 'crew');
 
       -- =====================================================
       -- EMPLOYEE_OUTLETS TABLE (for multi-outlet managers)
