@@ -7,8 +7,9 @@ function ESSManagerOverview() {
   const [overviewData, setOverviewData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [expandedOutlets, setExpandedOutlets] = useState({});
-  const [activeTab, setActiveTab] = useState('overview'); // overview, leave, claims, attendance
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedOutlet, setSelectedOutlet] = useState('all');
 
   useEffect(() => {
     fetchOverview();
@@ -19,41 +20,19 @@ function ESSManagerOverview() {
       setLoading(true);
       const res = await essApi.getManagerOverview();
       setOverviewData(res.data);
-      // Expand first outlet by default
-      if (res.data.outlets?.length > 0) {
-        setExpandedOutlets({ [res.data.outlets[0].id]: true });
-      }
     } catch (err) {
       console.error('Error fetching overview:', err);
-      setError(err.response?.data?.error || 'Failed to load manager overview');
+      setError(err.response?.data?.error || 'Failed to load team overview');
     } finally {
       setLoading(false);
     }
-  };
-
-  const toggleOutlet = (outletId) => {
-    setExpandedOutlets(prev => ({
-      ...prev,
-      [outletId]: !prev[outletId]
-    }));
-  };
-
-  const expandAll = () => {
-    const allExpanded = {};
-    overviewData?.outlets?.forEach(o => { allExpanded[o.id] = true; });
-    setExpandedOutlets(allExpanded);
-  };
-
-  const collapseAll = () => {
-    setExpandedOutlets({});
   };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('en-MY', {
       day: '2-digit',
-      month: 'short',
-      year: 'numeric'
+      month: 'short'
     });
   };
 
@@ -88,9 +67,44 @@ function ESSManagerOverview() {
 
   const { outlets, summary } = overviewData || { outlets: [], summary: {} };
 
-  // Calculate totals for tabs
+  // Calculate totals
   const totalPendingLeave = outlets.reduce((sum, o) => sum + o.pending_leave_count, 0);
   const totalPendingClaims = outlets.reduce((sum, o) => sum + o.pending_claims_count, 0);
+  const totalNotClockedIn = outlets.reduce((sum, o) => sum + o.not_clocked_in_count, 0);
+
+  // Get all staff across outlets (for staff directory)
+  const allStaff = outlets.flatMap(outlet =>
+    outlet.staff.map(emp => ({ ...emp, outlet_name: outlet.name, outlet_id: outlet.id }))
+  );
+
+  // Filter staff based on search and outlet
+  const filteredStaff = allStaff.filter(emp => {
+    const matchesSearch = !searchQuery ||
+      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.employee_id.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesOutlet = selectedOutlet === 'all' || emp.outlet_id === parseInt(selectedOutlet);
+    return matchesSearch && matchesOutlet;
+  });
+
+  // Get all attendance records
+  const allAttendance = outlets.flatMap(outlet =>
+    outlet.attendance_today.map(att => ({ ...att, outlet_name: outlet.name }))
+  );
+
+  // Get all not clocked in
+  const allNotClockedIn = outlets.flatMap(outlet =>
+    outlet.not_clocked_in.map(emp => ({ ...emp, outlet_name: outlet.name }))
+  );
+
+  // Get all pending leave
+  const allPendingLeave = outlets.flatMap(outlet =>
+    outlet.pending_leave.map(leave => ({ ...leave, outlet_name: outlet.name }))
+  );
+
+  // Get all pending claims
+  const allPendingClaims = outlets.flatMap(outlet =>
+    outlet.pending_claims.map(claim => ({ ...claim, outlet_name: outlet.name }))
+  );
 
   return (
     <ESSLayout>
@@ -98,238 +112,349 @@ function ESSManagerOverview() {
         <header className="overview-header">
           <div>
             <h1>Team Overview</h1>
-            <p>Your outlets at a glance</p>
+            <p>{new Date().toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
           </div>
         </header>
 
-        {/* Summary Cards */}
-        <div className="summary-cards">
-          <div className="summary-card outlets">
-            <span className="summary-icon">&#x1F3E2;</span>
-            <div className="summary-content">
-              <span className="summary-value">{summary.total_outlets}</span>
-              <span className="summary-label">Outlets</span>
-            </div>
+        {/* Quick Stats */}
+        <div className="quick-stats">
+          <div className="stat-card primary">
+            <div className="stat-number">{summary.total_outlets}</div>
+            <div className="stat-label">Outlets</div>
           </div>
-          <div className="summary-card staff">
-            <span className="summary-icon">&#x1F465;</span>
-            <div className="summary-content">
-              <span className="summary-value">{summary.total_staff}</span>
-              <span className="summary-label">Total Staff</span>
-            </div>
+          <div className="stat-card info">
+            <div className="stat-number">{summary.total_staff}</div>
+            <div className="stat-label">Staff</div>
           </div>
-          <div className="summary-card leave">
-            <span className="summary-icon">&#x1F4C5;</span>
-            <div className="summary-content">
-              <span className="summary-value">{summary.pending_leave}</span>
-              <span className="summary-label">Pending Leave</span>
-            </div>
+          <div className="stat-card success">
+            <div className="stat-number">{summary.clocked_in_today}</div>
+            <div className="stat-label">Working</div>
           </div>
-          <div className="summary-card claims">
-            <span className="summary-icon">&#x1F4B3;</span>
-            <div className="summary-content">
-              <span className="summary-value">{summary.pending_claims}</span>
-              <span className="summary-label">Pending Claims</span>
-            </div>
-          </div>
-          <div className="summary-card attendance">
-            <span className="summary-icon">&#x2705;</span>
-            <div className="summary-content">
-              <span className="summary-value">{summary.clocked_in_today}</span>
-              <span className="summary-label">Clocked In Today</span>
-            </div>
+          <div className="stat-card danger">
+            <div className="stat-number">{totalNotClockedIn}</div>
+            <div className="stat-label">Not In</div>
           </div>
         </div>
 
         {/* Tab Navigation */}
         <div className="tab-nav">
           <button
-            className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('overview')}
+            className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
           >
-            Overview
+            Dashboard
           </button>
           <button
-            className={`tab-btn ${activeTab === 'leave' ? 'active' : ''}`}
-            onClick={() => setActiveTab('leave')}
+            className={`tab-btn ${activeTab === 'staff' ? 'active' : ''}`}
+            onClick={() => setActiveTab('staff')}
           >
-            Pending Leave {totalPendingLeave > 0 && <span className="badge">{totalPendingLeave}</span>}
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'claims' ? 'active' : ''}`}
-            onClick={() => setActiveTab('claims')}
-          >
-            Pending Claims {totalPendingClaims > 0 && <span className="badge">{totalPendingClaims}</span>}
+            Staff Directory
           </button>
           <button
             className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
             onClick={() => setActiveTab('attendance')}
           >
-            Today's Attendance
+            Attendance
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'approvals' ? 'active' : ''}`}
+            onClick={() => setActiveTab('approvals')}
+          >
+            Approvals {(totalPendingLeave + totalPendingClaims) > 0 && (
+              <span className="badge">{totalPendingLeave + totalPendingClaims}</span>
+            )}
           </button>
         </div>
 
-        {/* Expand/Collapse All */}
-        <div className="expand-controls">
-          <button onClick={expandAll} className="expand-btn">Expand All</button>
-          <button onClick={collapseAll} className="expand-btn">Collapse All</button>
-        </div>
-
-        {/* Outlets List */}
-        <div className="outlets-list">
-          {outlets.map(outlet => (
-            <div key={outlet.id} className="outlet-card">
-              <div className="outlet-header" onClick={() => toggleOutlet(outlet.id)}>
-                <div className="outlet-info">
-                  <h3>{outlet.name}</h3>
-                  <div className="outlet-stats">
-                    <span className="stat"><strong>{outlet.staff_count}</strong> staff</span>
-                    {outlet.pending_leave_count > 0 && (
-                      <span className="stat warning"><strong>{outlet.pending_leave_count}</strong> leave pending</span>
-                    )}
-                    {outlet.pending_claims_count > 0 && (
-                      <span className="stat warning"><strong>{outlet.pending_claims_count}</strong> claims pending</span>
-                    )}
-                    <span className="stat success"><strong>{outlet.clocked_in_count}</strong> clocked in</span>
-                    {outlet.not_clocked_in_count > 0 && (
-                      <span className="stat danger"><strong>{outlet.not_clocked_in_count}</strong> not clocked in</span>
-                    )}
-                  </div>
-                </div>
-                <span className={`expand-icon ${expandedOutlets[outlet.id] ? 'expanded' : ''}`}>&#x25BC;</span>
-              </div>
-
-              {expandedOutlets[outlet.id] && (
-                <div className="outlet-content">
-                  {/* Overview Tab */}
-                  {activeTab === 'overview' && (
-                    <div className="tab-content">
-                      <h4>Staff List</h4>
-                      {outlet.staff.length === 0 ? (
-                        <p className="no-data">No active staff in this outlet</p>
-                      ) : (
-                        <div className="staff-grid">
-                          {outlet.staff.map(emp => (
-                            <div key={emp.id} className="staff-card">
-                              <div className="staff-avatar">
-                                {emp.name.charAt(0)}
-                              </div>
-                              <div className="staff-info">
-                                <strong>{emp.name}</strong>
-                                <span className="staff-id">{emp.employee_id}</span>
-                                <span className={`staff-role ${emp.employee_role}`}>
-                                  {emp.position_name || emp.position || emp.employee_role}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+        {/* Dashboard Tab */}
+        {activeTab === 'dashboard' && (
+          <div className="dashboard-content">
+            {/* Currently Working */}
+            <div className="dashboard-section">
+              <h3 className="section-header success-bg">
+                <span>&#x2705;</span> Currently Working ({allAttendance.filter(a => !a.clock_out_time).length})
+              </h3>
+              {allAttendance.filter(a => !a.clock_out_time).length === 0 ? (
+                <p className="no-data">No one clocked in yet</p>
+              ) : (
+                <div className="employee-list">
+                  {allAttendance.filter(a => !a.clock_out_time).map(att => (
+                    <div key={att.id} className="employee-row working">
+                      <div className="emp-main">
+                        <span className="emp-id-badge">{att.emp_code}</span>
+                        <span className="emp-name">{att.employee_name}</span>
+                      </div>
+                      <div className="emp-details">
+                        <span className="outlet-tag">{att.outlet_name}</span>
+                        <span className="time-info">In: {formatTime(att.clock_in_time)}</span>
+                      </div>
                     </div>
-                  )}
-
-                  {/* Pending Leave Tab */}
-                  {activeTab === 'leave' && (
-                    <div className="tab-content">
-                      <h4>Pending Leave Requests</h4>
-                      {outlet.pending_leave.length === 0 ? (
-                        <p className="no-data">No pending leave requests</p>
-                      ) : (
-                        <div className="requests-list">
-                          {outlet.pending_leave.map(leave => (
-                            <div key={leave.id} className="request-card leave">
-                              <div className="request-header">
-                                <strong>{leave.employee_name}</strong>
-                                <span className="request-type">{leave.leave_type_name}</span>
-                              </div>
-                              <div className="request-details">
-                                <span>{formatDate(leave.start_date)} - {formatDate(leave.end_date)}</span>
-                                <span className="days">{leave.total_days} day(s)</span>
-                              </div>
-                              {leave.reason && <p className="request-reason">{leave.reason}</p>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Pending Claims Tab */}
-                  {activeTab === 'claims' && (
-                    <div className="tab-content">
-                      <h4>Pending Claims</h4>
-                      {outlet.pending_claims.length === 0 ? (
-                        <p className="no-data">No pending claims</p>
-                      ) : (
-                        <div className="requests-list">
-                          {outlet.pending_claims.map(claim => (
-                            <div key={claim.id} className="request-card claim">
-                              <div className="request-header">
-                                <strong>{claim.employee_name}</strong>
-                                <span className="request-type">{claim.claim_type_name}</span>
-                              </div>
-                              <div className="request-details">
-                                <span>{formatDate(claim.claim_date)}</span>
-                                <span className="amount">RM {parseFloat(claim.amount).toFixed(2)}</span>
-                              </div>
-                              {claim.description && <p className="request-reason">{claim.description}</p>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Attendance Tab */}
-                  {activeTab === 'attendance' && (
-                    <div className="tab-content">
-                      <h4>Today's Attendance</h4>
-
-                      {/* Not Clocked In */}
-                      {outlet.not_clocked_in.length > 0 && (
-                        <div className="attendance-section">
-                          <h5 className="section-title danger">Not Clocked In ({outlet.not_clocked_in.length})</h5>
-                          <div className="attendance-list">
-                            {outlet.not_clocked_in.map(emp => (
-                              <div key={emp.id} className="attendance-item not-clocked">
-                                <span className="emp-name">{emp.employee_name}</span>
-                                <span className="emp-id">{emp.emp_code}</span>
-                                <span className="shift-time">
-                                  Scheduled: {emp.shift_start?.substring(0, 5)} - {emp.shift_end?.substring(0, 5)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Clocked In */}
-                      {outlet.attendance_today.length > 0 ? (
-                        <div className="attendance-section">
-                          <h5 className="section-title success">Attendance Records ({outlet.attendance_today.length})</h5>
-                          <div className="attendance-list">
-                            {outlet.attendance_today.map(att => (
-                              <div key={att.id} className={`attendance-item ${att.clock_out_time ? 'completed' : 'working'}`}>
-                                <span className="emp-name">{att.employee_name}</span>
-                                <span className="emp-id">{att.emp_code}</span>
-                                <span className="clock-times">
-                                  In: {formatTime(att.clock_in_time)}
-                                  {att.clock_out_time ? ` | Out: ${formatTime(att.clock_out_time)}` : ' (Working)'}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : outlet.not_clocked_in.length === 0 && (
-                        <p className="no-data">No attendance records for today</p>
-                      )}
-                    </div>
-                  )}
+                  ))}
                 </div>
               )}
             </div>
-          ))}
-        </div>
+
+            {/* Not Clocked In Yet */}
+            {allNotClockedIn.length > 0 && (
+              <div className="dashboard-section">
+                <h3 className="section-header danger-bg">
+                  <span>&#x26A0;</span> Not Clocked In ({allNotClockedIn.length})
+                </h3>
+                <div className="employee-list">
+                  {allNotClockedIn.map(emp => (
+                    <div key={emp.id} className="employee-row not-in">
+                      <div className="emp-main">
+                        <span className="emp-id-badge">{emp.emp_code}</span>
+                        <span className="emp-name">{emp.employee_name}</span>
+                      </div>
+                      <div className="emp-details">
+                        <span className="outlet-tag">{emp.outlet_name}</span>
+                        <span className="time-info">
+                          Shift: {emp.shift_start?.substring(0, 5)} - {emp.shift_end?.substring(0, 5)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Completed Shifts */}
+            {allAttendance.filter(a => a.clock_out_time).length > 0 && (
+              <div className="dashboard-section">
+                <h3 className="section-header completed-bg">
+                  <span>&#x1F3C1;</span> Completed ({allAttendance.filter(a => a.clock_out_time).length})
+                </h3>
+                <div className="employee-list">
+                  {allAttendance.filter(a => a.clock_out_time).map(att => (
+                    <div key={att.id} className="employee-row completed">
+                      <div className="emp-main">
+                        <span className="emp-id-badge">{att.emp_code}</span>
+                        <span className="emp-name">{att.employee_name}</span>
+                      </div>
+                      <div className="emp-details">
+                        <span className="outlet-tag">{att.outlet_name}</span>
+                        <span className="time-info">
+                          {formatTime(att.clock_in_time)} - {formatTime(att.clock_out_time)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pending Approvals Summary */}
+            {(totalPendingLeave > 0 || totalPendingClaims > 0) && (
+              <div className="dashboard-section">
+                <h3 className="section-header warning-bg">
+                  <span>&#x1F4DD;</span> Pending Approvals
+                </h3>
+                <div className="approval-summary">
+                  {totalPendingLeave > 0 && (
+                    <div className="approval-item" onClick={() => setActiveTab('approvals')}>
+                      <span className="approval-count">{totalPendingLeave}</span>
+                      <span className="approval-label">Leave Requests</span>
+                    </div>
+                  )}
+                  {totalPendingClaims > 0 && (
+                    <div className="approval-item" onClick={() => setActiveTab('approvals')}>
+                      <span className="approval-count">{totalPendingClaims}</span>
+                      <span className="approval-label">Claims</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Staff Directory Tab */}
+        {activeTab === 'staff' && (
+          <div className="staff-directory">
+            {/* Search and Filter */}
+            <div className="search-filter">
+              <input
+                type="text"
+                placeholder="Search by name or ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="search-input"
+              />
+              <select
+                value={selectedOutlet}
+                onChange={(e) => setSelectedOutlet(e.target.value)}
+                className="outlet-filter"
+              >
+                <option value="all">All Outlets</option>
+                {outlets.map(outlet => (
+                  <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Staff Count */}
+            <div className="staff-count">
+              Showing {filteredStaff.length} of {allStaff.length} staff
+            </div>
+
+            {/* Staff List */}
+            <div className="staff-directory-list">
+              {filteredStaff.length === 0 ? (
+                <p className="no-data">No staff found</p>
+              ) : (
+                filteredStaff.map(emp => (
+                  <div key={emp.id} className="staff-directory-card">
+                    <div className="staff-avatar">
+                      {emp.name.charAt(0)}
+                    </div>
+                    <div className="staff-details">
+                      <div className="staff-name-row">
+                        <span className="emp-id-badge">{emp.employee_id}</span>
+                        <strong className="staff-name">{emp.name}</strong>
+                      </div>
+                      <div className="staff-meta">
+                        <span className="outlet-tag">{emp.outlet_name}</span>
+                        <span className={`role-badge ${emp.employee_role}`}>
+                          {emp.position_name || emp.position || emp.employee_role}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Attendance Tab */}
+        {activeTab === 'attendance' && (
+          <div className="attendance-content">
+            {/* By Outlet */}
+            {outlets.map(outlet => (
+              <div key={outlet.id} className="outlet-attendance-card">
+                <div className="outlet-attendance-header">
+                  <h3>{outlet.name}</h3>
+                  <div className="outlet-attendance-stats">
+                    <span className="stat-badge success">{outlet.clocked_in_count} in</span>
+                    <span className="stat-badge danger">{outlet.not_clocked_in_count} not in</span>
+                  </div>
+                </div>
+                <div className="outlet-attendance-body">
+                  {/* Not Clocked In */}
+                  {outlet.not_clocked_in.length > 0 && (
+                    <div className="attendance-group">
+                      <h4 className="group-title danger">Not Clocked In</h4>
+                      {outlet.not_clocked_in.map(emp => (
+                        <div key={emp.id} className="attendance-row not-in">
+                          <span className="emp-id-badge">{emp.emp_code}</span>
+                          <span className="emp-name">{emp.employee_name}</span>
+                          <span className="shift-time">
+                            {emp.shift_start?.substring(0, 5)} - {emp.shift_end?.substring(0, 5)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Clocked In */}
+                  {outlet.attendance_today.length > 0 && (
+                    <div className="attendance-group">
+                      <h4 className="group-title success">Attendance Records</h4>
+                      {outlet.attendance_today.map(att => (
+                        <div key={att.id} className={`attendance-row ${att.clock_out_time ? 'completed' : 'working'}`}>
+                          <span className="emp-id-badge">{att.emp_code}</span>
+                          <span className="emp-name">{att.employee_name}</span>
+                          <span className="clock-times">
+                            {formatTime(att.clock_in_time)}
+                            {att.clock_out_time ? ` - ${formatTime(att.clock_out_time)}` : ' (Working)'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {outlet.not_clocked_in.length === 0 && outlet.attendance_today.length === 0 && (
+                    <p className="no-data">No schedule or attendance for today</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Approvals Tab */}
+        {activeTab === 'approvals' && (
+          <div className="approvals-content">
+            {/* Pending Leave */}
+            <div className="approval-section">
+              <h3 className="section-header warning-bg">
+                <span>&#x1F4C5;</span> Pending Leave Requests ({allPendingLeave.length})
+              </h3>
+              {allPendingLeave.length === 0 ? (
+                <p className="no-data">No pending leave requests</p>
+              ) : (
+                <div className="approval-list">
+                  {allPendingLeave.map(leave => (
+                    <div key={leave.id} className="approval-card leave">
+                      <div className="approval-header">
+                        <div className="emp-info">
+                          <span className="emp-id-badge">{leave.emp_code}</span>
+                          <strong>{leave.employee_name}</strong>
+                        </div>
+                        <span className="outlet-tag">{leave.outlet_name}</span>
+                      </div>
+                      <div className="approval-body">
+                        <span className="leave-type">{leave.leave_type_name}</span>
+                        <span className="leave-dates">
+                          {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
+                        </span>
+                        <span className="leave-days">{leave.total_days} day(s)</span>
+                      </div>
+                      {leave.reason && <p className="approval-reason">{leave.reason}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Pending Claims */}
+            <div className="approval-section">
+              <h3 className="section-header warning-bg">
+                <span>&#x1F4B3;</span> Pending Claims ({allPendingClaims.length})
+              </h3>
+              {allPendingClaims.length === 0 ? (
+                <p className="no-data">No pending claims</p>
+              ) : (
+                <div className="approval-list">
+                  {allPendingClaims.map(claim => (
+                    <div key={claim.id} className="approval-card claim">
+                      <div className="approval-header">
+                        <div className="emp-info">
+                          <span className="emp-id-badge">{claim.emp_code}</span>
+                          <strong>{claim.employee_name}</strong>
+                        </div>
+                        <span className="outlet-tag">{claim.outlet_name}</span>
+                      </div>
+                      <div className="approval-body">
+                        <span className="claim-type">{claim.claim_type_name}</span>
+                        <span className="claim-date">{formatDate(claim.claim_date)}</span>
+                        <span className="claim-amount">RM {parseFloat(claim.amount).toFixed(2)}</span>
+                      </div>
+                      {claim.description && <p className="approval-reason">{claim.description}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {totalPendingLeave === 0 && totalPendingClaims === 0 && (
+              <div className="all-clear">
+                <span className="all-clear-icon">&#x2705;</span>
+                <h3>All Caught Up!</h3>
+                <p>No pending approvals at this time</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </ESSLayout>
   );
