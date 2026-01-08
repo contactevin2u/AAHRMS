@@ -389,6 +389,9 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       calcIncrement = parseFloat(salary_after_confirmation) - parseFloat(salary_before_confirmation);
     }
 
+    // Determine probation_status based on employment_type
+    const newProbationStatus = newEmpType === 'confirmed' ? 'confirmed' : (current.probation_status || 'ongoing');
+
     const result = await pool.query(
       `UPDATE employees
        SET employee_id = $1, name = $2, email = $3, phone = $4, ic_number = $5, id_type = $6,
@@ -401,9 +404,9 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
            default_bonus = $31, default_incentive = $32,
            employment_type = $33, probation_months = $34, probation_end_date = $35,
            salary_before_confirmation = $36, salary_after_confirmation = $37, increment_amount = $38,
-           probation_notes = $39,
+           probation_notes = $39, probation_status = $40,
            updated_at = NOW()
-       WHERE id = $40
+       WHERE id = $41
        RETURNING *`,
       [
         employee_id, name, toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), toNullable(outlet_id), toNullable(position), toNullable(position_id), toNullable(join_date), status,
@@ -415,7 +418,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
         default_bonus || 0, default_incentive || 0,
         newEmpType, newProbMonths, probation_end_date,
         toNullable(salary_before_confirmation), toNullable(salary_after_confirmation), toNullable(calcIncrement),
-        toNullable(probation_notes), id
+        toNullable(probation_notes), newProbationStatus, id
       ]
     );
 
@@ -435,7 +438,8 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
     // Allowed fields for partial update
     const allowedFields = [
       'employee_id', 'outlet_id', 'position_id', 'position', 'employment_type', 'status',
-      'department_id', 'name', 'email', 'phone', 'address', 'gender', 'clock_in_required'
+      'department_id', 'name', 'email', 'phone', 'address', 'gender', 'clock_in_required',
+      'employee_role'
     ];
 
     // Build dynamic SET clause
@@ -458,6 +462,25 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
 
     if (setClauses.length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    // Check if position_id, position, or employee_role is being updated
+    // If it's a high-level position, auto-set employment_type to 'confirmed'
+    const positionId = updates.position_id !== undefined ? (updates.position_id === '' ? null : updates.position_id) : null;
+    const positionName = updates.position || null;
+    const employeeRole = updates.employee_role || null;
+
+    if (positionId || positionName || employeeRole) {
+      const isHighLevel = await isHighLevelPosition(positionId, positionName, employeeRole);
+      if (isHighLevel) {
+        // Add employment_type and probation_status to the update
+        setClauses.push(`employment_type = $${paramCount}`);
+        values.push('confirmed');
+        paramCount++;
+        setClauses.push(`probation_status = $${paramCount}`);
+        values.push('confirmed');
+        paramCount++;
+      }
     }
 
     // Add updated_at
