@@ -1,6 +1,6 @@
 .attendance-page {
   padding: 24px;
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -100,31 +100,33 @@
 .attendance-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .attendance-table th {
   background: #f8fafc;
-  padding: 14px 12px;
+  padding: 10px 8px;
   text-align: left;
   font-weight: 600;
   color: #475569;
   border-bottom: 1px solid #e2e8f0;
   white-space: nowrap;
+  font-size: 12px;
 }
 
 .attendance-table th small {
   display: block;
   font-weight: 400;
-  font-size: 11px;
+  font-size: 10px;
   color: #94a3b8;
   margin-top: 2px;
 }
 
 .attendance-table td {
-  padding: 14px 12px;
+  padding: 10px 8px;
   border-bottom: 1px solid #f1f5f9;
   color: #334155;
+  white-space: nowrap;
 }
 
 .attendance-table tbody tr:hover {
@@ -142,13 +144,13 @@
 
 .time-col {
   text-align: center;
-  min-width: 90px;
+  min-width: 70px;
 }
 
 .time-cell {
   text-align: center;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .has-location {
@@ -172,18 +174,19 @@
 
 .emp-name {
   font-weight: 500;
+  font-size: 12px;
 }
 
 .emp-code {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
 }
 
 /* Status Badges */
 .status-badge {
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
   font-weight: 500;
   text-transform: capitalize;
 }
@@ -206,21 +209,22 @@
 /* Actions */
 .actions-cell {
   display: flex;
-  gap: 8px;
+  gap: 4px;
+  flex-wrap: nowrap;
 }
 
 .approve-btn,
 .reject-btn {
-  width: 32px;
-  height: 32px;
+  padding: 4px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 16px;
-  display: flex;
+  font-size: 11px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .approve-btn {
@@ -302,12 +306,12 @@
 }
 
 .gps-btn {
-  padding: 6px 12px;
+  padding: 4px 8px;
   background: #e0f2fe;
   color: #0284c7;
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
@@ -328,12 +332,12 @@
 }
 
 .photo-btn {
-  padding: 6px 12px;
+  padding: 4px 8px;
   background: #fef3c7;
   color: #d97706;
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
