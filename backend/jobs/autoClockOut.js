@@ -207,30 +207,31 @@ async function runAutoClockOut() {
   const client = await pool.connect();
 
   try {
-    // Get yesterday's date (for records that didn't clock out)
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    // Get today's date
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
 
-    console.log('[AutoClockOut] Processing records for date:', yesterdayStr);
+    // Process all unclosed records from before today (not just yesterday)
+    console.log('[AutoClockOut] Processing all unclosed records before:', todayStr);
 
-    // Find all incomplete clock-in records for yesterday (Mimix companies only - company_id = 3)
+    // Find all incomplete clock-in records from before today (Mimix companies only)
     // where clock_in_1 exists but clock_out_2 is NULL
+    // Also handle NULL is_auto_clock_out (for older records)
     const incompleteRecords = await client.query(
       `SELECT cir.*, e.name as employee_name, e.work_type, e.id as emp_id,
               c.grouping_type
        FROM clock_in_records cir
        JOIN employees e ON cir.employee_id = e.id
        JOIN companies c ON cir.company_id = c.id
-       WHERE cir.work_date = $1
+       WHERE cir.work_date < $1
          AND cir.clock_in_1 IS NOT NULL
          AND cir.clock_out_2 IS NULL
-         AND cir.is_auto_clock_out = FALSE
+         AND (cir.is_auto_clock_out = FALSE OR cir.is_auto_clock_out IS NULL)
          AND c.grouping_type = 'outlet'`,
-      [yesterdayStr]
+      [todayStr]
     );
 
-    console.log('[AutoClockOut] Found', incompleteRecords.rows.length, 'incomplete records');
+    console.log('[AutoClockOut] Found', incompleteRecords.rows.length, 'incomplete records from before', todayStr);
 
     const results = [];
 

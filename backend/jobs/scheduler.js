@@ -13,9 +13,9 @@ const { runAutoClockOut } = require('./autoClockOut');
 function initScheduler() {
   console.log('[Scheduler] Initializing scheduled jobs...');
 
-  // Auto Clock-Out Job - Runs at 12:00 AM (midnight) daily
-  // Cron expression: '0 0 * * *' = At 00:00 every day
-  const autoClockOutJob = cron.schedule('0 0 * * *', async () => {
+  // Auto Clock-Out Job - Runs at 12:05 AM daily (5 mins after midnight for buffer)
+  // Cron expression: '5 0 * * *' = At 00:05 every day
+  const autoClockOutJob = cron.schedule('5 0 * * *', async () => {
     console.log('[Scheduler] Running auto clock-out job at', new Date().toISOString());
     try {
       const results = await runAutoClockOut();
@@ -28,7 +28,7 @@ function initScheduler() {
     timezone: 'Asia/Kuala_Lumpur' // Malaysia timezone
   });
 
-  console.log('[Scheduler] Auto clock-out job scheduled for 00:00 daily (MYT)');
+  console.log('[Scheduler] Auto clock-out job scheduled for 00:05 daily (MYT)');
 
   // Return jobs for potential manual control
   return {
