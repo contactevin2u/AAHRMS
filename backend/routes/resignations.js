@@ -179,6 +179,62 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Check for approved leaves after last working day (before processing)
+router.get('/:id/check-leaves', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get resignation details
+    const resignation = await pool.query(
+      'SELECT * FROM resignations WHERE id = $1',
+      [id]
+    );
+
+    if (resignation.rows.length === 0) {
+      return res.status(404).json({ error: 'Resignation not found' });
+    }
+
+    const r = resignation.rows[0];
+
+    // Get approved leaves after last working day
+    const approvedLeaves = await pool.query(`
+      SELECT lr.id, lr.start_date, lr.end_date, lr.total_days, lt.name as leave_type_name
+      FROM leave_requests lr
+      JOIN leave_types lt ON lr.leave_type_id = lt.id
+      WHERE lr.employee_id = $1
+        AND lr.status = 'approved'
+        AND lr.start_date > $2
+      ORDER BY lr.start_date
+    `, [r.employee_id, r.last_working_day]);
+
+    // Get pending leaves after last working day
+    const pendingLeaves = await pool.query(`
+      SELECT lr.id, lr.start_date, lr.end_date, lr.total_days, lt.name as leave_type_name
+      FROM leave_requests lr
+      JOIN leave_types lt ON lr.leave_type_id = lt.id
+      WHERE lr.employee_id = $1
+        AND lr.status = 'pending'
+        AND lr.start_date > $2
+      ORDER BY lr.start_date
+    `, [r.employee_id, r.last_working_day]);
+
+    const totalApprovedDays = approvedLeaves.rows.reduce((sum, l) => sum + parseFloat(l.total_days), 0);
+    const totalPendingDays = pendingLeaves.rows.reduce((sum, l) => sum + parseFloat(l.total_days), 0);
+
+    res.json({
+      last_working_day: r.last_working_day,
+      approved_leaves: approvedLeaves.rows,
+      pending_leaves: pendingLeaves.rows,
+      total_approved_days: totalApprovedDays,
+      total_pending_days: totalPendingDays,
+      has_leaves_to_cancel: approvedLeaves.rows.length > 0 || pendingLeaves.rows.length > 0
+    });
+  } catch (error) {
+    console.error('Error checking leaves:', error);
+    res.status(500).json({ error: 'Failed to check leaves' });
+  }
+});
+
 // Process resignation (complete the exit)
 router.post('/:id/process', authenticateAdmin, async (req, res) => {
   const client = await pool.connect();

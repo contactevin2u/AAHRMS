@@ -272,6 +272,15 @@
   background: #ffcdd2;
 }
 
+.action-btn.cleanup {
+  color: #f57c00;
+  background: #fff3e0;
+}
+
+.action-btn.cleanup:hover {
+  background: #ffe0b2;
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;
@@ -568,6 +577,77 @@
 
 .save-btn.process:hover {
   box-shadow: 0 6px 16px rgba(142, 199, 135, 0.4);
+}
+
+/* Leave Confirmation Modal */
+.leave-warning-box {
+  background: #fff8e1;
+  border: 2px solid #ffcc80;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.leave-warning-box > p {
+  margin: 0 0 15px 0;
+  color: #5d4037;
+  font-size: 0.95rem;
+}
+
+.leave-list-section {
+  margin-bottom: 15px;
+}
+
+.leave-list-section h4 {
+  margin: 0 0 10px 0;
+  color: #d84315;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.leave-cancel-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.leave-cancel-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.leave-cancel-list .leave-type {
+  font-weight: 600;
+  color: #1e293b;
+  flex: 1;
+}
+
+.leave-cancel-list .leave-dates {
+  color: #64748b;
+  flex: 1;
+  text-align: center;
+}
+
+.leave-cancel-list .leave-days {
+  color: #d32f2f;
+  font-weight: 600;
+  min-width: 70px;
+  text-align: right;
+}
+
+.leave-confirm-note {
+  background: #e8f5e9;
+  border-radius: 8px;
+  padding: 12px;
+  color: #2e7d32;
+  font-size: 0.85rem;
+  margin-top: 15px;
 }
 
 @media (max-width: 768px) {

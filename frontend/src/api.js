@@ -203,6 +203,8 @@ export const resignationsApi = {
   process: (id, data) => api.post(`/resignations/${id}/process`, data),
   cancel: (id) => api.post(`/resignations/${id}/cancel`),
   calculateSettlement: (data) => api.post('/resignations/calculate-settlement', data),
+  checkLeaves: (id) => api.get(`/resignations/${id}/check-leaves`),
+  cleanupLeaves: (id) => api.post(`/resignations/${id}/cleanup-leaves`),
 };
 
 // HR Letters

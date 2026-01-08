@@ -13,8 +13,11 @@ function Resignations() {
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showProcessModal, setShowProcessModal] = useState(false);
+  const [showLeaveConfirmModal, setShowLeaveConfirmModal] = useState(false);
   const [selectedResignation, setSelectedResignation] = useState(null);
   const [settlementCalc, setSettlementCalc] = useState(null);
+  const [leaveCheckData, setLeaveCheckData] = useState(null);
+  const [checkingLeaves, setCheckingLeaves] = useState(false);
 
   // Form
   const [form, setForm] = useState({
@@ -90,6 +93,41 @@ function Resignations() {
     }
   };
 
+  // Check for leaves before showing process modal
+  const handleProcessClick = async (resignation) => {
+    setSelectedResignation(resignation);
+    setCheckingLeaves(true);
+    setLeaveCheckData(null);
+
+    try {
+      const res = await resignationsApi.checkLeaves(resignation.id);
+      setLeaveCheckData(res.data);
+
+      if (res.data.has_leaves_to_cancel) {
+        // Show leave confirmation modal first
+        setShowLeaveConfirmModal(true);
+      } else {
+        // No leaves to cancel, go directly to process modal
+        setSettlementCalc(null);
+        setShowProcessModal(true);
+      }
+    } catch (error) {
+      console.error('Error checking leaves:', error);
+      // If check fails, still allow processing
+      setSettlementCalc(null);
+      setShowProcessModal(true);
+    } finally {
+      setCheckingLeaves(false);
+    }
+  };
+
+  // Confirm leave cancellation and proceed to process modal
+  const handleConfirmLeaveCancellation = () => {
+    setShowLeaveConfirmModal(false);
+    setSettlementCalc(null);
+    setShowProcessModal(true);
+  };
+
   const handleProcess = async (e) => {
     e.preventDefault();
     try {
@@ -97,6 +135,7 @@ function Resignations() {
       setShowProcessModal(false);
       setSelectedResignation(null);
       setSettlementCalc(null);
+      setLeaveCheckData(null);
       fetchData();
       alert('Resignation processed successfully. Employee status updated to resigned.');
     } catch (error) {
@@ -123,6 +162,33 @@ function Resignations() {
       } catch (error) {
         alert(error.response?.data?.error || 'Failed to delete resignation');
       }
+    }
+  };
+
+  // Cleanup leaves for already-completed resignations
+  const handleCleanupLeaves = async (resignation) => {
+    try {
+      // First check if there are leaves to cleanup
+      const checkRes = await resignationsApi.checkLeaves(resignation.id);
+
+      if (!checkRes.data.has_leaves_to_cancel) {
+        alert('No leaves found after last working day. Nothing to cleanup.');
+        return;
+      }
+
+      const totalDays = checkRes.data.total_approved_days + checkRes.data.total_pending_days;
+      const leaveDetails = [
+        ...checkRes.data.approved_leaves.map(l => `${l.leave_type_name}: ${formatDate(l.start_date)} (${l.total_days} days)`),
+        ...checkRes.data.pending_leaves.map(l => `${l.leave_type_name}: ${formatDate(l.start_date)} (${l.total_days} days)`)
+      ].join('\n');
+
+      if (window.confirm(`Found ${totalDays} days of leave after last working day:\n\n${leaveDetails}\n\nCancel these leaves and restore balance?`)) {
+        await resignationsApi.cleanupLeaves(resignation.id);
+        alert('Leaves cancelled and balance restored successfully.');
+        fetchData();
+      }
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to cleanup leaves');
     }
   };
 
@@ -266,14 +332,11 @@ function Resignations() {
                       {r.status === 'pending' && (
                         <>
                           <button
-                            onClick={() => {
-                              setSelectedResignation(r);
-                              setSettlementCalc(null);
-                              setShowProcessModal(true);
-                            }}
+                            onClick={() => handleProcessClick(r)}
                             className="action-btn process"
+                            disabled={checkingLeaves}
                           >
-                            Process Exit
+                            {checkingLeaves && selectedResignation?.id === r.id ? 'Checking...' : 'Process Exit'}
                           </button>
                           <button onClick={() => handleCancel(r.id)} className="action-btn cancel">
                             Cancel
@@ -282,6 +345,14 @@ function Resignations() {
                             Delete
                           </button>
                         </>
+                      )}
+                      {r.status === 'completed' && (
+                        <button
+                          onClick={() => handleCleanupLeaves(r)}
+                          className="action-btn cleanup"
+                        >
+                          Cleanup Leaves
+                        </button>
                       )}
                     </div>
                   </div>
@@ -510,6 +581,81 @@ function Resignations() {
                   <button type="submit" className="save-btn process">Complete Exit Process</button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Leave Confirmation Modal */}
+        {showLeaveConfirmModal && selectedResignation && leaveCheckData && (
+          <div className="modal-overlay" onClick={() => setShowLeaveConfirmModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Leave Cancellation Required</h2>
+
+              <div className="leave-warning-box">
+                <p>
+                  <strong>{selectedResignation.employee_name}</strong> has leaves scheduled after their last working day
+                  ({formatDate(leaveCheckData.last_working_day)}):
+                </p>
+
+                {leaveCheckData.approved_leaves.length > 0 && (
+                  <div className="leave-list-section">
+                    <h4>Approved Leaves ({leaveCheckData.total_approved_days} days)</h4>
+                    <ul className="leave-cancel-list">
+                      {leaveCheckData.approved_leaves.map(leave => (
+                        <li key={leave.id}>
+                          <span className="leave-type">{leave.leave_type_name}</span>
+                          <span className="leave-dates">
+                            {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
+                          </span>
+                          <span className="leave-days">{leave.total_days} day(s)</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {leaveCheckData.pending_leaves.length > 0 && (
+                  <div className="leave-list-section">
+                    <h4>Pending Leaves ({leaveCheckData.total_pending_days} days)</h4>
+                    <ul className="leave-cancel-list">
+                      {leaveCheckData.pending_leaves.map(leave => (
+                        <li key={leave.id}>
+                          <span className="leave-type">{leave.leave_type_name}</span>
+                          <span className="leave-dates">
+                            {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
+                          </span>
+                          <span className="leave-days">{leave.total_days} day(s)</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="leave-confirm-note">
+                  These leaves will be <strong>automatically cancelled</strong> and the leave balance will be <strong>restored</strong> when you proceed.
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLeaveConfirmModal(false);
+                    setSelectedResignation(null);
+                    setLeaveCheckData(null);
+                  }}
+                  className="cancel-btn"
+                >
+                  Go Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmLeaveCancellation}
+                  className="save-btn process"
+                >
+                  Confirm & Continue
+                </button>
+              </div>
             </div>
           </div>
         )}
