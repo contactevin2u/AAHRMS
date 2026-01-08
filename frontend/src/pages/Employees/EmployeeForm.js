@@ -51,6 +51,7 @@ const INITIAL_FORM_STATE = {
   department_id: '',
   outlet_id: '',
   position: '',
+  position_id: '',
   join_date: '',
   status: 'active',
   address: '',

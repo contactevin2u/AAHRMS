@@ -1,22 +1,13 @@
 import React, { useState } from 'react';
 import { getGenderFromIC } from './EmployeeForm';
 
-// Position enum values for AA Alive
+// Position enum values for AA Alive (text-based positions)
 const AA_ALIVE_POSITION_OPTIONS = [
   { value: 'Indoor Sales', label: 'Indoor Sales' },
   { value: 'Outdoor Sales', label: 'Outdoor Sales' },
   { value: 'Driver', label: 'Driver' },
   { value: 'Office', label: 'Office' },
   { value: 'Manager', label: 'Manager' }
-];
-
-// Position enum values for Mimix
-const MIMIX_POSITION_OPTIONS = [
-  { value: 'SUPERVISOR', label: 'SUPERVISOR' },
-  { value: 'PART TIMER', label: 'PART TIMER' },
-  { value: 'FT SERVICE CREW', label: 'FT SERVICE CREW' },
-  { value: 'MANAGER', label: 'MANAGER' },
-  { value: 'CASHIER', label: 'CASHIER' }
 ];
 
 // Employment type enum values
@@ -44,6 +35,7 @@ const EmployeeTable = ({
   usesOutlets = false,
   departments = [],
   outlets = [],
+  positions = [],
   onInlineUpdate
 }) => {
   // Editing state
@@ -319,28 +311,56 @@ const EmployeeTable = ({
                     )}
                   </td>
                   <td>
-                    {isEditing(emp.id, 'position') ? (
-                      <select
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={() => saveEdit(emp.id)}
-                        onKeyDown={(e) => handleKeyPress(e, emp.id)}
-                        autoFocus
-                        className="inline-edit-select"
-                      >
-                        <option value="">-</option>
-                        {(usesOutlets ? MIMIX_POSITION_OPTIONS : AA_ALIVE_POSITION_OPTIONS).map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
+                    {usesOutlets && positions.length > 0 ? (
+                      // For outlet-based companies (Mimix), use position_id dropdown from positions table
+                      isEditing(emp.id, 'position_id') ? (
+                        <select
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => saveEdit(emp.id)}
+                          onKeyDown={(e) => handleKeyPress(e, emp.id)}
+                          autoFocus
+                          className="inline-edit-select"
+                        >
+                          <option value="">-</option>
+                          {positions.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span
+                          className="editable-cell"
+                          onClick={() => onInlineUpdate && startEdit(emp.id, 'position_id', emp.position_id?.toString() || '')}
+                          title={onInlineUpdate ? "Click to edit" : ""}
+                        >
+                          {emp.position_name || emp.position || <span style={{ color: '#999' }}>-</span>}
+                        </span>
+                      )
                     ) : (
-                      <span
-                        className="editable-cell"
-                        onClick={() => onInlineUpdate && startEdit(emp.id, 'position', emp.position || '')}
-                        title={onInlineUpdate ? "Click to edit" : ""}
-                      >
-                        {emp.position || <span style={{ color: '#999' }}>-</span>}
-                      </span>
+                      // For department-based companies (AA Alive), use text position field
+                      isEditing(emp.id, 'position') ? (
+                        <select
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => saveEdit(emp.id)}
+                          onKeyDown={(e) => handleKeyPress(e, emp.id)}
+                          autoFocus
+                          className="inline-edit-select"
+                        >
+                          <option value="">-</option>
+                          {AA_ALIVE_POSITION_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span
+                          className="editable-cell"
+                          onClick={() => onInlineUpdate && startEdit(emp.id, 'position', emp.position || '')}
+                          title={onInlineUpdate ? "Click to edit" : ""}
+                        >
+                          {emp.position || <span style={{ color: '#999' }}>-</span>}
+                        </span>
+                      )
                     )}
                   </td>
                   <td>

@@ -92,6 +92,7 @@ function EmployeeEdit() {
         department_id: employee.department_id || '',
         outlet_id: employee.outlet_id || '',
         position: employee.position || '',
+        position_id: employee.position_id || '',
         join_date: employee.join_date ? employee.join_date.split('T')[0] : '',
         status: employee.status || 'active',
         address: employee.address || '',

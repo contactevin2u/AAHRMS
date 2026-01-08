@@ -25,6 +25,7 @@ function Employees() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [outlets, setOutlets] = useState([]);
+  const [positions, setPositions] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -61,13 +62,17 @@ function Employees() {
       setDepartments(deptRes.data);
       setStats(statsRes.data);
 
-      // Fetch outlets if company uses them
+      // Fetch outlets and positions if company uses them
       if (usesOutlets) {
         try {
-          const outletRes = await api.get('/outlets');
+          const [outletRes, positionsRes] = await Promise.all([
+            api.get('/outlets'),
+            api.get('/positions')
+          ]);
           setOutlets(outletRes.data || []);
+          setPositions(positionsRes.data || []);
         } catch (e) {
-          console.error('Error fetching outlets:', e);
+          console.error('Error fetching outlets/positions:', e);
         }
       }
     } catch (error) {
@@ -155,6 +160,11 @@ function Employees() {
             const outlet = outlets.find(o => o.id === parseInt(value));
             updated.outlet_name = outlet?.name || null;
           }
+          if (field === 'position_id') {
+            const pos = positions.find(p => p.id === parseInt(value));
+            updated.position_name = pos?.name || null;
+            updated.position = pos?.name || null;
+          }
 
           return updated;
         }
@@ -207,6 +217,7 @@ function Employees() {
           usesOutlets={usesOutlets}
           departments={departments}
           outlets={outlets}
+          positions={positions}
           onInlineUpdate={handleInlineUpdate}
         />
 
