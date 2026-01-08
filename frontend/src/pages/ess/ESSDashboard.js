@@ -10,6 +10,7 @@ function ESSDashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [profileStatus, setProfileStatus] = useState(null);
   const [pendingApprovals, setPendingApprovals] = useState(null);
+  const [resignationInfo, setResignationInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,6 +32,10 @@ function ESSDashboard() {
     try {
       const res = await essApi.getDashboard();
       setDashboardData(res.data);
+      // Check for resignation info
+      if (res.data.resignation) {
+        setResignationInfo(res.data.resignation);
+      }
     } catch (error) {
       console.error('Error fetching dashboard:', error);
     } finally {
@@ -127,6 +132,39 @@ function ESSDashboard() {
           <h1>{getGreeting()}, {employeeInfo?.name?.split(' ')[0] || 'there'}!</h1>
           <p>{new Date().toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         </div>
+
+        {/* Resignation Countdown Banner */}
+        {resignationInfo && (
+          <div className={`resignation-banner ${resignationInfo.days_remaining <= 7 ? 'urgent' : ''}`}>
+            <div className="resignation-icon">&#x1F4E4;</div>
+            <div className="resignation-content">
+              <h3>Resignation Notice</h3>
+              <p>
+                Your last working day is{' '}
+                <strong>
+                  {new Date(resignationInfo.last_working_day).toLocaleDateString('en-MY', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
+                </strong>
+              </p>
+              <div className="countdown-display">
+                {resignationInfo.days_remaining > 0 ? (
+                  <>
+                    <span className="countdown-number">{resignationInfo.days_remaining}</span>
+                    <span className="countdown-label">day{resignationInfo.days_remaining !== 1 ? 's' : ''} remaining</span>
+                  </>
+                ) : resignationInfo.days_remaining === 0 ? (
+                  <span className="countdown-today">Today is your last day!</span>
+                ) : (
+                  <span className="countdown-past">Last working day has passed</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Profile Completion Reminder */}
         {profileStatus && !profileStatus.complete && (

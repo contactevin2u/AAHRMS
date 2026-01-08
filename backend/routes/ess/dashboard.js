@@ -68,6 +68,34 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
     [req.employee.id]
   );
 
+  // Get resignation info if any
+  const resignationResult = await pool.query(
+    `SELECT id, notice_date, last_working_day, reason, status
+     FROM resignations
+     WHERE employee_id = $1 AND status = 'pending'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [req.employee.id]
+  );
+
+  let resignationInfo = null;
+  if (resignationResult.rows.length > 0) {
+    const r = resignationResult.rows[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastDay = new Date(r.last_working_day);
+    lastDay.setHours(0, 0, 0, 0);
+    const diffTime = lastDay - today;
+    const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    resignationInfo = {
+      notice_date: r.notice_date,
+      last_working_day: r.last_working_day,
+      reason: r.reason,
+      days_remaining: daysRemaining
+    };
+  }
+
   res.json({
     employee: empResult.rows[0] || null,
     latestPayslip: payslipResult.rows[0] || null,
@@ -75,7 +103,8 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
     pendingLeaveRequests: parseInt(pendingLeaveResult.rows[0].count),
     pendingClaims: parseInt(pendingClaimsResult.rows[0].count),
     unreadNotifications: parseInt(unreadResult.rows[0].count),
-    unreadLetters: parseInt(unreadLettersResult.rows[0].count)
+    unreadLetters: parseInt(unreadLettersResult.rows[0].count),
+    resignation: resignationInfo
   });
 }));
 

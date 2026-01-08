@@ -44,6 +44,88 @@
   margin: 0;
 }
 
+/* Resignation Countdown Banner */
+.resignation-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 2px solid #ffb74d;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.resignation-banner.urgent {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border-color: #ef5350;
+}
+
+.resignation-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.resignation-content {
+  flex: 1;
+}
+
+.resignation-content h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #e65100;
+}
+
+.resignation-banner.urgent .resignation-content h3 {
+  color: #c62828;
+}
+
+.resignation-content p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #5d4037;
+}
+
+.countdown-display {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.countdown-number {
+  font-size: 36px;
+  font-weight: 800;
+  color: #e65100;
+  line-height: 1;
+}
+
+.resignation-banner.urgent .countdown-number {
+  color: #c62828;
+}
+
+.countdown-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #bf360c;
+}
+
+.resignation-banner.urgent .countdown-label {
+  color: #c62828;
+}
+
+.countdown-today {
+  font-size: 18px;
+  font-weight: 700;
+  color: #c62828;
+}
+
+.countdown-past {
+  font-size: 16px;
+  font-weight: 600;
+  color: #9e9e9e;
+}
+
 /* Quick Actions */
 .quick-actions {
   display: grid;
