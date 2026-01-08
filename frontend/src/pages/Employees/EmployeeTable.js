@@ -344,28 +344,36 @@ const EmployeeTable = ({
                     )}
                   </td>
                   <td>
-                    {isEditing(emp.id, 'employment_type') ? (
-                      <select
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={() => saveEdit(emp.id)}
-                        onKeyDown={(e) => handleKeyPress(e, emp.id)}
-                        autoFocus
-                        className="inline-edit-select"
-                      >
-                        {EMPLOYMENT_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span
-                        className={`employment-badge ${emp.employment_type || 'probation'} editable-cell`}
-                        onClick={() => onInlineUpdate && startEdit(emp.id, 'employment_type', emp.employment_type || 'probation')}
-                        title={onInlineUpdate ? "Click to edit" : ""}
-                      >
-                        {emp.employment_type === 'confirmed' ? 'Confirmed' :
-                         emp.employment_type === 'contract' ? 'Contract' : 'Probation'}
+                    {/* Show Resigned/Terminated if not employed, otherwise show employment type */}
+                    {emp.employment_status && emp.employment_status !== 'employed' ? (
+                      <span className={`status-badge ${emp.employment_status}`}>
+                        {emp.employment_status === 'resigned' ? 'Resigned' :
+                         emp.employment_status === 'terminated' ? 'Terminated' : emp.employment_status}
                       </span>
+                    ) : (
+                      isEditing(emp.id, 'employment_type') ? (
+                        <select
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => saveEdit(emp.id)}
+                          onKeyDown={(e) => handleKeyPress(e, emp.id)}
+                          autoFocus
+                          className="inline-edit-select"
+                        >
+                          {EMPLOYMENT_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span
+                          className={`employment-badge ${emp.employment_type || 'probation'} editable-cell`}
+                          onClick={() => onInlineUpdate && startEdit(emp.id, 'employment_type', emp.employment_type || 'probation')}
+                          title={onInlineUpdate ? "Click to edit" : ""}
+                        >
+                          {emp.employment_type === 'confirmed' ? 'Confirmed' :
+                           emp.employment_type === 'contract' ? 'Contract' : 'Probation'}
+                        </span>
+                      )
                     )}
                   </td>
                   <td>
@@ -383,21 +391,13 @@ const EmployeeTable = ({
                         ))}
                       </select>
                     ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span
-                          className={`status-badge ${emp.status} editable-cell`}
-                          onClick={() => onInlineUpdate && startEdit(emp.id, 'status', emp.status || 'active')}
-                          title={onInlineUpdate ? "Click to edit" : ""}
-                        >
-                          {emp.status === 'active' ? 'Active' : 'Inactive'}
-                        </span>
-                        {emp.employment_status && emp.employment_status !== 'employed' && (
-                          <span className={`status-badge ${emp.employment_status}`} style={{ fontSize: '10px' }}>
-                            {emp.employment_status === 'resigned' ? 'Resigned' :
-                             emp.employment_status === 'terminated' ? 'Terminated' : emp.employment_status}
-                          </span>
-                        )}
-                      </div>
+                      <span
+                        className={`status-badge ${emp.status} editable-cell`}
+                        onClick={() => onInlineUpdate && startEdit(emp.id, 'status', emp.status || 'active')}
+                        title={onInlineUpdate ? "Click to edit" : ""}
+                      >
+                        {emp.status === 'active' ? 'Active' : 'Inactive'}
+                      </span>
                     )}
                   </td>
                   {!usesOutlets && (
