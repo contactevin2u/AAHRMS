@@ -756,12 +756,12 @@ router.post('/:id/approve-with-schedule', authenticateAdmin, async (req, res) =>
 
     // Create or update schedule for this employee/date
     const scheduleResult = await pool.query(
-      `INSERT INTO schedules (employee_id, schedule_date, shift_template_id, outlet_id, status, created_by)
-       VALUES ($1, $2, $3, $4, 'scheduled', $5)
+      `INSERT INTO schedules (employee_id, company_id, schedule_date, shift_template_id, shift_start, shift_end, outlet_id, status, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', $8)
        ON CONFLICT (employee_id, schedule_date)
-       DO UPDATE SET shift_template_id = $3, status = 'scheduled', updated_at = NOW()
+       DO UPDATE SET shift_template_id = $4, shift_start = $5, shift_end = $6, status = 'scheduled', updated_at = NOW()
        RETURNING id`,
-      [record.employee_id, record.work_date, shift_template_id, record.outlet_id, adminId]
+      [record.employee_id, record.company_id, record.work_date, shift_template_id, template.start_time, template.end_time, record.outlet_id, adminId]
     );
 
     const scheduleId = scheduleResult.rows[0].id;
