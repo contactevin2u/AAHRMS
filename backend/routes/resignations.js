@@ -221,10 +221,11 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
       WHERE id = $3
     `, [final_salary_amount, settlement_date || new Date(), id]);
 
-    // Update employee status
+    // Update employee status and employment_status
     await client.query(`
       UPDATE employees SET
-        status = 'resigned',
+        status = 'inactive',
+        employment_status = 'resigned',
         resign_date = $1,
         updated_at = NOW()
       WHERE id = $2

@@ -388,6 +388,12 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='id_type') THEN
           ALTER TABLE employees ADD COLUMN id_type VARCHAR(20) DEFAULT 'ic';
         END IF;
+        -- Employment Status: employed/resigned/terminated (separate from active/inactive status)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='employment_status') THEN
+          ALTER TABLE employees ADD COLUMN employment_status VARCHAR(20) DEFAULT 'employed';
+          -- Migrate existing 'resigned' status to employment_status
+          UPDATE employees SET employment_status = 'resigned', status = 'inactive' WHERE status = 'resigned';
+        END IF;
       END $$;
 
       CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id);
@@ -1298,6 +1304,31 @@ Human Resources Department
       -- Update existing positions with appropriate roles based on name
       UPDATE positions SET role = 'manager' WHERE LOWER(name) LIKE '%manager%' AND (role IS NULL OR role = 'crew');
       UPDATE positions SET role = 'supervisor' WHERE LOWER(name) LIKE '%supervisor%' AND (role IS NULL OR role = 'crew');
+
+      -- =====================================================
+      -- AUTO-SET employment_type = 'confirmed' FOR HIGH-LEVEL POSITIONS
+      -- Positions above assistant supervisor (supervisor, manager, director, admin)
+      -- should automatically have employment_type = 'confirmed'
+      -- =====================================================
+
+      -- Update employees with supervisor/manager roles to have confirmed employment_type
+      UPDATE employees e
+      SET employment_type = 'confirmed', probation_status = 'confirmed'
+      WHERE e.employment_type != 'confirmed'
+        AND (
+          -- Check by position_id linking to positions table with manager/supervisor role
+          EXISTS (
+            SELECT 1 FROM positions p
+            WHERE p.id = e.position_id
+            AND p.role IN ('manager', 'supervisor')
+          )
+          -- Or check by employee_role directly
+          OR e.employee_role IN ('supervisor', 'manager', 'director')
+          -- Or check by position name containing these keywords
+          OR LOWER(e.position) LIKE '%manager%'
+          OR LOWER(e.position) LIKE '%supervisor%'
+          OR LOWER(e.position) LIKE '%director%'
+        );
 
       -- =====================================================
       -- EMPLOYEE_OUTLETS TABLE (for multi-outlet managers)

@@ -9,6 +9,42 @@ const { initializeProbation } = require('../utils/probationReminder');
 const { sanitizeEmployeeData, escapeHtml } = require('../middleware/sanitize');
 const { formatIC, detectIDType } = require('../utils/statutory');
 
+/**
+ * Check if a position requires confirmed employment status
+ * Positions above assistant supervisor (supervisor, manager, director)
+ * should automatically have employment_type = 'confirmed'
+ */
+const isHighLevelPosition = async (positionId, positionName, employeeRole) => {
+  // Check employee_role directly
+  if (employeeRole && ['supervisor', 'manager', 'director'].includes(employeeRole.toLowerCase())) {
+    return true;
+  }
+
+  // Check position name for keywords
+  if (positionName) {
+    const lowerName = positionName.toLowerCase();
+    if (lowerName.includes('manager') || lowerName.includes('supervisor') || lowerName.includes('director')) {
+      return true;
+    }
+  }
+
+  // Check position_id linking to positions table
+  if (positionId) {
+    const posResult = await pool.query(
+      'SELECT role FROM positions WHERE id = $1',
+      [positionId]
+    );
+    if (posResult.rows.length > 0) {
+      const role = posResult.rows[0].role;
+      if (role && ['manager', 'supervisor'].includes(role.toLowerCase())) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
 // Get all employees (filtered by company and outlet for supervisors)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
@@ -184,8 +220,15 @@ router.post('/', authenticateAdmin, async (req, res) => {
 
     // Calculate probation end date if join_date and probation_months are provided
     let probation_end_date = null;
-    const empType = employment_type || 'probation';
+    let empType = employment_type || 'probation';
     const probMonths = probation_months || 3;
+
+    // Check if this is a high-level position (supervisor, manager, director)
+    // If so, auto-set employment_type to 'confirmed'
+    const isHighLevel = await isHighLevelPosition(toNullable(position_id), position, null);
+    if (isHighLevel) {
+      empType = 'confirmed';
+    }
 
     if (join_date && empType === 'probation') {
       const joinDateObj = new Date(join_date);
@@ -324,7 +367,14 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     let probation_end_date = current.probation_end_date;
     const newJoinDate = join_date || current.join_date;
     const newProbMonths = probation_months !== undefined ? probation_months : (current.probation_months || 3);
-    const newEmpType = employment_type || current.employment_type || 'probation';
+    let newEmpType = employment_type || current.employment_type || 'probation';
+
+    // Check if this is a high-level position (supervisor, manager, director)
+    // If so, auto-set employment_type to 'confirmed'
+    const isHighLevel = await isHighLevelPosition(toNullable(position_id) || current.position_id, position || current.position, null);
+    if (isHighLevel) {
+      newEmpType = 'confirmed';
+    }
 
     // Recalculate if still on probation and dates/months changed
     if (newEmpType === 'probation' && newJoinDate) {

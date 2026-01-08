@@ -203,6 +203,16 @@ tr:hover {
   color: #64748b;
 }
 
+.status-badge.resigned {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-badge.terminated {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 /* =====================================================
    INLINE EDITING - Dropdowns in Table Cells
    ===================================================== */

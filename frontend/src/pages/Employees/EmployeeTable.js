@@ -383,13 +383,21 @@ const EmployeeTable = ({
                         ))}
                       </select>
                     ) : (
-                      <span
-                        className={`status-badge ${emp.status} editable-cell`}
-                        onClick={() => onInlineUpdate && startEdit(emp.id, 'status', emp.status || 'active')}
-                        title={onInlineUpdate ? "Click to edit" : ""}
-                      >
-                        {emp.status}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span
+                          className={`status-badge ${emp.status} editable-cell`}
+                          onClick={() => onInlineUpdate && startEdit(emp.id, 'status', emp.status || 'active')}
+                          title={onInlineUpdate ? "Click to edit" : ""}
+                        >
+                          {emp.status === 'active' ? 'Active' : 'Inactive'}
+                        </span>
+                        {emp.employment_status && emp.employment_status !== 'employed' && (
+                          <span className={`status-badge ${emp.employment_status}`} style={{ fontSize: '10px' }}>
+                            {emp.employment_status === 'resigned' ? 'Resigned' :
+                             emp.employment_status === 'terminated' ? 'Terminated' : emp.employment_status}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </td>
                   {!usesOutlets && (
