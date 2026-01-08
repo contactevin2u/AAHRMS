@@ -1307,27 +1307,29 @@ Human Resources Department
 
       -- =====================================================
       -- AUTO-SET employment_type = 'confirmed' FOR HIGH-LEVEL POSITIONS
-      -- Positions above assistant supervisor (supervisor, manager, director, admin)
-      -- should automatically have employment_type = 'confirmed'
+      -- Positions above level 40 (above assistant supervisor) should have employment_type = 'confirmed'
+      -- This includes: supervisor (60), manager (80), director (90), admin/boss (100)
       -- =====================================================
 
-      -- Update employees with supervisor/manager roles to have confirmed employment_type
+      -- Update employees with high-level roles to have confirmed employment_type
       UPDATE employees e
       SET employment_type = 'confirmed', probation_status = 'confirmed'
       WHERE e.employment_type != 'confirmed'
         AND (
-          -- Check by position_id linking to positions table with manager/supervisor role
+          -- Check by position_id linking to positions table with high-level role
           EXISTS (
             SELECT 1 FROM positions p
             WHERE p.id = e.position_id
-            AND p.role IN ('manager', 'supervisor')
+            AND p.role IN ('manager', 'supervisor', 'admin', 'director')
           )
           -- Or check by employee_role directly
-          OR e.employee_role IN ('supervisor', 'manager', 'director')
+          OR e.employee_role IN ('supervisor', 'manager', 'director', 'admin', 'boss', 'super_admin')
           -- Or check by position name containing these keywords
           OR LOWER(e.position) LIKE '%manager%'
           OR LOWER(e.position) LIKE '%supervisor%'
           OR LOWER(e.position) LIKE '%director%'
+          OR LOWER(e.position) LIKE '%admin%'
+          OR LOWER(e.position) LIKE '%boss%'
         );
 
       -- =====================================================

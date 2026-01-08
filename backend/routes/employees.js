@@ -11,19 +11,26 @@ const { formatIC, detectIDType } = require('../utils/statutory');
 
 /**
  * Check if a position requires confirmed employment status
- * Positions above assistant supervisor (supervisor, manager, director)
- * should automatically have employment_type = 'confirmed'
+ * Positions above level 40 (above assistant supervisor) should have employment_type = 'confirmed'
+ * This includes: supervisor (60), manager (80), director (90), admin/boss (100)
  */
 const isHighLevelPosition = async (positionId, positionName, employeeRole) => {
+  // High-level roles that should be auto-confirmed (level > 40)
+  const highLevelRoles = ['supervisor', 'manager', 'director', 'admin', 'boss', 'super_admin'];
+
   // Check employee_role directly
-  if (employeeRole && ['supervisor', 'manager', 'director'].includes(employeeRole.toLowerCase())) {
+  if (employeeRole && highLevelRoles.includes(employeeRole.toLowerCase())) {
     return true;
   }
 
   // Check position name for keywords
   if (positionName) {
     const lowerName = positionName.toLowerCase();
-    if (lowerName.includes('manager') || lowerName.includes('supervisor') || lowerName.includes('director')) {
+    if (lowerName.includes('manager') ||
+        lowerName.includes('supervisor') ||
+        lowerName.includes('director') ||
+        lowerName.includes('admin') ||
+        lowerName.includes('boss')) {
       return true;
     }
   }
@@ -36,7 +43,7 @@ const isHighLevelPosition = async (positionId, positionName, employeeRole) => {
     );
     if (posResult.rows.length > 0) {
       const role = posResult.rows[0].role;
-      if (role && ['manager', 'supervisor'].includes(role.toLowerCase())) {
+      if (role && ['manager', 'supervisor', 'admin', 'director'].includes(role.toLowerCase())) {
         return true;
       }
     }
