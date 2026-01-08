@@ -376,6 +376,10 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='profile_completed_at') THEN
           ALTER TABLE employees ADD COLUMN profile_completed_at TIMESTAMP;
         END IF;
+        -- ID Type: 'ic' for Malaysian IC, 'passport' for passport/other
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='id_type') THEN
+          ALTER TABLE employees ADD COLUMN id_type VARCHAR(20) DEFAULT 'ic';
+        END IF;
       END $$;
 
       CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id);

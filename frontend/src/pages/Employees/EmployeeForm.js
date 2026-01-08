@@ -11,12 +11,43 @@ const getGenderFromIC = (icNumber) => {
   return lastDigit % 2 === 1 ? 'male' : 'female';
 };
 
+// Valid Malaysian state codes (7th-8th digit of IC)
+const VALID_STATE_CODES = [
+  '01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16',
+  '21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39',
+  '40','41','42','43','44','45','46','47','48','49','50','51','52','53','54','55','56','57','58','59',
+  '82'
+];
+
+// Format IC number with dashes: yymmddxxxxxx -> yymmdd-xx-xxxx
+const formatIC = (ic) => {
+  if (!ic) return '';
+  const clean = ic.replace(/[-\s]/g, '');
+  if (clean.length !== 12) return ic;
+  return `${clean.slice(0,6)}-${clean.slice(6,8)}-${clean.slice(8)}`;
+};
+
+// Detect if ID is Malaysian IC or Passport
+const detectIDType = (idNumber) => {
+  if (!idNumber) return 'passport';
+  const clean = idNumber.replace(/[-\s]/g, '');
+  if (!/^\d{12}$/.test(clean)) return 'passport';
+  const month = parseInt(clean.substring(2, 4));
+  const day = parseInt(clean.substring(4, 6));
+  if (month < 1 || month > 12) return 'passport';
+  if (day < 1 || day > 31) return 'passport';
+  const stateCode = clean.substring(6, 8);
+  if (!VALID_STATE_CODES.includes(stateCode)) return 'passport';
+  return 'ic';
+};
+
 const INITIAL_FORM_STATE = {
   employee_id: '',
   name: '',
   email: '',
   phone: '',
   ic_number: '',
+  id_type: 'ic',
   department_id: '',
   outlet_id: '',
   position: '',
@@ -237,38 +268,80 @@ const EmployeeForm = ({
 
       <div className="form-row">
         <div className="form-group">
-          <label>IC Number *</label>
+          <label>ID Type *</label>
+          <select
+            value={form.id_type || 'ic'}
+            onChange={(e) => setForm({ ...form, id_type: e.target.value })}
+            required
+          >
+            <option value="ic">Malaysian IC (MyKad)</option>
+            <option value="passport">Passport</option>
+          </select>
+          <small style={{ color: '#64748b', fontSize: '11px' }}>Auto-detected from ID number</small>
+        </div>
+        <div className="form-group">
+          <label>{form.id_type === 'ic' ? 'IC Number' : 'Passport Number'} *</label>
           <input
             type="text"
             value={form.ic_number}
-            onChange={(e) => setForm({ ...form, ic_number: e.target.value })}
-            placeholder="e.g. 901234-56-7890"
+            onChange={(e) => {
+              let value = e.target.value;
+              if (form.id_type === 'ic') {
+                // Only allow digits and dashes for IC
+                value = value.replace(/[^0-9-]/g, '');
+                // Auto-format if 12 digits entered
+                const digits = value.replace(/-/g, '');
+                if (digits.length === 12) {
+                  value = formatIC(digits);
+                }
+              }
+              setForm({ ...form, ic_number: value });
+            }}
+            onBlur={(e) => {
+              // On blur, auto-detect and format
+              const value = e.target.value;
+              if (value) {
+                const detected = detectIDType(value);
+                if (detected === 'ic') {
+                  setForm({ ...form, ic_number: formatIC(value), id_type: 'ic' });
+                } else if (form.id_type === 'ic' && detected === 'passport') {
+                  // If was IC but doesn't match IC format, change to passport
+                  setForm({ ...form, id_type: 'passport' });
+                }
+              }
+            }}
+            placeholder={form.id_type === 'ic' ? 'e.g. 901234-56-7890' : 'e.g. A12345678'}
             required
+            maxLength={form.id_type === 'ic' ? 14 : 20}
           />
           <small style={{ color: '#64748b', fontSize: '11px' }}>Required for employee login</small>
         </div>
+      </div>
+
+      <div className="form-row">
         <div className="form-group">
           <label>Gender</label>
           <input
             type="text"
             value={
-              getGenderFromIC(form.ic_number)
+              form.id_type === 'ic' && getGenderFromIC(form.ic_number)
                 ? getGenderFromIC(form.ic_number) === 'male' ? 'Male' : 'Female'
-                : 'Auto-detected from IC'
+                : form.id_type === 'passport' ? 'N/A (Passport)' : 'Auto-detected from IC'
             }
             disabled
             style={{
-              backgroundColor: getGenderFromIC(form.ic_number)
+              backgroundColor: form.id_type === 'ic' && getGenderFromIC(form.ic_number)
                 ? (getGenderFromIC(form.ic_number) === 'male' ? '#e3f2fd' : '#fce4ec')
                 : '#f5f5f5',
-              color: getGenderFromIC(form.ic_number) ? '#333' : '#999',
-              fontWeight: getGenderFromIC(form.ic_number) ? '500' : 'normal'
+              color: form.id_type === 'ic' && getGenderFromIC(form.ic_number) ? '#333' : '#999',
+              fontWeight: form.id_type === 'ic' && getGenderFromIC(form.ic_number) ? '500' : 'normal'
             }}
           />
           <small style={{ color: '#666', fontSize: '11px' }}>
-            Based on IC last digit (odd=Male, even=Female)
+            {form.id_type === 'ic' ? 'Based on IC last digit (odd=Male, even=Female)' : 'Not available for passport'}
           </small>
         </div>
+        <div className="form-group" />
       </div>
 
       <div className="form-row">

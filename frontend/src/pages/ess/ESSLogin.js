@@ -180,13 +180,25 @@ function ESSLogin() {
                   value={formData.ic_number}
                   onChange={(e) => {
                     // Allow only numbers and dashes
-                    const value = e.target.value.replace(/[^0-9-]/g, '');
+                    let value = e.target.value.replace(/[^0-9-]/g, '');
+                    // Auto-insert dashes as user types
+                    const digits = value.replace(/-/g, '');
+                    if (digits.length >= 6 && digits.length < 8) {
+                      value = `${digits.slice(0,6)}-${digits.slice(6)}`;
+                    } else if (digits.length >= 8) {
+                      value = `${digits.slice(0,6)}-${digits.slice(6,8)}-${digits.slice(8,12)}`;
+                    } else {
+                      value = digits;
+                    }
                     setFormData({ ...formData, ic_number: value });
                   }}
-                  placeholder="e.g., 901234-12-5678"
+                  placeholder="e.g. 901234-12-5678"
                   required
                   maxLength="14"
                 />
+                <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                  Format: YYMMDD-SS-NNNN
+                </small>
               </div>
             </>
           )}

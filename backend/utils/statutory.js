@@ -876,6 +876,56 @@ const calculatePublicHolidayPay = (basicSalary, publicHolidayDaysWorked, working
   return Math.round(phPay * 100) / 100;
 };
 
+// =====================================================
+// IC NUMBER FORMATTING & DETECTION
+// =====================================================
+
+// Valid Malaysian state codes (7th-8th digit of IC)
+const VALID_STATE_CODES = [
+  '01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16', // Malaysian states
+  '21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39',
+  '40','41','42','43','44','45','46','47','48','49','50','51','52','53','54','55','56','57','58','59', // Foreign countries
+  '82' // Unknown state
+];
+
+/**
+ * Format IC number with dashes: yymmddxxxxxx -> yymmdd-xx-xxxx
+ * @param {string} ic - IC number (with or without dashes)
+ * @returns {string} - Formatted IC with dashes, or original if not 12 digits
+ */
+const formatIC = (ic) => {
+  if (!ic) return '';
+  const clean = ic.replace(/[-\s]/g, '');
+  if (clean.length !== 12) return ic; // Return as-is if not 12 digits
+  return `${clean.slice(0,6)}-${clean.slice(6,8)}-${clean.slice(8)}`;
+};
+
+/**
+ * Detect if ID is Malaysian IC or Passport
+ * IC criteria: 12 digits + valid date (YYMMDD) + valid state code (7th-8th digit)
+ * @param {string} idNumber - ID number to check
+ * @returns {string} - 'ic' or 'passport'
+ */
+const detectIDType = (idNumber) => {
+  if (!idNumber) return 'passport';
+  const clean = idNumber.replace(/[-\s]/g, '');
+
+  // Must be exactly 12 digits
+  if (!/^\d{12}$/.test(clean)) return 'passport';
+
+  // Validate date portion (YYMMDD)
+  const month = parseInt(clean.substring(2, 4));
+  const day = parseInt(clean.substring(4, 6));
+  if (month < 1 || month > 12) return 'passport';
+  if (day < 1 || day > 31) return 'passport';
+
+  // Validate state code (7th-8th digit)
+  const stateCode = clean.substring(6, 8);
+  if (!VALID_STATE_CODES.includes(stateCode)) return 'passport';
+
+  return 'ic';
+};
+
 module.exports = {
   calculateEPF,
   calculateSOCSO,
@@ -899,5 +949,9 @@ module.exports = {
   isPublicHoliday,
   countPublicHolidaysInMonth,
   getPublicHolidaysInMonth,
-  SELANGOR_PUBLIC_HOLIDAYS
+  SELANGOR_PUBLIC_HOLIDAYS,
+  // IC formatting and detection
+  formatIC,
+  detectIDType,
+  VALID_STATE_CODES
 };

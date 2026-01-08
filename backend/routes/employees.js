@@ -7,6 +7,7 @@ const { getCompanyFilter, isSuperAdmin, getOutletFilter, isSupervisor } = requir
 const { initializeLeaveBalances } = require('../utils/leaveProration');
 const { initializeProbation } = require('../utils/probationReminder');
 const { sanitizeEmployeeData, escapeHtml } = require('../middleware/sanitize');
+const { formatIC, detectIDType } = require('../utils/statutory');
 
 // Get all employees (filtered by company and outlet for supervisors)
 router.get('/', authenticateAdmin, async (req, res) => {
@@ -163,6 +164,20 @@ router.post('/', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Join Date is required' });
     }
 
+    // Auto-detect and format IC number
+    let id_type = req.body.id_type;
+    let formattedIC = ic_number;
+
+    if (!id_type) {
+      // Auto-detect if not provided
+      id_type = detectIDType(ic_number);
+    }
+
+    if (id_type === 'ic') {
+      // Format IC with dashes: yymmddxxxxxx -> yymmdd-xx-xxxx
+      formattedIC = formatIC(ic_number);
+    }
+
     // Hash IC number as initial password (employee will change on first login)
     const cleanIC = ic_number.replace(/[-\s]/g, '');
     const passwordHash = await bcrypt.hash(cleanIC, 10);
@@ -186,7 +201,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO employees (
-        employee_id, name, email, phone, ic_number, department_id, outlet_id, position, position_id, join_date,
+        employee_id, name, email, phone, ic_number, id_type, department_id, outlet_id, position, position_id, join_date,
         address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
         marital_status, spouse_working, children_count, date_of_birth,
@@ -196,10 +211,10 @@ router.post('/', authenticateAdmin, async (req, res) => {
         salary_before_confirmation, salary_after_confirmation, increment_amount,
         company_id, profile_completed, password_hash, must_change_password
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
        RETURNING *`,
       [
-        employee_id, toNullable(name), toNullable(email), toNullable(phone), ic_number, toNullable(department_id), toNullable(outlet_id), toNullable(position), toNullable(position_id), join_date,
+        employee_id, toNullable(name), toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), toNullable(outlet_id), toNullable(position), toNullable(position_id), join_date,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
@@ -285,6 +300,26 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     }
     const current = currentEmp.rows[0];
 
+    // Auto-detect and format IC number if provided
+    let id_type = req.body.id_type;
+    let formattedIC = ic_number;
+
+    if (ic_number) {
+      if (!id_type) {
+        // Auto-detect if not provided
+        id_type = detectIDType(ic_number);
+      }
+
+      if (id_type === 'ic') {
+        // Format IC with dashes: yymmddxxxxxx -> yymmdd-xx-xxxx
+        formattedIC = formatIC(ic_number);
+      }
+    } else {
+      // Keep existing values if IC not being updated
+      formattedIC = current.ic_number;
+      id_type = current.id_type || 'ic';
+    }
+
     // Calculate probation end date if join_date or probation_months changed
     let probation_end_date = current.probation_end_date;
     const newJoinDate = join_date || current.join_date;
@@ -306,22 +341,22 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
 
     const result = await pool.query(
       `UPDATE employees
-       SET employee_id = $1, name = $2, email = $3, phone = $4, ic_number = $5,
-           department_id = $6, outlet_id = $7, position = $8, position_id = $9, join_date = $10, status = $11,
-           address = $12, bank_name = $13, bank_account_no = $14, bank_account_holder = $15,
-           epf_number = $16, socso_number = $17, tax_number = $18, epf_contribution_type = $19,
-           marital_status = $20, spouse_working = $21, children_count = $22, date_of_birth = $23,
-           default_basic_salary = $24, default_allowance = $25, commission_rate = $26,
-           per_trip_rate = $27, ot_rate = $28, outstation_rate = $29,
-           default_bonus = $30, default_incentive = $31,
-           employment_type = $32, probation_months = $33, probation_end_date = $34,
-           salary_before_confirmation = $35, salary_after_confirmation = $36, increment_amount = $37,
-           probation_notes = $38,
+       SET employee_id = $1, name = $2, email = $3, phone = $4, ic_number = $5, id_type = $6,
+           department_id = $7, outlet_id = $8, position = $9, position_id = $10, join_date = $11, status = $12,
+           address = $13, bank_name = $14, bank_account_no = $15, bank_account_holder = $16,
+           epf_number = $17, socso_number = $18, tax_number = $19, epf_contribution_type = $20,
+           marital_status = $21, spouse_working = $22, children_count = $23, date_of_birth = $24,
+           default_basic_salary = $25, default_allowance = $26, commission_rate = $27,
+           per_trip_rate = $28, ot_rate = $29, outstation_rate = $30,
+           default_bonus = $31, default_incentive = $32,
+           employment_type = $33, probation_months = $34, probation_end_date = $35,
+           salary_before_confirmation = $36, salary_after_confirmation = $37, increment_amount = $38,
+           probation_notes = $39,
            updated_at = NOW()
-       WHERE id = $39
+       WHERE id = $40
        RETURNING *`,
       [
-        employee_id, name, toNullable(email), toNullable(phone), ic_number, toNullable(department_id), toNullable(outlet_id), toNullable(position), toNullable(position_id), toNullable(join_date), status,
+        employee_id, name, toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), toNullable(outlet_id), toNullable(position), toNullable(position_id), toNullable(join_date), status,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
@@ -1099,6 +1134,10 @@ router.post('/quick-add', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Employee ID already exists in this company' });
     }
 
+    // Auto-detect and format IC number
+    const id_type = detectIDType(ic_number);
+    const formattedIC = id_type === 'ic' ? formatIC(ic_number) : ic_number;
+
     // Hash IC number as initial password (without dashes)
     const cleanIC = ic_number.replace(/[-\s]/g, '');
     const passwordHash = await bcrypt.hash(cleanIC, 10);
@@ -1109,13 +1148,13 @@ router.post('/quick-add', authenticateAdmin, async (req, res) => {
     // Insert employee with ESS enabled
     const result = await pool.query(
       `INSERT INTO employees (
-        employee_id, name, ic_number, company_id, outlet_id, join_date,
+        employee_id, name, ic_number, id_type, company_id, outlet_id, join_date,
         status, ess_enabled, password_hash, must_change_password,
         employment_type, probation_months, profile_completed
       )
-       VALUES ($1, $2, $3, $4, $5, $6, 'active', true, $7, true, 'probation', 3, false)
-       RETURNING id, employee_id, name, ic_number, outlet_id, status, ess_enabled`,
-      [employee_id, name, ic_number, companyId, outlet_id || null, today, passwordHash]
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', true, $8, true, 'probation', 3, false)
+       RETURNING id, employee_id, name, ic_number, id_type, outlet_id, status, ess_enabled`,
+      [employee_id, name, formattedIC, id_type, companyId, outlet_id || null, today, passwordHash]
     );
 
     const newEmployee = result.rows[0];
