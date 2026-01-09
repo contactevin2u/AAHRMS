@@ -19,6 +19,7 @@ const Attendance = () => {
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
     status: '',
+    ot_status: '',
     outlet_id: '',
     department_id: '',
     employee_id: ''
@@ -45,6 +46,10 @@ const Attendance = () => {
   const [assignScheduleRecord, setAssignScheduleRecord] = useState(null);
   const [shiftTemplates, setShiftTemplates] = useState([]);
   const [selectedShiftTemplate, setSelectedShiftTemplate] = useState('');
+
+  // Reject OT modal state
+  const [showRejectOTModal, setShowRejectOTModal] = useState(null);
+  const [rejectOTReason, setRejectOTReason] = useState('');
 
   const admin = JSON.parse(localStorage.getItem('admin') || '{}');
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
@@ -195,6 +200,20 @@ const Attendance = () => {
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to approve OT');
+    }
+  };
+
+  // Reject OT for a single record
+  const handleRejectOT = async () => {
+    if (!showRejectOTModal) return;
+    try {
+      await attendanceApi.rejectOT(showRejectOTModal, rejectOTReason);
+      toast.success('OT rejected');
+      setShowRejectOTModal(null);
+      setRejectOTReason('');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to reject OT');
     }
   };
 
@@ -536,6 +555,19 @@ const Attendance = () => {
           </select>
         </div>
 
+        {!isAAAlive && (
+          <div className="filter-group">
+            <label>OT Status</label>
+            <select name="ot_status" value={filters.ot_status} onChange={handleFilterChange}>
+              <option value="">All OT</option>
+              <option value="pending">Pending OT</option>
+              <option value="approved">Approved OT</option>
+              <option value="rejected">Rejected OT</option>
+              <option value="no_ot">No OT</option>
+            </select>
+          </div>
+        )}
+
         {!isSupervisor && isAAAlive && departments.length > 0 && (
           <div className="filter-group">
             <label>Department</label>
@@ -739,14 +771,33 @@ const Attendance = () => {
               </tr>
             </thead>
             <tbody>
-              {records.length === 0 ? (
-                <tr>
-                  <td colSpan={isSupervisor ? (isAAAlive ? 14 : 17) : (isAAAlive ? 15 : 18)} className="no-data">
-                    No attendance records found
-                  </td>
-                </tr>
-              ) : (
-                records.map(record => {
+              {(() => {
+                // Filter records by OT status if filter is set
+                const filteredRecords = filters.ot_status ? records.filter(r => {
+                  const hasOT = r.ot_hours > 0;
+                  const otApproved = r.ot_approved === true;
+                  const otRejected = r.ot_approved === false && r.ot_rejection_reason;
+                  const otPending = hasOT && r.ot_approved === null;
+
+                  switch (filters.ot_status) {
+                    case 'pending': return otPending;
+                    case 'approved': return otApproved;
+                    case 'rejected': return otRejected;
+                    case 'no_ot': return !hasOT;
+                    default: return true;
+                  }
+                }) : records;
+
+                if (filteredRecords.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={isSupervisor ? (isAAAlive ? 14 : 17) : (isAAAlive ? 15 : 18)} className="no-data">
+                        No attendance records found
+                      </td>
+                    </tr>
+                  );
+                }
+                return filteredRecords.map(record => {
                   const calcHours = calculateActualHours(record);
                   return (
                     <tr key={record.id} className={selectedRecords.includes(record.id) ? 'selected' : ''}>
@@ -836,8 +887,10 @@ const Attendance = () => {
                       {!isAAAlive && (
                         <td className="ot-status-cell">
                           {record.ot_hours > 0 ? (
-                            record.ot_approved ? (
+                            record.ot_approved === true ? (
                               <span className="ot-badge approved">Approved</span>
+                            ) : record.ot_approved === false ? (
+                              <span className="ot-badge rejected" title={record.ot_rejection_reason || ''}>Rejected</span>
                             ) : (
                               <span className="ot-badge pending">Pending</span>
                             )
@@ -874,14 +927,23 @@ const Attendance = () => {
                             {record.approved_by_name && `by ${record.approved_by_name}`}
                           </span>
                         )}
-                        {!isAAAlive && record.ot_hours > 0 && !record.ot_approved && (
-                          <button
-                            className="approve-ot-btn"
-                            onClick={() => handleApproveOT(record.id)}
-                            title="Approve OT"
-                          >
-                            OT ✓
-                          </button>
+                        {!isAAAlive && record.ot_hours > 0 && record.ot_approved === null && (
+                          <>
+                            <button
+                              className="approve-ot-btn"
+                              onClick={() => handleApproveOT(record.id)}
+                              title="Approve OT"
+                            >
+                              OT ✓
+                            </button>
+                            <button
+                              className="reject-ot-btn"
+                              onClick={() => setShowRejectOTModal(record.id)}
+                              title="Reject OT"
+                            >
+                              OT ✗
+                            </button>
+                          </>
                         )}
                         {!isAAAlive && !record.has_schedule && (
                           <button
@@ -903,8 +965,8 @@ const Attendance = () => {
                       </td>
                     </tr>
                   );
-                })
-              )}
+                });
+              })()}
             </tbody>
           </table>
         </div>
@@ -1276,6 +1338,38 @@ const Attendance = () => {
         </div>
       )}
 
+      {/* Reject OT Modal */}
+      {showRejectOTModal && (
+        <div className="modal-overlay" onClick={() => setShowRejectOTModal(null)}>
+          <div className="modal reject-ot-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Reject Overtime</h2>
+              <button className="close-btn" onClick={() => setShowRejectOTModal(null)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Rejection Reason (Optional)</label>
+                <textarea
+                  value={rejectOTReason}
+                  onChange={(e) => setRejectOTReason(e.target.value)}
+                  placeholder="Enter reason for rejecting OT..."
+                  rows="3"
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', resize: 'none' }}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowRejectOTModal(null)}>
+                Cancel
+              </button>
+              <button className="btn-reject" onClick={handleRejectOT}>
+                Reject OT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .header-actions {
           display: flex;
@@ -1441,6 +1535,42 @@ const Attendance = () => {
           background: #7b1fa2;
         }
 
+        /* Reject OT Button */
+        .reject-ot-btn {
+          background: #ef4444;
+          color: white;
+          border: none;
+          padding: 4px 8px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 11px;
+          margin-left: 4px;
+        }
+        .reject-ot-btn:hover {
+          background: #dc2626;
+        }
+
+        /* Reject OT Modal */
+        .reject-ot-modal {
+          max-width: 400px;
+          width: 100%;
+        }
+
+        /* Button in modal footer */
+        .btn-reject {
+          background: #ef4444;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+        }
+        .btn-reject:hover {
+          background: #dc2626;
+        }
+
         /* Inline Approve OT Button (next to OT hours) */
         .inline-approve-ot-btn {
           background: #9c27b0;
@@ -1491,6 +1621,10 @@ const Attendance = () => {
         .ot-badge.pending {
           background: #fff3e0;
           color: #ef6c00;
+        }
+        .ot-badge.rejected {
+          background: #fee2e2;
+          color: #dc2626;
         }
         .no-ot {
           color: #999;

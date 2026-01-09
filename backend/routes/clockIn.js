@@ -1205,6 +1205,48 @@ router.post('/bulk-approve-ot', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Reject OT for a record
+router.post('/:id/reject-ot', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const adminId = req.admin?.id;
+    const companyId = getCompanyFilter(req);
+
+    let query = `
+      UPDATE clock_in_records
+      SET ot_approved = false,
+          ot_approved_by = $1,
+          ot_approved_at = NOW(),
+          ot_rejection_reason = $2,
+          updated_at = NOW()
+      WHERE id = $3 AND ot_hours > 0
+    `;
+    let params = [adminId, reason || null, id];
+
+    if (companyId !== null) {
+      query += ' AND company_id = $4';
+      params.push(companyId);
+    }
+
+    query += ' RETURNING *';
+
+    const result = await pool.query(query, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Record not found or no OT to reject' });
+    }
+
+    res.json({
+      message: 'OT rejected successfully',
+      record: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error rejecting OT:', error);
+    res.status(500).json({ error: 'Failed to reject OT' });
+  }
+});
+
 // Get OT summary for payroll
 router.get('/ot-for-payroll/:year/:month', authenticateAdmin, async (req, res) => {
   try {

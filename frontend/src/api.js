@@ -299,6 +299,7 @@ export const attendanceApi = {
   // OT Approval
   approveOT: (id) => api.post(`/clock-in/${id}/approve-ot`),
   bulkApproveOT: (record_ids) => api.post('/clock-in/bulk-approve-ot', { record_ids }),
+  rejectOT: (id, reason) => api.post(`/clock-in/${id}/reject-ot`, { reason }),
   // Summary (grouped by outlet > position > employee)
   getSummary: (params) => api.get('/clock-in/summary', { params }),
   // Approve with schedule assignment (for records without schedule)
