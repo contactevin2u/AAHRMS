@@ -26,25 +26,42 @@ function ESSCalendar() {
         Object.entries(response.data.schedules).forEach(([dateKey, schedule]) => {
           const shiftStart = schedule.shift_start || '09:00';
           const shiftEnd = schedule.shift_end || '18:00';
-          const isOff = schedule.status === 'off' || (shiftStart === '00:00' && shiftEnd === '00:00');
+          const isOff = schedule.is_off || schedule.status === 'off' || (shiftStart === '00:00' && shiftEnd === '00:00');
 
-          // Determine shift type based on start time
+          // Use shift code if available (e.g., "AM", "PM"), otherwise determine type from time
           let shiftType = 'Work';
+          let shiftLabel = null;
           if (isOff) {
             shiftType = 'Off';
+            shiftLabel = 'Off';
+          } else if (schedule.shift_code) {
+            // Use the shift template code directly (matches admin view)
+            shiftType = schedule.shift_code;
+            shiftLabel = schedule.shift_code;
           } else {
+            // Fallback: determine shift type based on start time
             const startHour = parseInt(shiftStart.split(':')[0]);
-            if (startHour < 12) shiftType = 'Morning';
-            else if (startHour < 17) shiftType = 'Afternoon';
-            else shiftType = 'Night';
+            if (startHour < 12) {
+              shiftType = 'Morning';
+              shiftLabel = 'M';
+            } else if (startHour < 17) {
+              shiftType = 'Afternoon';
+              shiftLabel = 'A';
+            } else {
+              shiftType = 'Night';
+              shiftLabel = 'N';
+            }
           }
 
           scheduleMap[dateKey] = {
             shift: shiftType,
+            shiftLabel: shiftLabel,
+            shiftColor: schedule.shift_color || null,
             time: isOff ? 'Day Off' : `${formatTime(shiftStart)} - ${formatTime(shiftEnd)}`,
             outlet: schedule.outlet_name || '',
             attended: schedule.attended || false,
-            status: schedule.status
+            status: schedule.status,
+            isPublicHoliday: schedule.is_public_holiday
           };
         });
       }
@@ -91,7 +108,14 @@ function ESSCalendar() {
     return date.toISOString().split('T')[0];
   };
 
-  const getShiftColor = (shift) => {
+  const getShiftColor = (schedule) => {
+    // Use custom shift color from template if available
+    if (schedule?.shiftColor) {
+      // Make the color lighter for background
+      return schedule.shiftColor + '33'; // Add alpha for lighter shade
+    }
+
+    const shift = schedule?.shift;
     const colors = {
       'Morning': '#dbeafe',
       'Afternoon': '#fef3c7',
@@ -169,7 +193,7 @@ function ESSCalendar() {
                         textAlign: 'center',
                         borderRadius: '8px',
                         cursor: 'pointer',
-                        background: schedule ? getShiftColor(schedule.shift) : (isToday ? '#f0f9ff' : 'transparent'),
+                        background: schedule ? getShiftColor(schedule) : (isToday ? '#f0f9ff' : 'transparent'),
                         border: isToday ? '2px solid #1976d2' : 'none'
                       }}
                     >
@@ -177,9 +201,17 @@ function ESSCalendar() {
                         {date.getDate()}
                       </div>
                       {schedule && (
-                        <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                          {schedule.shift === 'Off' ? 'Off' : schedule.shift.charAt(0)}
+                        <div style={{
+                          fontSize: '10px',
+                          color: schedule.shiftColor || '#64748b',
+                          fontWeight: schedule.shiftColor ? '600' : '400',
+                          marginTop: '2px'
+                        }}>
+                          {schedule.shiftLabel || (schedule.shift === 'Off' ? 'Off' : schedule.shift.charAt(0))}
                         </div>
+                      )}
+                      {schedule?.isPublicHoliday && (
+                        <div style={{ fontSize: '8px', color: '#dc2626' }}>PH</div>
                       )}
                     </div>
                   );
@@ -229,10 +261,15 @@ function ESSCalendar() {
                 {selectedDate.date.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </h3>
               {selectedDate.schedule ? (
-                <div style={{ background: getShiftColor(selectedDate.schedule.shift), padding: '16px', borderRadius: '12px' }}>
-                  <div style={{ fontWeight: '600', fontSize: '16px', marginBottom: '8px' }}>{selectedDate.schedule.shift} Shift</div>
+                <div style={{ background: getShiftColor(selectedDate.schedule), padding: '16px', borderRadius: '12px' }}>
+                  <div style={{ fontWeight: '600', fontSize: '16px', marginBottom: '8px' }}>
+                    {selectedDate.schedule.shiftLabel ? `${selectedDate.schedule.shiftLabel} Shift` : `${selectedDate.schedule.shift} Shift`}
+                  </div>
                   <div style={{ color: '#64748b' }}>{selectedDate.schedule.time}</div>
                   {selectedDate.schedule.outlet && <div style={{ color: '#64748b', marginTop: '4px' }}>{selectedDate.schedule.outlet}</div>}
+                  {selectedDate.schedule.isPublicHoliday && (
+                    <div style={{ marginTop: '8px', color: '#dc2626', fontWeight: '500' }}>Public Holiday</div>
+                  )}
                   {selectedDate.schedule.attended && (
                     <div style={{ marginTop: '8px', color: '#059669', fontWeight: '500' }}>Attended</div>
                   )}

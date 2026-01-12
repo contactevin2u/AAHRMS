@@ -137,6 +137,7 @@ router.get('/public-holidays', authenticateEmployee, asyncHandler(async (req, re
 // Get own schedule for a month
 router.get('/my-schedule', authenticateEmployee, asyncHandler(async (req, res) => {
   const employeeId = req.employee.id;
+  const companyId = req.employee.company_id;
   const { year, month } = req.query;
 
   if (!year || !month) {
@@ -149,39 +150,79 @@ router.get('/my-schedule', authenticateEmployee, asyncHandler(async (req, res) =
   const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
   const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
+  // Query schedules with shift template info for consistency with admin view
+  // Use DISTINCT ON to avoid duplicate rows from clock_in_records join
   const result = await pool.query(
-    `SELECT s.*,
+    `SELECT DISTINCT ON (s.id)
+            s.id,
+            s.employee_id,
+            s.schedule_date,
+            s.shift_start,
+            s.shift_end,
+            s.break_duration,
+            s.status,
+            s.shift_template_id,
+            s.outlet_id,
+            s.department_id,
+            s.is_public_holiday,
             o.name as outlet_name,
+            st.code as shift_code,
+            st.color as shift_color,
+            st.is_off as template_is_off,
             cr.clock_in_1, cr.clock_out_1, cr.clock_in_2, cr.clock_out_2,
             cr.status as attendance_status
      FROM schedules s
      LEFT JOIN outlets o ON s.outlet_id = o.id
+     LEFT JOIN shift_templates st ON s.shift_template_id = st.id
      LEFT JOIN clock_in_records cr ON s.employee_id = cr.employee_id
        AND s.schedule_date = cr.work_date
      WHERE s.employee_id = $1
-       AND s.schedule_date BETWEEN $2 AND $3
-     ORDER BY s.schedule_date ASC`,
-    [employeeId, startDate, endDate]
+       AND s.company_id = $2
+       AND s.schedule_date BETWEEN $3 AND $4
+     ORDER BY s.id, s.schedule_date ASC`,
+    [employeeId, companyId, startDate, endDate]
   );
 
   // Group by date for calendar display
   const calendar = {};
+  const processedDates = new Set();
+
   result.rows.forEach(schedule => {
     const dateKey = schedule.schedule_date.toISOString().split('T')[0];
-    calendar[dateKey] = {
-      ...schedule,
-      shift_start: formatTime(schedule.shift_start),
-      shift_end: formatTime(schedule.shift_end),
-      attended: !!schedule.clock_in_1
-    };
+    // Avoid duplicates if there are multiple schedules for same date
+    if (!processedDates.has(dateKey)) {
+      processedDates.add(dateKey);
+      calendar[dateKey] = {
+        id: schedule.id,
+        shift_start: formatTime(schedule.shift_start),
+        shift_end: formatTime(schedule.shift_end),
+        break_duration: schedule.break_duration,
+        status: schedule.status,
+        outlet_name: schedule.outlet_name,
+        shift_code: schedule.shift_code,
+        shift_color: schedule.shift_color,
+        is_public_holiday: schedule.is_public_holiday,
+        is_off: schedule.template_is_off || schedule.status === 'off',
+        attended: !!schedule.clock_in_1,
+        clock_in_1: schedule.clock_in_1,
+        clock_out_1: schedule.clock_out_1,
+        clock_in_2: schedule.clock_in_2,
+        clock_out_2: schedule.clock_out_2,
+        attendance_status: schedule.attendance_status
+      };
+    }
   });
 
-  // Calculate summary
-  const totalScheduled = result.rows.length;
-  const attended = result.rows.filter(r => r.clock_in_1).length;
-  const upcoming = result.rows.filter(r =>
-    new Date(r.schedule_date) >= new Date().setHours(0, 0, 0, 0) && !r.clock_in_1
-  ).length;
+  // Calculate summary from unique dates
+  const scheduleList = Object.values(calendar);
+  const totalScheduled = scheduleList.length;
+  const attended = scheduleList.filter(r => r.attended).length;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcoming = scheduleList.filter(r => {
+    const schedDate = new Date(Object.keys(calendar).find(k => calendar[k] === r));
+    return schedDate >= today && !r.attended;
+  }).length;
 
   res.json({
     year: parseInt(year),
