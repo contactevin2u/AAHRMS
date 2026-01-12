@@ -547,6 +547,8 @@ export const essApi = {
 
   // Team Schedules (Supervisor/Manager only)
   getTeamEmployees: () => api.get('/ess/schedules/team-employees', essApiConfig),
+  getShiftTemplates: () => api.get('/ess/schedules/shift-templates', essApiConfig),
+  getWeeklyStats: (params) => api.get('/ess/schedules/weekly-stats', { params, ...essApiConfig }),
   getTeamSchedules: (params) => api.get('/ess/schedules/team-schedules', { params, ...essApiConfig }),
   createTeamSchedule: (data) => api.post('/ess/schedules/team-schedules', data, essApiConfig),
   createTeamSchedulesBulk: (schedules) => api.post('/ess/schedules/team-schedules/bulk', { schedules }, essApiConfig),

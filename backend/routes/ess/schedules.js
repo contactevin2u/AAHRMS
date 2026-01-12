@@ -440,6 +440,172 @@ router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res
   }
 }));
 
+// Get shift templates for the company (supervisor/manager only)
+router.get('/shift-templates', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const companyId = req.employee.company_id;
+
+  const result = await pool.query(
+    `SELECT id, name, code, start_time, end_time, color, is_off
+     FROM shift_templates
+     WHERE company_id = $1 AND is_active = true
+     ORDER BY
+       CASE WHEN is_off THEN 1 ELSE 0 END,
+       start_time`,
+    [companyId]
+  );
+
+  res.json(result.rows.map(t => ({
+    ...t,
+    start_time: formatTime(t.start_time),
+    end_time: formatTime(t.end_time)
+  })));
+}));
+
+// Get weekly stats for scheduling (supervisor/manager only)
+router.get('/weekly-stats', authenticateEmployee, asyncHandler(async (req, res) => {
+  if (!isSupervisorOrManager(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  }
+
+  const { week_start, outlet_id, department_id } = req.query;
+  const isMimix = isMimixCompany(req.employee.company_id);
+
+  if (!week_start) {
+    throw new ValidationError('week_start is required (YYYY-MM-DD)');
+  }
+
+  // Calculate week end (7 days)
+  const startDate = new Date(week_start);
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + 6);
+  const endDateStr = endDate.toISOString().split('T')[0];
+
+  let employeeFilter = '';
+  let params = [week_start, endDateStr];
+
+  if (isMimix) {
+    const managedOutlets = await getManagedOutlets(req.employee);
+    const effectiveOutlet = outlet_id ? parseInt(outlet_id) : managedOutlets[0];
+    if (!managedOutlets.includes(effectiveOutlet)) {
+      return res.status(403).json({ error: 'Access denied to this outlet' });
+    }
+    employeeFilter = 'AND e.outlet_id = $3';
+    params.push(effectiveOutlet);
+  } else {
+    const managedDepartments = await getManagedDepartments(req.employee);
+    const effectiveDept = department_id ? parseInt(department_id) : managedDepartments[0];
+    if (!managedDepartments.includes(effectiveDept)) {
+      return res.status(403).json({ error: 'Access denied to this department' });
+    }
+    employeeFilter = 'AND e.department_id = $3';
+    params.push(effectiveDept);
+  }
+
+  // Get employees with their schedule counts for the week
+  const statsQuery = `
+    SELECT
+      e.id,
+      e.name,
+      e.employee_id as emp_code,
+      COUNT(CASE WHEN s.status = 'scheduled' THEN 1 END) as work_days,
+      COUNT(CASE WHEN s.status = 'off' THEN 1 END) as off_days,
+      COUNT(s.id) as total_scheduled,
+      array_agg(DISTINCT s.schedule_date ORDER BY s.schedule_date) FILTER (WHERE s.status = 'scheduled') as work_dates,
+      array_agg(DISTINCT s.schedule_date ORDER BY s.schedule_date) FILTER (WHERE s.status = 'off') as off_dates
+    FROM employees e
+    LEFT JOIN schedules s ON e.id = s.employee_id
+      AND s.schedule_date BETWEEN $1 AND $2
+    WHERE e.status = 'active' ${employeeFilter}
+    GROUP BY e.id, e.name, e.employee_id
+    ORDER BY e.name
+  `;
+
+  const statsResult = await pool.query(statsQuery, params);
+
+  // Calculate warnings
+  const stats = statsResult.rows.map(emp => {
+    const workDays = parseInt(emp.work_days) || 0;
+    const offDays = parseInt(emp.off_days) || 0;
+    const totalScheduled = parseInt(emp.total_scheduled) || 0;
+
+    // Check for consecutive work days without rest
+    let maxConsecutiveWork = 0;
+    let currentStreak = 0;
+    const workDatesSet = new Set((emp.work_dates || []).map(d => d.toISOString().split('T')[0]));
+
+    for (let i = 0; i < 7; i++) {
+      const checkDate = new Date(startDate);
+      checkDate.setDate(checkDate.getDate() + i);
+      const dateStr = checkDate.toISOString().split('T')[0];
+
+      if (workDatesSet.has(dateStr)) {
+        currentStreak++;
+        maxConsecutiveWork = Math.max(maxConsecutiveWork, currentStreak);
+      } else {
+        currentStreak = 0;
+      }
+    }
+
+    return {
+      id: emp.id,
+      name: emp.name,
+      emp_code: emp.emp_code,
+      work_days: workDays,
+      off_days: offDays,
+      total_scheduled: totalScheduled,
+      unscheduled_days: 7 - totalScheduled,
+      max_consecutive_work: maxConsecutiveWork,
+      needs_rest: workDays >= 6 && offDays === 0,
+      warning: maxConsecutiveWork >= 6 ? 'No rest day this week' : null
+    };
+  });
+
+  // Get shift summary for the week
+  const shiftSummaryQuery = `
+    SELECT
+      st.code as shift_code,
+      st.name as shift_name,
+      st.color,
+      s.schedule_date,
+      COUNT(*) as count
+    FROM schedules s
+    JOIN shift_templates st ON s.shift_template_id = st.id
+    WHERE s.schedule_date BETWEEN $1 AND $2
+      AND s.status = 'scheduled'
+      ${isMimix ? 'AND s.outlet_id = $3' : 'AND s.department_id = $3'}
+    GROUP BY st.code, st.name, st.color, s.schedule_date
+    ORDER BY s.schedule_date, st.code
+  `;
+
+  const shiftSummary = await pool.query(shiftSummaryQuery, params);
+
+  // Organize shift summary by date
+  const shiftsByDate = {};
+  shiftSummary.rows.forEach(row => {
+    const dateKey = row.schedule_date.toISOString().split('T')[0];
+    if (!shiftsByDate[dateKey]) {
+      shiftsByDate[dateKey] = {};
+    }
+    shiftsByDate[dateKey][row.shift_code] = {
+      name: row.shift_name,
+      color: row.color,
+      count: parseInt(row.count)
+    };
+  });
+
+  res.json({
+    week_start,
+    week_end: endDateStr,
+    employees: stats,
+    shift_summary: shiftsByDate,
+    warnings: stats.filter(s => s.warning).map(s => ({ name: s.name, warning: s.warning }))
+  });
+}));
+
 // Get team schedules (supervisor/manager only)
 router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res) => {
   if (!isSupervisorOrManager(req.employee)) {
@@ -579,15 +745,27 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
 }));
 
 // Create schedule for team member (supervisor/manager only)
+// Uses shift_template_id to match admin page behavior
+// T+2 rule: Can only create/edit schedules 2+ days in advance
 router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, res) => {
   if (!isSupervisorOrManager(req.employee)) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
-  const { employee_id, schedule_date, shift_start, shift_end, break_duration } = req.body;
+  const { employee_id, schedule_date, shift_template_id } = req.body;
 
-  if (!employee_id || !schedule_date || !shift_start || !shift_end) {
-    throw new ValidationError('Employee, date, shift start and end are required');
+  if (!employee_id || !schedule_date || !shift_template_id) {
+    throw new ValidationError('Employee, date, and shift template are required');
+  }
+
+  // T+2 rule: Check if the date is at least 2 days in the future
+  const scheduleDate = new Date(schedule_date);
+  const twoDaysFromNow = new Date();
+  twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
+  twoDaysFromNow.setHours(0, 0, 0, 0);
+
+  if (scheduleDate < twoDaysFromNow) {
+    throw new ValidationError('Cannot create/edit schedules within 2 days (T+2 rule)');
   }
 
   const isMimix = isMimixCompany(req.employee.company_id);
@@ -618,6 +796,18 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
     }
   }
 
+  // Get shift template details
+  const templateResult = await pool.query(
+    'SELECT * FROM shift_templates WHERE id = $1 AND is_active = true',
+    [shift_template_id]
+  );
+
+  if (templateResult.rows.length === 0) {
+    throw new ValidationError('Shift template not found');
+  }
+
+  const template = templateResult.rows[0];
+
   // Check for existing schedule on same date
   const existing = await pool.query(
     `SELECT id FROM schedules WHERE employee_id = $1 AND schedule_date = $2`,
@@ -625,17 +815,42 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
   );
 
   if (existing.rows.length > 0) {
-    throw new ValidationError('Schedule already exists for this employee on this date');
+    // Update existing schedule
+    const result = await pool.query(
+      `UPDATE schedules SET
+         shift_template_id = $1,
+         shift_start = $2,
+         shift_end = $3,
+         status = $4,
+         updated_at = NOW()
+       WHERE employee_id = $5 AND schedule_date = $6
+       RETURNING *`,
+      [shift_template_id, template.start_time, template.end_time,
+       template.is_off ? 'off' : 'scheduled', employee_id, schedule_date]
+    );
+
+    return res.json({
+      message: 'Schedule updated successfully',
+      schedule: {
+        ...result.rows[0],
+        shift_start: formatTime(result.rows[0].shift_start),
+        shift_end: formatTime(result.rows[0].shift_end),
+        shift_code: template.code,
+        shift_color: template.color
+      }
+    });
   }
 
-  // Create schedule
-  // Note: created_by references admin_users, so we omit it when created via ESS by employees
+  // Create new schedule with shift_template_id
   const result = await pool.query(
     `INSERT INTO schedules
-       (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
+       (employee_id, outlet_id, department_id, company_id, schedule_date,
+        shift_template_id, shift_start, shift_end, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60]
+    [employee_id, targetEmployee.outlet_id, targetEmployee.department_id,
+     targetEmployee.company_id, schedule_date, shift_template_id,
+     template.start_time, template.end_time, template.is_off ? 'off' : 'scheduled']
   );
 
   res.status(201).json({
@@ -643,39 +858,71 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
     schedule: {
       ...result.rows[0],
       shift_start: formatTime(result.rows[0].shift_start),
-      shift_end: formatTime(result.rows[0].shift_end)
+      shift_end: formatTime(result.rows[0].shift_end),
+      shift_code: template.code,
+      shift_color: template.color
     }
   });
 }));
 
 // Bulk create schedules (supervisor/manager only)
+// Uses shift_template_id to match admin page behavior
 router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (req, res) => {
   if (!isSupervisorOrManager(req.employee)) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
   const { schedules } = req.body;
+  const isMimix = isMimixCompany(req.employee.company_id);
 
   if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
     throw new ValidationError('Schedules array is required');
   }
 
-  const managedOutlets = await getManagedOutlets(req.employee);
+  const managedOutlets = isMimix ? await getManagedOutlets(req.employee) : [];
+  const managedDepartments = !isMimix ? await getManagedDepartments(req.employee) : [];
   const created = [];
+  const updated = [];
   const errors = [];
+
+  // Pre-fetch all shift templates
+  const templatesResult = await pool.query(
+    'SELECT * FROM shift_templates WHERE company_id = $1 AND is_active = true',
+    [req.employee.company_id]
+  );
+  const templatesMap = {};
+  templatesResult.rows.forEach(t => { templatesMap[t.id] = t; });
+
+  // T+2 cutoff date
+  const twoDaysFromNow = new Date();
+  twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
+  twoDaysFromNow.setHours(0, 0, 0, 0);
 
   for (const sched of schedules) {
     try {
-      const { employee_id, schedule_date, shift_start, shift_end, break_duration } = sched;
+      const { employee_id, schedule_date, shift_template_id } = sched;
 
-      if (!employee_id || !schedule_date || !shift_start || !shift_end) {
+      if (!employee_id || !schedule_date || !shift_template_id) {
         errors.push({ employee_id, schedule_date, error: 'Missing required fields' });
         continue;
       }
 
-      // Verify employee is in managed outlet
+      // T+2 rule check
+      const schedDate = new Date(schedule_date);
+      if (schedDate < twoDaysFromNow) {
+        errors.push({ employee_id, schedule_date, error: 'Cannot schedule within 2 days (T+2 rule)' });
+        continue;
+      }
+
+      const template = templatesMap[shift_template_id];
+      if (!template) {
+        errors.push({ employee_id, schedule_date, error: 'Invalid shift template' });
+        continue;
+      }
+
+      // Verify employee
       const empResult = await pool.query(
-        `SELECT id, outlet_id, company_id FROM employees WHERE id = $1 AND status = 'active'`,
+        `SELECT id, outlet_id, department_id, company_id FROM employees WHERE id = $1 AND status = 'active'`,
         [employee_id]
       );
 
@@ -686,8 +933,13 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
 
       const targetEmployee = empResult.rows[0];
 
-      if (!managedOutlets.includes(targetEmployee.outlet_id)) {
+      // Check permission
+      if (isMimix && !managedOutlets.includes(targetEmployee.outlet_id)) {
         errors.push({ employee_id, schedule_date, error: 'Employee not in your outlet' });
+        continue;
+      }
+      if (!isMimix && !managedDepartments.includes(targetEmployee.department_id)) {
+        errors.push({ employee_id, schedule_date, error: 'Employee not in your department' });
         continue;
       }
 
@@ -698,28 +950,38 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
       );
 
       if (existing.rows.length > 0) {
-        errors.push({ employee_id, schedule_date, error: 'Schedule already exists' });
-        continue;
+        // Update existing
+        await pool.query(
+          `UPDATE schedules SET
+             shift_template_id = $1, shift_start = $2, shift_end = $3, status = $4, updated_at = NOW()
+           WHERE id = $5`,
+          [shift_template_id, template.start_time, template.end_time,
+           template.is_off ? 'off' : 'scheduled', existing.rows[0].id]
+        );
+        updated.push({ id: existing.rows[0].id, employee_id, schedule_date });
+      } else {
+        // Create new
+        const result = await pool.query(
+          `INSERT INTO schedules
+             (employee_id, outlet_id, department_id, company_id, schedule_date,
+              shift_template_id, shift_start, shift_end, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           RETURNING id`,
+          [employee_id, targetEmployee.outlet_id, targetEmployee.department_id,
+           targetEmployee.company_id, schedule_date, shift_template_id,
+           template.start_time, template.end_time, template.is_off ? 'off' : 'scheduled']
+        );
+        created.push({ id: result.rows[0].id, employee_id, schedule_date });
       }
-
-      // Create (created_by references admin_users, so we omit it when created via ESS)
-      const result = await pool.query(
-        `INSERT INTO schedules
-           (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-         RETURNING id`,
-        [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60]
-      );
-
-      created.push({ id: result.rows[0].id, employee_id, schedule_date });
     } catch (err) {
       errors.push({ employee_id: sched.employee_id, schedule_date: sched.schedule_date, error: err.message });
     }
   }
 
   res.json({
-    message: `Created ${created.length} schedules`,
+    message: `Created ${created.length}, updated ${updated.length} schedules`,
     created,
+    updated,
     errors: errors.length > 0 ? errors : undefined
   });
 }));
@@ -778,6 +1040,7 @@ router.put('/team-schedules/:id', authenticateEmployee, asyncHandler(async (req,
 }));
 
 // Delete schedule (supervisor/manager only)
+// T+2 rule: Can only delete schedules 2+ days in advance
 router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (req, res) => {
   if (!isSupervisorOrManager(req.employee)) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
@@ -800,6 +1063,16 @@ router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (r
   }
 
   const schedule = existing.rows[0];
+
+  // T+2 rule: Check if the date is at least 2 days in the future
+  const scheduleDate = new Date(schedule.schedule_date);
+  const twoDaysFromNow = new Date();
+  twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
+  twoDaysFromNow.setHours(0, 0, 0, 0);
+
+  if (scheduleDate < twoDaysFromNow) {
+    throw new ValidationError('Cannot delete schedules within 2 days (T+2 rule)');
+  }
 
   if (!managedOutlets.includes(schedule.outlet_id)) {
     throw new ValidationError('You can only delete schedules in your outlet(s)');
