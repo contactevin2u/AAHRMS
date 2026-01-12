@@ -12,6 +12,11 @@ function PayrollV2() {
   const [editingItem, setEditingItem] = useState(null);
   const [departments, setDepartments] = useState([]);
 
+  // OT Summary state
+  const [otSummary, setOtSummary] = useState(null);
+  const [loadingOtSummary, setLoadingOtSummary] = useState(false);
+  const [showOtDetails, setShowOtDetails] = useState(false);
+
   // Create form
   const [createForm, setCreateForm] = useState({
     month: new Date().getMonth() + 1,
@@ -41,6 +46,13 @@ function PayrollV2() {
     fetchRuns();
     fetchDepartments();
   }, []);
+
+  // Fetch OT summary when create modal is opened or form changes
+  useEffect(() => {
+    if (showCreateModal) {
+      fetchOtSummary(createForm.year, createForm.month, createForm.department_id);
+    }
+  }, [showCreateModal, createForm.year, createForm.month, createForm.department_id]);
 
   const fetchDepartments = async () => {
     try {
@@ -73,6 +85,21 @@ function PayrollV2() {
       });
     } catch (error) {
       console.error('Error fetching run details:', error);
+    }
+  };
+
+  // Fetch OT summary for create modal
+  const fetchOtSummary = async (year, month, departmentId) => {
+    setLoadingOtSummary(true);
+    try {
+      const params = departmentId ? { department_id: departmentId } : {};
+      const res = await payrollV2Api.getOTSummary(year, month, params);
+      setOtSummary(res.data);
+    } catch (error) {
+      console.error('Error fetching OT summary:', error);
+      setOtSummary(null);
+    } finally {
+      setLoadingOtSummary(false);
     }
   };
 
@@ -636,6 +663,79 @@ function PayrollV2() {
                   }
                   {' '}Unpaid leave and approved claims will be auto-calculated.
                 </div>
+
+                {/* OT Summary Section */}
+                <div className="ot-summary-section">
+                  <h4>OT Summary for {new Date(2000, createForm.month - 1).toLocaleString('en', { month: 'long' })} {createForm.year}</h4>
+                  {loadingOtSummary ? (
+                    <p className="loading-text">Loading OT summary...</p>
+                  ) : otSummary ? (
+                    <>
+                      <div className="ot-summary-stats">
+                        <div className="stat approved">
+                          <span className="label">Approved OT</span>
+                          <span className="value">{otSummary.totals.approved_ot_hours} hrs</span>
+                          <span className="amount">~RM {otSummary.totals.estimated_ot_pay.toLocaleString()}</span>
+                        </div>
+                        <div className="stat pending">
+                          <span className="label">Pending OT</span>
+                          <span className="value">{otSummary.totals.pending_ot_hours} hrs</span>
+                          <span className="count">{otSummary.totals.employees_with_pending_ot} employee(s)</span>
+                        </div>
+                        <div className="stat rejected">
+                          <span className="label">Rejected OT</span>
+                          <span className="value">{otSummary.totals.rejected_ot_hours} hrs</span>
+                        </div>
+                      </div>
+
+                      {otSummary.totals.pending_ot_hours > 0 && (
+                        <div className="ot-warning">
+                          <strong>Warning:</strong> There are {otSummary.totals.pending_ot_hours} hours of pending OT for {otSummary.totals.employees_with_pending_ot} employee(s).
+                          Only approved OT will be included in payroll.
+                          <a href="/attendance" target="_blank" rel="noopener noreferrer"> Approve OT in Attendance page</a>
+                        </div>
+                      )}
+
+                      {otSummary.summary.length > 0 && (
+                        <div className="ot-details-toggle">
+                          <button type="button" onClick={() => setShowOtDetails(!showOtDetails)} className="toggle-btn">
+                            {showOtDetails ? 'Hide' : 'Show'} Employee Details ({otSummary.summary.length})
+                          </button>
+                        </div>
+                      )}
+
+                      {showOtDetails && otSummary.summary.length > 0 && (
+                        <div className="ot-details-table">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Employee</th>
+                                <th>Dept</th>
+                                <th className="right">Approved</th>
+                                <th className="right">Pending</th>
+                                <th className="right">Est. Pay</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {otSummary.summary.map(emp => (
+                                <tr key={emp.employee_id} className={emp.pending_ot_hours > 0 ? 'has-pending' : ''}>
+                                  <td>{emp.employee_name}</td>
+                                  <td>{emp.department_name || '-'}</td>
+                                  <td className="right">{emp.approved_ot_hours} hrs</td>
+                                  <td className="right">{emp.pending_ot_hours > 0 ? `${emp.pending_ot_hours} hrs` : '-'}</td>
+                                  <td className="right">RM {emp.estimated_ot_pay.toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="no-data">No OT data available</p>
+                  )}
+                </div>
+
                 <div className="modal-actions">
                   <button type="button" onClick={() => setShowCreateModal(false)} className="cancel-btn">
                     Cancel

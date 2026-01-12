@@ -124,6 +124,9 @@ export const payrollV2Api = {
   finalizeRun: (id) => api.post(`/payroll/runs/${id}/finalize`),
   getBankFile: (id) => api.get(`/payroll/runs/${id}/bank-file`, { responseType: 'blob' }),
 
+  // OT Summary (before running payroll)
+  getOTSummary: (year, month, params) => api.get(`/payroll/ot-summary/${year}/${month}`, { params }),
+
   // Payroll Items
   updateItem: (id, data) => api.put(`/payroll/items/${id}`, data),
   getItemPayslip: (id) => api.get(`/payroll/items/${id}/payslip`),
