@@ -332,6 +332,7 @@ function Claims() {
                   <th>Category</th>
                   <th>Description</th>
                   <th>Amount</th>
+                  <th>Receipt</th>
                   <th>Status</th>
                   <th>Linked</th>
                   <th>Actions</th>
@@ -340,7 +341,7 @@ function Claims() {
               <tbody>
                 {claims.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="no-data">No claims found</td>
+                    <td colSpan="10" className="no-data">No claims found</td>
                   </tr>
                 ) : (
                   claims.map(claim => (
@@ -361,6 +362,21 @@ function Claims() {
                       </td>
                       <td className="desc-cell">{claim.description || '-'}</td>
                       <td><strong>{formatAmount(claim.amount)}</strong></td>
+                      <td>
+                        {claim.receipt_url ? (
+                          <a
+                            href={claim.receipt_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="receipt-link"
+                            title="View Receipt"
+                          >
+                            View
+                          </a>
+                        ) : (
+                          <span className="no-receipt">-</span>
+                        )}
+                      </td>
                       <td>{getStatusBadge(claim.status)}</td>
                       <td>
                         {claim.linked_payroll_item_id ? (
