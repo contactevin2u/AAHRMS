@@ -23,3 +23,5 @@ Thumbs.db
 npm-debug.log*
 nul
 backend/nul
+*.cwd
+tmpclaude-*

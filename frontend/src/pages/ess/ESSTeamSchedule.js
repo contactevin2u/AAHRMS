@@ -28,6 +28,14 @@ function ESSTeamSchedule() {
     status: 'scheduled'
   });
 
+  // Custom initials stored in localStorage
+  const [customInitials, setCustomInitials] = useState(() => {
+    const saved = localStorage.getItem('teamScheduleInitials');
+    return saved ? JSON.parse(saved) : {};
+  });
+  const [editingInitials, setEditingInitials] = useState(null);
+  const [initialsInput, setInitialsInput] = useState('');
+
   const isMimix = isMimixCompany(employeeInfo);
   const isIndoorSalesManager = !isMimix &&
     (employeeInfo?.position === 'Manager' || employeeInfo?.employee_role === 'manager');
@@ -48,12 +56,31 @@ function ESSTeamSchedule() {
     return colors[employeeId % colors.length];
   };
 
-  // Get initials from name (max 2 chars)
-  const getInitials = (name) => {
+  // Get initials - check custom first, then auto-generate
+  const getInitials = (name, employeeId) => {
+    if (employeeId && customInitials[employeeId]) {
+      return customInitials[employeeId];
+    }
     if (!name) return '?';
     const parts = name.trim().split(' ');
     if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  // Save custom initials
+  const saveInitials = () => {
+    if (!editingInitials || !initialsInput.trim()) return;
+    const newInitials = { ...customInitials, [editingInitials.id]: initialsInput.toUpperCase().substring(0, 3) };
+    setCustomInitials(newInitials);
+    localStorage.setItem('teamScheduleInitials', JSON.stringify(newInitials));
+    setEditingInitials(null);
+    setInitialsInput('');
+    toast.success('Initials updated!');
+  };
+
+  const openInitialsEdit = (emp) => {
+    setEditingInitials(emp);
+    setInitialsInput(customInitials[emp.id] || getInitials(emp.name, null));
   };
 
   // Get short name (first name only, max 8 chars)
@@ -351,26 +378,26 @@ function ESSTeamSchedule() {
                   >
                     <div className="ts-day-number">{date.getDate()}</div>
 
-                    {daySchedules.length > 0 && (
+                    {daySchedules.filter(s => s.status !== 'off').length > 0 && (
                       <div className="ts-day-schedules">
-                        {daySchedules.slice(0, 3).map((s, i) => {
+                        {daySchedules.filter(s => s.status !== 'off').slice(0, 3).map((s, i) => {
                           const color = getEmployeeColor(s.employee_id);
                           return (
                             <div
                               key={i}
-                              className={`ts-schedule-dot ${s.status === 'off' ? 'off' : ''}`}
+                              className="ts-schedule-dot"
                               style={{
-                                backgroundColor: s.status === 'off' ? '#fecaca' : color.bg,
-                                borderColor: s.status === 'off' ? '#f87171' : color.border
+                                backgroundColor: color.bg,
+                                borderColor: color.border
                               }}
-                              title={`${s.employee_name} ${s.status === 'off' ? '(OFF)' : formatTimeRange(s.shift_start, s.shift_end)}`}
+                              title={`${s.employee_name} ${formatTimeRange(s.shift_start, s.shift_end)}`}
                             >
-                              {getInitials(s.employee_name)}
+                              {getInitials(s.employee_name, s.employee_id)}
                             </div>
                           );
                         })}
-                        {daySchedules.length > 3 && (
-                          <div className="ts-more-badge">+{daySchedules.length - 3}</div>
+                        {daySchedules.filter(s => s.status !== 'off').length > 3 && (
+                          <div className="ts-more-badge">+{daySchedules.filter(s => s.status !== 'off').length - 3}</div>
                         )}
                       </div>
                     )}
@@ -405,7 +432,7 @@ function ESSTeamSchedule() {
                             className="ts-list-avatar"
                             style={{ backgroundColor: s.status === 'off' ? '#fecaca' : color.bg }}
                           >
-                            {getInitials(s.employee_name)}
+                            {getInitials(s.employee_name, s.employee_id)}
                           </div>
                           <div className="ts-list-info">
                             <div className="ts-list-name">{getShortName(s.employee_name)}</div>
@@ -436,19 +463,56 @@ function ESSTeamSchedule() {
 
         {/* Team Legend */}
         <div className="ts-legend">
-          <div className="ts-legend-title">Team</div>
+          <div className="ts-legend-header">
+            <div className="ts-legend-title">Team</div>
+            <span className="ts-legend-hint">Tap to edit initials</span>
+          </div>
           <div className="ts-legend-items">
             {filteredEmployees.map(emp => {
               const color = getEmployeeColor(emp.id);
               return (
-                <div key={emp.id} className="ts-legend-item" style={{ backgroundColor: color.bg, borderColor: color.border }}>
-                  <span className="ts-legend-initials">{getInitials(emp.name)}</span>
+                <div
+                  key={emp.id}
+                  className="ts-legend-item"
+                  style={{ backgroundColor: color.bg, borderColor: color.border }}
+                  onClick={() => openInitialsEdit(emp)}
+                >
+                  <span className="ts-legend-initials">{getInitials(emp.name, emp.id)}</span>
                   <span className="ts-legend-name">{getShortName(emp.name)}</span>
                 </div>
               );
             })}
           </div>
         </div>
+
+        {/* Edit Initials Modal */}
+        {editingInitials && (
+          <div className="ts-modal-overlay" onClick={() => setEditingInitials(null)}>
+            <div className="ts-modal ts-initials-modal" onClick={e => e.stopPropagation()}>
+              <div className="ts-modal-header">
+                <h3>Edit Initials</h3>
+                <button className="ts-close-btn" onClick={() => setEditingInitials(null)}>×</button>
+              </div>
+              <div className="ts-initials-content">
+                <p className="ts-initials-name">{editingInitials.name}</p>
+                <input
+                  type="text"
+                  className="ts-initials-input"
+                  value={initialsInput}
+                  onChange={(e) => setInitialsInput(e.target.value.toUpperCase())}
+                  maxLength={3}
+                  placeholder="AB"
+                  autoFocus
+                />
+                <p className="ts-initials-hint">Max 3 characters</p>
+                <div className="ts-form-actions">
+                  <button type="button" className="ts-btn-cancel" onClick={() => setEditingInitials(null)}>Cancel</button>
+                  <button type="button" className="ts-btn-save" onClick={saveInitials}>Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Day Detail Modal */}
         {showDayDetail && (
@@ -468,7 +532,7 @@ function ESSTeamSchedule() {
                         className="ts-day-avatar"
                         style={{ backgroundColor: s.status === 'off' ? '#fecaca' : color.bg }}
                       >
-                        {getInitials(s.employee_name)}
+                        {getInitials(s.employee_name, s.employee_id)}
                       </div>
                       <div className="ts-day-info">
                         <div className="ts-day-name">{s.employee_name}</div>
@@ -526,7 +590,7 @@ function ESSTeamSchedule() {
                           }}
                           onClick={() => setForm({ ...form, employee_id: emp.id.toString() })}
                         >
-                          <span className="ts-emp-initials" style={{ backgroundColor: color.bg }}>{getInitials(emp.name)}</span>
+                          <span className="ts-emp-initials" style={{ backgroundColor: color.bg }}>{getInitials(emp.name, emp.id)}</span>
                           <span className="ts-emp-name">{getShortName(emp.name)}</span>
                         </button>
                       );
