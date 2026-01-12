@@ -76,15 +76,15 @@ function ESSDashboard() {
         }
       }
 
-      // Fetch pending shift swap approvals
-      if (canApproveShiftSwap(info)) {
-        try {
-          const swapRes = await essApi.getPendingSwapApprovals();
-          approvals.swap = swapRes.data?.length || 0;
-        } catch (e) {
-          console.error('Error fetching swap approvals:', e);
-        }
-      }
+      // Shift swap disabled - employees must work assigned shifts only
+      // if (canApproveShiftSwap(info)) {
+      //   try {
+      //     const swapRes = await essApi.getPendingSwapApprovals();
+      //     approvals.swap = swapRes.data?.length || 0;
+      //   } catch (e) {
+      //     console.error('Error fetching swap approvals:', e);
+      //   }
+      // }
 
       // Fetch pending claims approvals
       if (canApproveClaims(info)) {
@@ -104,7 +104,7 @@ function ESSDashboard() {
 
   const features = employeeInfo?.features || {};
   const showApprovalSection = isSupervisorOrManager(employeeInfo) && pendingApprovals &&
-    (pendingApprovals.leave > 0 || pendingApprovals.ot > 0 || pendingApprovals.swap > 0 || pendingApprovals.claims > 0);
+    (pendingApprovals.leave > 0 || pendingApprovals.ot > 0 || pendingApprovals.claims > 0);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -211,13 +211,14 @@ function ESSDashboard() {
                   <span className="approval-label">OT Approvals</span>
                 </Link>
               )}
-              {pendingApprovals.swap > 0 && (
+              {/* Shift swap disabled - employees must work assigned shifts only */}
+              {/* {pendingApprovals.swap > 0 && (
                 <Link to="/ess/calendar" className="approval-card swap">
                   <div className="approval-badge">{pendingApprovals.swap}</div>
                   <div className="approval-icon">&#x1F504;</div>
                   <span className="approval-label">Shift Swaps</span>
                 </Link>
-              )}
+              )} */}
               {pendingApprovals.claims > 0 && (
                 <Link to="/ess/claims" className="approval-card claims">
                   <div className="approval-badge">{pendingApprovals.claims}</div>

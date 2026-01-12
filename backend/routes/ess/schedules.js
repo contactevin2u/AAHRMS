@@ -629,12 +629,13 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
   }
 
   // Create schedule
+  // Note: created_by references admin_users, so we pass NULL when created via ESS by employees
   const result = await pool.query(
     `INSERT INTO schedules
-       (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, notes, status, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'scheduled', $9)
+       (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, notes, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'scheduled')
      RETURNING *`,
-    [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60, notes, req.employee.id]
+    [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60, notes]
   );
 
   res.status(201).json({
@@ -701,13 +702,13 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
         continue;
       }
 
-      // Create
+      // Create (created_by references admin_users, so we omit it when created via ESS)
       const result = await pool.query(
         `INSERT INTO schedules
-           (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, status, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', $8)
+           (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
          RETURNING id`,
-        [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60, req.employee.id]
+        [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60]
       );
 
       created.push({ id: result.rows[0].id, employee_id, schedule_date });
