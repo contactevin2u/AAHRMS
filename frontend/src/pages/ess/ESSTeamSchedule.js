@@ -3,6 +3,7 @@ import ESSLayout from '../../components/ESSLayout';
 import { essApi } from '../../api';
 import { toast } from 'react-toastify';
 import { isMimixCompany, isSupervisorOrManager } from '../../utils/permissions';
+import './ESSTeamSchedule.css';
 
 function ESSTeamSchedule() {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
@@ -14,10 +15,13 @@ function ESSTeamSchedule() {
   const [loading, setLoading] = useState(true);
   const [selectedOutlet, setSelectedOutlet] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [scheduleForm, setScheduleForm] = useState({
+  const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
+  const [selectedDaySchedules, setSelectedDaySchedules] = useState([]);
+  const [showDayDetail, setShowDayDetail] = useState(false);
+  const [form, setForm] = useState({
     employee_id: '',
     shift_start: '09:00',
     shift_end: '18:00',
@@ -25,11 +29,39 @@ function ESSTeamSchedule() {
   });
 
   const isMimix = isMimixCompany(employeeInfo);
-
-  // Check access: Mimix (supervisors/managers) or AA Alive Indoor Sales Manager
   const isIndoorSalesManager = !isMimix &&
     (employeeInfo?.position === 'Manager' || employeeInfo?.employee_role === 'manager');
   const canManageSchedules = isSupervisorOrManager(employeeInfo) || isIndoorSalesManager;
+
+  // Generate consistent colors for employees
+  const getEmployeeColor = (employeeId) => {
+    const colors = [
+      { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' },
+      { bg: '#dcfce7', text: '#15803d', border: '#86efac' },
+      { bg: '#fef3c7', text: '#b45309', border: '#fcd34d' },
+      { bg: '#fce7f3', text: '#be185d', border: '#f9a8d4' },
+      { bg: '#e0e7ff', text: '#4338ca', border: '#a5b4fc' },
+      { bg: '#ffedd5', text: '#c2410c', border: '#fdba74' },
+      { bg: '#f3e8ff', text: '#7c3aed', border: '#c4b5fd' },
+      { bg: '#ccfbf1', text: '#0f766e', border: '#5eead4' },
+    ];
+    return colors[employeeId % colors.length];
+  };
+
+  // Get initials from name (max 2 chars)
+  const getInitials = (name) => {
+    if (!name) return '?';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  // Get short name (first name only, max 8 chars)
+  const getShortName = (name) => {
+    if (!name) return '?';
+    const firstName = name.split(' ')[0];
+    return firstName.length > 8 ? firstName.substring(0, 7) + '.' : firstName;
+  };
 
   useEffect(() => {
     fetchTeamEmployees();
@@ -46,7 +78,6 @@ function ESSTeamSchedule() {
       setOutlets(response.data.outlets || []);
       setDepartments(response.data.departments || []);
 
-      // Auto-select first outlet/department
       if (response.data.outlets?.length > 0) {
         setSelectedOutlet(response.data.outlets[0].id.toString());
       }
@@ -66,12 +97,8 @@ function ESSTeamSchedule() {
       const month = currentMonth.getMonth() + 1;
       const params = { year, month };
 
-      if (isMimix && selectedOutlet) {
-        params.outlet_id = selectedOutlet;
-      }
-      if (!isMimix && selectedDepartment) {
-        params.department_id = selectedDepartment;
-      }
+      if (isMimix && selectedOutlet) params.outlet_id = selectedOutlet;
+      if (!isMimix && selectedDepartment) params.department_id = selectedDepartment;
 
       const response = await essApi.getTeamSchedules(params);
       setSchedules(response.data.schedules || {});
@@ -83,70 +110,104 @@ function ESSTeamSchedule() {
     }
   };
 
-  const handleAddSchedule = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedDate || !scheduleForm.employee_id) {
+    if (!selectedDate || !form.employee_id) {
       toast.warning('Please select an employee');
       return;
     }
 
     try {
       const data = {
-        employee_id: parseInt(scheduleForm.employee_id),
+        employee_id: parseInt(form.employee_id),
         schedule_date: selectedDate,
-        shift_start: scheduleForm.shift_start,
-        shift_end: scheduleForm.shift_end,
-        status: scheduleForm.status,
+        shift_start: form.shift_start,
+        shift_end: form.shift_end,
+        status: form.status,
         outlet_id: isMimix ? parseInt(selectedOutlet) : null
       };
 
       if (editingSchedule) {
         await essApi.updateTeamSchedule(editingSchedule.id, data);
-        toast.success('Schedule updated');
+        toast.success('Updated!');
       } else {
         await essApi.createTeamSchedule(data);
-        toast.success('Schedule created');
+        toast.success('Added!');
       }
-      setShowAddModal(false);
-      setEditingSchedule(null);
-      setScheduleForm({ employee_id: '', shift_start: '09:00', shift_end: '18:00', status: 'scheduled' });
+      closeModal();
       fetchTeamSchedules();
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to save schedule');
+      toast.error(error.response?.data?.error || 'Failed to save');
     }
   };
 
-  const handleEditSchedule = (schedule) => {
+  const handleDelete = async (scheduleId, e) => {
+    e?.stopPropagation();
+    if (!window.confirm('Delete this schedule?')) return;
+
+    try {
+      await essApi.deleteTeamSchedule(scheduleId);
+      toast.success('Deleted!');
+      fetchTeamSchedules();
+      if (showDayDetail) {
+        setSelectedDaySchedules(prev => prev.filter(s => s.id !== scheduleId));
+      }
+    } catch (error) {
+      toast.error('Failed to delete');
+    }
+  };
+
+  const openAddModal = (date) => {
+    setEditingSchedule(null);
+    setForm({ employee_id: '', shift_start: '09:00', shift_end: '18:00', status: 'scheduled' });
+    setSelectedDate(formatDateKey(date));
+    setShowModal(true);
+  };
+
+  const openEditModal = (schedule, e) => {
+    e?.stopPropagation();
     setEditingSchedule(schedule);
     setSelectedDate(schedule.schedule_date);
-    setScheduleForm({
+    setForm({
       employee_id: schedule.employee_id.toString(),
       shift_start: schedule.shift_start || '09:00',
       shift_end: schedule.shift_end || '18:00',
       status: schedule.status || 'scheduled'
     });
-    setShowAddModal(true);
+    setShowModal(true);
   };
 
-  const handleDeleteSchedule = async (scheduleId) => {
-    if (!window.confirm('Delete this schedule?')) return;
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingSchedule(null);
+    setForm({ employee_id: '', shift_start: '09:00', shift_end: '18:00', status: 'scheduled' });
+  };
 
-    try {
-      await essApi.deleteTeamSchedule(scheduleId);
-      toast.success('Schedule deleted');
-      fetchTeamSchedules();
-    } catch (error) {
-      toast.error('Failed to delete schedule');
-    }
+  const openDayDetail = (date, daySchedules) => {
+    setSelectedDate(formatDateKey(date));
+    setSelectedDaySchedules(daySchedules);
+    setShowDayDetail(true);
+  };
+
+  const formatDateKey = (date) => {
+    if (!date) return '';
+    return date.toISOString().split('T')[0];
   };
 
   const formatTime = (time) => {
     if (!time) return '';
-    const [hours, minutes] = time.split(':');
+    const [hours] = time.split(':');
     const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
+    return hour >= 12 ? `${hour === 12 ? 12 : hour - 12}pm` : `${hour || 12}am`;
+  };
+
+  const formatTimeRange = (start, end) => {
+    return `${formatTime(start)}-${formatTime(end)}`;
+  };
+
+  const formatDisplayDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-MY', { weekday: 'short', day: 'numeric', month: 'short' });
   };
 
   const getDaysInMonth = (date) => {
@@ -156,63 +217,32 @@ function ESSTeamSchedule() {
     const lastDay = new Date(year, month + 1, 0);
     const days = [];
 
-    for (let i = 0; i < firstDay.getDay(); i++) {
-      days.push(null);
-    }
-
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      days.push(new Date(year, month, i));
-    }
+    for (let i = 0; i < firstDay.getDay(); i++) days.push(null);
+    for (let i = 1; i <= lastDay.getDate(); i++) days.push(new Date(year, month, i));
 
     return days;
   };
 
-  const formatDateKey = (date) => {
-    if (!date) return '';
-    return date.toISOString().split('T')[0];
-  };
-
-  const prevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
-  };
-
-  const nextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
-  };
-
-  const openAddModal = (date) => {
-    setEditingSchedule(null);
-    setScheduleForm({ employee_id: '', shift_start: '09:00', shift_end: '18:00', status: 'scheduled' });
-    setSelectedDate(formatDateKey(date));
-    setShowAddModal(true);
-  };
-
-  const closeModal = () => {
-    setShowAddModal(false);
-    setEditingSchedule(null);
-    setScheduleForm({ employee_id: '', shift_start: '09:00', shift_end: '18:00', status: 'scheduled' });
-  };
+  const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  const goToday = () => setCurrentMonth(new Date());
 
   const days = getDaysInMonth(currentMonth);
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-  // Filter employees based on selected outlet/department
   const filteredEmployees = employees.filter(emp => {
-    if (isMimix && selectedOutlet) {
-      return emp.outlet_id?.toString() === selectedOutlet;
-    }
-    if (!isMimix && selectedDepartment) {
-      return emp.department_id?.toString() === selectedDepartment;
-    }
+    if (isMimix && selectedOutlet) return emp.outlet_id?.toString() === selectedOutlet;
+    if (!isMimix && selectedDepartment) return emp.department_id?.toString() === selectedDepartment;
     return true;
   });
 
   if (!canManageSchedules) {
     return (
       <ESSLayout>
-        <div style={{ padding: '40px', textAlign: 'center' }}>
+        <div className="ts-access-denied">
+          <div className="ts-denied-icon">🔒</div>
           <h2>Access Denied</h2>
-          <p>This page is only available for Supervisors and Managers.</p>
+          <p>This page is only for Supervisors and Managers.</p>
         </div>
       </ESSLayout>
     );
@@ -220,228 +250,349 @@ function ESSTeamSchedule() {
 
   return (
     <ESSLayout>
-      <div style={{ paddingBottom: '80px' }}>
-        <div style={{ marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>Team Schedule</h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>Manage your team's work schedule</p>
+      <div className="ts-container">
+        {/* Header */}
+        <div className="ts-header">
+          <div className="ts-header-left">
+            <h1>Team Schedule</h1>
+            <span className="ts-team-count">{filteredEmployees.length} members</span>
+          </div>
+          <div className="ts-header-right">
+            <button
+              className={`ts-view-btn ${viewMode === 'calendar' ? 'active' : ''}`}
+              onClick={() => setViewMode('calendar')}
+            >
+              📅
+            </button>
+            <button
+              className={`ts-view-btn ${viewMode === 'list' ? 'active' : ''}`}
+              onClick={() => setViewMode('list')}
+            >
+              📋
+            </button>
+          </div>
         </div>
 
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          {isMimix && outlets.length > 0 && (
-            <select
-              value={selectedOutlet}
-              onChange={(e) => setSelectedOutlet(e.target.value)}
-              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px' }}
-            >
+        {/* Filter Pills */}
+        <div className="ts-filters">
+          {isMimix && outlets.length > 1 && (
+            <div className="ts-filter-pills">
               {outlets.map(o => (
-                <option key={o.id} value={o.id}>{o.name}</option>
+                <button
+                  key={o.id}
+                  className={`ts-pill ${selectedOutlet === o.id.toString() ? 'active' : ''}`}
+                  onClick={() => setSelectedOutlet(o.id.toString())}
+                >
+                  {o.name}
+                </button>
               ))}
-            </select>
+            </div>
           )}
-
-          {!isMimix && departments.length > 0 && (
-            <select
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px' }}
-            >
+          {!isMimix && departments.length > 1 && (
+            <div className="ts-filter-pills">
               {departments.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <button
+                  key={d.id}
+                  className={`ts-pill ${selectedDepartment === d.id.toString() ? 'active' : ''}`}
+                  onClick={() => setSelectedDepartment(d.id.toString())}
+                >
+                  {d.name}
+                </button>
               ))}
-            </select>
+            </div>
           )}
         </div>
 
         {/* Month Navigation */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <button onClick={prevMonth} style={{ padding: '8px 16px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer' }}>
-            &lt;
-          </button>
-          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
-            {currentMonth.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })}
-          </h2>
-          <button onClick={nextMonth} style={{ padding: '8px 16px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer' }}>
-            &gt;
-          </button>
+        <div className="ts-month-nav">
+          <button className="ts-nav-btn" onClick={prevMonth}>‹</button>
+          <div className="ts-month-display" onClick={goToday}>
+            <span className="ts-month-name">
+              {currentMonth.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })}
+            </span>
+            <span className="ts-today-hint">Tap for today</span>
+          </div>
+          <button className="ts-nav-btn" onClick={nextMonth}>›</button>
         </div>
 
-        {/* Calendar Grid */}
-        <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
-          ) : (
-            <>
-              {/* Day Headers */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '8px' }}>
-                {dayNames.map(day => (
-                  <div key={day} style={{ textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#64748b', padding: '8px' }}>
-                    {day}
-                  </div>
-                ))}
-              </div>
+        {loading ? (
+          <div className="ts-loading">
+            <div className="ts-spinner"></div>
+            <span>Loading schedules...</span>
+          </div>
+        ) : viewMode === 'calendar' ? (
+          /* Calendar View */
+          <div className="ts-calendar">
+            {/* Day Headers */}
+            <div className="ts-day-headers">
+              {dayNames.map((day, i) => (
+                <div key={i} className={`ts-day-header ${i === 0 || i === 6 ? 'weekend' : ''}`}>
+                  {day}
+                </div>
+              ))}
+            </div>
 
-              {/* Days */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
-                {days.map((date, idx) => {
-                  if (!date) {
-                    return <div key={idx} style={{ padding: '8px' }}></div>;
-                  }
+            {/* Calendar Grid */}
+            <div className="ts-calendar-grid">
+              {days.map((date, idx) => {
+                if (!date) return <div key={idx} className="ts-day-cell empty"></div>;
 
-                  const dateKey = formatDateKey(date);
-                  const daySchedules = schedules[dateKey] || [];
-                  const isToday = formatDateKey(new Date()) === dateKey;
-                  const isPast = date < new Date().setHours(0, 0, 0, 0);
+                const dateKey = formatDateKey(date);
+                const daySchedules = schedules[dateKey] || [];
+                const isToday = formatDateKey(new Date()) === dateKey;
+                const isPast = date < new Date().setHours(0, 0, 0, 0);
+                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '8px',
-                        minHeight: '80px',
-                        borderRadius: '8px',
-                        background: isToday ? '#e3f2fd' : '#f8fafc',
-                        border: isToday ? '2px solid #1976d2' : '1px solid #e5e7eb',
-                        cursor: isPast ? 'default' : 'pointer'
-                      }}
-                      onClick={() => !isPast && openAddModal(date)}
-                    >
-                      <div style={{ fontSize: '12px', fontWeight: isToday ? '700' : '500', color: '#1e293b', marginBottom: '4px' }}>
-                        {date.getDate()}
+                return (
+                  <div
+                    key={idx}
+                    className={`ts-day-cell ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${isWeekend ? 'weekend' : ''}`}
+                    onClick={() => daySchedules.length > 0 ? openDayDetail(date, daySchedules) : (!isPast && openAddModal(date))}
+                  >
+                    <div className="ts-day-number">{date.getDate()}</div>
+
+                    {daySchedules.length > 0 && (
+                      <div className="ts-day-schedules">
+                        {daySchedules.slice(0, 3).map((s, i) => {
+                          const color = getEmployeeColor(s.employee_id);
+                          return (
+                            <div
+                              key={i}
+                              className={`ts-schedule-dot ${s.status === 'off' ? 'off' : ''}`}
+                              style={{
+                                backgroundColor: s.status === 'off' ? '#fecaca' : color.bg,
+                                borderColor: s.status === 'off' ? '#f87171' : color.border
+                              }}
+                              title={`${s.employee_name} ${s.status === 'off' ? '(OFF)' : formatTimeRange(s.shift_start, s.shift_end)}`}
+                            >
+                              {getInitials(s.employee_name)}
+                            </div>
+                          );
+                        })}
+                        {daySchedules.length > 3 && (
+                          <div className="ts-more-badge">+{daySchedules.length - 3}</div>
+                        )}
                       </div>
-                      {daySchedules.slice(0, 2).map((s, i) => (
+                    )}
+
+                    {!isPast && daySchedules.length === 0 && (
+                      <div className="ts-add-hint">+</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* List View */
+          <div className="ts-list-view">
+            {Object.entries(schedules)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([dateKey, daySchedules]) => (
+                <div key={dateKey} className="ts-list-day">
+                  <div className="ts-list-date">{formatDisplayDate(dateKey)}</div>
+                  <div className="ts-list-schedules">
+                    {daySchedules.map((s, i) => {
+                      const color = getEmployeeColor(s.employee_id);
+                      const isPast = new Date(dateKey) < new Date().setHours(0, 0, 0, 0);
+                      return (
                         <div
                           key={i}
-                          style={{
-                            fontSize: '10px',
-                            padding: '2px 4px',
-                            background: s.status === 'off' ? '#fee2e2' : '#dbeafe',
-                            borderRadius: '4px',
-                            marginBottom: '2px',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                          }}
-                          onClick={(e) => e.stopPropagation()}
+                          className={`ts-list-item ${s.status === 'off' ? 'off' : ''}`}
+                          style={{ borderLeftColor: s.status === 'off' ? '#f87171' : color.border }}
                         >
-                          <span
-                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: isPast ? 'default' : 'pointer' }}
-                            onClick={() => !isPast && handleEditSchedule(s)}
-                            title={isPast ? '' : 'Click to edit'}
+                          <div
+                            className="ts-list-avatar"
+                            style={{ backgroundColor: s.status === 'off' ? '#fecaca' : color.bg }}
                           >
-                            {s.employee_name?.split(' ')[0]}
-                          </span>
+                            {getInitials(s.employee_name)}
+                          </div>
+                          <div className="ts-list-info">
+                            <div className="ts-list-name">{getShortName(s.employee_name)}</div>
+                            <div className="ts-list-time">
+                              {s.status === 'off' ? 'Day Off' : formatTimeRange(s.shift_start, s.shift_end)}
+                            </div>
+                          </div>
                           {!isPast && (
-                            <button
-                              onClick={() => handleDeleteSchedule(s.id)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: '10px', color: '#dc2626' }}
-                            >
-                              x
-                            </button>
+                            <div className="ts-list-actions">
+                              <button className="ts-action-btn edit" onClick={(e) => openEditModal(s, e)}>✏️</button>
+                              <button className="ts-action-btn delete" onClick={(e) => handleDelete(s.id, e)}>🗑️</button>
+                            </div>
                           )}
                         </div>
-                      ))}
-                      {daySchedules.length > 2 && (
-                        <div style={{ fontSize: '10px', color: '#64748b' }}>+{daySchedules.length - 2} more</div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            {Object.keys(schedules).length === 0 && (
+              <div className="ts-empty">
+                <div className="ts-empty-icon">📭</div>
+                <p>No schedules this month</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Team Legend */}
+        <div className="ts-legend">
+          <div className="ts-legend-title">Team</div>
+          <div className="ts-legend-items">
+            {filteredEmployees.map(emp => {
+              const color = getEmployeeColor(emp.id);
+              return (
+                <div key={emp.id} className="ts-legend-item" style={{ backgroundColor: color.bg, borderColor: color.border }}>
+                  <span className="ts-legend-initials">{getInitials(emp.name)}</span>
+                  <span className="ts-legend-name">{getShortName(emp.name)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Day Detail Modal */}
+        {showDayDetail && (
+          <div className="ts-modal-overlay" onClick={() => setShowDayDetail(false)}>
+            <div className="ts-modal ts-day-modal" onClick={e => e.stopPropagation()}>
+              <div className="ts-modal-header">
+                <h3>{formatDisplayDate(selectedDate)}</h3>
+                <button className="ts-close-btn" onClick={() => setShowDayDetail(false)}>×</button>
+              </div>
+              <div className="ts-day-list">
+                {selectedDaySchedules.map((s, i) => {
+                  const color = getEmployeeColor(s.employee_id);
+                  const isPast = new Date(selectedDate) < new Date().setHours(0, 0, 0, 0);
+                  return (
+                    <div key={i} className={`ts-day-item ${s.status === 'off' ? 'off' : ''}`}>
+                      <div
+                        className="ts-day-avatar"
+                        style={{ backgroundColor: s.status === 'off' ? '#fecaca' : color.bg }}
+                      >
+                        {getInitials(s.employee_name)}
+                      </div>
+                      <div className="ts-day-info">
+                        <div className="ts-day-name">{s.employee_name}</div>
+                        <div className="ts-day-time">
+                          {s.status === 'off' ? '🏖️ Day Off' : `🕐 ${formatTimeRange(s.shift_start, s.shift_end)}`}
+                        </div>
+                      </div>
+                      {!isPast && (
+                        <div className="ts-day-actions">
+                          <button className="ts-icon-btn" onClick={(e) => { setShowDayDetail(false); openEditModal(s, e); }}>✏️</button>
+                          <button className="ts-icon-btn danger" onClick={(e) => handleDelete(s.id, e)}>🗑️</button>
+                        </div>
                       )}
                     </div>
                   );
                 })}
               </div>
-            </>
-          )}
-        </div>
-
-        {/* Employee Legend */}
-        <div style={{ marginTop: '16px', background: 'white', borderRadius: '12px', padding: '16px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>Team Members ({filteredEmployees.length})</h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {filteredEmployees.map(emp => (
-              <div key={emp.id} style={{ fontSize: '12px', padding: '4px 8px', background: '#f1f5f9', borderRadius: '4px' }}>
-                {emp.name}
-              </div>
-            ))}
+              {new Date(selectedDate) >= new Date().setHours(0, 0, 0, 0) && (
+                <button
+                  className="ts-add-more-btn"
+                  onClick={() => { setShowDayDetail(false); openAddModal(new Date(selectedDate)); }}
+                >
+                  + Add More
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Add/Edit Schedule Modal */}
-        {showAddModal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeModal}>
-            <div style={{ background: 'white', width: '90%', maxWidth: '400px', borderRadius: '16px', padding: '24px' }} onClick={e => e.stopPropagation()}>
-              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>
-                {editingSchedule ? 'Edit' : 'Add'} Schedule - {selectedDate}
-              </h3>
+        {/* Add/Edit Modal */}
+        {showModal && (
+          <div className="ts-modal-overlay" onClick={closeModal}>
+            <div className="ts-modal" onClick={e => e.stopPropagation()}>
+              <div className="ts-modal-header">
+                <h3>{editingSchedule ? '✏️ Edit' : '➕ New'} Schedule</h3>
+                <button className="ts-close-btn" onClick={closeModal}>×</button>
+              </div>
+              <div className="ts-modal-date">{formatDisplayDate(selectedDate)}</div>
 
-              <form onSubmit={handleAddSchedule}>
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Employee</label>
-                  <select
-                    value={scheduleForm.employee_id}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, employee_id: e.target.value })}
-                    required
-                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px' }}
-                  >
-                    <option value="">Select Employee</option>
-                    {filteredEmployees.map(emp => (
-                      <option key={emp.id} value={emp.id}>{emp.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Start Time</label>
-                    <input
-                      type="time"
-                      value={scheduleForm.shift_start}
-                      onChange={(e) => setScheduleForm({ ...scheduleForm, shift_start: e.target.value })}
-                      required
-                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px' }}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>End Time</label>
-                    <input
-                      type="time"
-                      value={scheduleForm.shift_end}
-                      onChange={(e) => setScheduleForm({ ...scheduleForm, shift_end: e.target.value })}
-                      required
-                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px' }}
-                    />
+              <form onSubmit={handleSubmit} className="ts-form">
+                <div className="ts-form-group">
+                  <label>Employee</label>
+                  <div className="ts-employee-select">
+                    {filteredEmployees.map(emp => {
+                      const color = getEmployeeColor(emp.id);
+                      const isSelected = form.employee_id === emp.id.toString();
+                      return (
+                        <button
+                          key={emp.id}
+                          type="button"
+                          className={`ts-emp-option ${isSelected ? 'selected' : ''}`}
+                          style={{
+                            backgroundColor: isSelected ? color.bg : '#f8fafc',
+                            borderColor: isSelected ? color.border : '#e2e8f0'
+                          }}
+                          onClick={() => setForm({ ...form, employee_id: emp.id.toString() })}
+                        >
+                          <span className="ts-emp-initials" style={{ backgroundColor: color.bg }}>{getInitials(emp.name)}</span>
+                          <span className="ts-emp-name">{getShortName(emp.name)}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Status</label>
-                  <select
-                    value={scheduleForm.status}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, status: e.target.value })}
-                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px' }}
-                  >
-                    <option value="scheduled">Scheduled</option>
-                    <option value="off">Day Off</option>
-                  </select>
+                <div className="ts-form-row">
+                  <div className="ts-form-group">
+                    <label>Start</label>
+                    <input
+                      type="time"
+                      value={form.shift_start}
+                      onChange={(e) => setForm({ ...form, shift_start: e.target.value })}
+                      required
+                      disabled={form.status === 'off'}
+                    />
+                  </div>
+                  <div className="ts-form-group">
+                    <label>End</label>
+                    <input
+                      type="time"
+                      value={form.shift_end}
+                      onChange={(e) => setForm({ ...form, shift_end: e.target.value })}
+                      required
+                      disabled={form.status === 'off'}
+                    />
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <div className="ts-status-toggle">
                   <button
                     type="button"
-                    onClick={closeModal}
-                    style={{ flex: 1, padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '14px' }}
+                    className={`ts-status-btn ${form.status === 'scheduled' ? 'active' : ''}`}
+                    onClick={() => setForm({ ...form, status: 'scheduled' })}
                   >
-                    Cancel
+                    🕐 Working
                   </button>
                   <button
-                    type="submit"
-                    style={{ flex: 1, padding: '12px', border: 'none', borderRadius: '8px', background: '#1976d2', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
+                    type="button"
+                    className={`ts-status-btn off ${form.status === 'off' ? 'active' : ''}`}
+                    onClick={() => setForm({ ...form, status: 'off' })}
                   >
-                    {editingSchedule ? 'Update' : 'Add'} Schedule
+                    🏖️ Day Off
+                  </button>
+                </div>
+
+                <div className="ts-form-actions">
+                  <button type="button" className="ts-btn-cancel" onClick={closeModal}>Cancel</button>
+                  <button type="submit" className="ts-btn-save" disabled={!form.employee_id}>
+                    {editingSchedule ? 'Update' : 'Add'}
                   </button>
                 </div>
               </form>
             </div>
           </div>
         )}
+
+        {/* Floating Add Button */}
+        <button
+          className="ts-fab"
+          onClick={() => openAddModal(new Date())}
+          title="Add schedule for today"
+        >
+          +
+        </button>
       </div>
     </ESSLayout>
   );
