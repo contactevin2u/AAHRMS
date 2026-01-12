@@ -584,7 +584,7 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
-  const { employee_id, schedule_date, shift_start, shift_end, break_duration, notes } = req.body;
+  const { employee_id, schedule_date, shift_start, shift_end, break_duration } = req.body;
 
   if (!employee_id || !schedule_date || !shift_start || !shift_end) {
     throw new ValidationError('Employee, date, shift start and end are required');
@@ -629,13 +629,13 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
   }
 
   // Create schedule
-  // Note: created_by references admin_users, so we pass NULL when created via ESS by employees
+  // Note: created_by references admin_users, so we omit it when created via ESS by employees
   const result = await pool.query(
     `INSERT INTO schedules
-       (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, notes, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'scheduled')
+       (employee_id, outlet_id, company_id, schedule_date, shift_start, shift_end, break_duration, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
      RETURNING *`,
-    [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60, notes]
+    [employee_id, targetEmployee.outlet_id, targetEmployee.company_id, schedule_date, shift_start, shift_end, break_duration || 60]
   );
 
   res.status(201).json({
