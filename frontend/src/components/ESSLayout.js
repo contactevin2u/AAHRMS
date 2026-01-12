@@ -233,7 +233,8 @@ function ESSLayout({ children }) {
           </NavLink>
         )}
 
-        {isSupOrMgr && isMimix && (
+        {/* Overview only for manager level and above (not supervisors) */}
+        {employeeInfo?.employee_role === 'manager' && isMimix && (
           <NavLink
             to="/ess/manager-overview"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}

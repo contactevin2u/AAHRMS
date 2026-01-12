@@ -16,10 +16,10 @@ const { isSupervisorOrManager, getManagedOutlets, isMimixCompany } = require('..
  * Supervisors see level 1 approvals, Managers see level 2 approvals
  */
 router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
-  // Check if user is supervisor or manager
+  // Check if user is manager level or above (supervisors cannot access overview)
   const role = req.employee.employee_role;
-  if (role !== 'manager' && role !== 'supervisor') {
-    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  if (role !== 'manager' && role !== 'admin' && role !== 'director') {
+    return res.status(403).json({ error: 'Access denied. Manager level or above required.' });
   }
 
   // Get employee's company and outlet
