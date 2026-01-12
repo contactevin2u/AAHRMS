@@ -139,7 +139,9 @@ const EmployeeForm = ({
   salaryAutoPopulated,
   onDepartmentChange,
   onSubmit,
-  onCancel
+  onCancel,
+  saving = false,
+  submitLabel = null  // Custom submit button label
 }) => {
   // Get selected department's payroll structure based on name
   const selectedDept = departments.find(d => d.id === parseInt(form.department_id));
@@ -904,8 +906,8 @@ const EmployeeForm = ({
         <button type="button" onClick={onCancel} className="cancel-btn">
           Cancel
         </button>
-        <button type="submit" className="save-btn">
-          {editingEmployee ? 'Update' : 'Add'}
+        <button type="submit" className="save-btn" disabled={saving}>
+          {saving ? 'Saving...' : (submitLabel || (editingEmployee ? 'Update' : 'Add'))}
         </button>
       </div>
     </form>

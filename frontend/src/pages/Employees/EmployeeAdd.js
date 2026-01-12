@@ -150,16 +150,9 @@ function EmployeeAdd() {
             onDepartmentChange={() => {}}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
+            saving={saving}
+            submitLabel="Create Employee"
           />
-
-          <div className="modal-actions" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-            <button type="button" className="cancel-btn" onClick={handleCancel}>
-              Cancel
-            </button>
-            <button type="button" className="save-btn" onClick={handleSubmit} disabled={saving}>
-              {saving ? 'Creating...' : 'Create Employee'}
-            </button>
-          </div>
         </div>
       </div>
     </Layout>
