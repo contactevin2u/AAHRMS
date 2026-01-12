@@ -1578,6 +1578,9 @@ Human Resources Department
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='attendance_status') THEN
           ALTER TABLE clock_in_records ADD COLUMN attendance_status VARCHAR(20) DEFAULT 'present';
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='wrong_shift_reason') THEN
+          ALTER TABLE clock_in_records ADD COLUMN wrong_shift_reason TEXT;
+        END IF;
         -- OT approval columns (for supervisor approval flow)
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clock_in_records' AND column_name='ot_flagged') THEN
           ALTER TABLE clock_in_records ADD COLUMN ot_flagged BOOLEAN DEFAULT FALSE;
