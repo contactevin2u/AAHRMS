@@ -632,6 +632,43 @@ const initDb = async () => {
         ('EL', 'Emergency Leave', TRUE, 3, 'Emergency leave', 1)
       ON CONFLICT (code, company_id) DO NOTHING;
 
+      -- ==============================================
+      -- MIMIX (company_id=3) LEAVE TYPES
+      -- AL: 0-4yr=12days, 5+yr=16days
+      -- SL: 0-2yr=14days, 2-4yr=18days, 5+yr=22days
+      -- ==============================================
+
+      -- Mimix Annual Leave: 12 days (0-4 years), 16 days (5+ years)
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment, entitlement_rules, carries_forward, max_carry_forward) VALUES
+        ('AL', 'Annual Leave', TRUE, 12, 'Paid annual leave', 3, FALSE,
+         '{"type": "service_years", "rules": [{"min_years": 0, "max_years": 5, "days": 12}, {"min_years": 5, "max_years": 99, "days": 16}]}',
+         TRUE, 5)
+      ON CONFLICT (code, company_id) DO UPDATE SET
+        entitlement_rules = EXCLUDED.entitlement_rules,
+        default_days_per_year = 12,
+        carries_forward = EXCLUDED.carries_forward,
+        max_carry_forward = EXCLUDED.max_carry_forward;
+
+      -- Mimix Sick Leave: 14 days (0-2yr), 18 days (2-4yr), 22 days (5+yr)
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment, entitlement_rules) VALUES
+        ('SL', 'Sick Leave', TRUE, 14, 'Paid sick leave - requires Medical Certificate', 3, TRUE,
+         '{"type": "service_years", "rules": [{"min_years": 0, "max_years": 2, "days": 14}, {"min_years": 2, "max_years": 5, "days": 18}, {"min_years": 5, "max_years": 99, "days": 22}]}')
+      ON CONFLICT (code, company_id) DO UPDATE SET
+        requires_attachment = TRUE,
+        entitlement_rules = EXCLUDED.entitlement_rules;
+
+      -- Mimix Hospitalization Leave
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment) VALUES
+        ('HL', 'Hospitalization Leave', TRUE, 60, 'Hospitalization leave - separate from sick leave, requires MC', 3, TRUE)
+      ON CONFLICT (code, company_id) DO UPDATE SET
+        default_days_per_year = 60,
+        requires_attachment = TRUE;
+
+      -- Mimix Unpaid Leave
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id) VALUES
+        ('UL', 'Unpaid Leave', FALSE, 0, 'Unpaid leave - deducted from salary', 3)
+      ON CONFLICT (code, company_id) DO NOTHING;
+
       -- Leave Balances (per employee per year)
       CREATE TABLE IF NOT EXISTS leave_balances (
         id SERIAL PRIMARY KEY,

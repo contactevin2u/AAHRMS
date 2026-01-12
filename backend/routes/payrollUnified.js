@@ -117,6 +117,35 @@ async function getCompanySettings(companyId) {
 }
 
 /**
+ * Part-time hourly rate (RM)
+ */
+const PART_TIME_HOURLY_RATE = 8.72;
+
+/**
+ * Get total work hours for part-time employee from clock-in records
+ * Returns: { totalMinutes, totalHours, grossSalary }
+ */
+async function calculatePartTimeHours(employeeId, periodStart, periodEnd) {
+  const result = await pool.query(`
+    SELECT COALESCE(SUM(total_work_minutes), 0) as total_minutes
+    FROM clock_in_records
+    WHERE employee_id = $1
+      AND work_date BETWEEN $2 AND $3
+      AND status = 'completed'
+  `, [employeeId, periodStart, periodEnd]);
+
+  const totalMinutes = parseFloat(result.rows[0]?.total_minutes || 0);
+  const totalHours = totalMinutes / 60;
+  const grossSalary = Math.round(totalHours * PART_TIME_HOURLY_RATE * 100) / 100;
+
+  return {
+    totalMinutes,
+    totalHours: Math.round(totalHours * 100) / 100,
+    grossSalary
+  };
+}
+
+/**
  * Calculate schedule-based payable days for outlet companies (Mimix)
  * Returns: { scheduledDays, attendedDays, payableDays }
  */
@@ -686,9 +715,27 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       let basicSalary = prevPayroll?.basic_salary || parseFloat(emp.basic_salary) || 0;
       let fixedAllowance = prevPayroll?.fixed_allowance || parseFloat(emp.fixed_allowance) || 0;
 
+      // Part-time employee: salary = total work hours × RM 8.72
+      // Part-time employees don't get fixed salary, allowances, or leave
+      let partTimeData = null;
+      if (emp.work_type === 'part_time') {
+        partTimeData = await calculatePartTimeHours(
+          emp.id,
+          period.start.toISOString().split('T')[0],
+          period.end.toISOString().split('T')[0]
+        );
+        basicSalary = partTimeData.grossSalary;
+        fixedAllowance = 0; // Part-time no fixed allowance
+      }
+
       // Flexible earnings
       let commissionAmount = commissionsMap[emp.id] || 0;
       let flexAllowance = allowancesMap[emp.id] || 0;
+
+      // Part-time employees don't get flexible allowances
+      if (emp.work_type === 'part_time') {
+        flexAllowance = 0;
+      }
 
       // Indoor Sales logic
       let salesAmount = 0;
@@ -709,10 +756,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // OT calculation
+      // OT calculation (skip for part-time - they're paid by actual hours worked)
       let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
 
-      if (features.auto_ot_from_clockin) {
+      if (features.auto_ot_from_clockin && emp.work_type !== 'part_time') {
         try {
           const otResult = await calculateOTFromClockIn(
             emp.id, companyId, emp.department_id,
@@ -727,7 +774,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      if (features.auto_ph_pay) {
+      // PH pay (skip for part-time - they're paid by actual hours worked)
+      if (features.auto_ph_pay && emp.work_type !== 'part_time') {
         try {
           phDaysWorked = await calculatePHDaysWorked(
             emp.id, companyId,
@@ -744,38 +792,41 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       }
 
       // Unpaid leave / Schedule-based deductions
+      // Skip for part-time - they're already paid by actual hours worked
       const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
       let unpaidDeduction = 0;
       let unpaidDays = 0;
       let scheduleBasedPay = null;
 
-      // For outlet-based companies (Mimix), use schedule-based pay calculation
-      if (settings.groupingType === 'outlet') {
-        try {
-          scheduleBasedPay = await calculateScheduleBasedPay(
-            emp.id,
-            period.start.toISOString().split('T')[0],
-            period.end.toISOString().split('T')[0]
-          );
+      if (emp.work_type !== 'part_time') {
+        // For outlet-based companies (Mimix), use schedule-based pay calculation
+        if (settings.groupingType === 'outlet') {
+          try {
+            scheduleBasedPay = await calculateScheduleBasedPay(
+              emp.id,
+              period.start.toISOString().split('T')[0],
+              period.end.toISOString().split('T')[0]
+            );
 
-          // Calculate pay based on payable days only
-          // If they have schedules, pay = (payableDays / scheduledDays) * basicSalary
-          if (scheduleBasedPay.scheduledDays > 0) {
-            const scheduledDailyRate = basicSalary / scheduleBasedPay.scheduledDays;
-            const scheduledPay = scheduleBasedPay.payableDays * scheduledDailyRate;
-            unpaidDeduction = basicSalary - scheduledPay; // Deduct unattended days
-            unpaidDays = scheduleBasedPay.absentDays;
+            // Calculate pay based on payable days only
+            // If they have schedules, pay = (payableDays / scheduledDays) * basicSalary
+            if (scheduleBasedPay.scheduledDays > 0) {
+              const scheduledDailyRate = basicSalary / scheduleBasedPay.scheduledDays;
+              const scheduledPay = scheduleBasedPay.payableDays * scheduledDailyRate;
+              unpaidDeduction = basicSalary - scheduledPay; // Deduct unattended days
+              unpaidDays = scheduleBasedPay.absentDays;
+            }
+          } catch (e) {
+            console.warn(`Schedule-based pay calculation failed for ${emp.name}:`, e.message);
+            // Fallback to standard unpaid leave calculation
+            unpaidDays = unpaidLeaveMap[emp.id] || 0;
+            unpaidDeduction = dailyRate * unpaidDays;
           }
-        } catch (e) {
-          console.warn(`Schedule-based pay calculation failed for ${emp.name}:`, e.message);
-          // Fallback to standard unpaid leave calculation
+        } else {
+          // Standard unpaid leave calculation for non-outlet companies
           unpaidDays = unpaidLeaveMap[emp.id] || 0;
           unpaidDeduction = dailyRate * unpaidDays;
         }
-      } else {
-        // Standard unpaid leave calculation for non-outlet companies
-        unpaidDays = unpaidLeaveMap[emp.id] || 0;
-        unpaidDeduction = dailyRate * unpaidDays;
       }
 
       // Claims

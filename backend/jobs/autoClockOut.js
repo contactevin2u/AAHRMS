@@ -113,12 +113,12 @@ async function processAutoClockOut(record, schedule, employee) {
       const adjustedMinutes = (shiftEndMinutes + 60) % (24 * 60);
       clockOutTime = minutesToTime(adjustedMinutes);
     } else {
-      // Normal shift: clock_out at midnight (00:00:00)
-      clockOutTime = '00:00:00';
+      // Normal shift: clock_out at 1:00 AM (01:00:00)
+      clockOutTime = '01:00:00';
     }
   } else {
-    // No schedule: clock_out at midnight
-    clockOutTime = '00:00:00';
+    // No schedule: clock_out at 1:00 AM
+    clockOutTime = '01:00:00';
   }
 
   // Calculate work minutes with auto clock-out
