@@ -84,7 +84,9 @@ function ESSLayout({ children }) {
 
   // Check if employee is supervisor/manager (can see team management features)
   const isSupOrMgr = isSupervisorOrManager(employeeInfo);
-  const isIndoorSalesManager = employeeInfo?.position === 'Manager' && employeeInfo?.employee_role === 'manager';
+  // AA Alive: Indoor Sales Manager can manage schedules (position 'Manager' OR role 'manager')
+  const isIndoorSalesManager = !isMimix &&
+    (employeeInfo?.position === 'Manager' || employeeInfo?.employee_role === 'manager');
   const showTeamFeatures = isSupOrMgr || isIndoorSalesManager;
 
   // Get company logo based on company

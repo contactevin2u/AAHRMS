@@ -15,6 +15,7 @@ function ESSTeamSchedule() {
   const [selectedOutlet, setSelectedOutlet] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [scheduleForm, setScheduleForm] = useState({
     employee_id: '',
@@ -24,6 +25,11 @@ function ESSTeamSchedule() {
   });
 
   const isMimix = isMimixCompany(employeeInfo);
+
+  // Check access: Mimix (supervisors/managers) or AA Alive Indoor Sales Manager
+  const isIndoorSalesManager = !isMimix &&
+    (employeeInfo?.position === 'Manager' || employeeInfo?.employee_role === 'manager');
+  const canManageSchedules = isSupervisorOrManager(employeeInfo) || isIndoorSalesManager;
 
   useEffect(() => {
     fetchTeamEmployees();
@@ -94,14 +100,32 @@ function ESSTeamSchedule() {
         outlet_id: isMimix ? parseInt(selectedOutlet) : null
       };
 
-      await essApi.createTeamSchedule(data);
-      toast.success('Schedule created');
+      if (editingSchedule) {
+        await essApi.updateTeamSchedule(editingSchedule.id, data);
+        toast.success('Schedule updated');
+      } else {
+        await essApi.createTeamSchedule(data);
+        toast.success('Schedule created');
+      }
       setShowAddModal(false);
+      setEditingSchedule(null);
       setScheduleForm({ employee_id: '', shift_start: '09:00', shift_end: '18:00', status: 'scheduled' });
       fetchTeamSchedules();
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to create schedule');
+      toast.error(error.response?.data?.error || 'Failed to save schedule');
     }
+  };
+
+  const handleEditSchedule = (schedule) => {
+    setEditingSchedule(schedule);
+    setSelectedDate(schedule.schedule_date);
+    setScheduleForm({
+      employee_id: schedule.employee_id.toString(),
+      shift_start: schedule.shift_start || '09:00',
+      shift_end: schedule.shift_end || '18:00',
+      status: schedule.status || 'scheduled'
+    });
+    setShowAddModal(true);
   };
 
   const handleDeleteSchedule = async (scheduleId) => {
@@ -157,8 +181,16 @@ function ESSTeamSchedule() {
   };
 
   const openAddModal = (date) => {
+    setEditingSchedule(null);
+    setScheduleForm({ employee_id: '', shift_start: '09:00', shift_end: '18:00', status: 'scheduled' });
     setSelectedDate(formatDateKey(date));
     setShowAddModal(true);
+  };
+
+  const closeModal = () => {
+    setShowAddModal(false);
+    setEditingSchedule(null);
+    setScheduleForm({ employee_id: '', shift_start: '09:00', shift_end: '18:00', status: 'scheduled' });
   };
 
   const days = getDaysInMonth(currentMonth);
@@ -175,7 +207,7 @@ function ESSTeamSchedule() {
     return true;
   });
 
-  if (!isSupervisorOrManager(employeeInfo) && employeeInfo.position !== 'Manager') {
+  if (!canManageSchedules) {
     return (
       <ESSLayout>
         <div style={{ padding: '40px', textAlign: 'center' }}>
@@ -292,7 +324,11 @@ function ESSTeamSchedule() {
                           }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span
+                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: isPast ? 'default' : 'pointer' }}
+                            onClick={() => !isPast && handleEditSchedule(s)}
+                            title={isPast ? '' : 'Click to edit'}
+                          >
                             {s.employee_name?.split(' ')[0]}
                           </span>
                           {!isPast && (
@@ -328,12 +364,12 @@ function ESSTeamSchedule() {
           </div>
         </div>
 
-        {/* Add Schedule Modal */}
+        {/* Add/Edit Schedule Modal */}
         {showAddModal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowAddModal(false)}>
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeModal}>
             <div style={{ background: 'white', width: '90%', maxWidth: '400px', borderRadius: '16px', padding: '24px' }} onClick={e => e.stopPropagation()}>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>
-                Add Schedule - {selectedDate}
+                {editingSchedule ? 'Edit' : 'Add'} Schedule - {selectedDate}
               </h3>
 
               <form onSubmit={handleAddSchedule}>
@@ -390,7 +426,7 @@ function ESSTeamSchedule() {
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button
                     type="button"
-                    onClick={() => setShowAddModal(false)}
+                    onClick={closeModal}
                     style={{ flex: 1, padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '14px' }}
                   >
                     Cancel
@@ -399,7 +435,7 @@ function ESSTeamSchedule() {
                     type="submit"
                     style={{ flex: 1, padding: '12px', border: 'none', borderRadius: '8px', background: '#1976d2', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
                   >
-                    Add Schedule
+                    {editingSchedule ? 'Update' : 'Add'} Schedule
                   </button>
                 </div>
               </form>
