@@ -468,10 +468,12 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
     }
 
     const schedResult = await pool.query(
-      `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, o.name as outlet_name
+      `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, o.name as outlet_name,
+              st.code as shift_code, st.color as shift_color, st.is_off as template_is_off
        FROM schedules s
        JOIN employees e ON s.employee_id = e.id
        LEFT JOIN outlets o ON s.outlet_id = o.id
+       LEFT JOIN shift_templates st ON s.shift_template_id = st.id
        WHERE s.outlet_id = ANY($1)
          AND s.schedule_date BETWEEN $2 AND $3
        ORDER BY s.schedule_date, e.name`,
@@ -485,7 +487,9 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
       schedules[dateKey].push({
         ...s,
         shift_start: formatTime(s.shift_start),
-        shift_end: formatTime(s.shift_end)
+        shift_end: formatTime(s.shift_end),
+        shift_code: s.shift_code,
+        shift_color: s.shift_color
       });
     });
 
@@ -529,10 +533,12 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
     let schedules = {};
     if (empIds.length > 0) {
       const schedResult = await pool.query(
-        `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, d.name as department_name
+        `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, d.name as department_name,
+                st.code as shift_code, st.color as shift_color, st.is_off as template_is_off
          FROM schedules s
          JOIN employees e ON s.employee_id = e.id
          LEFT JOIN departments d ON e.department_id = d.id
+         LEFT JOIN shift_templates st ON s.shift_template_id = st.id
          WHERE s.employee_id = ANY($1)
            AND s.schedule_date BETWEEN $2 AND $3
          ORDER BY s.schedule_date, e.name`,
@@ -545,7 +551,9 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
         schedules[dateKey].push({
           ...s,
           shift_start: formatTime(s.shift_start),
-          shift_end: formatTime(s.shift_end)
+          shift_end: formatTime(s.shift_end),
+          shift_code: s.shift_code,
+          shift_color: s.shift_color
         });
       });
     }
