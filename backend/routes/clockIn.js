@@ -13,11 +13,12 @@ const { getCompanyFilter, getOutletFilter, isSupervisor, isAdmin } = require('..
  * - clock_in_2: After break (return)
  * - clock_out_2: End work (check-out)
  *
- * Standard work hours: 8.5 hours (510 minutes)
- * OT = Total hours - 8.5 hours
+ * Standard work hours: 7.5 hours (450 minutes) excluding 1 hour break
+ * Total shift = 8.5 hours (7.5 work + 1 hour break)
+ * OT = Working hours - 7.5 hours
  */
 
-const STANDARD_WORK_MINUTES = 510; // 8.5 hours
+const STANDARD_WORK_MINUTES = 450; // 7.5 hours (excluding break)
 
 /**
  * Calculate total work time and OT

@@ -64,8 +64,9 @@ const {
 } = require('../../middleware/essPermissions');
 const { checkWrongShift } = require('../../utils/attendanceDeduction');
 
-// Standard work time: 8.5 hours = 510 minutes
-const STANDARD_WORK_MINUTES = 510;
+// Standard work time: 7.5 hours = 450 minutes (excluding 1 hour break)
+// Total shift = 8.5 hours (7.5 work + 1 hour break)
+const STANDARD_WORK_MINUTES = 450;
 
 // Maximum allowed photo size (200KB as per storage minimization policy)
 const MAX_PHOTO_SIZE_KB = 200;

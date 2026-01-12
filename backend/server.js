@@ -29,7 +29,8 @@ const bikRoutes = require('./routes/benefitsInKind');
 const retentionRoutes = require('./routes/admin/retention');
 const schedulesRoutes = require('./routes/schedules');
 const positionsRoutes = require('./routes/positions');
-const shiftSwapRoutes = require('./routes/shiftSwap');
+// Shift swap disabled - employees must work assigned shifts only
+// const shiftSwapRoutes = require('./routes/shiftSwap');
 const commissionRoutes = require('./routes/commission');  // Indoor Sales commissions
 
 // Scheduled jobs
@@ -77,7 +78,8 @@ app.use('/api/benefits-in-kind', bikRoutes);  // Benefits In Kind (AA Alive)
 app.use('/api/admin/retention', retentionRoutes);  // Data Retention Policy Management
 app.use('/api/schedules', schedulesRoutes);  // Employee Schedules (Mimix)
 app.use('/api/positions', positionsRoutes);  // Job Positions
-app.use('/api/shift-swap', shiftSwapRoutes);  // Shift Swap Requests
+// Shift swap disabled - employees must work assigned shifts only
+// app.use('/api/shift-swap', shiftSwapRoutes);
 app.use('/api/commission', commissionRoutes);  // Indoor Sales commissions
 
 // Health check

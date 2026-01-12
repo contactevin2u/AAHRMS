@@ -20,7 +20,8 @@ const dashboardRoutes = require('./dashboard');
 const clockinRoutes = require('./clockin');
 const benefitsRoutes = require('./benefits');
 const schedulesRoutes = require('./schedules');
-const shiftSwapRoutes = require('./shiftSwap');
+// Shift swap disabled - employees must work assigned shifts only
+// const shiftSwapRoutes = require('./shiftSwap');
 const managerOverviewRoutes = require('./managerOverview');
 
 // Mount sub-routes
@@ -57,8 +58,8 @@ router.use('/benefits', benefitsRoutes);
 // Schedules routes (Mimix/outlet-based companies)
 router.use('/schedules', schedulesRoutes);
 
-// Shift Swap routes (outlet employees can swap shifts)
-router.use('/shift-swap', shiftSwapRoutes);
+// Shift swap disabled - employees must work assigned shifts only
+// router.use('/shift-swap', shiftSwapRoutes);
 
 // Manager Overview routes (managers only)
 router.use('/manager-overview', managerOverviewRoutes);

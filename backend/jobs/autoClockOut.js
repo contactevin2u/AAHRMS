@@ -9,15 +9,15 @@
  *    - If schedule ends before 12am → set clock_out = 12:00 AM (00:00:00)
  *    - If schedule ends after 12am (night shift) → set clock_out = shift_end + 1 hour
  * 3. Hours calculation on auto clock-out:
- *    - Full Time: Cap at 8.5 hours (510 minutes), no OT
+ *    - Full Time: Cap at 7.5 hours (450 minutes) excluding break, no OT
  *    - Part Time: Count scheduled hours only, no OT
  * 4. Flag auto clock-out records for admin review
  */
 
 const pool = require('../db');
 
-// Standard work time: 8.5 hours = 510 minutes
-const STANDARD_WORK_MINUTES = 510;
+// Standard work time: 7.5 hours = 450 minutes (excluding 1 hour break)
+const STANDARD_WORK_MINUTES = 450;
 
 /**
  * Convert time string (HH:MM:SS or HH:MM) to minutes since midnight
