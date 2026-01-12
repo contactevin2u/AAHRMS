@@ -4,7 +4,7 @@
 databases:
   - name: hrms-db
     region: singapore
-    plan: free
+    plan: basic
     databaseName: hrms_db
     user: hrms_user
 
@@ -12,7 +12,7 @@ services:
   - type: web
     name: hrms-backend
     region: singapore
-    plan: free
+    plan: starter
     runtime: node
     rootDir: backend
     buildCommand: npm install
