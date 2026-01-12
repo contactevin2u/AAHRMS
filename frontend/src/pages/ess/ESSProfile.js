@@ -159,9 +159,13 @@ function ESSProfile() {
 
   const getProbationBadge = (status) => {
     const statusMap = {
-      probation: { label: 'On Probation', class: 'probation-active' },
+      // Database values
+      ongoing: { label: 'On Probation', class: 'probation-active' },
+      pending_review: { label: 'Pending Review', class: 'probation-pending' },
       confirmed: { label: 'Confirmed', class: 'probation-confirmed' },
-      extended: { label: 'Extended', class: 'probation-extended' }
+      extended: { label: 'Extended', class: 'probation-extended' },
+      // Legacy/alternative values
+      probation: { label: 'On Probation', class: 'probation-active' }
     };
     const s = statusMap[status] || { label: status || 'N/A', class: '' };
     return <span className={`probation-badge ${s.class}`}>{s.label}</span>;

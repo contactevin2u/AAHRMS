@@ -380,7 +380,7 @@ function ESSTeamSchedule() {
 
                     {daySchedules.filter(s => s.status !== 'off').length > 0 && (
                       <div className="ts-day-schedules">
-                        {daySchedules.filter(s => s.status !== 'off').slice(0, 3).map((s, i) => {
+                        {daySchedules.filter(s => s.status !== 'off').slice(0, 4).map((s, i) => {
                           const color = getEmployeeColor(s.employee_id);
                           return (
                             <div
@@ -388,7 +388,8 @@ function ESSTeamSchedule() {
                               className="ts-schedule-dot"
                               style={{
                                 backgroundColor: color.bg,
-                                borderColor: color.border
+                                borderColor: color.border,
+                                color: color.text
                               }}
                               title={`${s.employee_name} ${formatTimeRange(s.shift_start, s.shift_end)}`}
                             >
@@ -396,8 +397,8 @@ function ESSTeamSchedule() {
                             </div>
                           );
                         })}
-                        {daySchedules.filter(s => s.status !== 'off').length > 3 && (
-                          <div className="ts-more-badge">+{daySchedules.filter(s => s.status !== 'off').length - 3}</div>
+                        {daySchedules.filter(s => s.status !== 'off').length > 4 && (
+                          <div className="ts-more-badge">+{daySchedules.filter(s => s.status !== 'off').length - 4}</div>
                         )}
                       </div>
                     )}

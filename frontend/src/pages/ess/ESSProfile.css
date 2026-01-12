@@ -160,6 +160,12 @@
   color: #dc2626;
 }
 
+.probation-pending {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px dashed #f59e0b;
+}
+
 /* Footer */
 .profile-footer {
   text-align: center;
