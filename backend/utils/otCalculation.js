@@ -29,17 +29,20 @@ async function getOTRules(companyId, departmentId = null) {
   }
 
   // Default rules if none configured
+  // 7.5 working hours + 1 hour break = 8.5 hour shift
+  // OT starts after 7.5 working hours (break excluded)
   return {
-    normal_hours_per_day: 8.00,
-    ot_threshold_hours: 8.00,
+    normal_hours_per_day: 7.50,
+    ot_threshold_hours: 7.50,
     ot_normal_multiplier: 1.50,
     ot_weekend_multiplier: 1.50,
-    ot_ph_multiplier: 2.00,
+    ot_ph_multiplier: 3.00,
     ot_ph_after_hours_multiplier: null,
-    rounding_method: 'minute',
-    rounding_direction: 'nearest',
+    rounding_method: '30min',
+    rounding_direction: 'down',
+    min_ot_hours: 1.0,  // Minimum 1 hour OT required
     includes_break: false,
-    break_duration_minutes: 0
+    break_duration_minutes: 60  // 1 hour break
   };
 }
 
@@ -59,10 +62,13 @@ async function getPublicHolidays(companyId, month, year) {
 
 /**
  * Get clock-in records for an employee in a specific period
+ * @param {boolean} onlyApprovedOT - If true, only count OT from records where ot_approved = true
  */
-async function getClockRecords(employeeId, startDate, endDate) {
+async function getClockRecords(employeeId, startDate, endDate, onlyApprovedOT = true) {
   const result = await pool.query(`
-    SELECT * FROM clock_in_records
+    SELECT *,
+      CASE WHEN ot_approved = true THEN true ELSE false END as is_ot_approved
+    FROM clock_in_records
     WHERE employee_id = $1
       AND clock_in_time >= $2
       AND clock_in_time <= $3
@@ -70,7 +76,15 @@ async function getClockRecords(employeeId, startDate, endDate) {
     ORDER BY clock_in_time
   `, [employeeId, startDate, endDate]);
 
-  return result.rows;
+  // If onlyApprovedOT is true, mark records so OT won't be counted for unapproved
+  if (onlyApprovedOT) {
+    return result.rows.map(r => ({
+      ...r,
+      count_ot: r.ot_approved === true
+    }));
+  }
+
+  return result.rows.map(r => ({ ...r, count_ot: true }));
 }
 
 /**
@@ -100,6 +114,25 @@ function roundTime(hours, method = 'minute', direction = 'nearest') {
   }
 
   return rounded / multiplier;
+}
+
+/**
+ * Round OT hours with minimum threshold
+ * - Rounds to 0.5 hour increments
+ * - Rounds down (1hr 15min = 1hr, 1hr 45min = 1.5hr)
+ * - Minimum 1 hour required (less than 1 hour = 0)
+ * @param {number} otHours - Raw OT hours
+ * @param {number} minOtHours - Minimum OT hours required (default 1.0)
+ */
+function roundOTHours(otHours, minOtHours = 1.0) {
+  // If less than minimum OT threshold, return 0
+  if (otHours < minOtHours) {
+    return 0;
+  }
+
+  // Round down to nearest 0.5 hour
+  // e.g., 1.25 hours -> 1.0 hours, 1.75 hours -> 1.5 hours
+  return Math.floor(otHours * 2) / 2;
 }
 
 /**
@@ -157,9 +190,13 @@ async function calculateOTFromClockIn(employeeId, companyId, departmentId, perio
 
     // Calculate worked hours in minutes for precision
     const workedMinutes = (clockOut - clockIn) / (1000 * 60);
-    let workedHours = workedMinutes / 60;
 
-    // Apply rounding
+    // Subtract break time (default 60 minutes = 1 hour)
+    const breakMinutes = rules.break_duration_minutes || 60;
+    const netWorkedMinutes = Math.max(0, workedMinutes - breakMinutes);
+    let workedHours = netWorkedMinutes / 60;
+
+    // Apply rounding to worked hours
     workedHours = roundTime(workedHours, rules.rounding_method, rules.rounding_direction);
 
     totalWorkedHours += workedHours;
@@ -180,40 +217,51 @@ async function calculateOTFromClockIn(employeeId, companyId, departmentId, perio
       is_weekend: isWeekend,
       ot_hours: 0,
       ot_type: null,
-      ot_multiplier: 0
+      ot_multiplier: 0,
+      ot_approved: record.ot_approved === true,
+      ot_counted: false  // Whether OT was counted for payroll
     };
 
-    // Calculate OT if worked more than threshold
+    // Calculate OT if worked more than threshold (7.5 hours excluding break)
     if (workedHours > rules.ot_threshold_hours) {
-      const otHours = roundTime(
-        workedHours - rules.ot_threshold_hours,
-        rules.rounding_method,
-        rules.rounding_direction
-      );
+      const rawOtHours = workedHours - rules.ot_threshold_hours;
+
+      // Apply OT rounding: 0.5hr increments, min 1hr, round down
+      // e.g., 0.5hr OT = 0 (below min), 1hr 15min = 1hr, 1hr 45min = 1.5hr
+      const minOtHours = rules.min_ot_hours || 1.0;
+      const otHours = roundOTHours(rawOtHours, minOtHours);
 
       dailyBreakdown.ot_hours = otHours;
+      dailyBreakdown.raw_ot_hours = Math.round(rawOtHours * 100) / 100; // For reference
 
-      if (isPublicHoliday) {
-        if (rules.ot_ph_after_hours_multiplier) {
-          // Mimix logic: PH work within normal hours = 2.0x, after hours = 3.0x
-          // For simplicity, we consider all OT hours as "after normal hours"
-          otPhAfterHours += otHours;
-          dailyBreakdown.ot_type = 'ph_after_hours';
-          dailyBreakdown.ot_multiplier = parseFloat(rules.ot_ph_after_hours_multiplier);
+      // Only count OT for payroll if approved (record.count_ot flag) AND has valid OT hours
+      const shouldCountOT = record.count_ot === true && otHours > 0;
+      dailyBreakdown.ot_counted = shouldCountOT;
+
+      // Only assign OT type if there are valid OT hours (after min threshold check)
+      if (otHours > 0) {
+        if (isPublicHoliday) {
+          if (rules.ot_ph_after_hours_multiplier) {
+            // Mimix logic: PH work within normal hours = 2.0x, after hours = 3.0x
+            // For simplicity, we consider all OT hours as "after normal hours"
+            if (shouldCountOT) otPhAfterHours += otHours;
+            dailyBreakdown.ot_type = 'ph_after_hours';
+            dailyBreakdown.ot_multiplier = parseFloat(rules.ot_ph_after_hours_multiplier);
+          } else {
+            // All PH OT at 3.0x
+            if (shouldCountOT) otPhHours += otHours;
+            dailyBreakdown.ot_type = 'ph';
+            dailyBreakdown.ot_multiplier = parseFloat(rules.ot_ph_multiplier);
+          }
+        } else if (isWeekend) {
+          if (shouldCountOT) otWeekendHours += otHours;
+          dailyBreakdown.ot_type = 'weekend';
+          dailyBreakdown.ot_multiplier = parseFloat(rules.ot_weekend_multiplier || rules.ot_normal_multiplier);
         } else {
-          // AA Alive logic: all PH OT at 2.0x
-          otPhHours += otHours;
-          dailyBreakdown.ot_type = 'ph';
-          dailyBreakdown.ot_multiplier = parseFloat(rules.ot_ph_multiplier);
+          if (shouldCountOT) otNormalHours += otHours;
+          dailyBreakdown.ot_type = 'normal';
+          dailyBreakdown.ot_multiplier = parseFloat(rules.ot_normal_multiplier);
         }
-      } else if (isWeekend) {
-        otWeekendHours += otHours;
-        dailyBreakdown.ot_type = 'weekend';
-        dailyBreakdown.ot_multiplier = parseFloat(rules.ot_weekend_multiplier || rules.ot_normal_multiplier);
-      } else {
-        otNormalHours += otHours;
-        dailyBreakdown.ot_type = 'normal';
-        dailyBreakdown.ot_multiplier = parseFloat(rules.ot_normal_multiplier);
       }
     }
 
@@ -350,5 +398,6 @@ module.exports = {
   calculateOTFromClockIn,
   calculateMonthlyOT,
   calculatePHDaysWorked,
-  roundTime
+  roundTime,
+  roundOTHours
 };

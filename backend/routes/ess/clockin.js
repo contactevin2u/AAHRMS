@@ -62,6 +62,7 @@ const {
   canApproveForOutlet,
   canApproveBasedOnHierarchy
 } = require('../../middleware/essPermissions');
+const { checkWrongShift } = require('../../utils/attendanceDeduction');
 
 // Standard work time: 8.5 hours = 510 minutes
 const STANDARD_WORK_MINUTES = 510;
@@ -307,10 +308,11 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
   const { company_id, outlet_id, grouping_type } = empResult.rows[0];
 
   // Schedule check for outlet-based companies (Mimix)
-  // Clock-in is ALWAYS allowed, but we track whether there's a schedule
+  // Clock-in is validated against assigned shift - wrong shift = absent
   let hasSchedule = false;
   let scheduleId = null;
   let attendanceStatus = 'present';
+  let wrongShiftReason = null;
 
   if (grouping_type === 'outlet' && action === 'clock_in_1') {
     const scheduleResult = await pool.query(
@@ -320,10 +322,22 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     );
 
     if (scheduleResult.rows.length > 0) {
+      const schedule = scheduleResult.rows[0];
       hasSchedule = true;
-      scheduleId = scheduleResult.rows[0].id;
-      attendanceStatus = 'present';
-      // Clock-in is allowed at any time - no time window restriction
+      scheduleId = schedule.id;
+
+      // Check if clocking in for wrong shift (more than 2 hours from scheduled start)
+      const wrongShiftCheck = checkWrongShift(schedule.shift_start, currentTime, 120);
+
+      if (wrongShiftCheck.isWrongShift) {
+        // Wrong shift - mark as absent
+        attendanceStatus = 'wrong_shift';
+        wrongShiftReason = wrongShiftCheck.reason;
+        console.log(`Wrong shift detected for employee ${employeeId}: ${wrongShiftReason}`);
+      } else {
+        // Correct shift
+        attendanceStatus = 'present';
+      }
     } else {
       // No schedule - still allow clock-in but mark as no_schedule
       hasSchedule = false;
@@ -355,17 +369,20 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     // Upload photo to Cloudinary
     const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_in_1');
 
+    // Determine record status based on attendance
+    const recordStatus = attendanceStatus === 'wrong_shift' ? 'absent' : 'in_progress';
+
     if (existingRecord.rows.length === 0) {
       // Create new record with schedule tracking
       record = await pool.query(
         `INSERT INTO clock_in_records
          (employee_id, company_id, outlet_id, work_date,
           clock_in_1, photo_in_1, location_in_1, address_in_1, face_detected_in_1, face_confidence_in_1,
-          has_schedule, schedule_id, attendance_status,
+          has_schedule, schedule_id, attendance_status, wrong_shift_reason,
           status, approval_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'in_progress', 'pending')
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'pending')
          RETURNING *`,
-        [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus]
+        [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus, wrongShiftReason, recordStatus]
       );
     } else {
       // Update existing record with schedule tracking
@@ -373,20 +390,33 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
         `UPDATE clock_in_records SET
            clock_in_1 = $1, photo_in_1 = $2, location_in_1 = $3, address_in_1 = $4,
            face_detected_in_1 = $5, face_confidence_in_1 = $6,
-           has_schedule = $7, schedule_id = $8, attendance_status = $9,
-           status = 'in_progress'
-         WHERE employee_id = $10 AND work_date = $11
+           has_schedule = $7, schedule_id = $8, attendance_status = $9, wrong_shift_reason = $10,
+           status = $11
+         WHERE employee_id = $12 AND work_date = $13
          RETURNING *`,
-        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus, employeeId, today]
+        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus, wrongShiftReason, recordStatus, employeeId, today]
       );
     }
 
-    res.json({
-      message: 'Clock-in successful! Have a great day at work.',
-      action: 'clock_in_1',
-      time: currentTime,
-      record: record.rows[0]
-    });
+    // Different response based on attendance status
+    if (attendanceStatus === 'wrong_shift') {
+      res.status(200).json({
+        message: 'Warning: You clocked in for the WRONG SHIFT. This will be marked as ABSENT.',
+        warning: wrongShiftReason,
+        action: 'clock_in_1',
+        time: currentTime,
+        attendance_status: 'wrong_shift',
+        record: record.rows[0]
+      });
+    } else {
+      res.json({
+        message: 'Clock-in successful! Have a great day at work.',
+        action: 'clock_in_1',
+        time: currentTime,
+        attendance_status: attendanceStatus,
+        record: record.rows[0]
+      });
+    }
 
   } else if (action === 'clock_out_1') {
     // Break time
@@ -554,10 +584,11 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
 
   const { company_id, outlet_id, grouping_type } = empResult.rows[0];
 
-  // Schedule check for outlet-based companies
+  // Schedule check for outlet-based companies with wrong shift detection
   let hasSchedule = false;
   let scheduleId = null;
   let attendanceStatus = 'present';
+  let wrongShiftReason = null;
 
   if (grouping_type === 'outlet') {
     const scheduleResult = await pool.query(
@@ -567,9 +598,18 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
     );
 
     if (scheduleResult.rows.length > 0) {
+      const schedule = scheduleResult.rows[0];
       hasSchedule = true;
-      scheduleId = scheduleResult.rows[0].id;
-      attendanceStatus = 'present';
+      scheduleId = schedule.id;
+
+      // Check if clocking in for wrong shift
+      const wrongShiftCheck = checkWrongShift(schedule.shift_start, currentTime, 120);
+      if (wrongShiftCheck.isWrongShift) {
+        attendanceStatus = 'wrong_shift';
+        wrongShiftReason = wrongShiftCheck.reason;
+      } else {
+        attendanceStatus = 'present';
+      }
     } else {
       hasSchedule = false;
       scheduleId = null;
@@ -592,13 +632,16 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
   // Upload photo to Cloudinary
   const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_in_1');
 
+  // Determine record status based on attendance
+  const recordStatus = attendanceStatus === 'wrong_shift' ? 'absent' : 'in_progress';
+
   const record = await pool.query(
     `INSERT INTO clock_in_records
      (employee_id, company_id, outlet_id, work_date,
       clock_in_1, photo_in_1, location_in_1, address_in_1, face_detected_in_1, face_confidence_in_1,
-      has_schedule, schedule_id, attendance_status,
+      has_schedule, schedule_id, attendance_status, wrong_shift_reason,
       status, approval_status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'in_progress', 'pending')
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'pending')
      ON CONFLICT (employee_id, work_date) DO UPDATE SET
        clock_in_1 = EXCLUDED.clock_in_1,
        photo_in_1 = EXCLUDED.photo_in_1,
@@ -609,15 +652,27 @@ router.post('/in', authenticateEmployee, asyncHandler(async (req, res) => {
        has_schedule = EXCLUDED.has_schedule,
        schedule_id = EXCLUDED.schedule_id,
        attendance_status = EXCLUDED.attendance_status,
-       status = 'in_progress'
+       wrong_shift_reason = EXCLUDED.wrong_shift_reason,
+       status = EXCLUDED.status
      RETURNING *`,
-    [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus]
+    [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus, wrongShiftReason, recordStatus]
   );
 
-  res.json({
-    message: 'Clock-in successful',
-    record: record.rows[0]
-  });
+  // Different response based on attendance status
+  if (attendanceStatus === 'wrong_shift') {
+    res.json({
+      message: 'Warning: You clocked in for the WRONG SHIFT. This will be marked as ABSENT.',
+      warning: wrongShiftReason,
+      attendance_status: 'wrong_shift',
+      record: record.rows[0]
+    });
+  } else {
+    res.json({
+      message: 'Clock-in successful',
+      attendance_status: attendanceStatus,
+      record: record.rows[0]
+    });
+  }
 }));
 
 // Legacy clock-out endpoint (backwards compatibility) - now requires all fields

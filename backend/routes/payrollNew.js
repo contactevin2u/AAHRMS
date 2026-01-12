@@ -4,6 +4,7 @@ const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { calculateAllStatutory, calculateOT, calculatePublicHolidayPay, getPublicHolidaysInMonth } = require('../utils/statutory');
 const { calculateOTFromClockIn, calculatePHDaysWorked } = require('../utils/otCalculation');
+const { calculatePeriodDeductions } = require('../utils/attendanceDeduction');
 
 // =====================================================
 // PAYROLL RUNS
@@ -423,15 +424,40 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const dailyRate = basicSalary > 0 ? basicSalary / workingDaysInMonth : 0;
       const unpaidDeduction = dailyRate * unpaidDays;
 
-      // Gross salary = basic + allowance + flex allowances + OT + PH pay + commission + claims - unpaid leave
+      // Calculate late/early attendance deduction (with 10-min grace period for late)
+      let lateEarlyDeduction = 0;
+      let lateMinutes = 0;
+      let earlyMinutes = 0;
+      try {
+        const attendanceDeduction = await calculatePeriodDeductions(
+          emp.id,
+          companyId,
+          empPeriodConfig.period.start.toISOString().split('T')[0],
+          empPeriodConfig.period.end.toISOString().split('T')[0],
+          basicSalary
+        );
+        lateEarlyDeduction = attendanceDeduction.total_deduction || 0;
+        lateMinutes = attendanceDeduction.total_late_minutes || 0;
+        earlyMinutes = attendanceDeduction.total_early_minutes || 0;
+
+        if (lateEarlyDeduction > 0) {
+          console.log(`${emp.name}: Late/Early deduction RM${lateEarlyDeduction.toFixed(2)} (late: ${lateMinutes}min, early: ${earlyMinutes}min)`);
+        }
+      } catch (attendanceError) {
+        console.error(`Error calculating attendance deduction for ${emp.name}:`, attendanceError.message);
+        // Continue without attendance deduction if calculation fails
+      }
+
+      // Gross salary = basic + allowance + flex allowances + OT + PH pay + commission + claims - unpaid leave - late/early
       // Commission and flexible allowances are auto-populated from employee settings
       // OT and PH pay are auto-calculated from clock-in records
       const totalAllowances = fixedAllowance + flexAllowanceAmount;
-      const grossBeforeUnpaid = basicSalary + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount;
-      const grossSalary = Math.max(0, grossBeforeUnpaid - unpaidDeduction);
+      const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount;
+      const totalAttendanceDeductions = unpaidDeduction + lateEarlyDeduction;
+      const grossSalary = Math.max(0, grossBeforeDeductions - totalAttendanceDeductions);
 
       // DEBUG: Log gross calculation
-      console.log(`${emp.name}: gross=${grossSalary} (basic:${basicSalary} + allow:${totalAllowances} + OT:${otAmount} + PH:${phPay} + comm:${commissionAmount} + claims:${claimsAmount} - unpaid:${unpaidDeduction})`);
+      console.log(`${emp.name}: gross=${grossSalary} (basic:${basicSalary} + allow:${totalAllowances} + OT:${otAmount} + PH:${phPay} + comm:${commissionAmount} + claims:${claimsAmount} - unpaid:${unpaidDeduction} - late/early:${lateEarlyDeduction})`);
 
       // IMPORTANT: Statutory deductions only apply to: basic + commission + bonus
       // OT, allowance, outstation, incentive are NOT subject to EPF, SOCSO, EIS, PCB
@@ -444,9 +470,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       // This uses IC number to detect Malaysian and age
       const statutory = calculateAllStatutory(statutoryBase, emp, month, null);
 
-      // Total deductions
+      // Total deductions (includes unpaid leave + late/early + statutory)
       const totalDeductionsForEmp = (
         unpaidDeduction +
+        lateEarlyDeduction +
         statutory.epf.employee +
         statutory.socso.employee +
         statutory.eis.employee +
@@ -454,19 +481,25 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       );
 
       // Net pay (can be negative if deductions > earnings)
-      const netPay = grossBeforeUnpaid - totalDeductionsForEmp;
+      const netPay = grossBeforeDeductions - totalDeductionsForEmp;
 
       // Employer total cost = gross + employer contributions
       const employerCost = grossSalary + statutory.epf.employer + statutory.socso.employer + statutory.eis.employer;
 
       // Insert payroll item (fixed_allowance now includes flex allowances combined)
       // OT and PH pay are auto-calculated from clock-in records
+      // Late/early deduction stored in other_deductions with remarks
+      const lateEarlyRemarks = lateEarlyDeduction > 0
+        ? `Late: ${lateMinutes}min, Early: ${earlyMinutes}min`
+        : null;
+
       await client.query(`
         INSERT INTO payroll_items (
           payroll_run_id, employee_id,
           basic_salary, fixed_allowance, commission_amount, claims_amount,
           ot_hours, ot_amount, ph_days_worked, ph_pay,
           unpaid_leave_days, unpaid_leave_deduction,
+          other_deductions, deduction_remarks,
           gross_salary,
           epf_employee, epf_employer,
           socso_employee, socso_employer,
@@ -474,12 +507,13 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           pcb,
           total_deductions, net_pay, employer_total_cost,
           sales_amount, salary_calculation_method
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
       `, [
         runId, emp.id,
         basicSalary, totalAllowances, commissionAmount, claimsAmount,
         otHours, otAmount, phDaysWorked, phPay,
         unpaidDays, unpaidDeduction,
+        lateEarlyDeduction, lateEarlyRemarks,
         grossSalary,
         statutory.epf.employee, statutory.epf.employer,
         statutory.socso.employee, statutory.socso.employer,
@@ -1027,5 +1061,121 @@ async function updateRunTotals(runId) {
     WHERE id = $1
   `, [runId]);
 }
+
+// =====================================================
+// OT SUMMARY FOR PAYROLL
+// =====================================================
+
+// Get OT summary for a specific month (before running payroll)
+// Shows approved, pending, and rejected OT hours per employee
+router.get('/ot-summary/:year/:month', authenticateAdmin, async (req, res) => {
+  try {
+    const { year, month } = req.params;
+    const { department_id } = req.query;
+
+    // Get company ID from admin
+    const companyId = req.admin?.company_id || null;
+
+    // Build employee filter
+    let employeeQuery = `
+      SELECT e.id, e.name, e.employee_id as emp_code, e.department_id,
+             d.name as department_name,
+             e.default_basic_salary as basic_salary
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE e.status = 'active'
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    if (companyId) {
+      employeeQuery += ` AND e.company_id = $${paramIndex}`;
+      params.push(companyId);
+      paramIndex++;
+    }
+
+    if (department_id) {
+      employeeQuery += ` AND e.department_id = $${paramIndex}`;
+      params.push(department_id);
+      paramIndex++;
+    }
+
+    employeeQuery += ' ORDER BY d.name, e.name';
+
+    const employees = await pool.query(employeeQuery, params);
+
+    // Calculate OT summary for each employee
+    const summary = [];
+    let totalApproved = 0;
+    let totalPending = 0;
+    let totalRejected = 0;
+    let totalEstimatedPay = 0;
+
+    for (const emp of employees.rows) {
+      // Get OT records for this employee in the specified month
+      const otRecords = await pool.query(`
+        SELECT
+          COALESCE(SUM(CASE WHEN ot_approved = true THEN ot_hours ELSE 0 END), 0) as approved_ot_hours,
+          COALESCE(SUM(CASE WHEN ot_approved IS NULL AND ot_hours > 0 THEN ot_hours ELSE 0 END), 0) as pending_ot_hours,
+          COALESCE(SUM(CASE WHEN ot_approved = false THEN ot_hours ELSE 0 END), 0) as rejected_ot_hours,
+          COUNT(CASE WHEN ot_approved IS NULL AND ot_hours > 0 THEN 1 END) as pending_records_count
+        FROM clock_in_records
+        WHERE employee_id = $1
+          AND EXTRACT(MONTH FROM work_date) = $2
+          AND EXTRACT(YEAR FROM work_date) = $3
+          AND status IN ('clocked_out', 'approved')
+      `, [emp.id, month, year]);
+
+      const otData = otRecords.rows[0];
+      const approvedHours = parseFloat(otData.approved_ot_hours) || 0;
+      const pendingHours = parseFloat(otData.pending_ot_hours) || 0;
+      const rejectedHours = parseFloat(otData.rejected_ot_hours) || 0;
+      const pendingCount = parseInt(otData.pending_records_count) || 0;
+
+      // Calculate estimated OT pay (using default 1.5x multiplier)
+      const basicSalary = parseFloat(emp.basic_salary) || 0;
+      const hourlyRate = basicSalary > 0 ? (basicSalary / 22 / 8) : 0;
+      const estimatedPay = approvedHours * hourlyRate * 1.5;
+
+      // Only include employees with any OT
+      if (approvedHours > 0 || pendingHours > 0 || rejectedHours > 0) {
+        summary.push({
+          employee_id: emp.id,
+          employee_name: emp.name,
+          emp_code: emp.emp_code,
+          department_name: emp.department_name,
+          basic_salary: basicSalary,
+          hourly_rate: Math.round(hourlyRate * 100) / 100,
+          approved_ot_hours: Math.round(approvedHours * 100) / 100,
+          pending_ot_hours: Math.round(pendingHours * 100) / 100,
+          rejected_ot_hours: Math.round(rejectedHours * 100) / 100,
+          pending_records_count: pendingCount,
+          estimated_ot_pay: Math.round(estimatedPay * 100) / 100
+        });
+
+        totalApproved += approvedHours;
+        totalPending += pendingHours;
+        totalRejected += rejectedHours;
+        totalEstimatedPay += estimatedPay;
+      }
+    }
+
+    res.json({
+      year: parseInt(year),
+      month: parseInt(month),
+      summary,
+      totals: {
+        approved_ot_hours: Math.round(totalApproved * 100) / 100,
+        pending_ot_hours: Math.round(totalPending * 100) / 100,
+        rejected_ot_hours: Math.round(totalRejected * 100) / 100,
+        estimated_ot_pay: Math.round(totalEstimatedPay * 100) / 100,
+        employees_with_pending_ot: summary.filter(s => s.pending_ot_hours > 0).length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching OT summary:', error);
+    res.status(500).json({ error: 'Failed to fetch OT summary' });
+  }
+});
 
 module.exports = router;
