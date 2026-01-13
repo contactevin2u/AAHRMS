@@ -470,14 +470,14 @@ const Attendance = () => {
 
     const numValue = parseFloat(value) || 0;
     const displayValue = value ? `${numValue.toFixed(1)}h` : '-';
-    // Show red if work hours less than 8 (not including break)
-    const isUnderHours = isWorkHours && numValue > 0 && numValue < 8;
+    // Show red if work hours less than 7.5 (not including break)
+    const isUnderHours = isWorkHours && numValue > 0 && numValue < 7.5;
 
     return (
       <span
         className={`editable-hours ${isUnderHours ? 'under-hours' : ''}`}
         onClick={() => startEdit(record.id, field, value)}
-        title={isUnderHours ? 'Under 8 hours - Click to edit' : 'Click to edit'}
+        title={isUnderHours ? 'Under 7.5 hours - Click to edit' : 'Click to edit'}
         style={isUnderHours ? { color: '#dc2626', fontWeight: 'bold' } : {}}
       >
         {displayValue}
@@ -975,11 +975,11 @@ const Attendance = () => {
       <div className="attendance-legend">
         <div className="legend-item">
           <span className="legend-label">Standard hours:</span>
-          <span className="legend-value">{isAAAlive ? '8 hours (+ 1hr break)' : '8.5 hours'}</span>
+          <span className="legend-value">{isAAAlive ? '8 hours (+ 1hr break)' : '7.5 hours (+ 1hr break)'}</span>
         </div>
         <div className="legend-item">
           <span className="legend-label">OT calculation:</span>
-          <span className="legend-value">{isAAAlive ? 'Hours above 8h @ 1.0x' : 'Hours above 8.5h'}</span>
+          <span className="legend-value">{isAAAlive ? 'Hours above 8h @ 1.0x' : 'Hours above 7.5h @ 1.5x'}</span>
         </div>
         <div className="legend-item">
           <span className="legend-hint">Click on hours to edit</span>

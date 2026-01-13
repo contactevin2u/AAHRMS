@@ -231,9 +231,11 @@ function ESSOTApproval() {
         <div style={{ marginTop: '20px', background: '#f0f9ff', borderRadius: '12px', padding: '16px' }}>
           <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', color: '#0369a1' }}>OT Calculation Rules</h4>
           <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '13px', color: '#0369a1' }}>
-            <li>Standard work day: 8 hours (+ 1 hour break)</li>
-            <li>OT starts after 8 hours of actual work</li>
-            <li>OT rate: 1.0x</li>
+            <li>Standard work day: 7.5 hours (excluding 1 hour break)</li>
+            <li>OT starts after 7.5 hours of actual work</li>
+            <li>Minimum 1 hour OT required, rounded to 0.5 hour increments</li>
+            <li>OT rate: Normal day 1.5x, Public Holiday 2.0x, OT on PH 3.0x</li>
+            <li>Part-time employees: No OT</li>
             <li>Approved OT will be included in payroll calculation</li>
           </ul>
         </div>

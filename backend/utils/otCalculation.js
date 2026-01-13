@@ -3,8 +3,10 @@
  * Calculates overtime from clock-in records based on company/department OT rules
  *
  * Supports:
- * - AA Alive Driver: 9 hrs (incl 1hr break), OT 1.0x, PH 2.0x
- * - Mimix: 8 hrs, OT 1.5x, PH 2.0x, PH after hours 3.0x
+ * - AA Alive: 8 hrs work (+ 1hr break), no OT for part-time
+ * - Mimix: 7.5 hrs work (+ 1hr break), OT 1.5x, PH 2.0x, OT on PH 3.0x
+ *   - Minimum 1 hour OT required, rounded down to 0.5 hour increments
+ *   - Part-time employees: No OT
  */
 
 const pool = require('../db');

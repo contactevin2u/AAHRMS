@@ -916,10 +916,12 @@ router.get('/pending-ot', authenticateEmployee, asyncHandler(async (req, res) =>
   );
 
   // Get records with OT flagged but not yet approved/rejected
+  // Filter: minimum 1 hour OT (60 minutes), exclude part-time employees
   // Include employee position info for hierarchy filtering
   const result = await pool.query(
     `SELECT cir.*, e.name as employee_name, e.employee_id as emp_code,
             e.outlet_id, e.employee_role, e.position, e.id as emp_id,
+            e.work_type,
             o.name as outlet_name,
             p.role as position_role, p.name as position_name
      FROM clock_in_records cir
@@ -929,6 +931,8 @@ router.get('/pending-ot', authenticateEmployee, asyncHandler(async (req, res) =>
      WHERE e.outlet_id = ANY($1)
        AND cir.ot_flagged = TRUE
        AND cir.ot_approved IS NULL
+       AND cir.ot_minutes >= 60
+       AND COALESCE(e.work_type, 'full_time') != 'part_time'
      ORDER BY cir.work_date DESC`,
     [outletIds]
   );
@@ -1123,13 +1127,16 @@ router.get('/pending-ot-count', authenticateEmployee, asyncHandler(async (req, r
     return res.json({ count: 0 });
   }
 
+  // Count only records with minimum 1 hour OT, exclude part-time
   const result = await pool.query(
     `SELECT COUNT(*) as count
      FROM clock_in_records cir
      JOIN employees e ON cir.employee_id = e.id
      WHERE e.outlet_id = ANY($1)
        AND cir.ot_flagged = TRUE
-       AND cir.ot_approved IS NULL`,
+       AND cir.ot_approved IS NULL
+       AND cir.ot_minutes >= 60
+       AND COALESCE(e.work_type, 'full_time') != 'part_time'`,
     [outletIds]
   );
 
