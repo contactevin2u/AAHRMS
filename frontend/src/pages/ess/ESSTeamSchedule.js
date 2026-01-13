@@ -430,7 +430,7 @@ function ESSTeamSchedule() {
                 >
                   <div className="ts-member-avatar">{getInitials(emp.name)}</div>
                   <div className="ts-member-info">
-                    <div className="ts-member-name">{getShortName(emp.name)}</div>
+                    <div className="ts-member-name">{emp.name}</div>
                     {empStats && (
                       <div className="ts-member-stats">
                         {empStats.work_days}d work · {empStats.off_days}d off
@@ -541,7 +541,7 @@ function ESSTeamSchedule() {
                         disabled={alreadyScheduled}
                       >
                         <span className="ts-emp-initials">{getInitials(emp.name)}</span>
-                        <span className="ts-emp-name">{getShortName(emp.name)}</span>
+                        <span className="ts-emp-name">{emp.name}</span>
                         {alreadyScheduled && <span className="ts-scheduled-badge">✓</span>}
                       </button>
                     );

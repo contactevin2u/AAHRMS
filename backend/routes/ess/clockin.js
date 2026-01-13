@@ -93,10 +93,14 @@ const authenticateEmployee = async (req, res, next) => {
 };
 
 // Calculate work time from a record
+// OT Rules:
+// - Minimum 1 hour OT required (less than 1 hour = 0)
+// - Round OT to nearest 0.5 hour, rounding DOWN
+// - e.g., 0.9h OT = 0 (below min), 1.2h = 1h, 1.7h = 1.5h
 function calculateWorkTime(record) {
   const { clock_in_1, clock_out_1, clock_in_2, clock_out_2 } = record;
 
-  if (!clock_in_1) return { totalMinutes: 0, otMinutes: 0, totalHours: 0, otHours: 0 };
+  if (!clock_in_1) return { totalMinutes: 0, otMinutes: 0, rawOtMinutes: 0, totalHours: 0, otHours: 0 };
 
   let totalMinutes = 0;
   let breakMinutes = 0;
@@ -125,15 +129,27 @@ function calculateWorkTime(record) {
     breakMinutes = timeToMinutes(clock_in_2) - timeToMinutes(clock_out_1);
   }
 
-  const otMinutes = Math.max(0, totalMinutes - STANDARD_WORK_MINUTES);
+  // Raw OT minutes (before applying rules)
+  const rawOtMinutes = Math.max(0, totalMinutes - STANDARD_WORK_MINUTES);
+  const rawOtHours = rawOtMinutes / 60;
+
+  // Apply OT rules:
+  // 1. Minimum 1 hour required (60 minutes)
+  // 2. Round DOWN to nearest 0.5 hour (30 minutes)
+  let otMinutes = 0;
+  if (rawOtMinutes >= 60) {
+    // Round down to nearest 30 minutes
+    otMinutes = Math.floor(rawOtMinutes / 30) * 30;
+  }
 
   return {
     totalMinutes,
     breakMinutes,
     workMinutes: totalMinutes,
-    otMinutes,
+    rawOtMinutes,  // Keep raw for reference
+    otMinutes,     // Rounded OT (min 1hr, 0.5hr increments)
     totalHours: Math.round(totalMinutes / 60 * 100) / 100,
-    otHours: Math.round(otMinutes / 60 * 100) / 100
+    otHours: otMinutes / 60  // This will be 0, 1, 1.5, 2, etc.
   };
 }
 

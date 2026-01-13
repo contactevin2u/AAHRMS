@@ -402,6 +402,10 @@
   font-weight: 500;
   color: #1f2937;
   font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .ts-member-stats {
@@ -677,9 +681,14 @@
 }
 
 .ts-emp-name {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #374151;
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+  display: block;
 }
 
 .ts-scheduled-badge {
