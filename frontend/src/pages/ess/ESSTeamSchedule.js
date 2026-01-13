@@ -170,7 +170,7 @@ function ESSTeamSchedule() {
           schedule_date: selectedDate,
           shift_template_id: selectedShift.id
         }));
-        const res = await essApi.bulkCreateTeamSchedules({ schedules });
+        const res = await essApi.createTeamSchedulesBulk(schedules);
         const created = res.data.created?.length || 0;
         const updated = res.data.updated?.length || 0;
         toast.success(`${selectedShift.code} assigned to ${created + updated} employees`);

@@ -224,11 +224,9 @@ function Layout({ children }) {
                 <NavLink to="/admin/claims" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                   Claims
                 </NavLink>
-                {usesOutlets() && (
-                  <NavLink to="/admin/attendance" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                    Attendance
-                  </NavLink>
-                )}
+                <NavLink to="/admin/attendance" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Attendance
+                </NavLink>
               </div>
             )}
           </div>
