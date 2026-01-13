@@ -1067,12 +1067,15 @@ router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (r
   }
 
   const { id } = req.params;
-  const managedOutlets = await getManagedOutlets(req.employee);
+  const isMimix = isMimixCompany(req.employee.company_id);
+  const managedOutlets = isMimix ? await getManagedOutlets(req.employee) : [];
+  const managedDepartments = !isMimix ? await getManagedDepartments(req.employee) : [];
 
-  // Check schedule exists and is in managed outlet
+  // Check schedule exists with employee info
   const existing = await pool.query(
-    `SELECT s.*, c.id as attendance_id
+    `SELECT s.*, e.outlet_id, e.department_id, c.id as attendance_id
      FROM schedules s
+     JOIN employees e ON s.employee_id = e.id
      LEFT JOIN clock_in_records c ON s.employee_id = c.employee_id AND s.schedule_date = c.work_date
      WHERE s.id = $1`,
     [id]
@@ -1094,8 +1097,15 @@ router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (r
     throw new ValidationError('Cannot delete schedules within 2 days (T+2 rule)');
   }
 
-  if (!managedOutlets.includes(schedule.outlet_id)) {
-    throw new ValidationError('You can only delete schedules in your outlet(s)');
+  // Check permission based on company type
+  if (isMimix) {
+    if (!managedOutlets.includes(schedule.outlet_id)) {
+      throw new ValidationError('You can only delete schedules in your outlet(s)');
+    }
+  } else {
+    if (!managedDepartments.includes(schedule.department_id)) {
+      throw new ValidationError('You can only delete schedules in your department(s)');
+    }
   }
 
   // Check if there's attendance for this schedule
