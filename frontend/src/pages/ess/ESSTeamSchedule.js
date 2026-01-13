@@ -26,6 +26,14 @@ function ESSTeamSchedule() {
   const [showWeeklyStats, setShowWeeklyStats] = useState(false);
   const [selectedDateLocked, setSelectedDateLocked] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [statsWeekStart, setStatsWeekStart] = useState(() => {
+    // Default to Monday of current week
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(today.setDate(diff));
+    return monday.toISOString().split('T')[0];
+  });
 
   const isMimix = isMimixCompany(employeeInfo);
   const canManageSchedules = isSupervisorOrManager(employeeInfo);
@@ -99,14 +107,9 @@ function ESSTeamSchedule() {
     }
   };
 
-  const fetchWeeklyStats = async () => {
+  const fetchWeeklyStats = async (weekStart = statsWeekStart) => {
     try {
-      // Get the Monday of the current week being viewed
-      const today = new Date();
-      const monday = new Date(today);
-      monday.setDate(monday.getDate() - monday.getDay() + 1);
-
-      const params = { week_start: monday.toISOString().split('T')[0] };
+      const params = { week_start: weekStart };
       if (isMimix && selectedOutlet) params.outlet_id = selectedOutlet;
       if (!isMimix && selectedDepartment) params.department_id = selectedDepartment;
 
@@ -115,6 +118,33 @@ function ESSTeamSchedule() {
     } catch (error) {
       console.error('Error fetching weekly stats:', error);
     }
+  };
+
+  // Navigate weeks in stats modal
+  const prevWeek = () => {
+    const date = new Date(statsWeekStart);
+    date.setDate(date.getDate() - 7);
+    const newWeekStart = date.toISOString().split('T')[0];
+    setStatsWeekStart(newWeekStart);
+    fetchWeeklyStats(newWeekStart);
+  };
+
+  const nextWeek = () => {
+    const date = new Date(statsWeekStart);
+    date.setDate(date.getDate() + 7);
+    const newWeekStart = date.toISOString().split('T')[0];
+    setStatsWeekStart(newWeekStart);
+    fetchWeeklyStats(newWeekStart);
+  };
+
+  const goToCurrentWeek = () => {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(today.setDate(diff));
+    const newWeekStart = monday.toISOString().split('T')[0];
+    setStatsWeekStart(newWeekStart);
+    fetchWeeklyStats(newWeekStart);
   };
 
   const handleAssignShift = async () => {
@@ -654,11 +684,20 @@ function ESSTeamSchedule() {
           <div className="ts-modal-overlay" onClick={() => setShowWeeklyStats(false)}>
             <div className="ts-modal ts-stats-modal" onClick={e => e.stopPropagation()}>
               <div className="ts-modal-header">
-                <h3>📊 Weekly Overview</h3>
+                <h3>Weekly Overview</h3>
                 <button className="ts-close-btn" onClick={() => setShowWeeklyStats(false)}>×</button>
               </div>
-              <div className="ts-stats-period">
-                {weeklyStats.week_start} to {weeklyStats.week_end}
+
+              {/* Week Navigation */}
+              <div className="ts-week-nav">
+                <button className="ts-week-btn" onClick={prevWeek}>&lt;</button>
+                <div className="ts-week-display">
+                  <span className="ts-week-dates">
+                    {new Date(weeklyStats.week_start).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })} - {new Date(weeklyStats.week_end).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                  <button className="ts-today-btn" onClick={goToCurrentWeek}>Today</button>
+                </div>
+                <button className="ts-week-btn" onClick={nextWeek}>&gt;</button>
               </div>
 
               {/* Warnings */}

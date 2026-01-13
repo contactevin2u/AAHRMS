@@ -152,6 +152,7 @@ router.get('/my-schedule', authenticateEmployee, asyncHandler(async (req, res) =
 
   // Query schedules with shift template info for consistency with admin view
   // Use DISTINCT ON to avoid duplicate rows from clock_in_records join
+  // For schedules without shift_template_id, try to match template by time
   const result = await pool.query(
     `SELECT DISTINCT ON (s.id)
             s.id,
@@ -166,14 +167,19 @@ router.get('/my-schedule', authenticateEmployee, asyncHandler(async (req, res) =
             s.department_id,
             s.is_public_holiday,
             o.name as outlet_name,
-            st.code as shift_code,
-            st.color as shift_color,
-            st.is_off as template_is_off,
+            COALESCE(st.code, st_time.code) as shift_code,
+            COALESCE(st.color, st_time.color) as shift_color,
+            COALESCE(st.is_off, st_time.is_off, false) as template_is_off,
             cr.clock_in_1, cr.clock_out_1, cr.clock_in_2, cr.clock_out_2,
             cr.status as attendance_status
      FROM schedules s
      LEFT JOIN outlets o ON s.outlet_id = o.id
      LEFT JOIN shift_templates st ON s.shift_template_id = st.id
+     LEFT JOIN shift_templates st_time ON st_time.company_id = s.company_id
+       AND st_time.start_time = s.shift_start
+       AND st_time.end_time = s.shift_end
+       AND st_time.is_active = true
+       AND s.shift_template_id IS NULL
      LEFT JOIN clock_in_records cr ON s.employee_id = cr.employee_id
        AND s.schedule_date = cr.work_date
      WHERE s.employee_id = $1
@@ -635,11 +641,18 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
 
     const schedResult = await pool.query(
       `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, o.name as outlet_name,
-              st.code as shift_code, st.color as shift_color, st.is_off as template_is_off
+              COALESCE(st.code, st_time.code) as shift_code,
+              COALESCE(st.color, st_time.color) as shift_color,
+              COALESCE(st.is_off, st_time.is_off, false) as template_is_off
        FROM schedules s
        JOIN employees e ON s.employee_id = e.id
        LEFT JOIN outlets o ON s.outlet_id = o.id
        LEFT JOIN shift_templates st ON s.shift_template_id = st.id
+       LEFT JOIN shift_templates st_time ON st_time.company_id = s.company_id
+         AND st_time.start_time = s.shift_start
+         AND st_time.end_time = s.shift_end
+         AND st_time.is_active = true
+         AND s.shift_template_id IS NULL
        WHERE s.outlet_id = ANY($1)
          AND s.schedule_date BETWEEN $2 AND $3
        ORDER BY s.schedule_date, e.name`,
@@ -700,11 +713,18 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
     if (empIds.length > 0) {
       const schedResult = await pool.query(
         `SELECT s.*, e.name as employee_name, e.employee_id as emp_code, d.name as department_name,
-                st.code as shift_code, st.color as shift_color, st.is_off as template_is_off
+                COALESCE(st.code, st_time.code) as shift_code,
+                COALESCE(st.color, st_time.color) as shift_color,
+                COALESCE(st.is_off, st_time.is_off, false) as template_is_off
          FROM schedules s
          JOIN employees e ON s.employee_id = e.id
          LEFT JOIN departments d ON e.department_id = d.id
          LEFT JOIN shift_templates st ON s.shift_template_id = st.id
+         LEFT JOIN shift_templates st_time ON st_time.company_id = s.company_id
+           AND st_time.start_time = s.shift_start
+           AND st_time.end_time = s.shift_end
+           AND st_time.is_active = true
+           AND s.shift_template_id IS NULL
          WHERE s.employee_id = ANY($1)
            AND s.schedule_date BETWEEN $2 AND $3
          ORDER BY s.schedule_date, e.name`,
