@@ -630,11 +630,75 @@
 }
 
 .ts-assign-section label {
-  display: block;
+  display: inline;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 12px;
   font-size: 0.875rem;
+}
+
+.ts-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ts-quick-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ts-quick-btn {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ts-quick-btn:hover {
+  background: #f3f4f6;
+}
+
+.ts-quick-btn.clear {
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.ts-quick-btn.clear:hover {
+  background: #fef2f2;
+}
+
+.ts-select-count {
+  font-weight: 400;
+  color: #3b82f6;
+  margin-left: 4px;
+}
+
+.ts-selected-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: white;
+  font-size: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ts-selection-summary {
+  padding: 12px 20px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 0.875rem;
+  border-top: 1px solid #bfdbfe;
 }
 
 .ts-employee-grid {

@@ -21,10 +21,11 @@ function ESSTeamSchedule() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedDaySchedules, setSelectedDaySchedules] = useState([]);
   const [showDayDetail, setShowDayDetail] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [selectedEmployees, setSelectedEmployees] = useState([]); // Multi-select employees
   const [selectedShift, setSelectedShift] = useState(null);
   const [showWeeklyStats, setShowWeeklyStats] = useState(false);
   const [selectedDateLocked, setSelectedDateLocked] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   const isMimix = isMimixCompany(employeeInfo);
   const canManageSchedules = isSupervisorOrManager(employeeInfo);
@@ -117,24 +118,67 @@ function ESSTeamSchedule() {
   };
 
   const handleAssignShift = async () => {
-    if (!selectedEmployee || !selectedShift || !selectedDate) {
-      toast.warning('Please select an employee and shift');
+    if (selectedEmployees.length === 0 || !selectedShift || !selectedDate) {
+      toast.warning('Please select employee(s) and shift');
       return;
     }
 
+    setAssigning(true);
     try {
-      await essApi.createTeamSchedule({
-        employee_id: selectedEmployee.id,
-        schedule_date: selectedDate,
-        shift_template_id: selectedShift.id
-      });
-      toast.success(`${selectedShift.code} assigned to ${getShortName(selectedEmployee.name)}`);
-      closeModal();
+      if (selectedEmployees.length === 1) {
+        // Single employee - use single API
+        await essApi.createTeamSchedule({
+          employee_id: selectedEmployees[0].id,
+          schedule_date: selectedDate,
+          shift_template_id: selectedShift.id
+        });
+        toast.success(`${selectedShift.code} assigned to ${selectedEmployees[0].name}`);
+      } else {
+        // Multiple employees - use bulk API
+        const schedules = selectedEmployees.map(emp => ({
+          employee_id: emp.id,
+          schedule_date: selectedDate,
+          shift_template_id: selectedShift.id
+        }));
+        const res = await essApi.bulkCreateTeamSchedules({ schedules });
+        const created = res.data.created?.length || 0;
+        const updated = res.data.updated?.length || 0;
+        toast.success(`${selectedShift.code} assigned to ${created + updated} employees`);
+      }
+      // Clear selected employees but keep shift for next batch
+      setSelectedEmployees([]);
       fetchTeamSchedules();
       fetchWeeklyStats();
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to assign shift');
+    } finally {
+      setAssigning(false);
     }
+  };
+
+  // Toggle employee selection (multi-select)
+  const toggleEmployeeSelection = (emp) => {
+    setSelectedEmployees(prev => {
+      const isSelected = prev.some(e => e.id === emp.id);
+      if (isSelected) {
+        return prev.filter(e => e.id !== emp.id);
+      } else {
+        return [...prev, emp];
+      }
+    });
+  };
+
+  // Select all unscheduled employees
+  const selectAllUnscheduled = () => {
+    const unscheduled = filteredEmployees.filter(emp =>
+      !schedules[selectedDate]?.some(s => s.employee_id === emp.id)
+    );
+    setSelectedEmployees(unscheduled);
+  };
+
+  // Clear employee selection
+  const clearEmployeeSelection = () => {
+    setSelectedEmployees([]);
   };
 
   const handleDelete = async (scheduleId, e) => {
@@ -156,14 +200,14 @@ function ESSTeamSchedule() {
 
   const openAddModal = (date) => {
     setSelectedDate(formatDateKey(date));
-    setSelectedEmployee(null);
+    setSelectedEmployees([]);
     setSelectedShift(null);
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
-    setSelectedEmployee(null);
+    setSelectedEmployees([]);
     setSelectedShift(null);
   };
 
@@ -525,33 +569,9 @@ function ESSTeamSchedule() {
               </div>
               <div className="ts-modal-date">{formatDisplayDate(selectedDate)}</div>
 
-              {/* Step 1: Select Employee */}
+              {/* Step 1: Select Shift FIRST */}
               <div className="ts-assign-section">
-                <label>1. Select Employee</label>
-                <div className="ts-employee-grid">
-                  {filteredEmployees.map(emp => {
-                    const isSelected = selectedEmployee?.id === emp.id;
-                    // Check if already scheduled
-                    const alreadyScheduled = schedules[selectedDate]?.some(s => s.employee_id === emp.id);
-                    return (
-                      <button
-                        key={emp.id}
-                        className={`ts-emp-btn ${isSelected ? 'selected' : ''} ${alreadyScheduled ? 'scheduled' : ''}`}
-                        onClick={() => !alreadyScheduled && setSelectedEmployee(emp)}
-                        disabled={alreadyScheduled}
-                      >
-                        <span className="ts-emp-initials">{getInitials(emp.name)}</span>
-                        <span className="ts-emp-name">{emp.name}</span>
-                        {alreadyScheduled && <span className="ts-scheduled-badge">✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Step 2: Select Shift */}
-              <div className="ts-assign-section">
-                <label>2. Select Shift</label>
+                <label>1. Select Shift</label>
                 <div className="ts-shift-grid">
                   {shiftTemplates.map(t => {
                     const isSelected = selectedShift?.id === t.id;
@@ -576,14 +596,53 @@ function ESSTeamSchedule() {
                 </div>
               </div>
 
+              {/* Step 2: Select Employees (Multi-select) */}
+              <div className="ts-assign-section">
+                <div className="ts-section-header">
+                  <label>2. Select Employees {selectedEmployees.length > 0 && <span className="ts-select-count">({selectedEmployees.length} selected)</span>}</label>
+                  <div className="ts-quick-actions">
+                    <button className="ts-quick-btn" onClick={selectAllUnscheduled}>Select All</button>
+                    {selectedEmployees.length > 0 && (
+                      <button className="ts-quick-btn clear" onClick={clearEmployeeSelection}>Clear</button>
+                    )}
+                  </div>
+                </div>
+                <div className="ts-employee-grid">
+                  {filteredEmployees.map(emp => {
+                    const isSelected = selectedEmployees.some(e => e.id === emp.id);
+                    const alreadyScheduled = schedules[selectedDate]?.some(s => s.employee_id === emp.id);
+                    return (
+                      <button
+                        key={emp.id}
+                        className={`ts-emp-btn ${isSelected ? 'selected' : ''} ${alreadyScheduled ? 'scheduled' : ''}`}
+                        onClick={() => !alreadyScheduled && toggleEmployeeSelection(emp)}
+                        disabled={alreadyScheduled}
+                      >
+                        <span className="ts-emp-initials">{getInitials(emp.name)}</span>
+                        <span className="ts-emp-name">{emp.name}</span>
+                        {alreadyScheduled && <span className="ts-scheduled-badge">✓</span>}
+                        {isSelected && !alreadyScheduled && <span className="ts-selected-check">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Selected employees summary */}
+              {selectedEmployees.length > 0 && selectedShift && (
+                <div className="ts-selection-summary">
+                  Assign <strong>{selectedShift.code}</strong> to: {selectedEmployees.map(e => e.name.split(' ')[0]).join(', ')}
+                </div>
+              )}
+
               <div className="ts-assign-actions">
-                <button className="ts-btn-cancel" onClick={closeModal}>Cancel</button>
+                <button className="ts-btn-cancel" onClick={closeModal}>Done</button>
                 <button
                   className="ts-btn-save"
                   onClick={handleAssignShift}
-                  disabled={!selectedEmployee || !selectedShift}
+                  disabled={selectedEmployees.length === 0 || !selectedShift || assigning}
                 >
-                  Assign Shift
+                  {assigning ? 'Assigning...' : `Assign ${selectedShift?.code || 'Shift'} (${selectedEmployees.length})`}
                 </button>
               </div>
             </div>
