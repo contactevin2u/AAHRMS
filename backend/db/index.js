@@ -1371,6 +1371,17 @@ Human Resources Department
         );
 
       -- =====================================================
+      -- SYNC probation_status FOR ALL CONFIRMED EMPLOYEES
+      -- Ensures probation_status = 'confirmed' when employment_type = 'confirmed'
+      -- This fixes any data inconsistency from manual updates
+      -- =====================================================
+
+      UPDATE employees
+      SET probation_status = 'confirmed'
+      WHERE employment_type = 'confirmed'
+        AND (probation_status IS NULL OR probation_status != 'confirmed');
+
+      -- =====================================================
       -- SET outlet_id = NULL FOR MANAGERS AND ABOVE
       -- Positions at level >= 80 (manager, director, admin) should NOT have outlet_id
       -- Managers operate at company level, not outlet level

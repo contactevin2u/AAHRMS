@@ -225,7 +225,7 @@ function ESSLayout({ children }) {
           </NavLink>
         )}
 
-        {showTeamFeatures && (
+        {showTeamFeatures && isMimix && (
           <NavLink
             to="/ess/ot-approval"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
