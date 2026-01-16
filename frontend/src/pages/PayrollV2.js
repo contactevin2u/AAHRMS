@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { payrollV2Api, departmentApi } from '../api';
+import React, { useState, useEffect, useCallback } from 'react';
+import { payrollV2Api, departmentApi, payrollApi } from '../api';
 import Layout from '../components/Layout';
 import './PayrollV2.css';
 
@@ -41,6 +41,10 @@ function PayrollV2() {
     deduction_remarks: '',
     notes: ''
   });
+
+  // Statutory preview state
+  const [statutoryPreview, setStatutoryPreview] = useState(null);
+  const [loadingStatutory, setLoadingStatutory] = useState(false);
 
   useEffect(() => {
     fetchRuns();
@@ -174,7 +178,7 @@ function PayrollV2() {
 
   const handleEditItem = (item) => {
     setEditingItem(item);
-    setItemForm({
+    const formData = {
       basic_salary: item.basic_salary || 0,
       fixed_allowance: item.fixed_allowance || 0,
       ot_hours: item.ot_hours || 0,
@@ -189,8 +193,15 @@ function PayrollV2() {
       other_deductions: item.other_deductions || 0,
       deduction_remarks: item.deduction_remarks || '',
       notes: item.notes || ''
-    });
+    };
+    setItemForm(formData);
     setShowItemModal(true);
+    // Fetch initial statutory preview
+    const statutoryBase = (parseFloat(formData.basic_salary) || 0) +
+                          (parseFloat(formData.commission_amount) || 0) +
+                          (parseFloat(formData.trade_commission_amount) || 0) +
+                          (parseFloat(formData.bonus) || 0);
+    fetchStatutoryPreview(item.employee_id, statutoryBase);
   };
 
   // Get department-specific field visibility
@@ -251,16 +262,62 @@ function PayrollV2() {
     });
   };
 
-  // Handle basic salary change - recalculate OT and PH
+  // Fetch statutory preview calculation
+  const fetchStatutoryPreview = useCallback(async (employeeId, statutoryBase) => {
+    if (!employeeId || statutoryBase <= 0) {
+      setStatutoryPreview(null);
+      return;
+    }
+    setLoadingStatutory(true);
+    try {
+      const res = await payrollApi.calculateStatutory({
+        employee_id: employeeId,
+        gross_salary: statutoryBase  // This is actually the statutory base
+      });
+      setStatutoryPreview(res.data);
+    } catch (error) {
+      console.error('Error fetching statutory preview:', error);
+      setStatutoryPreview(null);
+    } finally {
+      setLoadingStatutory(false);
+    }
+  }, []);
+
+  // Calculate statutory base from form values
+  const getStatutoryBase = useCallback((form) => {
+    // Statutory base = basic + commission + trade_commission + bonus
+    return (parseFloat(form.basic_salary) || 0) +
+           (parseFloat(form.commission_amount) || 0) +
+           (parseFloat(form.trade_commission_amount) || 0) +
+           (parseFloat(form.bonus) || 0);
+  }, []);
+
+  // Handle basic salary change - recalculate OT, PH, and statutory preview
   const handleBasicSalaryChange = (basicSalary) => {
     const calculatedOT = calculateOTAmount(basicSalary, itemForm.ot_hours);
     const calculatedPH = calculatePHPay(basicSalary, itemForm.ph_days_worked);
-    setItemForm({
+    const newForm = {
       ...itemForm,
       basic_salary: basicSalary,
       ot_amount: calculatedOT,
       ph_pay: calculatedPH
-    });
+    };
+    setItemForm(newForm);
+    // Trigger statutory preview
+    if (editingItem) {
+      const statutoryBase = getStatutoryBase(newForm);
+      fetchStatutoryPreview(editingItem.employee_id, statutoryBase);
+    }
+  };
+
+  // Handle commission/bonus changes - also update statutory preview
+  const handleStatutoryFieldChange = (field, value) => {
+    const newForm = { ...itemForm, [field]: value };
+    setItemForm(newForm);
+    if (editingItem) {
+      const statutoryBase = getStatutoryBase(newForm);
+      fetchStatutoryPreview(editingItem.employee_id, statutoryBase);
+    }
   };
 
   const handleUpdateItem = async (e) => {
@@ -842,7 +899,7 @@ function PayrollV2() {
                         type="number"
                         step="0.01"
                         value={itemForm.commission_amount}
-                        onChange={(e) => setItemForm({ ...itemForm, commission_amount: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => handleStatutoryFieldChange('commission_amount', parseFloat(e.target.value) || 0)}
                       />
                     </div>
                     <div className="form-group">
@@ -866,7 +923,7 @@ function PayrollV2() {
                         type="number"
                         step="0.01"
                         value={itemForm.trade_commission_amount}
-                        onChange={(e) => setItemForm({ ...itemForm, trade_commission_amount: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => handleStatutoryFieldChange('trade_commission_amount', parseFloat(e.target.value) || 0)}
                       />
                     </div>
                     <div className="form-group">
@@ -875,7 +932,7 @@ function PayrollV2() {
                         type="number"
                         step="0.01"
                         value={itemForm.commission_amount}
-                        onChange={(e) => setItemForm({ ...itemForm, commission_amount: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => handleStatutoryFieldChange('commission_amount', parseFloat(e.target.value) || 0)}
                       />
                     </div>
                   </div>
@@ -904,7 +961,7 @@ function PayrollV2() {
                         type="number"
                         step="0.01"
                         value={itemForm.bonus}
-                        onChange={(e) => setItemForm({ ...itemForm, bonus: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => handleStatutoryFieldChange('bonus', parseFloat(e.target.value) || 0)}
                       />
                     </div>
                   </div>
@@ -941,18 +998,39 @@ function PayrollV2() {
                   />
                 </div>
 
-                {/* Deduction rules info */}
-                <div className="info-box">
-                  <strong>Statutory Deduction Rules:</strong>
-                  <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', fontSize: '0.85rem' }}>
-                    <li><strong>Subject to EPF, SOCSO, EIS, PCB:</strong> Basic + Commission + Bonus</li>
-                    <li><strong>NOT subject to deductions:</strong> OT, Allowance, PH Pay, Outstation</li>
-                  </ul>
+                {/* Statutory Preview */}
+                <div className="statutory-preview">
+                  <h4>Statutory Deductions Preview</h4>
+                  {loadingStatutory ? (
+                    <p className="loading-text">Calculating...</p>
+                  ) : statutoryPreview ? (
+                    <div className="statutory-grid">
+                      <div className="statutory-item">
+                        <span className="label">EPF (Employee)</span>
+                        <span className="value">RM {formatNum(statutoryPreview.epf?.employee || 0)}</span>
+                      </div>
+                      <div className="statutory-item">
+                        <span className="label">SOCSO</span>
+                        <span className="value">RM {formatNum(statutoryPreview.socso?.employee || 0)}</span>
+                      </div>
+                      <div className="statutory-item">
+                        <span className="label">EIS</span>
+                        <span className="value">RM {formatNum(statutoryPreview.eis?.employee || 0)}</span>
+                      </div>
+                      <div className="statutory-item">
+                        <span className="label">PCB (Tax)</span>
+                        <span className="value">RM {formatNum(statutoryPreview.pcb || 0)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="no-data">Enter salary to see preview</p>
+                  )}
+                  <small className="preview-hint">Based on: Basic + Commission + Bonus</small>
                 </div>
 
                 {/* Auto-calculated info */}
                 <div className="auto-info">
-                  <h4>Auto-calculated values:</h4>
+                  <h4>Other Auto-calculated:</h4>
                   <p>Unpaid Leave: {editingItem.unpaid_leave_days} days = RM {formatNum(editingItem.unpaid_leave_deduction)}</p>
                   <p>Claims: RM {formatNum(editingItem.claims_amount)}</p>
                 </div>
