@@ -173,18 +173,17 @@ function ESSLeave() {
             {loading ? (
               <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
             ) : (
-              displayBalances.map((balance, idx) => {
+              displayBalances.filter(balance => balance.is_paid !== false).map((balance, idx) => {
                 const entitled = balance.entitled_days || balance.entitled || balance.balance || 0;
                 const used = balance.used_days || balance.used || 0;
                 const available = balance.available || (entitled - used);
-                const isUnlimited = balance.is_paid === false || entitled >= 999;
                 return (
                   <div key={idx} className="balance-card">
                     <div className="balance-type">{balance.leave_type_name || balance.leave_type || balance.name}</div>
                     <div className="balance-info">
                       <div className="balance-item">
                         <span className="label">Entitled</span>
-                        <span className="value">{isUnlimited ? 'Unlimited' : entitled}</span>
+                        <span className="value">{entitled}</span>
                       </div>
                       <div className="balance-item">
                         <span className="label">Used</span>
@@ -192,7 +191,7 @@ function ESSLeave() {
                       </div>
                       <div className="balance-item highlight">
                         <span className="label">Available</span>
-                        <span className="value">{isUnlimited ? 'Unlimited' : available}</span>
+                        <span className="value">{available}</span>
                       </div>
                     </div>
                   </div>
@@ -246,10 +245,10 @@ function ESSLeave() {
                       {leaveTypes.filter(lt => lt.eligible !== false).map((lt) => {
                         const balance = getBalanceForType(lt.id);
                         const availableDays = balance ? balance.available : (lt.entitled_days_for_service || lt.default_days_per_year || 0);
-                        const isUnlimited = !lt.is_paid || availableDays >= 999;
+                        const isUnpaid = lt.is_paid === false;
                         return (
                           <option key={lt.id} value={lt.id}>
-                            {lt.name} ({isUnlimited ? 'Unlimited' : availableDays + ' available'})
+                            {lt.name}{isUnpaid ? '' : ` (${availableDays} available)`}
                           </option>
                         );
                       })}

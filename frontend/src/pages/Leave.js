@@ -398,15 +398,14 @@ function Leave() {
                         <span className="emp-code">{emp.employee_id}</span>
                       </div>
                       <div className="balance-items">
-                        {leaveTypes.map(type => {
+                        {leaveTypes.filter(type => type.is_paid !== false).map(type => {
                           const balance = empBalances.find(b => b.leave_type_id === type.id);
-                          const isUnlimited = !type.is_paid || parseFloat(balance?.entitled_days) >= 999;
                           return (
                             <div key={type.id} className="balance-item">
                               <span className="balance-type">{type.code}</span>
                               <span className="balance-value">
                                 {balance ? (
-                                  isUnlimited ? <>{balance.used_days} / <span style={{color:'#64748b'}}>Unlimited</span></> : <>{balance.used_days} / {balance.entitled_days}</>
+                                  <>{balance.used_days} / {balance.entitled_days}</>
                                 ) : (
                                   <span className="not-init">-</span>
                                 )}
