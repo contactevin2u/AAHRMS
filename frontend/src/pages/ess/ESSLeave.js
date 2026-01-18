@@ -174,9 +174,9 @@ function ESSLeave() {
               <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
             ) : (
               displayBalances.filter(balance => balance.is_paid !== false).map((balance, idx) => {
-                const entitled = balance.entitled_days || balance.entitled || balance.balance || 0;
-                const used = balance.used_days || balance.used || 0;
-                const available = balance.available || (entitled - used);
+                const entitled = parseFloat(balance.entitled_days || balance.entitled || balance.balance) || 0;
+                const used = parseFloat(balance.used_days || balance.used) || 0;
+                const available = parseFloat(balance.available) || (entitled - used);
                 return (
                   <div key={idx} className="balance-card">
                     <div className="balance-type">{balance.leave_type_name || balance.leave_type || balance.name}</div>
@@ -244,7 +244,7 @@ function ESSLeave() {
                       <option value="">Select leave type</option>
                       {leaveTypes.filter(lt => lt.eligible !== false).map((lt) => {
                         const balance = getBalanceForType(lt.id);
-                        const availableDays = balance ? balance.available : (lt.entitled_days_for_service || lt.default_days_per_year || 0);
+                        const availableDays = balance ? parseFloat(balance.available) || 0 : parseFloat(lt.entitled_days_for_service || lt.default_days_per_year) || 0;
                         const isUnpaid = lt.is_paid === false;
                         return (
                           <option key={lt.id} value={lt.id}>
