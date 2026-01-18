@@ -248,6 +248,80 @@ router.post('/balances/yearly-reset/:employeeId', authenticateAdmin, async (req,
   }
 });
 
+// Initialize leave balances for ALL employees (bulk initialization)
+router.post('/balances/initialize-all', authenticateAdmin, async (req, res) => {
+  try {
+    const { year } = req.body;
+    const targetYear = year || new Date().getFullYear();
+    const companyFilter = getCompanyFilter(req);
+
+    // Get all active employees
+    let query = `
+      SELECT id, join_date, company_id, gender, name
+      FROM employees
+      WHERE status = 'active'
+    `;
+    const params = [];
+
+    if (companyFilter) {
+      query += ` AND company_id = $1`;
+      params.push(companyFilter);
+    }
+
+    const employeesResult = await pool.query(query, params);
+    const employees = employeesResult.rows;
+
+    console.log(`[Leave Init] Initializing balances for ${employees.length} employees, year ${targetYear}`);
+
+    const results = {
+      success: [],
+      failed: [],
+      skipped: []
+    };
+
+    for (const emp of employees) {
+      try {
+        // Check if balances already exist for this year
+        const existingCheck = await pool.query(
+          'SELECT COUNT(*) as count FROM leave_balances WHERE employee_id = $1 AND year = $2',
+          [emp.id, targetYear]
+        );
+
+        if (parseInt(existingCheck.rows[0].count) > 0) {
+          results.skipped.push({ id: emp.id, name: emp.name, reason: 'Already has balances' });
+          continue;
+        }
+
+        // Initialize balances
+        await initializeYearlyLeaveBalances(
+          emp.id,
+          emp.company_id,
+          targetYear,
+          emp.join_date
+        );
+
+        results.success.push({ id: emp.id, name: emp.name });
+      } catch (empError) {
+        console.error(`[Leave Init] Failed for employee ${emp.id}:`, empError.message);
+        results.failed.push({ id: emp.id, name: emp.name, error: empError.message });
+      }
+    }
+
+    res.json({
+      message: `Leave balances initialization completed for year ${targetYear}`,
+      year: targetYear,
+      total_employees: employees.length,
+      initialized: results.success.length,
+      skipped: results.skipped.length,
+      failed: results.failed.length,
+      details: results
+    });
+  } catch (error) {
+    console.error('Error in bulk leave initialization:', error);
+    res.status(500).json({ error: 'Failed to initialize leave balances' });
+  }
+});
+
 // Update leave balance manually (for adjustments)
 router.put('/balances/:id', authenticateAdmin, async (req, res) => {
   try {

@@ -203,6 +203,22 @@ function Leave() {
     }
   };
 
+  const handleInitializeAllBalances = async () => {
+    if (!window.confirm(`Initialize leave balances for all employees for year ${filter.year}?\n\nThis will create leave balances for employees who don't have them yet.`)) {
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await leaveApi.initializeAllBalances({ year: filter.year });
+      alert(`Initialization complete!\n\nInitialized: ${res.data.initialized}\nSkipped (already exists): ${res.data.skipped}\nFailed: ${res.data.failed}`);
+      fetchBalances();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to initialize balances');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('en-MY', {
@@ -360,10 +376,13 @@ function Leave() {
                 value={filter.year}
                 onChange={(e) => setFilter({ ...filter, year: parseInt(e.target.value) })}
               >
-                {[2023, 2024, 2025, 2026].map(y => (
+                {[2023, 2024, 2025, 2026, 2027].map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
+              <button onClick={handleInitializeAllBalances} className="add-btn">
+                Initialize All Balances
+              </button>
             </div>
 
             {loading ? (

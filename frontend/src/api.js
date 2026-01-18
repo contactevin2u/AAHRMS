@@ -142,6 +142,7 @@ export const leaveApi = {
   getBalances: (params) => api.get('/leave/balances', { params }),
   getEmployeeBalances: (employeeId, params) => api.get(`/leave/balances/${employeeId}`, { params }),
   initializeBalances: (employeeId, data) => api.post(`/leave/balances/initialize/${employeeId}`, data),
+  initializeAllBalances: (data) => api.post('/leave/balances/initialize-all', data),
   updateBalance: (id, data) => api.put(`/leave/balances/${id}`, data),
 
   // Leave Requests (with multi-level approval)

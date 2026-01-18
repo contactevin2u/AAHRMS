@@ -75,7 +75,12 @@
       "Bash(del \"C:\\\\Users\\\\user\\\\Desktop\\\\AA HRMS\\\\backend\\\\create-mimix-depts.js\")",
       "Bash(del:*)",
       "Bash(git rm:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(git reset:*)",
+      "Bash(ping:*)",
+      "Bash(ls:*)",
+      "Bash(set PGPASSWORD=Xs0XlvNZ1ysdSsuznOBbq6sN7H7Ej9Tf:*)",
+      "Bash(psql:*)"
     ],
     "deny": [],
     "ask": []
