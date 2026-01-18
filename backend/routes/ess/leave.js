@@ -22,7 +22,8 @@ const {
 const {
   calculateYearsOfService,
   getEntitlementByServiceYears,
-  checkLeaveEligibility
+  checkLeaveEligibility,
+  initializeYearlyLeaveBalances
 } = require('../../utils/leaveProration');
 
 // Multer setup for MC upload (in-memory)
@@ -329,13 +330,32 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
 
   // Check leave balance for paid leave
   const currentYear = new Date().getFullYear();
-  const balanceResult = await pool.query(
+  let balanceResult = await pool.query(
     `SELECT lb.*, lt.is_paid
      FROM leave_balances lb
      JOIN leave_types lt ON lb.leave_type_id = lt.id
      WHERE lb.employee_id = $1 AND lb.leave_type_id = $2 AND lb.year = $3`,
     [req.employee.id, leaveType.id, currentYear]
   );
+
+  // Auto-initialize leave balances for current year if not exists
+  if (balanceResult.rows.length === 0 && leaveType.is_paid) {
+    console.log(`[Leave Apply] Auto-initializing leave balances for employee ${req.employee.id}, year ${currentYear}`);
+    try {
+      await initializeYearlyLeaveBalances(req.employee.id, employee.company_id, currentYear, employee.join_date);
+      // Re-fetch the balance after initialization
+      balanceResult = await pool.query(
+        `SELECT lb.*, lt.is_paid
+         FROM leave_balances lb
+         JOIN leave_types lt ON lb.leave_type_id = lt.id
+         WHERE lb.employee_id = $1 AND lb.leave_type_id = $2 AND lb.year = $3`,
+        [req.employee.id, leaveType.id, currentYear]
+      );
+    } catch (initError) {
+      console.error('[Leave Apply] Failed to auto-initialize balances:', initError);
+      throw new ValidationError('Leave balance not initialized. Please contact HR.');
+    }
+  }
 
   if (balanceResult.rows.length > 0) {
     const balance = balanceResult.rows[0];
