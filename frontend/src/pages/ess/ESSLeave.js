@@ -7,12 +7,13 @@ function ESSLeave() {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [activeTab, setActiveTab] = useState('apply');
   const [leaveBalances, setLeaveBalances] = useState([]);
+  const [leaveTypes, setLeaveTypes] = useState([]);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [applyForm, setApplyForm] = useState({
-    leave_type: '',
+    leave_type_id: '',
     start_date: '',
     end_date: '',
     reason: ''
@@ -25,16 +26,19 @@ function ESSLeave() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [balanceRes, historyRes] = await Promise.all([
+      const [balanceRes, historyRes, typesRes] = await Promise.all([
         essApi.getLeaveBalance(),
-        essApi.getLeaveHistory()
+        essApi.getLeaveHistory(),
+        essApi.getLeaveTypes()
       ]);
-      setLeaveBalances(balanceRes.data || []);
+      setLeaveBalances(balanceRes.data?.balances || balanceRes.data || []);
       setApplications(historyRes.data || []);
+      setLeaveTypes(typesRes.data || []);
     } catch (error) {
       console.error('Error fetching leave data:', error);
       setLeaveBalances([]);
       setApplications([]);
+      setLeaveTypes([]);
     } finally {
       setLoading(false);
     }
@@ -45,13 +49,13 @@ function ESSLeave() {
     setSubmitting(true);
     try {
       await essApi.applyLeave({
-        leave_type: applyForm.leave_type,
+        leave_type_id: applyForm.leave_type_id,
         start_date: applyForm.start_date,
         end_date: applyForm.end_date,
         reason: applyForm.reason
       });
       setShowApplyModal(false);
-      setApplyForm({ leave_type: '', start_date: '', end_date: '', reason: '' });
+      setApplyForm({ leave_type_id: '', start_date: '', end_date: '', reason: '' });
       alert('Leave application submitted!');
       fetchData();
     } catch (error) {
@@ -84,19 +88,23 @@ function ESSLeave() {
     return Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1;
   };
 
-  // Default leave types if no data from API
-  const defaultLeaveTypes = [
-    { name: 'Annual Leave', entitled: 14 },
-    { name: 'Medical Leave', entitled: 14 },
-    { name: 'Emergency Leave', entitled: 3 },
-    { name: 'Unpaid Leave', entitled: 999 }
-  ];
+  // Helper to get balance for a leave type
+  const getBalanceForType = (leaveTypeId) => {
+    const balance = leaveBalances.find(b => b.leave_type_id === leaveTypeId);
+    if (balance) {
+      const available = (balance.entitled_days || 0) + (balance.carried_forward || 0) - (balance.used_days || 0);
+      return { entitled: balance.entitled_days || 0, used: balance.used_days || 0, available };
+    }
+    return null;
+  };
 
-  const displayBalances = leaveBalances.length > 0 ? leaveBalances : defaultLeaveTypes.map(t => ({
-    leave_type: t.name,
-    entitled: t.entitled,
-    used: 0,
-    available: t.entitled
+  // Display balances from API or calculate from leave types
+  const displayBalances = leaveBalances.length > 0 ? leaveBalances : leaveTypes.map(lt => ({
+    leave_type_id: lt.id,
+    leave_type_name: lt.name,
+    entitled_days: lt.entitled_days_for_service || lt.default_days_per_year || 0,
+    used_days: 0,
+    available: lt.entitled_days_for_service || lt.default_days_per_year || 0
   }));
 
   return (
@@ -222,13 +230,17 @@ function ESSLeave() {
                 <div className="modal-body">
                   <div className="form-group">
                     <label>Leave Type *</label>
-                    <select value={applyForm.leave_type} onChange={e => setApplyForm({...applyForm, leave_type: e.target.value})} required>
+                    <select value={applyForm.leave_type_id} onChange={e => setApplyForm({...applyForm, leave_type_id: e.target.value})} required>
                       <option value="">Select leave type</option>
-                      {displayBalances.map((balance, idx) => (
-                        <option key={idx} value={balance.leave_type_name || balance.leave_type || balance.name}>
-                          {balance.leave_type_name || balance.leave_type || balance.name} ({balance.available || (balance.entitled_days || balance.entitled || balance.balance || 0) - (balance.used_days || balance.used || 0)} available)
-                        </option>
-                      ))}
+                      {leaveTypes.filter(lt => lt.eligible !== false).map((lt) => {
+                        const balance = getBalanceForType(lt.id);
+                        const availableDays = balance ? balance.available : (lt.entitled_days_for_service || lt.default_days_per_year || 'N/A');
+                        return (
+                          <option key={lt.id} value={lt.id}>
+                            {lt.name} ({availableDays} available)
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                   <div className="form-row">
