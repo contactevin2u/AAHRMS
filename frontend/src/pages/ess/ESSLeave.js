@@ -31,6 +31,8 @@ function ESSLeave() {
         essApi.getLeaveHistory(),
         essApi.getLeaveTypes()
       ]);
+      console.log('[Leave] Balance response:', balanceRes.data);
+      console.log('[Leave] Types response:', typesRes.data);
       setLeaveBalances(balanceRes.data?.balances || balanceRes.data || []);
       setApplications(historyRes.data || []);
       setLeaveTypes(typesRes.data || []);
@@ -48,17 +50,20 @@ function ESSLeave() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await essApi.applyLeave({
-        leave_type_id: applyForm.leave_type_id,
+      const payload = {
+        leave_type_id: parseInt(applyForm.leave_type_id, 10),
         start_date: applyForm.start_date,
         end_date: applyForm.end_date,
         reason: applyForm.reason
-      });
+      };
+      console.log('[Leave Apply] Submitting:', payload);
+      await essApi.applyLeave(payload);
       setShowApplyModal(false);
       setApplyForm({ leave_type_id: '', start_date: '', end_date: '', reason: '' });
       alert('Leave application submitted!');
       fetchData();
     } catch (error) {
+      console.error('[Leave Apply] Error:', error.response?.data);
       alert(error.response?.data?.error || 'Failed to submit leave application');
     } finally {
       setSubmitting(false);
