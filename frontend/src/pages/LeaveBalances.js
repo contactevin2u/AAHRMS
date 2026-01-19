@@ -289,17 +289,16 @@ function LeaveBalances() {
                 </div>
                 {expandedGroups[groupKey] && (
                   <div className="table-wrapper">
-                    <table className="balance-table">
+                    <table className="balance-table grouped">
                       <thead>
                         <tr>
-                          <th style={{width: '100px'}}>ID</th>
-                          <th style={{width: '150px'}}>Dept</th>
-                          <th style={{width: '200px'}}>Name</th>
-                          <th style={{width: '100px', textAlign: 'center'}}>AL</th>
-                          <th style={{width: '100px', textAlign: 'center'}}>ML</th>
-                          <th style={{width: '100px', textAlign: 'center'}}>HL</th>
-                          <th style={{width: '80px', textAlign: 'center'}}>UL</th>
-                          <th style={{width: '80px', textAlign: 'center'}}>Actions</th>
+                          <th className="col-id">ID</th>
+                          <th className="col-name">Name</th>
+                          <th className="col-balance">AL</th>
+                          <th className="col-balance">ML</th>
+                          <th className="col-balance">HL</th>
+                          <th className="col-balance">UL</th>
+                          <th className="col-actions">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -308,9 +307,8 @@ function LeaveBalances() {
                           const isNegativeUL = ulDays > 0;
                           return (
                             <tr key={emp.id}>
-                              <td>{emp.emp_code}</td>
-                              <td>{emp.department_name || emp.outlet_name || '-'}</td>
-                              <td className="name-cell">{emp.name}</td>
+                              <td className="col-id">{emp.emp_code}</td>
+                              <td className="col-name">{emp.name}</td>
                               <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
                               <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
                               <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
@@ -321,7 +319,7 @@ function LeaveBalances() {
                                   </span>
                                 ) : '0'}
                               </td>
-                              <td className="actions-cell">
+                              <td className="col-actions">
                                 <button className="edit-btn" onClick={() => handleEdit(emp)}>Edit</button>
                               </td>
                             </tr>
@@ -343,14 +341,14 @@ function LeaveBalances() {
             <table className="balance-table">
               <thead>
                 <tr>
-                  <th style={{width: '100px'}}>ID</th>
-                  <th style={{width: '150px'}}>Dept</th>
-                  <th style={{width: '200px'}}>Name</th>
-                  <th style={{width: '100px', textAlign: 'center'}}>AL</th>
-                  <th style={{width: '100px', textAlign: 'center'}}>ML</th>
-                  <th style={{width: '100px', textAlign: 'center'}}>HL</th>
-                  <th style={{width: '80px', textAlign: 'center'}}>UL</th>
-                  <th style={{width: '80px', textAlign: 'center'}}>Actions</th>
+                  <th className="col-id">ID</th>
+                  <th className="col-dept">Dept/Outlet</th>
+                  <th className="col-name">Name</th>
+                  <th className="col-balance">AL</th>
+                  <th className="col-balance">ML</th>
+                  <th className="col-balance">HL</th>
+                  <th className="col-balance">UL</th>
+                  <th className="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -362,9 +360,9 @@ function LeaveBalances() {
                     const isNegativeUL = ulDays > 0;
                     return (
                       <tr key={emp.id}>
-                        <td>{emp.emp_code}</td>
-                        <td>{emp.department_name || emp.outlet_name || '-'}</td>
-                        <td className="name-cell">{emp.name}</td>
+                        <td className="col-id">{emp.emp_code}</td>
+                        <td className="col-dept">{emp.department_name || emp.outlet_name || '-'}</td>
+                        <td className="col-name">{emp.name}</td>
                         <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
                         <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
                         <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
@@ -375,7 +373,7 @@ function LeaveBalances() {
                             </span>
                           ) : '0'}
                         </td>
-                        <td className="actions-cell">
+                        <td className="col-actions">
                           <button className="edit-btn" onClick={() => handleEdit(emp)}>Edit</button>
                         </td>
                       </tr>
