@@ -523,16 +523,16 @@ function ESSProfile() {
                 >
                   <option value="">Select bank</option>
                   <option value="Maybank">Maybank</option>
-                  <option value="CIMB">CIMB</option>
+                  <option value="CIMB Bank">CIMB Bank</option>
                   <option value="Public Bank">Public Bank</option>
-                  <option value="RHB">RHB</option>
-                  <option value="Hong Leong">Hong Leong</option>
+                  <option value="RHB Bank">RHB Bank</option>
+                  <option value="Hong Leong Bank">Hong Leong Bank</option>
                   <option value="AmBank">AmBank</option>
                   <option value="Bank Islam">Bank Islam</option>
                   <option value="Bank Rakyat">Bank Rakyat</option>
-                  <option value="OCBC">OCBC</option>
-                  <option value="HSBC">HSBC</option>
-                  <option value="UOB">UOB</option>
+                  <option value="OCBC Bank">OCBC Bank</option>
+                  <option value="HSBC Bank">HSBC Bank</option>
+                  <option value="UOB Bank">UOB Bank</option>
                   <option value="Standard Chartered">Standard Chartered</option>
                   <option value="Affin Bank">Affin Bank</option>
                   <option value="Alliance Bank">Alliance Bank</option>
