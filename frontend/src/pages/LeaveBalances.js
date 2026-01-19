@@ -193,49 +193,15 @@ function LeaveBalances() {
     }
   };
 
-  // Format balance display: available/entitled
-  const formatBalance = (available, entitled) => {
-    return `${available}/${entitled}`;
+  // Format number - remove unnecessary decimals
+  const formatNum = (num) => {
+    const n = parseFloat(num) || 0;
+    return Number.isInteger(n) ? n : n.toFixed(1).replace(/\.0$/, '');
   };
 
-  // Render table row
-  const renderRow = (emp) => {
-    const ulDays = parseFloat(emp.ul_days) || 0;
-    const isNegativeUL = ulDays > 0;
-
-    return (
-      <tr key={emp.id}>
-        <td>{emp.emp_code}</td>
-        <td>{isMimix ? emp.outlet_name : emp.department_name}</td>
-        <td className="name-col">{emp.name}</td>
-        <td className="balance-cell">
-          {formatBalance(emp.al_available, emp.al_entitled)}
-        </td>
-        <td className="balance-cell">
-          {formatBalance(emp.ml_available, emp.ml_entitled)}
-        </td>
-        <td className="balance-cell">
-          {formatBalance(emp.hl_available, emp.hl_entitled)}
-        </td>
-        <td className={`balance-cell ul-cell ${isNegativeUL ? 'negative' : ''}`}>
-          {isNegativeUL ? (
-            <span
-              className="ul-value clickable"
-              onClick={() => handleViewUnpaid(emp)}
-            >
-              -{ulDays}
-            </span>
-          ) : (
-            <span>0</span>
-          )}
-        </td>
-        <td className="actions-col">
-          <button className="edit-btn" onClick={() => handleEdit(emp)} title="Edit balances">
-            Edit
-          </button>
-        </td>
-      </tr>
-    );
+  // Format balance display: available/entitled
+  const formatBalance = (available, entitled) => {
+    return `${formatNum(available)}/${formatNum(entitled)}`;
   };
 
   // Generate year options
@@ -299,7 +265,7 @@ function LeaveBalances() {
             className={`group-toggle-btn ${groupByEnabled ? 'active' : ''}`}
             onClick={() => setGroupByEnabled(!groupByEnabled)}
           >
-            {groupByEnabled ? 'Grouped View' : 'Flat View'}
+            {groupByEnabled ? 'Grouped' : 'Flat'}
           </button>
         </div>
 
@@ -308,38 +274,59 @@ function LeaveBalances() {
           <div className="loading">Loading...</div>
         ) : groupByEnabled ? (
           // Grouped View
-          <div className="employees-grouped">
+          <div className="leave-groups">
             {Object.entries(getEmployeesByGroup()).map(([groupKey, group]) => (
               <div
                 key={groupKey}
-                className={`employee-group ${group.group_type === 'outlet' ? 'outlet-group' : 'dept-group'}`}
+                className={`leave-group ${group.group_type === 'outlet' ? 'outlet-group' : 'dept-group'}`}
               >
                 <div className="group-header" onClick={() => toggleGroup(groupKey)}>
-                  <div className="group-header-left">
-                    <span className="collapse-icon">
-                      {expandedGroups[groupKey] ? '▼' : '▶'}
-                    </span>
-                    <span className="group-name">{group.group_name}</span>
-                    <span className="group-count">({group.employees.length} employees)</span>
-                  </div>
+                  <span className="collapse-icon">
+                    {expandedGroups[groupKey] ? '▼' : '▶'}
+                  </span>
+                  <span className="group-name">{group.group_name}</span>
+                  <span className="group-count">({group.employees.length} employees)</span>
                 </div>
                 {expandedGroups[groupKey] && (
-                  <div className="leave-balances-table">
-                    <table>
+                  <div className="table-wrapper">
+                    <table className="balance-table">
                       <thead>
                         <tr>
-                          <th>ID</th>
-                          <th>{isMimix ? 'Outlet' : 'Dept'}</th>
-                          <th>Name</th>
-                          <th className="balance-header">AL</th>
-                          <th className="balance-header">ML</th>
-                          <th className="balance-header">HL</th>
-                          <th className="balance-header">UL</th>
-                          <th>Actions</th>
+                          <th style={{width: '100px'}}>ID</th>
+                          <th style={{width: '150px'}}>Dept</th>
+                          <th style={{width: '200px'}}>Name</th>
+                          <th style={{width: '100px', textAlign: 'center'}}>AL</th>
+                          <th style={{width: '100px', textAlign: 'center'}}>ML</th>
+                          <th style={{width: '100px', textAlign: 'center'}}>HL</th>
+                          <th style={{width: '80px', textAlign: 'center'}}>UL</th>
+                          <th style={{width: '80px', textAlign: 'center'}}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {group.employees.map(emp => renderRow(emp))}
+                        {group.employees.map(emp => {
+                          const ulDays = parseFloat(emp.ul_days) || 0;
+                          const isNegativeUL = ulDays > 0;
+                          return (
+                            <tr key={emp.id}>
+                              <td>{emp.emp_code}</td>
+                              <td>{emp.department_name || emp.outlet_name || '-'}</td>
+                              <td className="name-cell">{emp.name}</td>
+                              <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
+                              <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
+                              <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
+                              <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>
+                                {isNegativeUL ? (
+                                  <span className="clickable" onClick={() => handleViewUnpaid(emp)}>
+                                    -{formatNum(ulDays)}
+                                  </span>
+                                ) : '0'}
+                              </td>
+                              <td className="actions-cell">
+                                <button className="edit-btn" onClick={() => handleEdit(emp)}>Edit</button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -347,30 +334,53 @@ function LeaveBalances() {
               </div>
             ))}
             {Object.keys(getEmployeesByGroup()).length === 0 && (
-              <div className="no-data-centered">No employees found</div>
+              <div className="no-data">No employees found</div>
             )}
           </div>
         ) : (
           // Flat View
-          <div className="leave-balances-table">
-            <table>
+          <div className="table-wrapper">
+            <table className="balance-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>{isMimix ? 'Outlet' : 'Dept'}</th>
-                  <th>Name</th>
-                  <th className="balance-header">AL</th>
-                  <th className="balance-header">ML</th>
-                  <th className="balance-header">HL</th>
-                  <th className="balance-header">UL</th>
-                  <th>Actions</th>
+                  <th style={{width: '100px'}}>ID</th>
+                  <th style={{width: '150px'}}>Dept</th>
+                  <th style={{width: '200px'}}>Name</th>
+                  <th style={{width: '100px', textAlign: 'center'}}>AL</th>
+                  <th style={{width: '100px', textAlign: 'center'}}>ML</th>
+                  <th style={{width: '100px', textAlign: 'center'}}>HL</th>
+                  <th style={{width: '80px', textAlign: 'center'}}>UL</th>
+                  <th style={{width: '80px', textAlign: 'center'}}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {employees.length === 0 ? (
                   <tr><td colSpan="8" className="no-data">No employees found</td></tr>
                 ) : (
-                  employees.map(emp => renderRow(emp))
+                  employees.map(emp => {
+                    const ulDays = parseFloat(emp.ul_days) || 0;
+                    const isNegativeUL = ulDays > 0;
+                    return (
+                      <tr key={emp.id}>
+                        <td>{emp.emp_code}</td>
+                        <td>{emp.department_name || emp.outlet_name || '-'}</td>
+                        <td className="name-cell">{emp.name}</td>
+                        <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
+                        <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
+                        <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
+                        <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>
+                          {isNegativeUL ? (
+                            <span className="clickable" onClick={() => handleViewUnpaid(emp)}>
+                              -{formatNum(ulDays)}
+                            </span>
+                          ) : '0'}
+                        </td>
+                        <td className="actions-cell">
+                          <button className="edit-btn" onClick={() => handleEdit(emp)}>Edit</button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -380,15 +390,15 @@ function LeaveBalances() {
         {/* Edit Modal */}
         {showEditModal && editingEmployee && (
           <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-            <div className="modal edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
               <h2>Edit Leave Balances</h2>
               <p className="modal-subtitle">{editingEmployee.name} ({editingEmployee.emp_code})</p>
 
-              <div className="balance-edit-section">
+              <div className="edit-section">
                 <h3>Annual Leave (AL)</h3>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Entitled Days</label>
+                <div className="edit-row">
+                  <div className="edit-field">
+                    <label>Entitled</label>
                     <input
                       type="number"
                       min="0"
@@ -396,8 +406,8 @@ function LeaveBalances() {
                       onChange={(e) => setEditForm({ ...editForm, al_entitled: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Used Days</label>
+                  <div className="edit-field">
+                    <label>Used</label>
                     <input
                       type="number"
                       min="0"
@@ -405,23 +415,18 @@ function LeaveBalances() {
                       onChange={(e) => setEditForm({ ...editForm, al_used: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-                  <div className="form-group">
+                  <div className="edit-field">
                     <label>Available</label>
-                    <input
-                      type="text"
-                      value={editForm.al_entitled - editForm.al_used}
-                      disabled
-                      className="calculated-field"
-                    />
+                    <input type="text" value={formatNum(editForm.al_entitled - editForm.al_used)} disabled />
                   </div>
                 </div>
               </div>
 
-              <div className="balance-edit-section">
+              <div className="edit-section">
                 <h3>Medical Leave (ML)</h3>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Entitled Days</label>
+                <div className="edit-row">
+                  <div className="edit-field">
+                    <label>Entitled</label>
                     <input
                       type="number"
                       min="0"
@@ -429,8 +434,8 @@ function LeaveBalances() {
                       onChange={(e) => setEditForm({ ...editForm, ml_entitled: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Used Days</label>
+                  <div className="edit-field">
+                    <label>Used</label>
                     <input
                       type="number"
                       min="0"
@@ -438,23 +443,18 @@ function LeaveBalances() {
                       onChange={(e) => setEditForm({ ...editForm, ml_used: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-                  <div className="form-group">
+                  <div className="edit-field">
                     <label>Available</label>
-                    <input
-                      type="text"
-                      value={editForm.ml_entitled - editForm.ml_used}
-                      disabled
-                      className="calculated-field"
-                    />
+                    <input type="text" value={formatNum(editForm.ml_entitled - editForm.ml_used)} disabled />
                   </div>
                 </div>
               </div>
 
-              <div className="balance-edit-section">
+              <div className="edit-section">
                 <h3>Hospitalization Leave (HL)</h3>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Entitled Days</label>
+                <div className="edit-row">
+                  <div className="edit-field">
+                    <label>Entitled</label>
                     <input
                       type="number"
                       min="0"
@@ -462,8 +462,8 @@ function LeaveBalances() {
                       onChange={(e) => setEditForm({ ...editForm, hl_entitled: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Used Days</label>
+                  <div className="edit-field">
+                    <label>Used</label>
                     <input
                       type="number"
                       min="0"
@@ -471,24 +471,17 @@ function LeaveBalances() {
                       onChange={(e) => setEditForm({ ...editForm, hl_used: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-                  <div className="form-group">
+                  <div className="edit-field">
                     <label>Available</label>
-                    <input
-                      type="text"
-                      value={editForm.hl_entitled - editForm.hl_used}
-                      disabled
-                      className="calculated-field"
-                    />
+                    <input type="text" value={formatNum(editForm.hl_entitled - editForm.hl_used)} disabled />
                   </div>
                 </div>
               </div>
 
               <div className="modal-actions">
-                <button className="cancel-btn" onClick={() => setShowEditModal(false)}>
-                  Cancel
-                </button>
+                <button className="cancel-btn" onClick={() => setShowEditModal(false)}>Cancel</button>
                 <button className="save-btn" onClick={handleSaveEdit} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Changes'}
+                  {saving ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </div>
@@ -498,58 +491,48 @@ function LeaveBalances() {
         {/* Unpaid Leave Detail Modal */}
         {showUnpaidModal && unpaidEmployee && (
           <div className="modal-overlay" onClick={() => setShowUnpaidModal(false)}>
-            <div className="modal unpaid-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
               <h2>Unpaid Leave Details</h2>
-              <p className="modal-subtitle">{unpaidEmployee.name} ({unpaidEmployee.emp_code}) - {year}</p>
+              <p className="modal-subtitle">{unpaidEmployee.name} - {year}</p>
 
               {loadingUnpaid ? (
                 <div className="loading">Loading...</div>
               ) : unpaidData ? (
                 <>
-                  <div className="unpaid-summary">
-                    <span className="total-label">Total Unpaid Leave:</span>
-                    <span className="total-value">{unpaidData.total_unpaid_days} days</span>
+                  <div className="unpaid-total">
+                    Total: <strong>{formatNum(unpaidData.total_unpaid_days)} days</strong>
                   </div>
 
                   {unpaidData.monthly_breakdown.length === 0 ? (
-                    <div className="no-unpaid">No unpaid leave records found</div>
+                    <div className="no-data">No unpaid leave records</div>
                   ) : (
-                    <div className="monthly-breakdown">
+                    <div className="unpaid-list">
                       {unpaidData.monthly_breakdown.map(month => (
-                        <div key={month.month} className="month-section">
+                        <div key={month.month} className="unpaid-month">
                           <div className="month-header">
-                            <span className="month-name">{month.month_name}</span>
-                            <span className="month-total">{month.total_days} days</span>
+                            <span>{month.month_name}</span>
+                            <span className="month-days">{formatNum(month.total_days)} days</span>
                           </div>
-                          <div className="month-requests">
-                            {month.requests.map(req => (
-                              <div key={req.id} className="request-item">
-                                <div className="request-dates">
-                                  {new Date(req.start_date).toLocaleDateString()}
-                                  {req.start_date !== req.end_date && (
-                                    <> - {new Date(req.end_date).toLocaleDateString()}</>
-                                  )}
-                                </div>
-                                <div className="request-days">{req.total_days} day(s)</div>
-                                {req.reason && (
-                                  <div className="request-reason">{req.reason}</div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
+                          {month.requests.map(req => (
+                            <div key={req.id} className="unpaid-item">
+                              <span className="dates">
+                                {new Date(req.start_date).toLocaleDateString()}
+                                {req.start_date !== req.end_date && ` - ${new Date(req.end_date).toLocaleDateString()}`}
+                              </span>
+                              <span className="days">{formatNum(req.total_days)}d</span>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
                   )}
                 </>
               ) : (
-                <div className="error">Failed to load unpaid leave details</div>
+                <div className="error">Failed to load data</div>
               )}
 
               <div className="modal-actions">
-                <button className="cancel-btn" onClick={() => setShowUnpaidModal(false)}>
-                  Close
-                </button>
+                <button className="cancel-btn" onClick={() => setShowUnpaidModal(false)}>Close</button>
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
 /* =====================================================
-   LEAVE BALANCES PAGE - Clean & Modern
+   LEAVE BALANCES PAGE
    ===================================================== */
 
 .leave-balances-page {
@@ -9,14 +9,11 @@
 }
 
 .leave-balances-page .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 24px;
 }
 
 .leave-balances-page .page-header h1 {
-  font-size: 22px;
+  font-size: 24px;
   color: #1e293b;
   margin: 0 0 4px 0;
   font-weight: 600;
@@ -28,56 +25,47 @@
   font-size: 14px;
 }
 
-/* Filters Row */
+/* Filters */
 .leave-balances-page .filters-row {
   display: flex;
   gap: 12px;
   margin-bottom: 20px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
-.leave-balances-page .filters-row input,
-.leave-balances-page .filters-row select {
+.leave-balances-page .filters-row select,
+.leave-balances-page .filters-row input {
   padding: 10px 14px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 14px;
   background: white;
   color: #1e293b;
-  transition: all 0.15s ease;
 }
 
 .leave-balances-page .filters-row input {
   flex: 1;
   min-width: 200px;
+  max-width: 300px;
 }
 
-.leave-balances-page .filters-row select {
-  min-width: 150px;
-}
-
-.leave-balances-page .filters-row input:focus,
-.leave-balances-page .filters-row select:focus {
+.leave-balances-page .filters-row select:focus,
+.leave-balances-page .filters-row input:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .leave-balances-page .group-toggle-btn {
-  background: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
   padding: 10px 16px;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
   font-weight: 500;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.leave-balances-page .group-toggle-btn:hover {
-  background: #e2e8f0;
-  color: #475569;
 }
 
 .leave-balances-page .group-toggle-btn.active {
@@ -90,122 +78,16 @@
   text-align: center;
   padding: 48px;
   color: #64748b;
-  font-size: 14px;
 }
 
-/* Leave Balances Table */
-.leave-balances-table {
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
-}
-
-.leave-balances-table table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.leave-balances-table th {
-  background: #f8fafc;
-  color: #475569;
-  padding: 12px 16px;
-  text-align: left;
-  font-weight: 600;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.leave-balances-table th.balance-header {
-  text-align: center;
-  min-width: 80px;
-}
-
-.leave-balances-table td {
-  padding: 14px 16px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #1e293b;
-  font-size: 14px;
-}
-
-.leave-balances-table tr:hover {
-  background: #f8fafc;
-}
-
-.leave-balances-table .no-data {
-  text-align: center;
-  color: #64748b;
-  padding: 40px !important;
-}
-
-.leave-balances-table .name-col {
-  min-width: 180px;
-  font-weight: 500;
-}
-
-/* Balance cells */
-.leave-balances-table .balance-cell {
-  text-align: center;
-  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-  font-weight: 500;
-  color: #059669;
-}
-
-.leave-balances-table .balance-cell.ul-cell {
-  color: #64748b;
-}
-
-.leave-balances-table .balance-cell.ul-cell.negative {
-  color: #dc2626;
-  font-weight: 600;
-}
-
-.leave-balances-table .ul-value.clickable {
-  cursor: pointer;
-  text-decoration: underline;
-  transition: all 0.15s ease;
-}
-
-.leave-balances-table .ul-value.clickable:hover {
-  color: #991b1b;
-}
-
-/* Actions column */
-.leave-balances-table .actions-col {
-  width: 100px;
-  text-align: center;
-}
-
-.leave-balances-table .edit-btn {
-  background: #3b82f6;
-  color: white;
-  border: none;
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-weight: 500;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.leave-balances-table .edit-btn:hover {
-  background: #2563eb;
-}
-
-/* =====================================================
-   GROUPED EMPLOYEE DISPLAY
-   ===================================================== */
-
-.leave-balances-page .employees-grouped {
+/* Groups */
+.leave-balances-page .leave-groups {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.leave-balances-page .employee-group {
+.leave-balances-page .leave-group {
   background: white;
   border-radius: 12px;
   overflow: hidden;
@@ -213,74 +95,148 @@
   border: 1px solid #e2e8f0;
 }
 
-.leave-balances-page .employee-group.outlet-group .group-header {
+.leave-balances-page .leave-group.outlet-group .group-header {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  border-left: 4px solid #1d4ed8;
 }
 
-.leave-balances-page .employee-group.dept-group .group-header {
+.leave-balances-page .leave-group.dept-group .group-header {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-left: 4px solid #047857;
 }
 
 .leave-balances-page .group-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 20px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.leave-balances-page .group-header:hover {
-  opacity: 0.95;
-}
-
-.leave-balances-page .group-header-left {
-  display: flex;
   align-items: center;
   gap: 12px;
+  padding: 14px 20px;
+  cursor: pointer;
+  color: white;
 }
 
 .leave-balances-page .collapse-icon {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.9);
   width: 16px;
 }
 
 .leave-balances-page .group-name {
   font-weight: 600;
   font-size: 15px;
-  color: white;
 }
 
 .leave-balances-page .group-count {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.85);
+  opacity: 0.9;
+}
+
+/* Table */
+.leave-balances-page .table-wrapper {
+  background: white;
+  overflow-x: auto;
+}
+
+.leave-balances-page .balance-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.leave-balances-page .balance-table thead tr {
+  background: #f8fafc;
+}
+
+.leave-balances-page .balance-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.leave-balances-page .balance-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap;
+}
+
+.leave-balances-page .balance-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.leave-balances-page .name-cell {
   font-weight: 500;
 }
 
-.leave-balances-page .employee-group .leave-balances-table {
-  border-top: 1px solid #e2e8f0;
-  border-radius: 0;
-  box-shadow: none;
-  border: none;
+/* Balance cells */
+.leave-balances-page .balance-cell {
+  text-align: center !important;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-weight: 600;
+  font-size: 13px;
 }
 
-.leave-balances-page .no-data-centered {
-  text-align: center;
-  padding: 60px 20px;
+.leave-balances-page .balance-cell.al {
+  color: #2563eb;
+}
+
+.leave-balances-page .balance-cell.ml {
+  color: #059669;
+}
+
+.leave-balances-page .balance-cell.hl {
+  color: #7c3aed;
+}
+
+.leave-balances-page .balance-cell.ul {
   color: #64748b;
-  font-size: 15px;
+}
+
+.leave-balances-page .balance-cell.ul.negative {
+  color: #dc2626;
+}
+
+.leave-balances-page .balance-cell .clickable {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.leave-balances-page .balance-cell .clickable:hover {
+  color: #991b1b;
+}
+
+/* Actions */
+.leave-balances-page .actions-cell {
+  text-align: center !important;
+}
+
+.leave-balances-page .edit-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.leave-balances-page .edit-btn:hover {
+  background: #2563eb;
+}
+
+.leave-balances-page .no-data {
+  text-align: center;
+  padding: 40px;
+  color: #64748b;
   background: white;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
 }
 
-/* =====================================================
-   MODALS
-   ===================================================== */
-
+/* Modal */
 .leave-balances-page .modal-overlay {
   position: fixed;
   top: 0;
@@ -298,88 +254,78 @@
 .leave-balances-page .modal {
   background: white;
   border-radius: 16px;
-  padding: 28px;
-  max-width: 600px;
+  padding: 24px;
   width: 100%;
+  max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
 }
 
 .leave-balances-page .modal h2 {
-  color: #1e293b;
-  margin: 0 0 8px 0;
   font-size: 18px;
-  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 4px 0;
 }
 
 .leave-balances-page .modal-subtitle {
   color: #64748b;
   font-size: 14px;
-  margin: 0 0 24px 0;
+  margin: 0 0 20px 0;
 }
 
-/* Edit Modal */
-.leave-balances-page .edit-modal {
-  max-width: 650px;
-}
-
-.leave-balances-page .balance-edit-section {
-  margin-bottom: 20px;
-  padding: 16px;
+/* Edit sections */
+.leave-balances-page .edit-section {
   background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
 }
 
-.leave-balances-page .balance-edit-section h3 {
-  margin: 0 0 14px 0;
+.leave-balances-page .edit-section h3 {
   font-size: 14px;
-  font-weight: 600;
   color: #1e293b;
+  margin: 0 0 12px 0;
+  font-weight: 600;
 }
 
-.leave-balances-page .form-row {
+.leave-balances-page .edit-row {
   display: flex;
   gap: 12px;
 }
 
-.leave-balances-page .form-group {
+.leave-balances-page .edit-field {
   flex: 1;
 }
 
-.leave-balances-page .form-group label {
+.leave-balances-page .edit-field label {
   display: block;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 6px;
-  font-size: 13px;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
 }
 
-.leave-balances-page .form-group input {
+.leave-balances-page .edit-field input {
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 14px;
-  transition: all 0.15s ease;
-  background: white;
-  color: #1e293b;
+  box-sizing: border-box;
 }
 
-.leave-balances-page .form-group input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.leave-balances-page .form-group input.calculated-field {
+.leave-balances-page .edit-field input:disabled {
   background: #e2e8f0;
   color: #059669;
   font-weight: 600;
-  text-align: center;
 }
 
+.leave-balances-page .edit-field input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* Modal actions */
 .leave-balances-page .modal-actions {
   display: flex;
   gap: 12px;
@@ -396,14 +342,11 @@
   background: white;
   color: #64748b;
   font-weight: 500;
-  font-size: 14px;
   cursor: pointer;
-  transition: all 0.15s ease;
 }
 
 .leave-balances-page .cancel-btn:hover {
   background: #f8fafc;
-  border-color: #cbd5e1;
 }
 
 .leave-balances-page .save-btn {
@@ -413,9 +356,7 @@
   background: #3b82f6;
   color: white;
   font-weight: 600;
-  font-size: 14px;
   cursor: pointer;
-  transition: all 0.15s ease;
 }
 
 .leave-balances-page .save-btn:hover {
@@ -427,130 +368,76 @@
   cursor: not-allowed;
 }
 
-/* =====================================================
-   UNPAID LEAVE DETAIL MODAL
-   ===================================================== */
-
-.leave-balances-page .unpaid-modal {
-  max-width: 550px;
-}
-
-.leave-balances-page .unpaid-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
+/* Unpaid leave modal */
+.leave-balances-page .unpaid-total {
   background: #fef2f2;
   border: 1px solid #fecaca;
-  border-radius: 10px;
-  margin-bottom: 20px;
-}
-
-.leave-balances-page .unpaid-summary .total-label {
-  font-weight: 500;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
   color: #991b1b;
-  font-size: 14px;
 }
 
-.leave-balances-page .unpaid-summary .total-value {
-  font-weight: 700;
+.leave-balances-page .unpaid-total strong {
   color: #dc2626;
-  font-size: 18px;
 }
 
-.leave-balances-page .no-unpaid {
-  text-align: center;
-  padding: 40px 20px;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.leave-balances-page .monthly-breakdown {
+.leave-balances-page .unpaid-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
-.leave-balances-page .month-section {
+.leave-balances-page .unpaid-month {
   background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   overflow: hidden;
 }
 
-.leave-balances-page .month-header {
+.leave-balances-page .unpaid-month .month-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
+  padding: 10px 14px;
   background: #e2e8f0;
+  font-weight: 600;
+  font-size: 13px;
 }
 
-.leave-balances-page .month-name {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 14px;
-}
-
-.leave-balances-page .month-total {
-  font-weight: 600;
+.leave-balances-page .unpaid-month .month-days {
   color: #dc2626;
-  font-size: 14px;
 }
 
-.leave-balances-page .month-requests {
-  padding: 12px 16px;
-}
-
-.leave-balances-page .request-item {
-  padding: 10px 0;
+.leave-balances-page .unpaid-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 13px;
   border-bottom: 1px solid #e2e8f0;
 }
 
-.leave-balances-page .request-item:last-child {
+.leave-balances-page .unpaid-item:last-child {
   border-bottom: none;
 }
 
-.leave-balances-page .request-dates {
-  font-size: 13px;
-  color: #1e293b;
-  font-weight: 500;
+.leave-balances-page .unpaid-item .dates {
+  color: #475569;
 }
 
-.leave-balances-page .request-days {
-  font-size: 12px;
+.leave-balances-page .unpaid-item .days {
   color: #dc2626;
   font-weight: 500;
-  margin-top: 4px;
-}
-
-.leave-balances-page .request-reason {
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 4px;
-  font-style: italic;
 }
 
 .leave-balances-page .error {
   text-align: center;
-  padding: 30px;
+  padding: 20px;
   color: #dc2626;
-  font-size: 14px;
 }
 
-/* =====================================================
-   RESPONSIVE
-   ===================================================== */
-
+/* Responsive */
 @media (max-width: 768px) {
   .leave-balances-page {
     padding: 16px;
-  }
-
-  .leave-balances-page .page-header {
-    flex-direction: column;
-    gap: 12px;
-    align-items: flex-start;
   }
 
   .leave-balances-page .filters-row {
@@ -560,18 +447,14 @@
   .leave-balances-page .filters-row input,
   .leave-balances-page .filters-row select {
     width: 100%;
+    max-width: none;
   }
 
-  .leave-balances-page .form-row {
+  .leave-balances-page .edit-row {
     flex-direction: column;
-    gap: 12px;
   }
 
-  .leave-balances-table {
-    overflow-x: auto;
-  }
-
-  .leave-balances-table table {
-    min-width: 700px;
+  .leave-balances-page .balance-table {
+    min-width: 800px;
   }
 }
