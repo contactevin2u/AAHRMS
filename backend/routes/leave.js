@@ -125,10 +125,10 @@ router.get('/balances/:employeeId', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get all employees' leave balances summary (grouped by outlet)
+// Get all employees' leave balances summary (grouped by outlet or department)
 router.get('/balances', authenticateAdmin, async (req, res) => {
   try {
-    const { year, outlet_id } = req.query;
+    const { year, outlet_id, department_id } = req.query;
     const currentYear = year || new Date().getFullYear();
     const companyId = getCompanyFilter(req);
 
@@ -138,6 +138,7 @@ router.get('/balances', authenticateAdmin, async (req, res) => {
         e.employee_id as emp_code,
         e.name as employee_name,
         e.employee_role,
+        d.id as department_id,
         d.name as department_name,
         o.id as outlet_id,
         o.name as outlet_name,
@@ -171,9 +172,15 @@ router.get('/balances', authenticateAdmin, async (req, res) => {
       params.push(outlet_id);
     }
 
+    if (department_id) {
+      paramCount++;
+      query += ` AND e.department_id = $${paramCount}`;
+      params.push(department_id);
+    }
+
     query += `
-      GROUP BY e.id, e.employee_id, e.name, e.employee_role, d.name, o.id, o.name
-      ORDER BY o.name NULLS LAST, e.employee_role DESC NULLS LAST, e.name
+      GROUP BY e.id, e.employee_id, e.name, e.employee_role, d.id, d.name, o.id, o.name
+      ORDER BY COALESCE(o.name, d.name) NULLS LAST, e.employee_role DESC NULLS LAST, e.name
     `;
 
     const result = await pool.query(query, params);

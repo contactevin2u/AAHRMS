@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { leaveApi, employeeApi, outletsApi } from '../api';
+import { leaveApi, employeeApi, outletsApi, departmentApi } from '../api';
 import Layout from '../components/Layout';
 import './Leave.css';
 
@@ -10,10 +10,16 @@ function Leave() {
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [outlets, setOutlets] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [holidays, setHolidays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
-  const [expandedOutlets, setExpandedOutlets] = useState({});
+  const [expandedGroups, setExpandedGroups] = useState({});
+
+  // Detect if company uses outlets or departments
+  const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
+  const isOutletBased = outlets.length > 0;
+  const isDepartmentBased = !isOutletBased && departments.length > 0;
 
   // Filters
   const [filter, setFilter] = useState({
@@ -21,6 +27,7 @@ function Leave() {
     status: '',
     leave_type_id: '',
     outlet_id: '',
+    department_id: '',
     year: new Date().getFullYear()
   });
 
@@ -66,21 +73,24 @@ function Leave() {
 
   const fetchInitialData = async () => {
     try {
-      const [typesRes, empRes, countRes, outletsRes] = await Promise.all([
+      const [typesRes, empRes, countRes, outletsRes, deptsRes] = await Promise.all([
         leaveApi.getTypes(),
         employeeApi.getAll({ status: 'active' }),
         leaveApi.getPendingCount(),
-        outletsApi.getAll()
+        outletsApi.getAll().catch(() => ({ data: [] })),
+        departmentApi.getAll().catch(() => ({ data: [] }))
       ]);
       setLeaveTypes(typesRes.data);
       setEmployees(empRes.data);
       setPendingCount(countRes.data.count);
       setOutlets(outletsRes.data || []);
-      // Expand all outlets by default
+      setDepartments(deptsRes.data || []);
+      // Expand all groups by default
       const expanded = {};
-      (outletsRes.data || []).forEach(o => { expanded[o.id] = true; });
-      expanded['no-outlet'] = true;
-      setExpandedOutlets(expanded);
+      (outletsRes.data || []).forEach(o => { expanded['outlet-' + o.id] = true; });
+      (deptsRes.data || []).forEach(d => { expanded['dept-' + d.id] = true; });
+      expanded['no-group'] = true;
+      setExpandedGroups(expanded);
     } catch (error) {
       console.error('Error fetching initial data:', error);
     }
@@ -103,6 +113,7 @@ function Leave() {
     try {
       const params = { year: filter.year };
       if (filter.outlet_id) params.outlet_id = filter.outlet_id;
+      if (filter.department_id) params.department_id = filter.department_id;
       const res = await leaveApi.getBalances(params);
       setBalances(res.data);
     } catch (error) {
@@ -112,33 +123,45 @@ function Leave() {
     }
   };
 
-  // Group balances by outlet
-  const getBalancesByOutlet = () => {
+  // Group balances by outlet or department
+  const getBalancesByGroup = () => {
     const grouped = {};
     balances.forEach(emp => {
-      const outletKey = emp.outlet_id || 'no-outlet';
-      const outletName = emp.outlet_name || 'No Outlet Assigned';
-      if (!grouped[outletKey]) {
-        grouped[outletKey] = {
-          outlet_id: emp.outlet_id,
-          outlet_name: outletName,
+      // Determine grouping key based on what's available
+      let groupKey, groupName;
+      if (emp.outlet_id) {
+        groupKey = 'outlet-' + emp.outlet_id;
+        groupName = emp.outlet_name;
+      } else if (emp.department_id) {
+        groupKey = 'dept-' + emp.department_id;
+        groupName = emp.department_name;
+      } else {
+        groupKey = 'no-group';
+        groupName = 'No Group Assigned';
+      }
+
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = {
+          group_id: emp.outlet_id || emp.department_id,
+          group_name: groupName,
+          group_type: emp.outlet_id ? 'outlet' : 'department',
           employees: [],
           supervisors: [],
           managers: []
         };
       }
       if (emp.employee_role === 'supervisor') {
-        grouped[outletKey].supervisors.push(emp);
+        grouped[groupKey].supervisors.push(emp);
       } else if (emp.employee_role === 'manager') {
-        grouped[outletKey].managers.push(emp);
+        grouped[groupKey].managers.push(emp);
       }
-      grouped[outletKey].employees.push(emp);
+      grouped[groupKey].employees.push(emp);
     });
     return grouped;
   };
 
-  const toggleOutlet = (outletId) => {
-    setExpandedOutlets(prev => ({ ...prev, [outletId]: !prev[outletId] }));
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
 
   const fetchHolidays = async () => {
@@ -421,15 +444,28 @@ function Leave() {
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
-              <select
-                value={filter.outlet_id}
-                onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value })}
-              >
-                <option value="">All Outlets</option>
-                {outlets.map(outlet => (
-                  <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
-                ))}
-              </select>
+              {outlets.length > 0 && (
+                <select
+                  value={filter.outlet_id}
+                  onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value, department_id: '' })}
+                >
+                  <option value="">All Outlets</option>
+                  {outlets.map(outlet => (
+                    <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
+                  ))}
+                </select>
+              )}
+              {departments.length > 0 && (
+                <select
+                  value={filter.department_id}
+                  onChange={(e) => setFilter({ ...filter, department_id: e.target.value, outlet_id: '' })}
+                >
+                  <option value="">All Departments</option>
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+              )}
               <button onClick={handleInitializeAllBalances} className="add-btn">
                 Initialize All Balances
               </button>
@@ -439,17 +475,17 @@ function Leave() {
               <div className="loading">Loading...</div>
             ) : (
               <div className="outlet-groups">
-                {Object.entries(getBalancesByOutlet()).map(([outletKey, outletData]) => (
-                  <div key={outletKey} className="outlet-group">
+                {Object.entries(getBalancesByGroup()).map(([groupKey, groupData]) => (
+                  <div key={groupKey} className="outlet-group">
                     <div
                       className="outlet-header"
-                      onClick={() => toggleOutlet(outletKey)}
+                      onClick={() => toggleGroup(groupKey)}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '12px 16px',
-                        backgroundColor: '#1e40af',
+                        backgroundColor: groupData.group_type === 'department' ? '#059669' : '#1e40af',
                         color: 'white',
                         borderRadius: '8px 8px 0 0',
                         cursor: 'pointer',
@@ -457,24 +493,27 @@ function Leave() {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '18px' }}>{expandedOutlets[outletKey] ? '▼' : '▶'}</span>
+                        <span style={{ fontSize: '18px' }}>{expandedGroups[groupKey] ? '▼' : '▶'}</span>
                         <div>
-                          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>{outletData.outlet_name}</h3>
+                          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>{groupData.group_name}</h3>
                           <div style={{ fontSize: '12px', opacity: 0.9, marginTop: '2px' }}>
-                            {outletData.employees.length} staff
-                            {outletData.supervisors.length > 0 && ` • ${outletData.supervisors.length} supervisor${outletData.supervisors.length > 1 ? 's' : ''}`}
+                            {groupData.employees.length} staff
+                            {groupData.supervisors.length > 0 && ` • ${groupData.supervisors.length} supervisor${groupData.supervisors.length > 1 ? 's' : ''}`}
+                            {groupData.managers.length > 0 && ` • ${groupData.managers.length} manager${groupData.managers.length > 1 ? 's' : ''}`}
                           </div>
                         </div>
                       </div>
-                      {outletData.supervisors.length > 0 && (
-                        <div style={{ fontSize: '12px', textAlign: 'right' }}>
-                          <div style={{ opacity: 0.8 }}>Supervisor:</div>
-                          <div>{outletData.supervisors.map(s => s.employee_name).join(', ')}</div>
-                        </div>
-                      )}
+                      <div style={{ fontSize: '12px', textAlign: 'right' }}>
+                        {groupData.managers.length > 0 && (
+                          <div><span style={{ opacity: 0.8 }}>Manager: </span>{groupData.managers.map(m => m.employee_name).join(', ')}</div>
+                        )}
+                        {groupData.supervisors.length > 0 && (
+                          <div><span style={{ opacity: 0.8 }}>Supervisor: </span>{groupData.supervisors.map(s => s.employee_name).join(', ')}</div>
+                        )}
+                      </div>
                     </div>
 
-                    {expandedOutlets[outletKey] && (
+                    {expandedGroups[groupKey] && (
                       <div className="balance-cards" style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
@@ -485,7 +524,7 @@ function Leave() {
                         border: '1px solid #e2e8f0',
                         borderTop: 'none'
                       }}>
-                        {outletData.employees.map(emp => {
+                        {groupData.employees.map(emp => {
                           const empBalances = emp.balances || [];
                           const isSupervisor = emp.employee_role === 'supervisor';
                           const isManager = emp.employee_role === 'manager';
