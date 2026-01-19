@@ -68,6 +68,11 @@ const { checkWrongShift } = require('../../utils/attendanceDeduction');
 // Total shift = 8.5 hours (7.5 work + 1 hour break)
 const STANDARD_WORK_MINUTES = 450;
 
+// Night shift cutoff time (1:30 AM) - actions before this time are treated as previous day
+// This applies to companies with night shifts (like Mimix)
+const NIGHT_SHIFT_CUTOFF_HOUR = 1;
+const NIGHT_SHIFT_CUTOFF_MINUTE = 30;
+
 // Maximum allowed photo size (200KB as per storage minimization policy)
 const MAX_PHOTO_SIZE_KB = 200;
 
@@ -176,6 +181,59 @@ function getCurrentDate() {
 }
 
 /**
+ * Get the effective work date considering night shift cutoff
+ * If current time is after midnight but before cutoff (e.g., 1:30 AM),
+ * return yesterday's date for shift continuation
+ */
+function getEffectiveWorkDate() {
+  const malaysiaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
+  const hour = malaysiaTime.getHours();
+  const minute = malaysiaTime.getMinutes();
+
+  // Check if we're in the "after midnight but before cutoff" window
+  const isBeforeCutoff = hour < NIGHT_SHIFT_CUTOFF_HOUR ||
+    (hour === NIGHT_SHIFT_CUTOFF_HOUR && minute < NIGHT_SHIFT_CUTOFF_MINUTE);
+
+  if (isBeforeCutoff) {
+    // Return yesterday's date
+    malaysiaTime.setDate(malaysiaTime.getDate() - 1);
+  }
+
+  const year = malaysiaTime.getFullYear();
+  const month = String(malaysiaTime.getMonth() + 1).padStart(2, '0');
+  const day = String(malaysiaTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Check if there's an open shift from yesterday that needs to be closed
+ * Returns the record if found, null otherwise
+ */
+async function getOpenShiftFromYesterday(employeeId) {
+  const malaysiaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
+  malaysiaTime.setDate(malaysiaTime.getDate() - 1);
+
+  const year = malaysiaTime.getFullYear();
+  const month = String(malaysiaTime.getMonth() + 1).padStart(2, '0');
+  const day = String(malaysiaTime.getDate()).padStart(2, '0');
+  const yesterday = `${year}-${month}-${day}`;
+
+  const result = await pool.query(
+    `SELECT * FROM clock_in_records
+     WHERE employee_id = $1 AND work_date = $2
+     AND (
+       (clock_in_1 IS NOT NULL AND clock_out_1 IS NULL) OR
+       (clock_out_1 IS NOT NULL AND clock_in_2 IS NULL) OR
+       (clock_in_2 IS NOT NULL AND clock_out_2 IS NULL)
+     )
+     ORDER BY id DESC LIMIT 1`,
+    [employeeId, yesterday]
+  );
+
+  return result.rows.length > 0 ? result.rows[0] : null;
+}
+
+/**
  * Calculate base64 image size in KB
  * @param {string} base64 - Base64 string (with or without data URL prefix)
  * @returns {number} - Size in KB
@@ -224,10 +282,42 @@ function validateClockData(data, action) {
 }
 
 // Get today's status (supports 4-action structure)
+// Also checks for open shifts from yesterday (for night shift workers)
 router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   const employeeId = req.employee.id;
   const today = getCurrentDate();
 
+  // First, check if there's an open shift from yesterday that needs to be closed
+  // This handles night shift workers who clock out after midnight
+  const openYesterdayShift = await getOpenShiftFromYesterday(employeeId);
+
+  if (openYesterdayShift) {
+    // There's an open shift from yesterday - return that status
+    let status = 'working';
+    let nextAction = null;
+
+    if (openYesterdayShift.clock_in_1 && !openYesterdayShift.clock_out_1) {
+      nextAction = 'clock_out_1';
+    } else if (openYesterdayShift.clock_out_1 && !openYesterdayShift.clock_in_2) {
+      status = 'on_break';
+      nextAction = 'clock_in_2';
+    } else if (openYesterdayShift.clock_in_2 && !openYesterdayShift.clock_out_2) {
+      nextAction = 'clock_out_2';
+    }
+
+    return res.json({
+      status,
+      next_action: nextAction,
+      is_yesterday_shift: true,
+      record: {
+        ...openYesterdayShift,
+        total_hours: openYesterdayShift.total_work_minutes ? (openYesterdayShift.total_work_minutes / 60).toFixed(2) : null,
+        ot_hours: openYesterdayShift.ot_minutes ? (openYesterdayShift.ot_minutes / 60).toFixed(2) : null
+      }
+    });
+  }
+
+  // No open shift from yesterday, check today's records
   const result = await pool.query(
     `SELECT id, work_date,
             clock_in_1, clock_out_1, clock_in_2, clock_out_2,
@@ -295,7 +385,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
   } = req.body;
 
   const employeeId = req.employee.id;
-  const today = getCurrentDate();
+  let workDate = getCurrentDate(); // Default to today
   const currentTime = getCurrentTime();
 
   // Validate action type
@@ -307,6 +397,19 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
   const validationErrors = validateClockData(req.body, action);
   if (validationErrors.length > 0) {
     throw new ValidationError(validationErrors.join('. '));
+  }
+
+  // Check if there's an open shift from yesterday that needs to be closed
+  // This handles night shift workers clocking out after midnight
+  const openYesterdayShift = await getOpenShiftFromYesterday(employeeId);
+  let useYesterdayShift = false;
+
+  if (openYesterdayShift && action !== 'clock_in_1') {
+    // There's an open shift from yesterday and this is not a new clock-in
+    // Use yesterday's date for this action
+    useYesterdayShift = true;
+    workDate = openYesterdayShift.work_date;
+    console.log(`Night shift continuation: Using yesterday's shift (${workDate}) for ${action}`);
   }
 
   // Get employee info
@@ -335,7 +438,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     const scheduleResult = await pool.query(
       `SELECT * FROM schedules
        WHERE employee_id = $1 AND schedule_date = $2 AND status = 'scheduled'`,
-      [employeeId, today]
+      [employeeId, workDate]
     );
 
     if (scheduleResult.rows.length > 0) {
@@ -363,10 +466,10 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     }
   }
 
-  // Check existing record for today
+  // Check existing record for the work date
   let existingRecord = await pool.query(
     'SELECT * FROM clock_in_records WHERE employee_id = $1 AND work_date = $2',
-    [employeeId, today]
+    [employeeId, workDate]
   );
 
   let record;
@@ -399,7 +502,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
           status, approval_status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'pending')
          RETURNING *`,
-        [employeeId, company_id, outlet_id, today, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus, wrongShiftReason, recordStatus]
+        [employeeId, company_id, outlet_id, workDate, currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus, wrongShiftReason, recordStatus]
       );
     } else {
       // Update existing record with schedule tracking
@@ -411,7 +514,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
            status = $11
          WHERE employee_id = $12 AND work_date = $13
          RETURNING *`,
-        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus, wrongShiftReason, recordStatus, employeeId, today]
+        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, hasSchedule, scheduleId, attendanceStatus, wrongShiftReason, recordStatus, employeeId, workDate]
       );
     }
 
@@ -453,7 +556,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
          face_detected_out_1 = $5, face_confidence_out_1 = $6
        WHERE employee_id = $7 AND work_date = $8
        RETURNING *`,
-      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
+      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, workDate]
     );
 
     res.json({
@@ -481,7 +584,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
          face_detected_in_2 = $5, face_confidence_in_2 = $6
        WHERE employee_id = $7 AND work_date = $8
        RETURNING *`,
-      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, today]
+      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, workDate]
     );
 
     res.json({
@@ -537,7 +640,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
          total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9, status = 'completed'
        WHERE employee_id = $10 AND work_date = $11
        RETURNING *`,
-      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, today]
+      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, workDate]
     );
 
     // If OT flagged for Mimix company, create notification for supervisor
@@ -555,7 +658,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
         await pool.query(
           `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
            VALUES ($1, 'ot_approval', 'OT Approval Required', $2, 'clock_in_record', $3)`,
-          [supervisorId, `${req.employee.name} has ${otHours} hours of overtime on ${today}`, record.rows[0].id]
+          [supervisorId, `${req.employee.name} has ${otHours} hours of overtime on ${workDate}`, record.rows[0].id]
         );
       }
     }
