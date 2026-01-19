@@ -398,18 +398,23 @@ function Leave() {
                         <span className="emp-code">{emp.emp_code}</span>
                       </div>
                       <div className="balance-items">
-                        {empBalances.filter(b => b.code !== 'UL' && b.leave_type_id).map(balance => (
-                          <div key={balance.leave_type_id} className="balance-item">
-                            <span className="balance-type">{balance.code}</span>
-                            <span className="balance-value">
-                              {balance.entitled !== null ? (
-                                <>{parseFloat(balance.used) || 0} / {parseFloat(balance.entitled) || 0}</>
-                              ) : (
-                                <span className="not-init">-</span>
-                              )}
-                            </span>
-                          </div>
-                        ))}
+                        {empBalances.filter(b => b.code !== 'UL' && b.leave_type_id).map(balance => {
+                          const entitled = parseFloat(balance.entitled) || 0;
+                          const used = parseFloat(balance.used) || 0;
+                          const available = entitled - used;
+                          return (
+                            <div key={balance.leave_type_id} className="balance-item">
+                              <span className="balance-type">{balance.code}</span>
+                              <span className="balance-value">
+                                {balance.entitled !== null ? (
+                                  <>{available} / {entitled}</>
+                                ) : (
+                                  <span className="not-init">-</span>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                       <button
                         className="init-btn"
