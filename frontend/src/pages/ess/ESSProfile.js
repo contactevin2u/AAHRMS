@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import './ESSProfile.css';
@@ -23,6 +24,7 @@ const FIELD_LABELS = {
 };
 
 function ESSProfile() {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -235,6 +237,14 @@ function ESSProfile() {
             <p className="employee-id">{profile.employee_id}</p>
             <p className="position">{profile.position || 'Employee'}</p>
             {getStatusBadge(profile.status)}
+          </div>
+          <div className="profile-actions">
+            <button
+              className="btn-change-password"
+              onClick={() => navigate('/ess/change-password')}
+            >
+              Change Password
+            </button>
           </div>
         </div>
 

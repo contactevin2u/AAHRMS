@@ -20,6 +20,7 @@ import Contributions from './pages/Contributions';
 import Letters from './pages/Letters';
 import UserManagement from './pages/UserManagement';
 import RoleManagement from './pages/RoleManagement';
+import PasswordStatus from './pages/PasswordStatus';
 import MyProfile from './pages/MyProfile';
 import CompanyManagement from './pages/CompanyManagement';
 import Settings from './pages/Settings';
@@ -206,6 +207,14 @@ function App() {
           element={
             <ProtectedRoute>
               <UserManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/password-status"
+          element={
+            <ProtectedRoute>
+              <PasswordStatus />
             </ProtectedRoute>
           }
         />

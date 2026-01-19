@@ -80,7 +80,7 @@ function Layout({ children }) {
       setExpandedSection('payroll');
     } else if (path.includes('/resignations') || path.includes('/letters') || path.includes('/departments') || path.includes('/outlets')) {
       setExpandedSection('hr');
-    } else if (path.includes('/users') || path.includes('/roles') || path.includes('/companies') || path.includes('/settings')) {
+    } else if (path.includes('/users') || path.includes('/roles') || path.includes('/companies') || path.includes('/settings') || path.includes('/password-status')) {
       setExpandedSection('system');
     }
   }, [location.pathname]);
@@ -329,9 +329,14 @@ function Layout({ children }) {
                     Settings
                   </NavLink>
                   {canManageUsers() && (
-                    <NavLink to="/admin/users" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                      Users
-                    </NavLink>
+                    <>
+                      <NavLink to="/admin/users" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                        Users
+                      </NavLink>
+                      <NavLink to="/admin/password-status" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                        Password Status
+                      </NavLink>
+                    </>
                   )}
                   {isSuperAdmin() && (
                     <>

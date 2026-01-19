@@ -1576,4 +1576,90 @@ router.delete('/test-employees/all', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get password status for employees (check if they have changed/set their password)
+router.get('/password-status/check', authenticateAdmin, async (req, res) => {
+  try {
+    const { search, employee_id } = req.query;
+    const companyId = getCompanyFilter(req);
+
+    if (!search && !employee_id) {
+      return res.status(400).json({ error: 'Please provide search term or employee_id' });
+    }
+
+    let query = `
+      SELECT
+        e.id,
+        e.employee_id,
+        e.name,
+        e.email,
+        e.ic_number,
+        e.company_id,
+        CASE WHEN e.password_hash IS NOT NULL AND e.password_hash != '' THEN true ELSE false END as password_set,
+        e.must_change_password,
+        e.last_login,
+        e.created_at,
+        e.updated_at,
+        c.name as company_name,
+        d.name as department_name
+      FROM employees e
+      LEFT JOIN companies c ON e.company_id = c.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramCount = 0;
+
+    // Company filter (skip for super_admin viewing all)
+    if (companyId !== null) {
+      paramCount++;
+      query += ` AND e.company_id = $${paramCount}`;
+      params.push(companyId);
+    }
+
+    if (employee_id) {
+      paramCount++;
+      query += ` AND e.employee_id = $${paramCount}`;
+      params.push(employee_id);
+    } else if (search) {
+      paramCount++;
+      query += ` AND (e.name ILIKE $${paramCount} OR e.employee_id ILIKE $${paramCount} OR e.email ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+    }
+
+    query += ' ORDER BY e.name ASC LIMIT 50';
+
+    const result = await pool.query(query, params);
+
+    // For each employee, get password change history from audit logs
+    const employeesWithHistory = await Promise.all(result.rows.map(async (emp) => {
+      // Check audit logs for password changes
+      const auditResult = await pool.query(`
+        SELECT action, created_at, actor_name, ip_address
+        FROM audit_logs
+        WHERE entity_type = 'employee'
+          AND entity_id = $1
+          AND action IN ('password_change', 'password_set', 'password_reset')
+        ORDER BY created_at DESC
+        LIMIT 5
+      `, [emp.id.toString()]);
+
+      return {
+        ...emp,
+        password_status: emp.password_set
+          ? (emp.must_change_password ? 'Must Change' : 'Set')
+          : 'Not Set',
+        password_history: auditResult.rows
+      };
+    }));
+
+    res.json({
+      count: employeesWithHistory.length,
+      employees: employeesWithHistory
+    });
+  } catch (error) {
+    console.error('Error checking password status:', error);
+    res.status(500).json({ error: 'Failed to check password status' });
+  }
+});
+
 module.exports = router;

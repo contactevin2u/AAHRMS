@@ -13,6 +13,7 @@ const pool = require('../../db');
 const { asyncHandler, ValidationError, AuthenticationError } = require('../../middleware/errorHandler');
 const { authenticateEmployee } = require('../../middleware/auth');
 const { buildPermissionFlags, isMimixCompany } = require('../../middleware/essPermissions');
+const { logAction } = require('../../utils/auditLog');
 
 // Cookie configuration
 const COOKIE_OPTIONS = {
@@ -601,6 +602,23 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
       [newPasswordHash, req.employee.id]
     );
   }
+
+  // Log the password change to audit trail
+  await logAction({
+    companyId: req.employee.company_id,
+    entityType: 'employee',
+    entityId: req.employee.id,
+    action: newUsername ? 'password_set' : 'password_change',
+    actorType: 'employee',
+    actorId: req.employee.id,
+    actorName: req.employee.name,
+    changes: {
+      action: newUsername ? 'Initial password and username set' : 'Password changed',
+      username_changed: !!newUsername
+    },
+    ipAddress: req.ip || req.headers['x-forwarded-for'],
+    userAgent: req.headers['user-agent']
+  });
 
   // Fetch updated employee data to return
   const updatedResult = await pool.query(
