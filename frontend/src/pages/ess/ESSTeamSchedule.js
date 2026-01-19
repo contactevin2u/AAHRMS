@@ -250,11 +250,17 @@ function ESSTeamSchedule() {
 
   const formatDateKey = (date) => {
     if (!date) return '';
-    return date.toISOString().split('T')[0];
+    // Use local date components to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const formatDisplayDate = (dateStr) => {
-    const date = new Date(dateStr);
+    // Parse date string as local date (not UTC)
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
     return date.toLocaleDateString('en-MY', { weekday: 'short', day: 'numeric', month: 'short' });
   };
 
@@ -578,7 +584,12 @@ function ESSTeamSchedule() {
               {!selectedDateLocked && (
                 <button
                   className="ts-add-more-btn"
-                  onClick={() => { setShowDayDetail(false); openAddModal(new Date(selectedDate)); }}
+                  onClick={() => {
+                    setShowDayDetail(false);
+                    // Parse date string as local date (not UTC)
+                    const [year, month, day] = selectedDate.split('-').map(Number);
+                    openAddModal(new Date(year, month - 1, day));
+                  }}
                 >
                   + Add More
                 </button>
