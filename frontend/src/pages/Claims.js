@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { claimsApi, employeeApi } from '../api';
+import { claimsApi, employeeApi, outletsApi, departmentApi } from '../api';
 import Layout from '../components/Layout';
 import './Claims.css';
 
@@ -7,16 +7,24 @@ function Claims() {
   const [claims, setClaims] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [outlets, setOutlets] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [summary, setSummary] = useState([]);
+
+  // Get company info for filtering
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isMimix = adminInfo.company_id === 3;
 
   // Filters
   const [filter, setFilter] = useState({
     employee_id: '',
     status: '',
     month: new Date().getMonth() + 1,
-    year: new Date().getFullYear()
+    year: new Date().getFullYear(),
+    outlet_id: '',
+    department_id: ''
   });
 
   // Modals
@@ -46,14 +54,18 @@ function Claims() {
 
   const fetchInitialData = async () => {
     try {
-      const [empRes, catRes, countRes] = await Promise.all([
+      const [empRes, catRes, countRes, outletsRes, deptsRes] = await Promise.all([
         employeeApi.getAll({ status: 'active' }),
         claimsApi.getCategories(),
-        claimsApi.getPendingCount()
+        claimsApi.getPendingCount(),
+        outletsApi.getAll().catch(() => ({ data: [] })),
+        departmentApi.getAll().catch(() => ({ data: [] }))
       ]);
       setEmployees(empRes.data);
       setCategories(catRes.data);
       setPendingCount(countRes.data.count);
+      setOutlets(outletsRes.data || []);
+      setDepartments(deptsRes.data || []);
     } catch (error) {
       console.error('Error fetching initial data:', error);
     }
@@ -261,6 +273,30 @@ function Claims() {
 
         {/* Filters */}
         <div className="filters-row">
+          {/* Outlet filter for Mimix */}
+          {isMimix && outlets.length > 0 && (
+            <select
+              value={filter.outlet_id}
+              onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value })}
+            >
+              <option value="">All Outlets</option>
+              {outlets.map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          )}
+          {/* Department filter for AA Alive */}
+          {!isMimix && departments.length > 0 && (
+            <select
+              value={filter.department_id}
+              onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}
+            >
+              <option value="">All Departments</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          )}
           <select
             value={filter.employee_id}
             onChange={(e) => setFilter({ ...filter, employee_id: e.target.value })}

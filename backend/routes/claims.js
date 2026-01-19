@@ -9,7 +9,7 @@ const { logClaimAction } = require('../utils/auditLog');
 // Get all claims
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, status, month, year, unlinked_only } = req.query;
+    const { employee_id, status, month, year, unlinked_only, department_id, outlet_id } = req.query;
     const companyId = req.companyId;
 
     // CRITICAL: Tenant isolation - must have company context
@@ -21,10 +21,12 @@ router.get('/', authenticateAdmin, async (req, res) => {
       SELECT c.*,
              e.name as employee_name,
              e.employee_id as emp_code,
-             d.name as department_name
+             d.name as department_name,
+             o.name as outlet_name
       FROM claims c
       JOIN employees e ON c.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
       WHERE e.company_id = $1
     `;
     const params = [companyId];
@@ -53,6 +55,20 @@ router.get('/', authenticateAdmin, async (req, res) => {
 
     if (unlinked_only === 'true') {
       query += ` AND c.linked_payroll_item_id IS NULL`;
+    }
+
+    // Filter by department (for AA Alive)
+    if (department_id) {
+      paramCount++;
+      query += ` AND e.department_id = $${paramCount}`;
+      params.push(department_id);
+    }
+
+    // Filter by outlet (for Mimix)
+    if (outlet_id) {
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
     }
 
     query += ' ORDER BY c.created_at DESC';
