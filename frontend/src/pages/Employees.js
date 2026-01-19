@@ -50,6 +50,8 @@ function Employees() {
   const isMimix = companyId === 3;
   const [showModal, setShowModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [groupByEnabled, setGroupByEnabled] = useState(true);
   const [filter, setFilter] = useState({
     department_id: searchParams.get('department_id') || '',
     outlet_id: searchParams.get('outlet_id') || '',
@@ -214,11 +216,58 @@ function Employees() {
       setCommissionTypes(commTypesRes.data);
       setAllowanceTypes(allowTypesRes.data);
       setPositions(positionsRes.data);
+
+      // Expand all groups by default
+      const expanded = {};
+      (outletsRes.data || []).forEach(o => { expanded['outlet-' + o.id] = true; });
+      (deptRes.data || []).forEach(d => { expanded['dept-' + d.id] = true; });
+      expanded['no-group'] = true;
+      setExpandedGroups(expanded);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Group employees by outlet or department
+  const getEmployeesByGroup = () => {
+    const grouped = {};
+    employees.forEach(emp => {
+      let groupKey, groupName;
+      if (isMimix && emp.outlet_id) {
+        groupKey = 'outlet-' + emp.outlet_id;
+        groupName = emp.outlet_name || 'Unknown Outlet';
+      } else if (!isMimix && emp.department_id) {
+        groupKey = 'dept-' + emp.department_id;
+        groupName = emp.department_name || 'Unknown Department';
+      } else {
+        groupKey = 'no-group';
+        groupName = isMimix ? 'No Outlet Assigned' : 'No Department Assigned';
+      }
+
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = {
+          group_id: isMimix ? emp.outlet_id : emp.department_id,
+          group_name: groupName,
+          group_type: isMimix ? 'outlet' : 'department',
+          employees: [],
+          supervisors: [],
+          managers: []
+        };
+      }
+      if (emp.employee_role === 'supervisor') {
+        grouped[groupKey].supervisors.push(emp);
+      } else if (emp.employee_role === 'manager') {
+        grouped[groupKey].managers.push(emp);
+      }
+      grouped[groupKey].employees.push(emp);
+    });
+    return grouped;
+  };
+
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
 
   const handleSubmit = async (e) => {
@@ -872,6 +921,13 @@ function Employees() {
                 Detailed
               </button>
             </div>
+            <button
+              onClick={() => setGroupByEnabled(!groupByEnabled)}
+              className={`group-toggle-btn ${groupByEnabled ? 'active' : ''}`}
+              title={groupByEnabled ? 'Disable grouping' : 'Enable grouping'}
+            >
+              {groupByEnabled ? `Group by ${isMimix ? 'Outlet' : 'Dept'} ON` : `Group by ${isMimix ? 'Outlet' : 'Dept'} OFF`}
+            </button>
             <button onClick={downloadTemplate} className="template-btn">
               Download Template
             </button>
@@ -980,169 +1036,478 @@ function Employees() {
         {loading ? (
           <div className="loading">☕ Loading...</div>
         ) : viewMode === 'simple' ? (
-          <div className="employees-table">
-            <table>
-              <thead>
-                <tr>
-                  <th className="checkbox-col">
-                    <input
-                      type="checkbox"
-                      checked={employees.length > 0 && selectedEmployees.length === employees.length}
-                      onChange={handleSelectAll}
-                    />
-                  </th>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>{isMimix ? 'Outlet' : 'Department'}</th>
-                  <th>Position</th>
-                  <th>Gender</th>
-                  <th>Employment</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.length === 0 ? (
-                  <tr>
-                    <td colSpan="9" className="no-data">No employees found</td>
-                  </tr>
-                ) : (
-                  employees.map(emp => {
-                    const isPendingReview = emp.employment_type === 'probation' &&
-                      emp.probation_end_date &&
-                      new Date(emp.probation_end_date) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          groupByEnabled ? (
+            /* Grouped Simple View */
+            <div className="employees-grouped">
+              {Object.entries(getEmployeesByGroup()).map(([groupKey, group]) => (
+                <div key={groupKey} className={`employee-group ${group.group_type === 'outlet' ? 'outlet-group' : 'dept-group'}`}>
+                  <div
+                    className={`group-header ${expandedGroups[groupKey] ? 'expanded' : 'collapsed'}`}
+                    onClick={() => toggleGroup(groupKey)}
+                  >
+                    <div className="group-header-left">
+                      <span className="collapse-icon">{expandedGroups[groupKey] ? '▼' : '▶'}</span>
+                      <span className="group-name">{group.group_name}</span>
+                      <span className="group-count">({group.employees.length} staff)</span>
+                    </div>
+                    <div className="group-header-right">
+                      {group.managers.length > 0 && (
+                        <span className="role-badge manager">MGR: {group.managers.map(m => m.name).join(', ')}</span>
+                      )}
+                      {group.supervisors.length > 0 && (
+                        <span className="role-badge supervisor">SV: {group.supervisors.map(s => s.name).join(', ')}</span>
+                      )}
+                    </div>
+                  </div>
+                  {expandedGroups[groupKey] && (
+                    <div className="employees-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th className="checkbox-col">
+                              <input
+                                type="checkbox"
+                                checked={group.employees.length > 0 && group.employees.every(e => selectedEmployees.includes(e.id))}
+                                onChange={() => {
+                                  const groupIds = group.employees.map(e => e.id);
+                                  const allSelected = groupIds.every(id => selectedEmployees.includes(id));
+                                  if (allSelected) {
+                                    setSelectedEmployees(prev => prev.filter(id => !groupIds.includes(id)));
+                                  } else {
+                                    setSelectedEmployees(prev => [...new Set([...prev, ...groupIds])]);
+                                  }
+                                }}
+                              />
+                            </th>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Position</th>
+                            <th>Gender</th>
+                            <th>Employment</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.employees.map(emp => {
+                            const isPendingReview = emp.employment_type === 'probation' &&
+                              emp.probation_end_date &&
+                              new Date(emp.probation_end_date) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-                    return (
-                      <tr key={emp.id} className={`${selectedEmployees.includes(emp.id) ? 'selected' : ''} ${isPendingReview ? 'pending-review' : ''}`}>
-                        <td className="checkbox-col">
-                          <input
-                            type="checkbox"
-                            checked={selectedEmployees.includes(emp.id)}
-                            onChange={() => handleSelectEmployee(emp.id)}
-                          />
-                        </td>
-                        <td className="inline-edit-cell">
-                          <input
-                            type="text"
-                            className={`inline-input ${updatingCell === `${emp.id}-employee_id` ? 'updating' : ''}`}
-                            defaultValue={emp.employee_id || ''}
-                            onBlur={(e) => {
-                              if (e.target.value !== emp.employee_id) {
-                                handleInlineUpdate(emp.id, 'employee_id', e.target.value);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.target.blur();
-                              }
-                            }}
-                            disabled={updatingCell === `${emp.id}-employee_id`}
-                            style={{ fontWeight: 'bold', width: '80px' }}
-                          />
-                        </td>
-                        <td>{emp.name}</td>
-                        {/* Inline Outlet/Department Dropdown */}
-                        <td className="inline-edit-cell">
-                          {isMimix ? (
+                            return (
+                              <tr key={emp.id} className={`${selectedEmployees.includes(emp.id) ? 'selected' : ''} ${isPendingReview ? 'pending-review' : ''} ${emp.employee_role === 'supervisor' ? 'supervisor-row' : ''} ${emp.employee_role === 'manager' ? 'manager-row' : ''}`}>
+                                <td className="checkbox-col">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedEmployees.includes(emp.id)}
+                                    onChange={() => handleSelectEmployee(emp.id)}
+                                  />
+                                </td>
+                                <td className="inline-edit-cell">
+                                  <input
+                                    type="text"
+                                    className={`inline-input ${updatingCell === `${emp.id}-employee_id` ? 'updating' : ''}`}
+                                    defaultValue={emp.employee_id || ''}
+                                    onBlur={(e) => {
+                                      if (e.target.value !== emp.employee_id) {
+                                        handleInlineUpdate(emp.id, 'employee_id', e.target.value);
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.target.blur();
+                                      }
+                                    }}
+                                    disabled={updatingCell === `${emp.id}-employee_id`}
+                                    style={{ fontWeight: 'bold', width: '80px' }}
+                                  />
+                                </td>
+                                <td>{emp.name}</td>
+                                <td>
+                                  {emp.employee_role === 'manager' && <span className="role-tag manager">MGR</span>}
+                                  {emp.employee_role === 'supervisor' && <span className="role-tag supervisor">SV</span>}
+                                  {!emp.employee_role && <span className="role-tag staff">Staff</span>}
+                                </td>
+                                <td className="inline-edit-cell">
+                                  <select
+                                    className={`inline-select ${updatingCell === `${emp.id}-position_id` ? 'updating' : ''}`}
+                                    value={emp.position_id || ''}
+                                    onChange={(e) => handleInlineUpdate(emp.id, 'position_id', e.target.value)}
+                                    disabled={updatingCell === `${emp.id}-position_id`}
+                                  >
+                                    <option value="">-- Select --</option>
+                                    {positions.map(p => (
+                                      <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="inline-edit-cell">
+                                  <select
+                                    className={`inline-select gender-select ${emp.gender || ''} ${updatingCell === `${emp.id}-gender` ? 'updating' : ''}`}
+                                    value={emp.gender || ''}
+                                    onChange={(e) => handleInlineUpdate(emp.id, 'gender', e.target.value)}
+                                    disabled={updatingCell === `${emp.id}-gender`}
+                                  >
+                                    <option value="">-- Select --</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                  </select>
+                                </td>
+                                <td className="inline-edit-cell">
+                                  <select
+                                    className={`inline-select employment-select ${emp.employment_type || 'probation'} ${updatingCell === `${emp.id}-employment_type` ? 'updating' : ''}`}
+                                    value={emp.employment_type || 'probation'}
+                                    onChange={(e) => handleInlineUpdate(emp.id, 'employment_type', e.target.value)}
+                                    disabled={updatingCell === `${emp.id}-employment_type`}
+                                  >
+                                    <option value="probation">Probation</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="contract">Contract</option>
+                                  </select>
+                                  {isPendingReview && (
+                                    <button
+                                      className="review-btn"
+                                      onClick={() => openProbationModal(emp)}
+                                      title="Review probation"
+                                    >
+                                      Review
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="inline-edit-cell">
+                                  <select
+                                    className={`inline-select status-select ${emp.status} ${updatingCell === `${emp.id}-status` ? 'updating' : ''}`}
+                                    value={emp.status}
+                                    onChange={(e) => handleInlineUpdate(emp.id, 'status', e.target.value)}
+                                    disabled={updatingCell === `${emp.id}-status`}
+                                  >
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                  </select>
+                                </td>
+                                <td>
+                                  <button onClick={() => handleEdit(emp)} className="edit-btn" title="Edit">✏️</button>
+                                  <button onClick={() => handleResetPassword(emp)} className="reset-pwd-btn" title="Reset Password">🔑</button>
+                                  <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Delete">🗑️</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {Object.keys(getEmployeesByGroup()).length === 0 && (
+                <div className="no-data-centered">No employees found</div>
+              )}
+            </div>
+          ) : (
+            /* Flat Simple View */
+            <div className="employees-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="checkbox-col">
+                      <input
+                        type="checkbox"
+                        checked={employees.length > 0 && selectedEmployees.length === employees.length}
+                        onChange={handleSelectAll}
+                      />
+                    </th>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>{isMimix ? 'Outlet' : 'Department'}</th>
+                    <th>Position</th>
+                    <th>Gender</th>
+                    <th>Employment</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" className="no-data">No employees found</td>
+                    </tr>
+                  ) : (
+                    employees.map(emp => {
+                      const isPendingReview = emp.employment_type === 'probation' &&
+                        emp.probation_end_date &&
+                        new Date(emp.probation_end_date) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+                      return (
+                        <tr key={emp.id} className={`${selectedEmployees.includes(emp.id) ? 'selected' : ''} ${isPendingReview ? 'pending-review' : ''}`}>
+                          <td className="checkbox-col">
+                            <input
+                              type="checkbox"
+                              checked={selectedEmployees.includes(emp.id)}
+                              onChange={() => handleSelectEmployee(emp.id)}
+                            />
+                          </td>
+                          <td className="inline-edit-cell">
+                            <input
+                              type="text"
+                              className={`inline-input ${updatingCell === `${emp.id}-employee_id` ? 'updating' : ''}`}
+                              defaultValue={emp.employee_id || ''}
+                              onBlur={(e) => {
+                                if (e.target.value !== emp.employee_id) {
+                                  handleInlineUpdate(emp.id, 'employee_id', e.target.value);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.target.blur();
+                                }
+                              }}
+                              disabled={updatingCell === `${emp.id}-employee_id`}
+                              style={{ fontWeight: 'bold', width: '80px' }}
+                            />
+                          </td>
+                          <td>{emp.name}</td>
+                          {/* Inline Outlet/Department Dropdown */}
+                          <td className="inline-edit-cell">
+                            {isMimix ? (
+                              <select
+                                className={`inline-select ${updatingCell === `${emp.id}-outlet_id` ? 'updating' : ''}`}
+                                value={emp.outlet_id || ''}
+                                onChange={(e) => handleInlineUpdate(emp.id, 'outlet_id', e.target.value)}
+                                disabled={updatingCell === `${emp.id}-outlet_id`}
+                              >
+                                <option value="">-- Select --</option>
+                                {outlets.map(o => (
+                                  <option key={o.id} value={o.id}>{o.name}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <select
+                                className={`inline-select ${updatingCell === `${emp.id}-department_id` ? 'updating' : ''}`}
+                                value={emp.department_id || ''}
+                                onChange={(e) => handleInlineUpdate(emp.id, 'department_id', e.target.value)}
+                                disabled={updatingCell === `${emp.id}-department_id`}
+                              >
+                                <option value="">-- Select --</option>
+                                {departments.map(d => (
+                                  <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                              </select>
+                            )}
+                          </td>
+                          {/* Inline Position Dropdown */}
+                          <td className="inline-edit-cell">
                             <select
-                              className={`inline-select ${updatingCell === `${emp.id}-outlet_id` ? 'updating' : ''}`}
-                              value={emp.outlet_id || ''}
-                              onChange={(e) => handleInlineUpdate(emp.id, 'outlet_id', e.target.value)}
-                              disabled={updatingCell === `${emp.id}-outlet_id`}
+                              className={`inline-select ${updatingCell === `${emp.id}-position_id` ? 'updating' : ''}`}
+                              value={emp.position_id || ''}
+                              onChange={(e) => handleInlineUpdate(emp.id, 'position_id', e.target.value)}
+                              disabled={updatingCell === `${emp.id}-position_id`}
                             >
                               <option value="">-- Select --</option>
-                              {outlets.map(o => (
-                                <option key={o.id} value={o.id}>{o.name}</option>
+                              {positions.map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
                               ))}
                             </select>
-                          ) : (
+                          </td>
+                          {/* Inline Gender Dropdown */}
+                          <td className="inline-edit-cell">
                             <select
-                              className={`inline-select ${updatingCell === `${emp.id}-department_id` ? 'updating' : ''}`}
-                              value={emp.department_id || ''}
-                              onChange={(e) => handleInlineUpdate(emp.id, 'department_id', e.target.value)}
-                              disabled={updatingCell === `${emp.id}-department_id`}
+                              className={`inline-select gender-select ${emp.gender || ''} ${updatingCell === `${emp.id}-gender` ? 'updating' : ''}`}
+                              value={emp.gender || ''}
+                              onChange={(e) => handleInlineUpdate(emp.id, 'gender', e.target.value)}
+                              disabled={updatingCell === `${emp.id}-gender`}
                             >
                               <option value="">-- Select --</option>
-                              {departments.map(d => (
-                                <option key={d.id} value={d.id}>{d.name}</option>
-                              ))}
+                              <option value="male">Male</option>
+                              <option value="female">Female</option>
                             </select>
-                          )}
-                        </td>
-                        {/* Inline Position Dropdown */}
-                        <td className="inline-edit-cell">
-                          <select
-                            className={`inline-select ${updatingCell === `${emp.id}-position_id` ? 'updating' : ''}`}
-                            value={emp.position_id || ''}
-                            onChange={(e) => handleInlineUpdate(emp.id, 'position_id', e.target.value)}
-                            disabled={updatingCell === `${emp.id}-position_id`}
-                          >
-                            <option value="">-- Select --</option>
-                            {positions.map(p => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                          </select>
-                        </td>
-                        {/* Inline Gender Dropdown */}
-                        <td className="inline-edit-cell">
-                          <select
-                            className={`inline-select gender-select ${emp.gender || ''} ${updatingCell === `${emp.id}-gender` ? 'updating' : ''}`}
-                            value={emp.gender || ''}
-                            onChange={(e) => handleInlineUpdate(emp.id, 'gender', e.target.value)}
-                            disabled={updatingCell === `${emp.id}-gender`}
-                          >
-                            <option value="">-- Select --</option>
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                          </select>
-                        </td>
-                        {/* Inline Employment Type Dropdown */}
-                        <td className="inline-edit-cell">
-                          <select
-                            className={`inline-select employment-select ${emp.employment_type || 'probation'} ${updatingCell === `${emp.id}-employment_type` ? 'updating' : ''}`}
-                            value={emp.employment_type || 'probation'}
-                            onChange={(e) => handleInlineUpdate(emp.id, 'employment_type', e.target.value)}
-                            disabled={updatingCell === `${emp.id}-employment_type`}
-                          >
-                            <option value="probation">Probation</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="contract">Contract</option>
-                          </select>
-                          {isPendingReview && (
-                            <button
-                              className="review-btn"
-                              onClick={() => openProbationModal(emp)}
-                              title="Review probation"
+                          </td>
+                          {/* Inline Employment Type Dropdown */}
+                          <td className="inline-edit-cell">
+                            <select
+                              className={`inline-select employment-select ${emp.employment_type || 'probation'} ${updatingCell === `${emp.id}-employment_type` ? 'updating' : ''}`}
+                              value={emp.employment_type || 'probation'}
+                              onChange={(e) => handleInlineUpdate(emp.id, 'employment_type', e.target.value)}
+                              disabled={updatingCell === `${emp.id}-employment_type`}
                             >
-                              Review
-                            </button>
-                          )}
-                        </td>
-                        {/* Inline Status Dropdown */}
-                        <td className="inline-edit-cell">
-                          <select
-                            className={`inline-select status-select ${emp.status} ${updatingCell === `${emp.id}-status` ? 'updating' : ''}`}
-                            value={emp.status}
-                            onChange={(e) => handleInlineUpdate(emp.id, 'status', e.target.value)}
-                            disabled={updatingCell === `${emp.id}-status`}
-                          >
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                          </select>
-                        </td>
-                        <td>
-                          <button onClick={() => handleEdit(emp)} className="edit-btn" title="Edit">✏️</button>
-                          <button onClick={() => handleResetPassword(emp)} className="reset-pwd-btn" title="Reset Password">🔑</button>
-                          <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Delete">🗑️</button>
-                        </td>
-                      </tr>
-                    );
-                  })
+                              <option value="probation">Probation</option>
+                              <option value="confirmed">Confirmed</option>
+                              <option value="contract">Contract</option>
+                            </select>
+                            {isPendingReview && (
+                              <button
+                                className="review-btn"
+                                onClick={() => openProbationModal(emp)}
+                                title="Review probation"
+                              >
+                                Review
+                              </button>
+                            )}
+                          </td>
+                          {/* Inline Status Dropdown */}
+                          <td className="inline-edit-cell">
+                            <select
+                              className={`inline-select status-select ${emp.status} ${updatingCell === `${emp.id}-status` ? 'updating' : ''}`}
+                              value={emp.status}
+                              onChange={(e) => handleInlineUpdate(emp.id, 'status', e.target.value)}
+                              disabled={updatingCell === `${emp.id}-status`}
+                            >
+                              <option value="active">Active</option>
+                              <option value="inactive">Inactive</option>
+                            </select>
+                          </td>
+                          <td>
+                            <button onClick={() => handleEdit(emp)} className="edit-btn" title="Edit">✏️</button>
+                            <button onClick={() => handleResetPassword(emp)} className="reset-pwd-btn" title="Reset Password">🔑</button>
+                            <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Delete">🗑️</button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : groupByEnabled ? (
+          /* Grouped Detailed View */
+          <div className="employees-grouped detailed-view">
+            {Object.entries(getEmployeesByGroup()).map(([groupKey, group]) => (
+              <div key={groupKey} className={`employee-group ${group.group_type === 'outlet' ? 'outlet-group' : 'dept-group'}`}>
+                <div
+                  className={`group-header ${expandedGroups[groupKey] ? 'expanded' : 'collapsed'}`}
+                  onClick={() => toggleGroup(groupKey)}
+                >
+                  <div className="group-header-left">
+                    <span className="collapse-icon">{expandedGroups[groupKey] ? '▼' : '▶'}</span>
+                    <span className="group-name">{group.group_name}</span>
+                    <span className="group-count">({group.employees.length} staff)</span>
+                  </div>
+                  <div className="group-header-right">
+                    {group.managers.length > 0 && (
+                      <span className="role-badge manager">MGR: {group.managers.map(m => m.name).join(', ')}</span>
+                    )}
+                    {group.supervisors.length > 0 && (
+                      <span className="role-badge supervisor">SV: {group.supervisors.map(s => s.name).join(', ')}</span>
+                    )}
+                  </div>
+                </div>
+                {expandedGroups[groupKey] && (
+                  <div className="employees-table detailed-view">
+                    <div className="table-scroll-wrapper">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th className="checkbox-col sticky-col">
+                              <input
+                                type="checkbox"
+                                checked={group.employees.length > 0 && group.employees.every(e => selectedEmployees.includes(e.id))}
+                                onChange={() => {
+                                  const groupIds = group.employees.map(e => e.id);
+                                  const allSelected = groupIds.every(id => selectedEmployees.includes(id));
+                                  if (allSelected) {
+                                    setSelectedEmployees(prev => prev.filter(id => !groupIds.includes(id)));
+                                  } else {
+                                    setSelectedEmployees(prev => [...new Set([...prev, ...groupIds])]);
+                                  }
+                                }}
+                              />
+                            </th>
+                            <th className="sticky-col">ID</th>
+                            <th className="sticky-col">Name</th>
+                            <th>Role</th>
+                            <th>IC Number</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>Position</th>
+                            <th>Gender</th>
+                            <th>Join Date</th>
+                            <th>Basic Salary</th>
+                            <th>Allowance</th>
+                            <th>Bank</th>
+                            <th>Account No</th>
+                            <th>EPF No</th>
+                            <th>SOCSO No</th>
+                            <th>Tax No</th>
+                            <th>Marital</th>
+                            <th>Status</th>
+                            <th className="sticky-col-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.employees.map(emp => (
+                            <tr key={emp.id} className={`${selectedEmployees.includes(emp.id) ? 'selected' : ''} ${emp.employee_role === 'supervisor' ? 'supervisor-row' : ''} ${emp.employee_role === 'manager' ? 'manager-row' : ''}`}>
+                              <td className="checkbox-col sticky-col">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedEmployees.includes(emp.id)}
+                                  onChange={() => handleSelectEmployee(emp.id)}
+                                />
+                              </td>
+                              <td className="sticky-col inline-edit-cell">
+                                <input
+                                  type="text"
+                                  className={`inline-input ${updatingCell === `${emp.id}-employee_id` ? 'updating' : ''}`}
+                                  defaultValue={emp.employee_id || ''}
+                                  onBlur={(e) => {
+                                    if (e.target.value !== emp.employee_id) {
+                                      handleInlineUpdate(emp.id, 'employee_id', e.target.value);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.target.blur();
+                                    }
+                                  }}
+                                  disabled={updatingCell === `${emp.id}-employee_id`}
+                                  style={{ fontWeight: 'bold', width: '80px' }}
+                                />
+                              </td>
+                              <td className="sticky-col name-col">{emp.name}</td>
+                              <td>
+                                {emp.employee_role === 'manager' && <span className="role-tag manager">MGR</span>}
+                                {emp.employee_role === 'supervisor' && <span className="role-tag supervisor">SV</span>}
+                                {!emp.employee_role && <span className="role-tag staff">Staff</span>}
+                              </td>
+                              <td>{emp.ic_number || '-'}</td>
+                              <td>{emp.phone || '-'}</td>
+                              <td>{emp.email || '-'}</td>
+                              <td>{emp.position || '-'}</td>
+                              <td className="capitalize">{emp.gender || '-'}</td>
+                              <td>{emp.join_date ? new Date(emp.join_date).toLocaleDateString('en-MY') : '-'}</td>
+                              <td className="money-col">RM {parseFloat(emp.default_basic_salary || 0).toFixed(2)}</td>
+                              <td className="money-col">RM {parseFloat(emp.default_allowance || 0).toFixed(2)}</td>
+                              <td>{emp.bank_name || '-'}</td>
+                              <td>{emp.bank_account_no || '-'}</td>
+                              <td>{emp.epf_number || '-'}</td>
+                              <td>{emp.socso_number || '-'}</td>
+                              <td>{emp.tax_number || '-'}</td>
+                              <td>{emp.marital_status || '-'}</td>
+                              <td>
+                                <span className={`status-badge ${emp.status}`}>
+                                  {emp.status}
+                                </span>
+                              </td>
+                              <td className="sticky-col-right">
+                                <button onClick={() => handleEdit(emp)} className="edit-btn" title="Edit">✏️</button>
+                                <button onClick={() => handleResetPassword(emp)} className="reset-pwd-btn" title="Reset Password">🔑</button>
+                                <button onClick={() => handleDelete(emp.id)} className="delete-btn" title="Delete">🗑️</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 )}
-              </tbody>
-            </table>
+              </div>
+            ))}
+            {Object.keys(getEmployeesByGroup()).length === 0 && (
+              <div className="no-data-centered">No employees found</div>
+            )}
           </div>
         ) : (
+          /* Flat Detailed View */
           <div className="employees-table detailed-view">
             <div className="table-scroll-wrapper">
               <table>

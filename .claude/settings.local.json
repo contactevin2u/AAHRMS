@@ -80,7 +80,14 @@
       "Bash(ping:*)",
       "Bash(ls:*)",
       "Bash(set PGPASSWORD=Xs0XlvNZ1ysdSsuznOBbq6sN7H7Ej9Tf:*)",
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(npm start)",
+      "Bash(set:*)",
+      "Bash(set DB_PORT=5432)",
+      "Bash(set DB_NAME=hrms_db)",
+      "Bash(set DB_USER=postgres)",
+      "Bash(set DB_PASSWORD=postgres)",
+      "Bash(xargs ls:*)"
     ],
     "deny": [],
     "ask": []

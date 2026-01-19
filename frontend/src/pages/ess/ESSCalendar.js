@@ -7,6 +7,7 @@ function ESSCalendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [schedules, setSchedules] = useState({});
+  const [shiftLegend, setShiftLegend] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,41 +23,42 @@ function ESSCalendar() {
 
       // Convert API response to our format
       const scheduleMap = {};
+      const legendMap = {}; // Track unique shift types for legend
+
       if (response.data && response.data.schedules) {
         Object.entries(response.data.schedules).forEach(([dateKey, schedule]) => {
           const shiftStart = schedule.shift_start || '09:00';
           const shiftEnd = schedule.shift_end || '18:00';
           const isOff = schedule.is_off || schedule.status === 'off' || (shiftStart === '00:00' && shiftEnd === '00:00');
 
-          // Use shift code if available (e.g., "AM", "PM"), otherwise determine type from time
-          let shiftType = 'Work';
-          let shiftLabel = null;
+          // Use shift code if available (e.g., "AM", "PM")
+          let shiftCode = null;
+          let shiftName = null;
+          let shiftColor = schedule.shift_color || null;
+
           if (isOff) {
-            shiftType = 'Off';
-            shiftLabel = 'Off';
+            shiftCode = 'Off';
+            shiftName = 'Day Off';
+            shiftColor = '#fee2e2';
           } else if (schedule.shift_code) {
             // Use the shift template code directly (matches admin view)
-            shiftType = schedule.shift_code;
-            shiftLabel = schedule.shift_code;
-          } else {
-            // Fallback: determine shift type based on start time
-            const startHour = parseInt(shiftStart.split(':')[0]);
-            if (startHour < 12) {
-              shiftType = 'Morning';
-              shiftLabel = 'M';
-            } else if (startHour < 17) {
-              shiftType = 'Afternoon';
-              shiftLabel = 'A';
-            } else {
-              shiftType = 'Night';
-              shiftLabel = 'N';
+            shiftCode = schedule.shift_code;
+            shiftName = schedule.shift_name || schedule.shift_code;
+            // Add to legend if not already there
+            if (!legendMap[shiftCode]) {
+              legendMap[shiftCode] = {
+                code: shiftCode,
+                name: shiftName,
+                color: shiftColor
+              };
             }
           }
 
           scheduleMap[dateKey] = {
-            shift: shiftType,
-            shiftLabel: shiftLabel,
-            shiftColor: schedule.shift_color || null,
+            shift: shiftCode || 'Work',
+            shiftLabel: shiftCode,
+            shiftName: shiftName,
+            shiftColor: shiftColor,
             time: isOff ? 'Day Off' : `${formatTime(shiftStart)} - ${formatTime(shiftEnd)}`,
             outlet: schedule.outlet_name || '',
             attended: schedule.attended || false,
@@ -65,10 +67,14 @@ function ESSCalendar() {
           };
         });
       }
+
       setSchedules(scheduleMap);
+      // Convert legend map to array for rendering
+      setShiftLegend(Object.values(legendMap));
     } catch (error) {
       console.error('Error fetching schedules:', error);
       setSchedules({});
+      setShiftLegend([]);
     } finally {
       setLoading(false);
     }
@@ -108,22 +114,19 @@ function ESSCalendar() {
     return date.toISOString().split('T')[0];
   };
 
-  const getShiftColor = (schedule) => {
+  const getShiftColor = (schedule, forBackground = true) => {
     // Use custom shift color from template if available
     if (schedule?.shiftColor) {
-      // Make the color lighter for background
-      return schedule.shiftColor + '33'; // Add alpha for lighter shade
+      if (forBackground) {
+        // Make the color lighter for background
+        return schedule.shiftColor + '33'; // Add alpha for lighter shade
+      }
+      return schedule.shiftColor;
     }
 
-    const shift = schedule?.shift;
-    const colors = {
-      'Morning': '#dbeafe',
-      'Afternoon': '#fef3c7',
-      'Night': '#e0e7ff',
-      'Off': '#fee2e2',
-      'Work': '#d1fae5'
-    };
-    return colors[shift] || '#f1f5f9';
+    // Fallback colors for Off and no-template cases
+    if (schedule?.shift === 'Off') return '#fee2e2';
+    return forBackground ? '#f1f5f9' : '#64748b';
   };
 
   const prevMonth = () => {
@@ -221,29 +224,24 @@ function ESSCalendar() {
           )}
         </div>
 
-        {/* Legend */}
-        <div style={{ display: 'flex', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
-            <div style={{ width: '16px', height: '16px', background: '#dbeafe', borderRadius: '4px' }}></div>
-            <span>Morning</span>
+        {/* Dynamic Legend based on actual shift templates */}
+        {shiftLegend.length > 0 && (
+          <div style={{ display: 'flex', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
+            {shiftLegend.map(shift => (
+              <div key={shift.code} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  background: shift.color ? shift.color + '33' : '#f1f5f9',
+                  border: shift.color ? `2px solid ${shift.color}` : '1px solid #e5e7eb',
+                  borderRadius: '4px'
+                }}></div>
+                <span style={{ color: shift.color || '#64748b', fontWeight: '500' }}>{shift.code}</span>
+                <span style={{ color: '#94a3b8', fontSize: '11px' }}>({shift.name})</span>
+              </div>
+            ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
-            <div style={{ width: '16px', height: '16px', background: '#fef3c7', borderRadius: '4px' }}></div>
-            <span>Afternoon</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
-            <div style={{ width: '16px', height: '16px', background: '#e0e7ff', borderRadius: '4px' }}></div>
-            <span>Night</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
-            <div style={{ width: '16px', height: '16px', background: '#fee2e2', borderRadius: '4px' }}></div>
-            <span>Off</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
-            <div style={{ width: '16px', height: '16px', background: '#d1fae5', borderRadius: '4px' }}></div>
-            <span>Work</span>
-          </div>
-        </div>
+        )}
 
         {/* No schedule message */}
         {!loading && Object.keys(schedules).length === 0 && (
@@ -262,8 +260,13 @@ function ESSCalendar() {
               </h3>
               {selectedDate.schedule ? (
                 <div style={{ background: getShiftColor(selectedDate.schedule), padding: '16px', borderRadius: '12px' }}>
-                  <div style={{ fontWeight: '600', fontSize: '16px', marginBottom: '8px' }}>
-                    {selectedDate.schedule.shiftLabel ? `${selectedDate.schedule.shiftLabel} Shift` : `${selectedDate.schedule.shift} Shift`}
+                  <div style={{
+                    fontWeight: '600',
+                    fontSize: '16px',
+                    marginBottom: '8px',
+                    color: getShiftColor(selectedDate.schedule, false)
+                  }}>
+                    {selectedDate.schedule.shiftLabel || 'Work'} - {selectedDate.schedule.shiftName || 'Shift'}
                   </div>
                   <div style={{ color: '#64748b' }}>{selectedDate.schedule.time}</div>
                   {selectedDate.schedule.outlet && <div style={{ color: '#64748b', marginTop: '4px' }}>{selectedDate.schedule.outlet}</div>}
@@ -275,7 +278,7 @@ function ESSCalendar() {
                   )}
                 </div>
               ) : (
-                <div style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>No schedule for this day</div>
+                <div style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>No schedule for this day (Day Off)</div>
               )}
               <button onClick={() => setSelectedDate(null)} style={{ width: '100%', marginTop: '16px', padding: '14px', background: '#f1f5f9', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '500', cursor: 'pointer' }}>
                 Close
