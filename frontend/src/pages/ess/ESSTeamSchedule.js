@@ -332,7 +332,7 @@ function ESSTeamSchedule() {
           </div>
         </div>
 
-        {/* Shift Legend */}
+        {/* Shift Legend - Only show working shifts (no schedule = off day) */}
         {shiftTemplates.length > 0 && (
           <div className="ts-shift-legend">
             {shiftTemplates.filter(t => !t.is_off).map(t => (
@@ -342,12 +342,10 @@ function ESSTeamSchedule() {
                 <span className="ts-shift-time">{t.start_time}-{t.end_time}</span>
               </div>
             ))}
-            {shiftTemplates.filter(t => t.is_off).map(t => (
-              <div key={t.id} className="ts-shift-chip off">
-                <span className="ts-shift-code">{t.code}</span>
-                <span className="ts-shift-time">Day Off</span>
-              </div>
-            ))}
+            <div className="ts-shift-chip off">
+              <span className="ts-shift-code">-</span>
+              <span className="ts-shift-time">No schedule = Off</span>
+            </div>
           </div>
         )}
 
@@ -599,31 +597,30 @@ function ESSTeamSchedule() {
               </div>
               <div className="ts-modal-date">{formatDisplayDate(selectedDate)}</div>
 
-              {/* Step 1: Select Shift FIRST */}
+              {/* Step 1: Select Shift FIRST - Only working shifts (no schedule = off day) */}
               <div className="ts-assign-section">
                 <label>1. Select Shift</label>
                 <div className="ts-shift-grid">
-                  {shiftTemplates.map(t => {
+                  {shiftTemplates.filter(t => !t.is_off).map(t => {
                     const isSelected = selectedShift?.id === t.id;
                     return (
                       <button
                         key={t.id}
-                        className={`ts-shift-btn ${isSelected ? 'selected' : ''} ${t.is_off ? 'off' : ''}`}
+                        className={`ts-shift-btn ${isSelected ? 'selected' : ''}`}
                         style={{
-                          backgroundColor: isSelected ? t.color : (t.is_off ? '#fef2f2' : t.color + '15'),
-                          borderColor: t.is_off ? '#fca5a5' : t.color,
-                          color: isSelected ? '#fff' : (t.is_off ? '#dc2626' : t.color)
+                          backgroundColor: isSelected ? t.color : t.color + '15',
+                          borderColor: t.color,
+                          color: isSelected ? '#fff' : t.color
                         }}
                         onClick={() => setSelectedShift(t)}
                       >
                         <span className="ts-shift-code-lg">{t.code}</span>
-                        <span className="ts-shift-time-sm">
-                          {t.is_off ? 'Day Off' : `${t.start_time}-${t.end_time}`}
-                        </span>
+                        <span className="ts-shift-time-sm">{t.start_time}-{t.end_time}</span>
                       </button>
                     );
                   })}
                 </div>
+                <p className="ts-hint">No schedule = Day Off (don't need to assign)</p>
               </div>
 
               {/* Step 2: Select Employees (Multi-select) */}
