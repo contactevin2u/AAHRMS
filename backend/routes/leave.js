@@ -978,6 +978,182 @@ router.delete('/holidays/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// =====================================================
+// LEAVE BALANCE TABLE (for Leave Balance Management page)
+// =====================================================
+
+// Get leave balances table data with AL, ML, HL, UL columns
+router.get('/balances-table', authenticateAdmin, async (req, res) => {
+  try {
+    const { year, outlet_id, department_id, search } = req.query;
+    const currentYear = year || new Date().getFullYear();
+    const companyId = getCompanyFilter(req);
+
+    let query = `
+      SELECT
+        e.id,
+        e.employee_id as emp_code,
+        e.name,
+        e.employee_role,
+        d.id as department_id,
+        d.name as department_name,
+        o.id as outlet_id,
+        o.name as outlet_name,
+        -- Annual Leave (AL)
+        COALESCE(al_bal.entitled_days, 0) as al_entitled,
+        COALESCE(al_bal.used_days, 0) as al_used,
+        COALESCE(al_bal.entitled_days, 0) - COALESCE(al_bal.used_days, 0) as al_available,
+        al_bal.id as al_balance_id,
+        -- Medical Leave (ML)
+        COALESCE(ml_bal.entitled_days, 0) as ml_entitled,
+        COALESCE(ml_bal.used_days, 0) as ml_used,
+        COALESCE(ml_bal.entitled_days, 0) - COALESCE(ml_bal.used_days, 0) as ml_available,
+        ml_bal.id as ml_balance_id,
+        -- Hospitalization Leave (HL)
+        COALESCE(hl_bal.entitled_days, 0) as hl_entitled,
+        COALESCE(hl_bal.used_days, 0) as hl_used,
+        COALESCE(hl_bal.entitled_days, 0) - COALESCE(hl_bal.used_days, 0) as hl_available,
+        hl_bal.id as hl_balance_id,
+        -- Unpaid Leave (UL) - count from approved leave requests
+        COALESCE(ul_count.total_days, 0) as ul_days
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
+      -- Join AL balance
+      LEFT JOIN leave_balances al_bal ON e.id = al_bal.employee_id
+        AND al_bal.year = $1
+        AND al_bal.leave_type_id = (SELECT id FROM leave_types WHERE code = 'AL' AND (company_id = e.company_id OR company_id IS NULL) LIMIT 1)
+      -- Join ML balance
+      LEFT JOIN leave_balances ml_bal ON e.id = ml_bal.employee_id
+        AND ml_bal.year = $1
+        AND ml_bal.leave_type_id = (SELECT id FROM leave_types WHERE code = 'ML' AND (company_id = e.company_id OR company_id IS NULL) LIMIT 1)
+      -- Join HL balance
+      LEFT JOIN leave_balances hl_bal ON e.id = hl_bal.employee_id
+        AND hl_bal.year = $1
+        AND hl_bal.leave_type_id = (SELECT id FROM leave_types WHERE code = 'HL' AND (company_id = e.company_id OR company_id IS NULL) LIMIT 1)
+      -- Count UL from approved unpaid leave requests
+      LEFT JOIN (
+        SELECT lr.employee_id, SUM(lr.total_days) as total_days
+        FROM leave_requests lr
+        JOIN leave_types lt ON lr.leave_type_id = lt.id
+        WHERE lt.is_paid = FALSE
+          AND lr.status = 'approved'
+          AND EXTRACT(YEAR FROM lr.start_date) = $1
+        GROUP BY lr.employee_id
+      ) ul_count ON e.id = ul_count.employee_id
+      WHERE e.status = 'active'
+    `;
+    const params = [currentYear];
+    let paramCount = 1;
+
+    if (companyId !== null) {
+      paramCount++;
+      query += ` AND e.company_id = $${paramCount}`;
+      params.push(companyId);
+    }
+
+    if (outlet_id) {
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
+    }
+
+    if (department_id) {
+      paramCount++;
+      query += ` AND e.department_id = $${paramCount}`;
+      params.push(department_id);
+    }
+
+    if (search) {
+      paramCount++;
+      query += ` AND (LOWER(e.name) LIKE LOWER($${paramCount}) OR LOWER(e.employee_id) LIKE LOWER($${paramCount}))`;
+      params.push(`%${search}%`);
+    }
+
+    query += `
+      ORDER BY COALESCE(o.name, d.name) NULLS LAST, e.employee_role DESC NULLS LAST, e.name
+    `;
+
+    const result = await pool.query(query, params);
+    res.json({
+      year: parseInt(currentYear),
+      employees: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching leave balances table:', error);
+    res.status(500).json({ error: 'Failed to fetch leave balances' });
+  }
+});
+
+// Get unpaid leave monthly breakdown for an employee
+router.get('/unpaid-monthly/:employeeId', authenticateAdmin, async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { year } = req.query;
+    const currentYear = year || new Date().getFullYear();
+
+    // Get all approved unpaid leave requests for the year
+    const result = await pool.query(`
+      SELECT
+        lr.id,
+        lr.start_date,
+        lr.end_date,
+        lr.total_days,
+        lr.reason,
+        lt.code as leave_type_code,
+        lt.name as leave_type_name,
+        EXTRACT(MONTH FROM lr.start_date) as month
+      FROM leave_requests lr
+      JOIN leave_types lt ON lr.leave_type_id = lt.id
+      WHERE lr.employee_id = $1
+        AND lt.is_paid = FALSE
+        AND lr.status = 'approved'
+        AND EXTRACT(YEAR FROM lr.start_date) = $2
+      ORDER BY lr.start_date DESC
+    `, [employeeId, currentYear]);
+
+    // Group by month
+    const monthlyBreakdown = {};
+    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+
+    result.rows.forEach(row => {
+      const month = parseInt(row.month);
+      if (!monthlyBreakdown[month]) {
+        monthlyBreakdown[month] = {
+          month: month,
+          month_name: monthNames[month],
+          total_days: 0,
+          requests: []
+        };
+      }
+      monthlyBreakdown[month].total_days += parseFloat(row.total_days);
+      monthlyBreakdown[month].requests.push({
+        id: row.id,
+        start_date: row.start_date,
+        end_date: row.end_date,
+        total_days: row.total_days,
+        reason: row.reason,
+        leave_type: row.leave_type_name
+      });
+    });
+
+    // Convert to array and sort by month
+    const breakdown = Object.values(monthlyBreakdown).sort((a, b) => a.month - b.month);
+    const totalUnpaid = breakdown.reduce((sum, m) => sum + m.total_days, 0);
+
+    res.json({
+      year: parseInt(currentYear),
+      employee_id: parseInt(employeeId),
+      total_unpaid_days: totalUnpaid,
+      monthly_breakdown: breakdown
+    });
+  } catch (error) {
+    console.error('Error fetching unpaid leave monthly:', error);
+    res.status(500).json({ error: 'Failed to fetch unpaid leave breakdown' });
+  }
+});
+
 // Get unpaid leave for payroll calculation
 router.get('/unpaid-for-payroll', authenticateAdmin, async (req, res) => {
   try {

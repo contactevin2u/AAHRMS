@@ -14,6 +14,7 @@ import Departments from './pages/Departments';
 import Outlets from './pages/Outlets';
 import Feedback from './pages/Feedback';
 import Leave from './pages/Leave';
+import LeaveBalances from './pages/LeaveBalances';
 import Claims from './pages/Claims';
 import Resignations from './pages/Resignations';
 import Contributions from './pages/Contributions';
@@ -159,6 +160,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Leave />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/leave-balances"
+          element={
+            <ProtectedRoute>
+              <LeaveBalances />
             </ProtectedRoute>
           }
         />

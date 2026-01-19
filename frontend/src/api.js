@@ -146,6 +146,10 @@ export const leaveApi = {
   initializeAllBalances: (data) => api.post('/leave/balances/initialize-all', data),
   updateBalance: (id, data) => api.put(`/leave/balances/${id}`, data),
 
+  // Leave Balance Table (for Leave Balance Management page)
+  getBalancesTable: (params) => api.get('/leave/balances-table', { params }),
+  getUnpaidMonthly: (employeeId, year) => api.get(`/leave/unpaid-monthly/${employeeId}`, { params: { year } }),
+
   // Leave Requests (with multi-level approval)
   getRequests: (params) => api.get('/leave/requests', { params }),
   getPendingCount: () => api.get('/leave/requests/pending-count'),
