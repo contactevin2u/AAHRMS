@@ -28,7 +28,7 @@ function Employees() {
     }
   });
 
-  // Listen for company changes (for super_admin switching companies)
+  // Listen for company changes (for super_admin switching companies) and ensure companyId is set
   useEffect(() => {
     const handleStorageChange = () => {
       try {
@@ -36,6 +36,9 @@ function Employees() {
         if (adminInfo.role === 'super_admin') {
           const selectedCompanyId = localStorage.getItem('selectedCompanyId');
           setCompanyId(selectedCompanyId ? parseInt(selectedCompanyId) : null);
+        } else if (adminInfo.company_id) {
+          // For regular admins, ensure companyId is set from adminInfo
+          setCompanyId(adminInfo.company_id);
         }
       } catch {
         // ignore
