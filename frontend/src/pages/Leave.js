@@ -389,35 +389,32 @@ function Leave() {
               <div className="loading">Loading...</div>
             ) : (
               <div className="balance-cards">
-                {employees.map(emp => {
-                  const empBalances = balances.filter(b => b.employee_id === emp.id);
+                {balances.map(emp => {
+                  const empBalances = emp.balances || [];
                   return (
-                    <div key={emp.id} className="balance-card">
+                    <div key={emp.employee_id} className="balance-card">
                       <div className="balance-card-header">
-                        <h3>{emp.name}</h3>
-                        <span className="emp-code">{emp.employee_id}</span>
+                        <h3>{emp.employee_name}</h3>
+                        <span className="emp-code">{emp.emp_code}</span>
                       </div>
                       <div className="balance-items">
-                        {leaveTypes.filter(type => type.is_paid !== false).map(type => {
-                          const balance = empBalances.find(b => b.leave_type_id === type.id);
-                          return (
-                            <div key={type.id} className="balance-item">
-                              <span className="balance-type">{type.code}</span>
-                              <span className="balance-value">
-                                {balance ? (
-                                  <>{balance.used_days} / {balance.entitled_days}</>
-                                ) : (
-                                  <span className="not-init">-</span>
-                                )}
-                              </span>
-                            </div>
-                          );
-                        })}
+                        {empBalances.filter(b => b.code !== 'UL' && b.leave_type_id).map(balance => (
+                          <div key={balance.leave_type_id} className="balance-item">
+                            <span className="balance-type">{balance.code}</span>
+                            <span className="balance-value">
+                              {balance.entitled !== null ? (
+                                <>{parseFloat(balance.used) || 0} / {parseFloat(balance.entitled) || 0}</>
+                              ) : (
+                                <span className="not-init">-</span>
+                              )}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                       <button
                         className="init-btn"
                         onClick={() => {
-                          setSelectedEmployee(emp);
+                          setSelectedEmployee(employees.find(e => e.id === emp.employee_id) || emp);
                           setShowBalanceModal(true);
                         }}
                       >
