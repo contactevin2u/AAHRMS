@@ -125,10 +125,10 @@ router.get('/balances/:employeeId', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get all employees' leave balances summary
+// Get all employees' leave balances summary (grouped by outlet)
 router.get('/balances', authenticateAdmin, async (req, res) => {
   try {
-    const { year } = req.query;
+    const { year, outlet_id } = req.query;
     const currentYear = year || new Date().getFullYear();
     const companyId = getCompanyFilter(req);
 
@@ -137,7 +137,10 @@ router.get('/balances', authenticateAdmin, async (req, res) => {
         e.id as employee_id,
         e.employee_id as emp_code,
         e.name as employee_name,
+        e.employee_role,
         d.name as department_name,
+        o.id as outlet_id,
+        o.name as outlet_name,
         json_agg(json_build_object(
           'leave_type_id', lt.id,
           'code', lt.code,
@@ -148,20 +151,29 @@ router.get('/balances', authenticateAdmin, async (req, res) => {
         )) as balances
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
       LEFT JOIN leave_balances lb ON e.id = lb.employee_id AND lb.year = $1
       LEFT JOIN leave_types lt ON lb.leave_type_id = lt.id
       WHERE e.status = 'active'
     `;
     const params = [currentYear];
+    let paramCount = 1;
 
     if (companyId !== null) {
-      query += ' AND e.company_id = $2';
+      paramCount++;
+      query += ` AND e.company_id = $${paramCount}`;
       params.push(companyId);
     }
 
+    if (outlet_id) {
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
+    }
+
     query += `
-      GROUP BY e.id, e.employee_id, e.name, d.name
-      ORDER BY e.name
+      GROUP BY e.id, e.employee_id, e.name, e.employee_role, d.name, o.id, o.name
+      ORDER BY o.name NULLS LAST, e.employee_role DESC NULLS LAST, e.name
     `;
 
     const result = await pool.query(query, params);
