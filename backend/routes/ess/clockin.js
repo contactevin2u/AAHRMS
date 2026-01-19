@@ -206,6 +206,19 @@ function getEffectiveWorkDate() {
 }
 
 /**
+ * Check if current time is past the night shift cutoff
+ */
+function isPastCutoff() {
+  const malaysiaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
+  const hour = malaysiaTime.getHours();
+  const minute = malaysiaTime.getMinutes();
+
+  // Past cutoff if hour > cutoff hour, or hour == cutoff hour and minute >= cutoff minute
+  return hour > NIGHT_SHIFT_CUTOFF_HOUR ||
+    (hour === NIGHT_SHIFT_CUTOFF_HOUR && minute >= NIGHT_SHIFT_CUTOFF_MINUTE);
+}
+
+/**
  * Check if there's an open shift from yesterday that needs to be closed
  * Returns the record if found, null otherwise
  */
@@ -231,6 +244,85 @@ async function getOpenShiftFromYesterday(employeeId) {
   );
 
   return result.rows.length > 0 ? result.rows[0] : null;
+}
+
+/**
+ * Auto clock-out an open shift at the cutoff time
+ * This is called when an employee has an open shift from yesterday and it's past the cutoff
+ * The shift will be auto-closed at 1:30 AM with a system note
+ */
+async function autoClockOutShift(record) {
+  const cutoffTime = `${String(NIGHT_SHIFT_CUTOFF_HOUR).padStart(2, '0')}:${String(NIGHT_SHIFT_CUTOFF_MINUTE).padStart(2, '0')}:00`;
+
+  // Determine which field to update based on current state
+  let updateField = null;
+  if (record.clock_in_1 && !record.clock_out_1) {
+    // Was working, never took break - auto clock out at clock_out_2 (end of day)
+    updateField = 'clock_out_2';
+  } else if (record.clock_out_1 && !record.clock_in_2) {
+    // Was on break - auto clock out at clock_out_2
+    updateField = 'clock_out_2';
+  } else if (record.clock_in_2 && !record.clock_out_2) {
+    // Returned from break but didn't clock out - auto clock out at clock_out_2
+    updateField = 'clock_out_2';
+  }
+
+  if (!updateField) {
+    return null; // Nothing to update
+  }
+
+  // Calculate work time for the auto clock-out
+  const updatedRecord = { ...record };
+  updatedRecord[updateField] = cutoffTime;
+
+  // Simple calculation for total work time
+  const parseTime = (timeStr) => {
+    if (!timeStr) return null;
+    const [h, m] = timeStr.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  let totalMinutes = 0;
+  const clockIn1 = parseTime(record.clock_in_1);
+  const clockOut1 = parseTime(record.clock_out_1);
+  const clockIn2 = parseTime(record.clock_in_2);
+  const cutoffMinutes = NIGHT_SHIFT_CUTOFF_HOUR * 60 + NIGHT_SHIFT_CUTOFF_MINUTE + (24 * 60); // Add 24 hours since it's next day
+
+  if (clockIn1) {
+    if (clockOut1 && clockIn2) {
+      // Full shift with break: (clock_out_1 - clock_in_1) + (cutoff - clock_in_2)
+      totalMinutes = (clockOut1 - clockIn1) + (cutoffMinutes - (clockIn2 + 24 * 60));
+    } else if (clockOut1) {
+      // Only morning session
+      totalMinutes = clockOut1 - clockIn1;
+    } else {
+      // No break taken, straight through
+      totalMinutes = cutoffMinutes - clockIn1;
+    }
+  }
+
+  // Cap at reasonable maximum (16 hours = 960 minutes)
+  totalMinutes = Math.max(0, Math.min(totalMinutes, 960));
+
+  // OT calculation (over 8.5 hours = 510 minutes)
+  const otMinutes = Math.max(0, totalMinutes - 510);
+
+  // Update the record
+  const result = await pool.query(
+    `UPDATE clock_in_records SET
+       ${updateField} = $1,
+       total_work_minutes = $2,
+       ot_minutes = $3,
+       status = 'completed',
+       notes = COALESCE(notes, '') || ' [Auto clock-out at cutoff time 01:30 AM]'
+     WHERE id = $4
+     RETURNING *`,
+    [cutoffTime, totalMinutes, otMinutes, record.id]
+  );
+
+  console.log(`Auto clock-out for employee shift ${record.id}: ${updateField} at ${cutoffTime}`);
+
+  return result.rows[0];
 }
 
 /**
@@ -289,32 +381,46 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
 
   // First, check if there's an open shift from yesterday that needs to be closed
   // This handles night shift workers who clock out after midnight
-  const openYesterdayShift = await getOpenShiftFromYesterday(employeeId);
+  let openYesterdayShift = await getOpenShiftFromYesterday(employeeId);
 
   if (openYesterdayShift) {
-    // There's an open shift from yesterday - return that status
-    let status = 'working';
-    let nextAction = null;
+    // Check if it's past the cutoff time (1:30 AM)
+    // If so, auto clock-out the shift instead of letting them continue
+    if (isPastCutoff()) {
+      console.log(`Auto clock-out triggered for employee ${employeeId}: past cutoff time`);
+      const autoClosedRecord = await autoClockOutShift(openYesterdayShift);
 
-    if (openYesterdayShift.clock_in_1 && !openYesterdayShift.clock_out_1) {
-      nextAction = 'clock_out_1';
-    } else if (openYesterdayShift.clock_out_1 && !openYesterdayShift.clock_in_2) {
-      status = 'on_break';
-      nextAction = 'clock_in_2';
-    } else if (openYesterdayShift.clock_in_2 && !openYesterdayShift.clock_out_2) {
-      nextAction = 'clock_out_2';
-    }
-
-    return res.json({
-      status,
-      next_action: nextAction,
-      is_yesterday_shift: true,
-      record: {
-        ...openYesterdayShift,
-        total_hours: openYesterdayShift.total_work_minutes ? (openYesterdayShift.total_work_minutes / 60).toFixed(2) : null,
-        ot_hours: openYesterdayShift.ot_minutes ? (openYesterdayShift.ot_minutes / 60).toFixed(2) : null
+      if (autoClosedRecord) {
+        // Shift has been auto-closed, return completed status
+        // Now check for today's records or allow new clock-in
+        openYesterdayShift = null; // Clear so we continue to check today's records
+        console.log(`Shift ${autoClosedRecord.id} auto-closed at cutoff time`);
       }
-    });
+    } else {
+      // Before cutoff - allow them to continue their shift
+      let status = 'working';
+      let nextAction = null;
+
+      if (openYesterdayShift.clock_in_1 && !openYesterdayShift.clock_out_1) {
+        nextAction = 'clock_out_1';
+      } else if (openYesterdayShift.clock_out_1 && !openYesterdayShift.clock_in_2) {
+        status = 'on_break';
+        nextAction = 'clock_in_2';
+      } else if (openYesterdayShift.clock_in_2 && !openYesterdayShift.clock_out_2) {
+        nextAction = 'clock_out_2';
+      }
+
+      return res.json({
+        status,
+        next_action: nextAction,
+        is_yesterday_shift: true,
+        record: {
+          ...openYesterdayShift,
+          total_hours: openYesterdayShift.total_work_minutes ? (openYesterdayShift.total_work_minutes / 60).toFixed(2) : null,
+          ot_hours: openYesterdayShift.ot_minutes ? (openYesterdayShift.ot_minutes / 60).toFixed(2) : null
+        }
+      });
+    }
   }
 
   // No open shift from yesterday, check today's records
