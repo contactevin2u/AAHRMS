@@ -188,12 +188,8 @@ function ESSClockInContent() {
 
   // Start camera - ONLY on button click
   const startCamera = async () => {
-    // Check if camera permission is denied
-    if (cameraPermission === 'denied') {
-      setError('Camera blocked. Please enable camera in browser settings.');
-      return;
-    }
-
+    // Don't block based on permissions API - Samsung Browser reports 'denied' incorrectly
+    // Just try to access camera and handle actual errors
     setCameraLoading(true);
     setCameraActive(false);
     setError('');
@@ -235,11 +231,15 @@ function ESSClockInContent() {
     } catch (err) {
       console.error('Camera error:', err);
       setCameraLoading(false);
-      if (err.name === 'NotAllowedError') {
-        setError('Camera permission denied. Please allow camera access.');
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Camera blocked. Try: 1) Refresh page, 2) Clear browser cache, 3) Use Chrome browser');
         setCameraPermission('denied');
+      } else if (err.name === 'NotFoundError') {
+        setError('No camera found. Please check your device has a camera.');
+      } else if (err.name === 'NotReadableError') {
+        setError('Camera in use by another app. Please close other apps and try again.');
       } else {
-        setError('Unable to access camera. Please check your device.');
+        setError('Unable to access camera. Try using Chrome browser instead.');
       }
     }
   };
