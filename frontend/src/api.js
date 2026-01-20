@@ -38,15 +38,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle auth errors
+// Handle auth errors - only redirect on 401 (unauthorized), not 403 (forbidden)
+// 401 = not authenticated (need to login)
+// 403 = authenticated but not permitted (don't logout, just show error)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    if (error.response?.status === 401) {
       const path = window.location.pathname;
 
       if (path.startsWith('/ess')) {
         localStorage.removeItem('employeeToken');
+        localStorage.removeItem('employeeInfo');
         window.location.href = '/ess/login';
       } else if (path.startsWith('/admin')) {
         localStorage.removeItem('adminToken');

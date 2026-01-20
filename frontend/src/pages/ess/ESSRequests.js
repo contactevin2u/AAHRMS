@@ -51,15 +51,26 @@ function ESSRequests() {
   }, [activeTab, isSupOrMgr]);
 
   const fetchPendingCounts = async () => {
+    // Fetch independently so one 403 doesn't break the other
     try {
-      const [leaveRes, claimsRes] = await Promise.all([
-        essApi.getTeamPendingLeave(),
-        essApi.getTeamPendingClaims()
-      ]);
+      const leaveRes = await essApi.getTeamPendingLeave();
       setPendingLeaveCount(leaveRes.data?.length || 0);
+    } catch (err) {
+      // 403 means feature not available for this company - silently ignore
+      if (err.response?.status !== 403) {
+        console.error('Error fetching pending leave count:', err);
+      }
+      setPendingLeaveCount(0);
+    }
+
+    try {
+      const claimsRes = await essApi.getTeamPendingClaims();
       setPendingClaimsCount(claimsRes.data?.length || 0);
     } catch (err) {
-      console.error('Error fetching pending counts:', err);
+      if (err.response?.status !== 403) {
+        console.error('Error fetching pending claims count:', err);
+      }
+      setPendingClaimsCount(0);
     }
   };
 
