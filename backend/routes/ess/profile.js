@@ -428,7 +428,9 @@ const ALLOWED_PRESET_AVATARS = [
   '/avatars/mixue/love.jpg',
   '/avatars/mixue/icecream.jpg',
   '/avatars/mixue/search.png',
-  '/avatars/mixue/king.png'
+  '/avatars/mixue/king.png',
+  '/avatars/mixue/blackbull.png',
+  '/avatars/mixue/kiss.png'
 ];
 
 router.post('/preset-avatar', authenticateEmployee, asyncHandler(async (req, res) => {

@@ -46,6 +46,8 @@ const MIXUE_AVATARS = [
   { id: 'icecream', name: 'Ice Cream', url: '/avatars/mixue/icecream.jpg' },
   { id: 'search', name: 'Search', url: '/avatars/mixue/search.png' },
   { id: 'king', name: 'Snow King', url: '/avatars/mixue/king.png' },
+  { id: 'blackbull', name: 'Black Bull', url: '/avatars/mixue/blackbull.png' },
+  { id: 'kiss', name: 'Kiss', url: '/avatars/mixue/kiss.png' },
 ];
 
 // Field labels for display
