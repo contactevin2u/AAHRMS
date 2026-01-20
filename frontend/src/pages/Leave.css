@@ -135,6 +135,12 @@
   font-size: 14px;
 }
 
+.pending-preview-dept {
+  font-weight: 400;
+  color: #64748b;
+  font-size: 13px;
+}
+
 .pending-preview-detail {
   font-size: 12px;
   color: #64748b;
@@ -319,6 +325,14 @@
 
 .data-table tr:hover {
   background: #f8fafc;
+}
+
+/* Employee sub-info (outlet/department under name) */
+.employee-sub-info {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 400;
+  margin-top: 2px;
 }
 
 .no-data {
