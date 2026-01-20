@@ -753,14 +753,6 @@ function ESSTeamSchedule({ embedded = false }) {
           </div>
         )}
 
-        {/* Floating Add Button */}
-        <button
-          className="ts-fab"
-          onClick={() => openAddModal(new Date())}
-          title="Add schedule for today"
-        >
-          +
-        </button>
       </div>
   );
 
