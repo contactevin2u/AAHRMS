@@ -10,7 +10,7 @@ function ESSChangePassword() {
 
   // Get current employee info
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
-  const currentUsername = employeeInfo?.login_email || employeeInfo?.email || '';
+  const currentUsername = employeeInfo?.username || employeeInfo?.employee_id || '';
 
   const [formData, setFormData] = useState({
     newUsername: '',
@@ -29,16 +29,16 @@ function ESSChangePassword() {
 
     // Validate username if changing
     if (changeUsername && formData.newUsername) {
-      const username = formData.newUsername.trim();
-      // Username must be at least 3 characters
-      if (username.length < 3) {
-        setError('Username must be at least 3 characters');
+      const username = formData.newUsername.trim().toLowerCase();
+      // Username must be at least 4 characters
+      if (username.length < 4) {
+        setError('Username must be at least 4 characters');
         return;
       }
-      // Only letters and numbers allowed (no symbols)
-      const alphanumericRegex = /^[a-zA-Z0-9]+$/;
-      if (!alphanumericRegex.test(username)) {
-        setError('Username can only contain letters and numbers (no symbols)');
+      // Only letters, numbers, and underscore allowed
+      const usernameRegex = /^[a-z0-9_]+$/;
+      if (!usernameRegex.test(username)) {
+        setError('Username can only contain letters, numbers, and underscores');
         return;
       }
     }
@@ -167,10 +167,10 @@ function ESSChangePassword() {
                 placeholder={isFirstLogin ? "Choose your username" : "Enter new username"}
                 required={isFirstLogin || changeUsername}
                 autoComplete="username"
-                minLength={3}
+                minLength={4}
               />
               <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                Letters and numbers only, min 3 characters
+                Letters, numbers, and underscore only. Min 4 characters.
               </small>
             </div>
           )}
@@ -225,7 +225,7 @@ function ESSChangePassword() {
           <div className="password-hint">
             <p><strong>Account Setup:</strong></p>
             <ul>
-              <li>Username: letters and numbers only, no symbols</li>
+              <li>Username: letters, numbers, and underscore only</li>
               <li>Password must be at least 6 characters</li>
               <li>Password must be different from your IC number</li>
             </ul>

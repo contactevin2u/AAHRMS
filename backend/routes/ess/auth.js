@@ -139,6 +139,7 @@ router.post('/login', asyncHandler(async (req, res) => {
       employee_id: employee.employee_id,
       name: employee.name,
       email: employee.email,
+      username: employee.username,
       company_id: employee.company_id,
       company_name: employee.company_name,
       company_code: employee.company_code,
@@ -248,7 +249,7 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
 
   // Find employee by employee_id and verify IC, including company info
   const result = await pool.query(
-    `SELECT e.id, e.employee_id, e.name, e.email, e.ic_number, e.status, e.ess_enabled,
+    `SELECT e.id, e.employee_id, e.name, e.email, e.username, e.ic_number, e.status, e.ess_enabled,
             e.department_id, e.outlet_id, e.company_id, e.must_change_password,
             e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
@@ -321,6 +322,7 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
       employee_id: employee.employee_id,
       name: employee.name,
       email: employee.email,
+      username: employee.username,
       company_id: employee.company_id,
       company_name: employee.company_name,
       company_code: employee.company_code,
@@ -350,7 +352,7 @@ router.post('/login-name', asyncHandler(async (req, res) => {
 
   // Find employee by name (case-insensitive) and verify IC, including company info
   const result = await pool.query(
-    `SELECT e.id, e.employee_id, e.name, e.email, e.ic_number, e.status, e.ess_enabled,
+    `SELECT e.id, e.employee_id, e.name, e.email, e.username, e.ic_number, e.status, e.ess_enabled,
             e.department_id, e.outlet_id, e.company_id, e.must_change_password,
             e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
@@ -423,6 +425,7 @@ router.post('/login-name', asyncHandler(async (req, res) => {
       employee_id: employee.employee_id,
       name: employee.name,
       email: employee.email,
+      username: employee.username,
       company_id: employee.company_id,
       company_name: employee.company_name,
       company_code: employee.company_code,
@@ -485,7 +488,7 @@ router.post('/set-password', asyncHandler(async (req, res) => {
 router.get('/me', authenticateEmployee, asyncHandler(async (req, res) => {
   // Fetch fresh employee data
   const result = await pool.query(
-    `SELECT e.id, e.employee_id, e.name, e.email, e.status, e.department_id, e.outlet_id, e.company_id,
+    `SELECT e.id, e.employee_id, e.name, e.email, e.username, e.status, e.department_id, e.outlet_id, e.company_id,
             e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings,
@@ -518,6 +521,7 @@ router.get('/me', authenticateEmployee, asyncHandler(async (req, res) => {
       employee_id: employee.employee_id,
       name: employee.name,
       email: employee.email,
+      username: employee.username,
       company_id: employee.company_id,
       company_name: employee.company_name,
       company_code: employee.company_code,
@@ -548,20 +552,20 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
 
   // Validate username if provided
   if (newUsername) {
-    const trimmedUsername = newUsername.trim();
-    if (trimmedUsername.length < 3) {
-      throw new ValidationError('Username must be at least 3 characters');
+    const trimmedUsername = newUsername.trim().toLowerCase();
+    if (trimmedUsername.length < 4) {
+      throw new ValidationError('Username must be at least 4 characters');
     }
 
-    // Only letters and numbers allowed (no symbols)
-    const alphanumericRegex = /^[a-zA-Z0-9]+$/;
-    if (!alphanumericRegex.test(trimmedUsername)) {
-      throw new ValidationError('Username can only contain letters and numbers (no symbols)');
+    // Only letters, numbers, and underscore allowed
+    const usernameRegex = /^[a-z0-9_]+$/;
+    if (!usernameRegex.test(trimmedUsername)) {
+      throw new ValidationError('Username can only contain letters, numbers, and underscores');
     }
 
     // Check if username already in use by another employee (case-insensitive)
     const usernameCheck = await pool.query(
-      'SELECT id FROM employees WHERE LOWER(email) = LOWER($1) AND id != $2',
+      'SELECT id FROM employees WHERE LOWER(username) = LOWER($1) AND id != $2',
       [trimmedUsername, req.employee.id]
     );
     if (usernameCheck.rows.length > 0) {
@@ -590,11 +594,11 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
   // Hash new password
   const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
-  // Update password, username (stored in email field), and clear must_change_password flag
+  // Update password, username, and clear must_change_password flag
   if (newUsername) {
     await pool.query(
-      'UPDATE employees SET password_hash = $1, email = $2, must_change_password = false WHERE id = $3',
-      [newPasswordHash, newUsername.trim(), req.employee.id]
+      'UPDATE employees SET password_hash = $1, username = $2, must_change_password = false WHERE id = $3',
+      [newPasswordHash, newUsername.trim().toLowerCase(), req.employee.id]
     );
   } else {
     await pool.query(
@@ -622,7 +626,7 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
 
   // Fetch updated employee data to return
   const updatedResult = await pool.query(
-    `SELECT e.id, e.employee_id, e.name, e.email, e.company_id, e.outlet_id,
+    `SELECT e.id, e.employee_id, e.name, e.email, e.username, e.company_id, e.outlet_id,
             e.employee_role,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type
@@ -645,6 +649,7 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
       employee_id: updatedEmployee.employee_id,
       name: updatedEmployee.name,
       email: updatedEmployee.email,
+      username: updatedEmployee.username,
       company_id: updatedEmployee.company_id,
       company_name: updatedEmployee.company_name,
       company_code: updatedEmployee.company_code,
