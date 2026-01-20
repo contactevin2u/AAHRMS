@@ -583,13 +583,13 @@ const initDb = async () => {
         carries_forward = EXCLUDED.carries_forward,
         max_carry_forward = EXCLUDED.max_carry_forward;
 
-      -- Medical Leave: 14 days for all employees (same as sick leave)
-      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment) VALUES
-        ('ML', 'Medical Leave', TRUE, 14, 'Medical/Sick Leave - 14 days per year, requires MC', 1, TRUE)
+      -- Medical Leave: 14 days (<2yr), 18 days (2-5yr), 22 days (5+yr)
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment, entitlement_rules) VALUES
+        ('ML', 'Medical Leave', TRUE, 14, 'Medical/Sick Leave - 14 days (<2yr), 18 days (2-5yr), 22 days (5+yr)', 1, TRUE,
+         '{"type": "service_years", "rules": [{"min_years": 0, "max_years": 2, "days": 14}, {"min_years": 2, "max_years": 5, "days": 18}, {"min_years": 5, "max_years": 99, "days": 22}]}')
       ON CONFLICT (code, company_id) DO UPDATE SET
-        default_days_per_year = 14,
         requires_attachment = TRUE,
-        entitlement_rules = NULL;
+        entitlement_rules = EXCLUDED.entitlement_rules;
 
       -- Hospitalization Leave: 60 days (separate from sick leave)
       INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment) VALUES
@@ -649,13 +649,13 @@ const initDb = async () => {
         carries_forward = EXCLUDED.carries_forward,
         max_carry_forward = EXCLUDED.max_carry_forward;
 
-      -- Mimix Medical Leave: 14 days for all (same as sick leave)
-      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment) VALUES
-        ('ML', 'Medical Leave', TRUE, 14, 'Medical/Sick Leave - 14 days per year, requires MC', 3, TRUE)
+      -- Mimix Medical Leave: 14 days (<2yr), 18 days (2-5yr), 22 days (5+yr)
+      INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment, entitlement_rules) VALUES
+        ('ML', 'Medical Leave', TRUE, 14, 'Medical/Sick Leave - 14 days (<2yr), 18 days (2-5yr), 22 days (5+yr)', 3, TRUE,
+         '{"type": "service_years", "rules": [{"min_years": 0, "max_years": 2, "days": 14}, {"min_years": 2, "max_years": 5, "days": 18}, {"min_years": 5, "max_years": 99, "days": 22}]}')
       ON CONFLICT (code, company_id) DO UPDATE SET
-        default_days_per_year = 14,
         requires_attachment = TRUE,
-        entitlement_rules = NULL;
+        entitlement_rules = EXCLUDED.entitlement_rules;
 
       -- Mimix Hospitalization Leave
       INSERT INTO leave_types (code, name, is_paid, default_days_per_year, description, company_id, requires_attachment) VALUES

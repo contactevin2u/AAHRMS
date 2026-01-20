@@ -4,11 +4,11 @@
  *
  * AA Alive (company_id=1) - Malaysian Employment Act 1955:
  * - Annual Leave: 8 days (<2 years), 12 days (2-5 years), 16 days (>5 years)
- * - Medical Leave: 14 days for all employees
+ * - Medical Leave: 14 days (<2 years), 18 days (2-5 years), 22 days (>5 years)
  *
  * Mimix (company_id=3):
  * - Annual Leave: 12 days (0-4 years), 16 days (5+ years)
- * - Medical Leave: 14 days for all employees
+ * - Medical Leave: 14 days (<2 years), 18 days (2-5 years), 22 days (>5 years)
  * - Part-time employees: No leave entitlement (paid by hours worked)
  *
  * Common:
