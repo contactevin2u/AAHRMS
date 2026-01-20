@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { essApi } from '../../api';
 import './ESSLogin.css';
@@ -8,12 +8,17 @@ function ESSChangePassword() {
   const location = useLocation();
   const isFirstLogin = location.state?.firstLogin || false;
 
+  // Get current employee info
+  const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
+  const currentUsername = employeeInfo?.login_email || employeeInfo?.email || '';
+
   const [formData, setFormData] = useState({
     newUsername: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
+  const [changeUsername, setChangeUsername] = useState(isFirstLogin);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -22,8 +27,8 @@ function ESSChangePassword() {
     e.preventDefault();
     setError('');
 
-    // Validate username for first login
-    if (isFirstLogin && formData.newUsername) {
+    // Validate username if changing
+    if (changeUsername && formData.newUsername) {
       const username = formData.newUsername.trim();
       // Username must be at least 3 characters
       if (username.length < 3) {
@@ -62,7 +67,7 @@ function ESSChangePassword() {
       const response = await essApi.changePassword(
         formData.currentPassword,
         formData.newPassword,
-        isFirstLogin ? formData.newUsername : null
+        changeUsername && formData.newUsername ? formData.newUsername : null
       );
 
       // Update stored employee info with new email if changed
@@ -71,8 +76,13 @@ function ESSChangePassword() {
       }
 
       // Navigate to dashboard on success
+      const successMsg = isFirstLogin
+        ? 'Account setup completed!'
+        : (changeUsername && formData.newUsername
+            ? 'Username and password updated!'
+            : 'Password changed successfully!');
       navigate('/ess/dashboard', {
-        state: { message: isFirstLogin ? 'Account setup completed!' : 'Password changed successfully!' }
+        state: { message: successMsg }
       });
     } catch (err) {
       console.error('Password change error:', err);
@@ -94,11 +104,11 @@ function ESSChangePassword() {
           <div className="password-icon">
             <span role="img" aria-label="lock">🔐</span>
           </div>
-          <h1>{isFirstLogin ? 'Setup Your Account' : 'Change Password'}</h1>
+          <h1>{isFirstLogin ? 'Setup Your Account' : 'Account Settings'}</h1>
           <p>
             {isFirstLogin
               ? 'Choose your username and password. Your current password is your IC number.'
-              : 'Enter your current password and choose a new one.'
+              : 'Change your username or password. You can update one or both.'
             }
           </p>
         </div>
@@ -112,21 +122,55 @@ function ESSChangePassword() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="login-form">
-          {/* Username field - only for first login */}
-          {isFirstLogin && (
+          {/* Current Username Display */}
+          {!isFirstLogin && currentUsername && (
             <div className="form-group">
-              <label>Username</label>
+              <label>Current Username</label>
+              <div style={{
+                padding: '12px',
+                background: '#f1f5f9',
+                borderRadius: '8px',
+                color: '#1e293b',
+                fontWeight: '500',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span>{currentUsername}</span>
+                <button
+                  type="button"
+                  onClick={() => setChangeUsername(!changeUsername)}
+                  style={{
+                    background: changeUsername ? '#dc2626' : '#1976d2',
+                    color: 'white',
+                    border: 'none',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {changeUsername ? 'Cancel' : 'Change'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* New Username field - for first login or when changing */}
+          {(isFirstLogin || changeUsername) && (
+            <div className="form-group">
+              <label>{isFirstLogin ? 'Choose Username' : 'New Username'}</label>
               <input
                 type="text"
                 value={formData.newUsername}
                 onChange={(e) => setFormData({ ...formData, newUsername: e.target.value })}
-                placeholder="Choose your username"
-                required
+                placeholder={isFirstLogin ? "Choose your username" : "Enter new username"}
+                required={isFirstLogin || changeUsername}
                 autoComplete="username"
                 minLength={3}
               />
               <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                This will be your login username
+                Letters and numbers only, min 3 characters
               </small>
             </div>
           )}
@@ -169,15 +213,15 @@ function ESSChangePassword() {
           </div>
 
           <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? 'Saving...' : (isFirstLogin ? 'Setup Account' : 'Change Password')}
+            {loading ? 'Saving...' : (isFirstLogin ? 'Setup Account' : 'Save Changes')}
           </button>
 
           <button type="button" className="skip-btn" onClick={handleSkip}>
-            Skip for Now
+            {isFirstLogin ? 'Skip for Now' : 'Cancel'}
           </button>
         </form>
 
-        {isFirstLogin && (
+        {isFirstLogin ? (
           <div className="password-hint">
             <p><strong>Account Setup:</strong></p>
             <ul>
@@ -188,6 +232,15 @@ function ESSChangePassword() {
             <p style={{ marginTop: '10px', color: '#64748b', fontSize: '12px' }}>
               You can skip for now, but you'll be asked again on next login.
             </p>
+          </div>
+        ) : (
+          <div className="password-hint">
+            <p><strong>Tips:</strong></p>
+            <ul>
+              <li>Click "Change" next to username to update it</li>
+              <li>Password must be at least 6 characters</li>
+              <li>Remember your new credentials for next login</li>
+            </ul>
           </div>
         )}
       </div>

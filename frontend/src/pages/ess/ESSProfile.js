@@ -253,8 +253,8 @@ function ESSProfile() {
             className="quick-link-btn"
             onClick={() => navigate('/ess/change-password')}
           >
-            <span className="quick-link-icon">🔑</span>
-            <span>Change Password</span>
+            <span className="quick-link-icon">🔐</span>
+            <span>Account Settings</span>
           </button>
         </div>
 
