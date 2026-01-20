@@ -66,8 +66,8 @@ function Outlets() {
     }
   };
 
-  const totalEmployees = outlets.reduce((sum, o) => sum + (o.employee_count || 0), 0);
-  const totalMinStaff = outlets.reduce((sum, o) => sum + (o.min_staff || 2), 0);
+  const totalEmployees = outlets.reduce((sum, o) => sum + (parseInt(o.employee_count) || 0), 0);
+  const totalMinStaff = outlets.reduce((sum, o) => sum + (parseInt(o.min_staff) || 2), 0);
 
   if (loading) {
     return (

@@ -18,7 +18,6 @@ function Layout({ children }) {
       const info = JSON.parse(storedInfo);
       setAdminInfo(info);
 
-      // For super_admin, load companies and selected company
       if (info.role === 'super_admin') {
         const savedCompanyId = localStorage.getItem('selectedCompanyId');
         if (savedCompanyId) {
@@ -43,7 +42,6 @@ function Layout({ children }) {
     setSelectedCompanyId(id);
     if (id) {
       localStorage.setItem('selectedCompanyId', id.toString());
-      // Update adminInfo with selected company details
       const company = companies.find(c => c.id === id);
       if (company) {
         const updatedInfo = {
@@ -57,7 +55,6 @@ function Layout({ children }) {
       }
     } else {
       localStorage.removeItem('selectedCompanyId');
-      // Reset to super_admin without company
       const updatedInfo = {
         ...adminInfo,
         company_id: null,
@@ -67,18 +64,17 @@ function Layout({ children }) {
       localStorage.setItem('adminInfo', JSON.stringify(updatedInfo));
       setAdminInfo(updatedInfo);
     }
-    // Reload page to refresh data with new company context
     window.location.reload();
   };
 
   // Auto-expand section based on current route
   useEffect(() => {
     const path = location.pathname;
-    if (path.includes('/employees') || path.includes('/leave') || path.includes('/claims') || path.includes('/attendance')) {
+    if (path.includes('/employees') || path.includes('/leave') || path.includes('/claims') || path.includes('/attendance') || path.includes('/schedules')) {
       setExpandedSection('people');
     } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales')) {
       setExpandedSection('payroll');
-    } else if (path.includes('/resignations') || path.includes('/letters') || path.includes('/departments') || path.includes('/outlets')) {
+    } else if (path.includes('/resignations') || path.includes('/letters') || path.includes('/departments') || path.includes('/feedback') || path.includes('/benefits')) {
       setExpandedSection('hr');
     } else if (path.includes('/users') || path.includes('/roles') || path.includes('/companies') || path.includes('/settings') || path.includes('/password-status')) {
       setExpandedSection('system');
@@ -95,7 +91,6 @@ function Layout({ children }) {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
-  // Permission checks
   const canManageUsers = () => {
     if (!adminInfo) return false;
     return ['super_admin', 'boss', 'director'].includes(adminInfo.role);
@@ -110,30 +105,21 @@ function Layout({ children }) {
     return adminInfo?.company_grouping_type === 'outlet';
   };
 
-  // Check if current company is AA Alive (for feedback feature)
   const isAAAlive = () => {
     const companyId = adminInfo?.role === 'super_admin' ? selectedCompanyId : adminInfo?.company_id;
     return companyId === 1;
   };
 
-  // Get company-specific logo
   const getCompanyLogo = () => {
-    // Use selectedCompanyId for super_admin, otherwise use adminInfo.company_id
     const companyId = adminInfo?.role === 'super_admin' ? selectedCompanyId : adminInfo?.company_id;
-
     if (!companyId) return '/logos/hr-default.png';
-
-    // Map company IDs to logos
-    // TODO: Add /logos/aa-alive.png when logo is provided
     const companyLogos = {
-      1: '/logos/aa-alive.png',    // AA Alive Sdn Bhd
-      3: '/logos/mixue.png'        // Mimix A Sdn Bhd (company_id = 3)
+      1: '/logos/aa-alive.png',
+      3: '/logos/mixue.png'
     };
-
     return companyLogos[companyId] || '/logos/hr-default.png';
   };
 
-  // Handle logo load error - fallback to default
   const handleLogoError = (e) => {
     e.target.src = '/logos/hr-default.png';
   };
@@ -165,7 +151,6 @@ function Layout({ children }) {
               <h2>{adminInfo?.company_name || 'HRMS'}</h2>
             </div>
           </div>
-          {/* Company Selector for Super Admin */}
           {adminInfo?.role === 'super_admin' && companies.length > 0 && (
             <div className="company-selector">
               <select
@@ -195,16 +180,19 @@ function Layout({ children }) {
 
         {/* Navigation */}
         <div className="nav-container">
-          {/* Dashboard - Always visible */}
+          {/* Dashboard */}
           <NavLink to="/admin/dashboard" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
             <span className="nav-icon">📊</span>
             <span>Dashboard</span>
           </NavLink>
 
-          <NavLink to="/admin/analytics" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-            <span className="nav-icon">📈</span>
-            <span>Analytics</span>
-          </NavLink>
+          {/* Outlets - Top level for outlet-based companies */}
+          {usesOutlets() && (
+            <NavLink to="/admin/outlets" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              <span className="nav-icon">🏪</span>
+              <span>Outlets</span>
+            </NavLink>
+          )}
 
           {/* PEOPLE SECTION */}
           <div className="nav-section">
@@ -218,14 +206,19 @@ function Layout({ children }) {
                 <NavLink to="/admin/employees" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                   Employees
                 </NavLink>
+                {usesOutlets() && (
+                  <NavLink to="/admin/schedules" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Schedules
+                  </NavLink>
+                )}
+                <NavLink to="/admin/attendance" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Attendance
+                </NavLink>
                 <NavLink to="/admin/leave" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                   Leave
                 </NavLink>
                 <NavLink to="/admin/claims" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                   Claims
-                </NavLink>
-                <NavLink to="/admin/attendance" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                  Attendance
                 </NavLink>
               </div>
             )}
@@ -256,66 +249,59 @@ function Layout({ children }) {
           </div>
 
           {/* HR ADMIN SECTION */}
-          {!usesOutlets() && (
-            <div className="nav-section">
-              <button className={`section-header ${expandedSection === 'hr' ? 'expanded' : ''}`} onClick={() => toggleSection('hr')}>
-                <span className="section-icon">📋</span>
-                <span>HR Admin</span>
-                <span className="expand-icon">{expandedSection === 'hr' ? '−' : '+'}</span>
-              </button>
-              {expandedSection === 'hr' && (
-                <div className="section-items">
-                  <NavLink to="/admin/resignations" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                    Resignations
-                  </NavLink>
-                  <NavLink to="/admin/letters" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                    HR Letters
-                  </NavLink>
+          <div className="nav-section">
+            <button className={`section-header ${expandedSection === 'hr' ? 'expanded' : ''}`} onClick={() => toggleSection('hr')}>
+              <span className="section-icon">📋</span>
+              <span>HR Admin</span>
+              <span className="expand-icon">{expandedSection === 'hr' ? '−' : '+'}</span>
+            </button>
+            {expandedSection === 'hr' && (
+              <div className="section-items">
+                <NavLink to="/admin/resignations" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Resignations
+                </NavLink>
+                <NavLink to="/admin/letters" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  HR Letters
+                </NavLink>
+                {!usesOutlets() && (
                   <NavLink to="/admin/departments" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                     Departments
                   </NavLink>
-                  {isAAAlive() && (
-                    <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                      Feedback
-                    </NavLink>
-                  )}
-                  <NavLink to="/admin/benefits-in-kind" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                    Benefits In Kind
+                )}
+                {isAAAlive() && (
+                  <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Feedback
+                  </NavLink>
+                )}
+                <NavLink to="/admin/benefits-in-kind" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Benefits In Kind
+                </NavLink>
+              </div>
+            )}
+          </div>
+
+          {/* Indoor Sales for AA Alive */}
+          {isAAAlive() && (
+            <div className="nav-section">
+              <button className={`section-header ${expandedSection === 'sales' ? 'expanded' : ''}`} onClick={() => toggleSection('sales')}>
+                <span className="section-icon">🛒</span>
+                <span>Indoor Sales</span>
+                <span className="expand-icon">{expandedSection === 'sales' ? '−' : '+'}</span>
+              </button>
+              {expandedSection === 'sales' && (
+                <div className="section-items">
+                  <NavLink to="/admin/indoor-sales/schedule" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Roster
+                  </NavLink>
+                  <NavLink to="/admin/indoor-sales/commission" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                    Commission
                   </NavLink>
                 </div>
               )}
             </div>
           )}
 
-          {/* Outlets and Schedules for Mimix */}
-          {usesOutlets() && (
-            <>
-              <NavLink to="/admin/outlets" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                <span className="nav-icon">🏪</span>
-                <span>Outlets</span>
-              </NavLink>
-              <NavLink to="/admin/schedules" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                <span className="nav-icon">📅</span>
-                <span>Schedules</span>
-              </NavLink>
-            </>
-          )}
-
-          {/* Indoor Sales for AA Alive */}
-          {isAAAlive() && (
-            <>
-              <NavLink to="/admin/indoor-sales/schedule" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                <span className="nav-icon">📊</span>
-                <span>Indoor Sales Roster</span>
-              </NavLink>
-              <NavLink to="/admin/indoor-sales/commission" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                <span className="nav-icon">💰</span>
-                <span>Sales Commission</span>
-              </NavLink>
-            </>
-          )}
-
-          {/* SYSTEM SECTION - Only for authorized users */}
+          {/* SYSTEM SECTION */}
           {(canManageUsers() || isSuperAdmin()) && (
             <div className="nav-section">
               <button className={`section-header ${expandedSection === 'system' ? 'expanded' : ''}`} onClick={() => toggleSection('system')}>
