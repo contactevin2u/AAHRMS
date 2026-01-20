@@ -10,6 +10,76 @@ const { sanitizeEmployeeData, escapeHtml } = require('../middleware/sanitize');
 const { formatIC, detectIDType } = require('../utils/statutory');
 
 /**
+ * Get Mimix salary configuration based on position role, work type, and employment status
+ * @param {number} companyId - Company ID (should be Mimix = 3)
+ * @param {string} positionRole - Position role (supervisor, crew, manager)
+ * @param {string} workType - Work type (full_time, part_time)
+ * @param {string} employmentType - Employment type (probation, confirmed)
+ * @returns {Object|null} Salary config { basic_salary, hourly_rate, salary_after_confirmation }
+ */
+const getMimixSalaryConfig = async (companyId, positionRole, workType, employmentType) => {
+  try {
+    // Check if this is Mimix company
+    const companyCheck = await pool.query(
+      "SELECT id FROM companies WHERE id = $1 AND (code = 'MIMIX' OR name LIKE '%Mimix%')",
+      [companyId]
+    );
+    if (companyCheck.rows.length === 0) return null;
+
+    // Try to get from mimix_salary_config table
+    const result = await pool.query(`
+      SELECT basic_salary, hourly_rate
+      FROM mimix_salary_config
+      WHERE company_id = $1
+        AND position_role = $2
+        AND work_type = $3
+        AND (employment_type = $4 OR employment_type IS NULL)
+      ORDER BY employment_type NULLS LAST
+      LIMIT 1
+    `, [companyId, positionRole || 'crew', workType || 'full_time', employmentType]);
+
+    if (result.rows.length > 0) {
+      const config = result.rows[0];
+
+      // For full-time crew, also get the confirmed salary for salary_after_confirmation
+      if (workType === 'full_time' && employmentType === 'probation' && positionRole === 'crew') {
+        const confirmedResult = await pool.query(`
+          SELECT basic_salary FROM mimix_salary_config
+          WHERE company_id = $1 AND position_role = 'crew'
+            AND work_type = 'full_time' AND employment_type = 'confirmed'
+        `, [companyId]);
+        if (confirmedResult.rows.length > 0) {
+          config.salary_after_confirmation = parseFloat(confirmedResult.rows[0].basic_salary);
+        }
+      }
+
+      return {
+        basic_salary: parseFloat(config.basic_salary) || 0,
+        hourly_rate: parseFloat(config.hourly_rate) || 0,
+        salary_after_confirmation: config.salary_after_confirmation || parseFloat(config.basic_salary) || 0
+      };
+    }
+
+    // Default values if no config found
+    if (workType === 'PART TIMER' || workType === 'part_time') {
+      return { basic_salary: 0, hourly_rate: 8.72, salary_after_confirmation: 0 };
+    }
+
+    if (positionRole === 'supervisor' || positionRole === 'manager') {
+      return { basic_salary: 2000, hourly_rate: 0, salary_after_confirmation: 2000 };
+    }
+
+    // Default for crew
+    return employmentType === 'probation'
+      ? { basic_salary: 1700, hourly_rate: 0, salary_after_confirmation: 1800 }
+      : { basic_salary: 1800, hourly_rate: 0, salary_after_confirmation: 1800 };
+  } catch (err) {
+    console.error('Error getting Mimix salary config:', err);
+    return null;
+  }
+};
+
+/**
  * Check if a position is Manager level or above (should NOT have outlet_id)
  * Positions at level >= 80 (manager, director, admin) should have outlet_id = NULL
  */
@@ -256,6 +326,10 @@ router.post('/', authenticateAdmin, async (req, res) => {
       default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
       // Additional earning fields
       default_bonus, default_incentive,
+      // Hourly rate for part-time
+      hourly_rate,
+      // Work type (full_time or part_time)
+      work_type,
       // Probation fields
       employment_type, probation_months, salary_before_confirmation, salary_after_confirmation, increment_amount,
       // Multi-outlet for managers
@@ -328,10 +402,51 @@ router.post('/', authenticateAdmin, async (req, res) => {
       probation_end_date = joinDateObj.toISOString().split('T')[0];
     }
 
+    // Determine work type (full_time or PART TIMER)
+    const finalWorkType = work_type || 'full_time';
+
+    // Get position role for salary lookup
+    let positionRole = 'crew';
+    if (toNullable(position_id)) {
+      const posResult = await pool.query('SELECT role FROM positions WHERE id = $1', [position_id]);
+      if (posResult.rows.length > 0) {
+        positionRole = posResult.rows[0].role || 'crew';
+      }
+    } else if (position) {
+      const lowerPos = position.toLowerCase();
+      if (lowerPos.includes('manager')) positionRole = 'manager';
+      else if (lowerPos.includes('supervisor')) positionRole = 'supervisor';
+    }
+
+    // Auto-set Mimix salary if not explicitly provided
+    let finalBasicSalary = default_basic_salary;
+    let finalHourlyRate = hourly_rate;
+    let finalSalaryBefore = salary_before_confirmation;
+    let finalSalaryAfter = salary_after_confirmation;
+
+    // Only auto-set if salary fields are not provided
+    if (!default_basic_salary && !hourly_rate) {
+      const mimixConfig = await getMimixSalaryConfig(companyId, positionRole, finalWorkType, empType);
+      if (mimixConfig) {
+        finalBasicSalary = mimixConfig.basic_salary;
+        finalHourlyRate = mimixConfig.hourly_rate;
+        if (!finalSalaryAfter) {
+          finalSalaryAfter = mimixConfig.salary_after_confirmation;
+        }
+        if (!finalSalaryBefore && empType === 'probation') {
+          finalSalaryBefore = mimixConfig.basic_salary;
+        }
+        console.log('[Employee Create] Applied Mimix salary config:', {
+          companyId, positionRole, workType: finalWorkType, empType,
+          basic_salary: finalBasicSalary, hourly_rate: finalHourlyRate
+        });
+      }
+    }
+
     // Calculate increment amount if both salaries provided
     let calcIncrement = increment_amount;
-    if (!calcIncrement && salary_before_confirmation && salary_after_confirmation) {
-      calcIncrement = parseFloat(salary_after_confirmation) - parseFloat(salary_before_confirmation);
+    if (!calcIncrement && finalSalaryBefore && finalSalaryAfter) {
+      calcIncrement = parseFloat(finalSalaryAfter) - parseFloat(finalSalaryBefore);
     }
 
     const result = await pool.query(
@@ -341,22 +456,22 @@ router.post('/', authenticateAdmin, async (req, res) => {
         epf_number, socso_number, tax_number, epf_contribution_type,
         marital_status, spouse_working, children_count, date_of_birth,
         default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
-        default_bonus, default_incentive,
+        default_bonus, default_incentive, hourly_rate, work_type,
         employment_type, probation_months, probation_end_date, probation_status,
         salary_before_confirmation, salary_after_confirmation, increment_amount,
         company_id, profile_completed, password_hash, must_change_password
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44)
        RETURNING *`,
       [
         employee_id, toNullable(name), toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(position), toNullable(position_id), join_date,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
-        default_basic_salary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
-        default_bonus || 0, default_incentive || 0,
+        finalBasicSalary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
+        default_bonus || 0, default_incentive || 0, finalHourlyRate || 0, finalWorkType,
         empType, probMonths, probation_end_date, empType === 'confirmed' ? 'confirmed' : 'ongoing',
-        toNullable(salary_before_confirmation), toNullable(salary_after_confirmation), toNullable(calcIncrement),
+        toNullable(finalSalaryBefore), toNullable(finalSalaryAfter), toNullable(calcIncrement),
         companyId, false, passwordHash, true
       ]
     );

@@ -9,7 +9,7 @@ const pool = require('../../db');
 const { authenticateEmployee } = require('../../middleware/auth');
 const { asyncHandler, NotFoundError } = require('../../middleware/errorHandler');
 
-// Get employee's payslips
+// Get employee's payslips (only show finalized payrolls)
 router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
   const { year } = req.query;
 
@@ -18,6 +18,7 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
     FROM payroll_items pi
     JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
     WHERE pi.employee_id = $1
+      AND pr.status = 'finalized'
   `;
   const params = [req.employee.id];
 

@@ -154,11 +154,19 @@ router.get('/history', authenticateEmployee, asyncHandler(async (req, res) => {
 
 /**
  * Calculate working days between two dates
- * Excludes weekends and public holidays
+ * Excludes weekends and public holidays based on company
+ * - AA Alive (company_id=1): Mon-Fri only (exclude Sat & Sun)
+ * - Mimix (company_id=3): Mon-Sun (F&B shift work, only exclude public holidays)
  */
 async function calculateWorkingDays(startDate, endDate, companyId) {
   const start = new Date(startDate);
   const end = new Date(endDate);
+
+  // Company working day rules:
+  // - Mimix (company_id = 3): F&B with shifts, works Monday-Sunday
+  // - AA Alive (company_id = 1): Office hours, works Monday-Friday only
+  const isMimix = companyId === 3;
+  const isAAAlive = companyId === 1;
 
   // Get public holidays in date range
   const holidaysResult = await pool.query(
@@ -176,13 +184,28 @@ async function calculateWorkingDays(startDate, endDate, companyId) {
   const current = new Date(start);
 
   while (current <= end) {
-    const day = current.getDay();
+    const day = current.getDay(); // 0 = Sunday, 6 = Saturday
     const dateStr = current.toISOString().split('T')[0];
 
-    // Exclude Sundays (0) and public holidays
-    // Note: Saturday may be a working day in some companies
-    if (day !== 0 && !holidays.has(dateStr)) {
+    // Skip public holidays for all companies
+    if (holidays.has(dateStr)) {
+      current.setDate(current.getDate() + 1);
+      continue;
+    }
+
+    if (isMimix) {
+      // Mimix (F&B): count all days Mon-Sun (only exclude public holidays)
       totalDays++;
+    } else if (isAAAlive) {
+      // AA Alive: Mon-Fri only (exclude Saturday=6 and Sunday=0)
+      if (day !== 0 && day !== 6) {
+        totalDays++;
+      }
+    } else {
+      // Default: exclude Sundays (0) and public holidays
+      if (day !== 0) {
+        totalDays++;
+      }
     }
 
     current.setDate(current.getDate() + 1);
