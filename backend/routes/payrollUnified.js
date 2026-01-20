@@ -1456,4 +1456,114 @@ router.get('/summary/:year/:month', authenticateAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/payroll/ot-summary/:year/:month
+ * Get OT summary for a period (approved, pending, rejected hours)
+ */
+router.get('/ot-summary/:year/:month', authenticateAdmin, async (req, res) => {
+  try {
+    const { year, month } = req.params;
+    const { department_id } = req.query;
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Build employee filter
+    let employeeQuery = `
+      SELECT e.id, e.name, e.employee_id as emp_code, e.department_id,
+             d.name as department_name,
+             e.default_basic_salary as basic_salary
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE e.status = 'active' AND e.company_id = $1
+    `;
+    const params = [companyId];
+    let paramIndex = 2;
+
+    if (department_id) {
+      employeeQuery += ` AND e.department_id = $${paramIndex}`;
+      params.push(department_id);
+      paramIndex++;
+    }
+
+    employeeQuery += ' ORDER BY d.name, e.name';
+
+    const employees = await pool.query(employeeQuery, params);
+
+    // Calculate OT summary for each employee
+    const summary = [];
+    let totalApproved = 0;
+    let totalPending = 0;
+    let totalRejected = 0;
+    let totalEstimatedPay = 0;
+
+    for (const emp of employees.rows) {
+      // Get OT records for this employee in the specified month
+      const otRecords = await pool.query(`
+        SELECT
+          COALESCE(SUM(CASE WHEN ot_approved = true THEN ot_hours ELSE 0 END), 0) as approved_ot_hours,
+          COALESCE(SUM(CASE WHEN ot_approved IS NULL AND ot_hours > 0 THEN ot_hours ELSE 0 END), 0) as pending_ot_hours,
+          COALESCE(SUM(CASE WHEN ot_approved = false THEN ot_hours ELSE 0 END), 0) as rejected_ot_hours,
+          COUNT(CASE WHEN ot_approved IS NULL AND ot_hours > 0 THEN 1 END) as pending_records_count
+        FROM clock_in_records
+        WHERE employee_id = $1
+          AND EXTRACT(MONTH FROM work_date) = $2
+          AND EXTRACT(YEAR FROM work_date) = $3
+          AND status IN ('clocked_out', 'approved', 'completed')
+      `, [emp.id, month, year]);
+
+      const otData = otRecords.rows[0];
+      const approvedHours = parseFloat(otData.approved_ot_hours) || 0;
+      const pendingHours = parseFloat(otData.pending_ot_hours) || 0;
+      const rejectedHours = parseFloat(otData.rejected_ot_hours) || 0;
+      const pendingCount = parseInt(otData.pending_records_count) || 0;
+
+      // Calculate estimated OT pay (using default 1.5x multiplier)
+      const basicSalary = parseFloat(emp.basic_salary) || 0;
+      const hourlyRate = basicSalary > 0 ? (basicSalary / 22 / 8) : 0;
+      const estimatedPay = approvedHours * hourlyRate * 1.5;
+
+      // Only include employees with any OT
+      if (approvedHours > 0 || pendingHours > 0 || rejectedHours > 0) {
+        summary.push({
+          employee_id: emp.id,
+          employee_name: emp.name,
+          emp_code: emp.emp_code,
+          department_name: emp.department_name,
+          basic_salary: basicSalary,
+          hourly_rate: Math.round(hourlyRate * 100) / 100,
+          approved_ot_hours: Math.round(approvedHours * 100) / 100,
+          pending_ot_hours: Math.round(pendingHours * 100) / 100,
+          rejected_ot_hours: Math.round(rejectedHours * 100) / 100,
+          pending_records_count: pendingCount,
+          estimated_ot_pay: Math.round(estimatedPay * 100) / 100
+        });
+
+        totalApproved += approvedHours;
+        totalPending += pendingHours;
+        totalRejected += rejectedHours;
+        totalEstimatedPay += estimatedPay;
+      }
+    }
+
+    res.json({
+      year: parseInt(year),
+      month: parseInt(month),
+      summary,
+      totals: {
+        approved_ot_hours: Math.round(totalApproved * 100) / 100,
+        pending_ot_hours: Math.round(totalPending * 100) / 100,
+        rejected_ot_hours: Math.round(totalRejected * 100) / 100,
+        estimated_ot_pay: Math.round(totalEstimatedPay * 100) / 100,
+        employees_with_pending_ot: summary.filter(s => s.pending_ot_hours > 0).length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching OT summary:', error);
+    res.status(500).json({ error: 'Failed to fetch OT summary' });
+  }
+});
+
 module.exports = router;

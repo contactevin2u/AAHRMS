@@ -815,6 +815,16 @@ const initDb = async () => {
           ALTER TABLE payroll_runs ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;
           UPDATE payroll_runs SET company_id = 1 WHERE company_id IS NULL;
         END IF;
+        -- Approval workflow columns
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='approved_by') THEN
+          ALTER TABLE payroll_runs ADD COLUMN approved_by INTEGER REFERENCES admin_users(id);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='approved_at') THEN
+          ALTER TABLE payroll_runs ADD COLUMN approved_at TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='has_variance_warning') THEN
+          ALTER TABLE payroll_runs ADD COLUMN has_variance_warning BOOLEAN DEFAULT FALSE;
+        END IF;
         -- Drop old unique constraint and add new one with department_id
         IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_runs_month_year_key') THEN
           ALTER TABLE payroll_runs DROP CONSTRAINT payroll_runs_month_year_key;
@@ -823,9 +833,12 @@ const initDb = async () => {
 
       CREATE INDEX IF NOT EXISTS idx_payroll_runs_company ON payroll_runs(company_id);
 
-      -- Create unique index for month, year, department_id (nullable)
+      -- Drop old unique index without company_id if exists
+      DROP INDEX IF EXISTS idx_payroll_runs_unique;
+
+      -- Create unique index for company_id, month, year, department_id (nullable)
       CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_runs_unique
-      ON payroll_runs (month, year, COALESCE(department_id, -1));
+      ON payroll_runs (company_id, month, year, COALESCE(department_id, -1));
 
       -- Payroll Items (one per employee per payroll run)
       CREATE TABLE IF NOT EXISTS payroll_items (
@@ -898,6 +911,30 @@ const initDb = async () => {
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='ph_pay') THEN
           ALTER TABLE payroll_items ADD COLUMN ph_pay DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        -- Statutory base for deduction calculation
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='statutory_base') THEN
+          ALTER TABLE payroll_items ADD COLUMN statutory_base DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        -- YTD tracking for PCB calculation
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='ytd_gross') THEN
+          ALTER TABLE payroll_items ADD COLUMN ytd_gross DECIMAL(12,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='ytd_epf') THEN
+          ALTER TABLE payroll_items ADD COLUMN ytd_epf DECIMAL(12,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='ytd_pcb') THEN
+          ALTER TABLE payroll_items ADD COLUMN ytd_pcb DECIMAL(12,2) DEFAULT 0;
+        END IF;
+        -- Variance tracking
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='prev_month_net') THEN
+          ALTER TABLE payroll_items ADD COLUMN prev_month_net DECIMAL(10,2);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='variance_amount') THEN
+          ALTER TABLE payroll_items ADD COLUMN variance_amount DECIMAL(10,2);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='variance_percent') THEN
+          ALTER TABLE payroll_items ADD COLUMN variance_percent DECIMAL(6,2);
         END IF;
       END $$;
 
