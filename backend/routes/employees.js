@@ -405,12 +405,17 @@ router.post('/', authenticateAdmin, async (req, res) => {
     // Determine work type (full_time or PART TIMER)
     const finalWorkType = work_type || 'full_time';
 
-    // Get position role for salary lookup
+    // Get position role and name for salary lookup and auto-sync
     let positionRole = 'crew';
+    let finalPosition = position; // Auto-sync position text from position_id if not provided
     if (toNullable(position_id)) {
-      const posResult = await pool.query('SELECT role FROM positions WHERE id = $1', [position_id]);
+      const posResult = await pool.query('SELECT name, role FROM positions WHERE id = $1', [position_id]);
       if (posResult.rows.length > 0) {
         positionRole = posResult.rows[0].role || 'crew';
+        // Auto-set position text from position_id if not provided
+        if (!finalPosition) {
+          finalPosition = posResult.rows[0].name;
+        }
       }
     } else if (position) {
       const lowerPos = position.toLowerCase();
@@ -464,7 +469,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44)
        RETURNING *`,
       [
-        employee_id, toNullable(name), toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(position), toNullable(position_id), join_date,
+        employee_id, toNullable(name), toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(finalPosition), toNullable(position_id), join_date,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
@@ -477,6 +482,14 @@ router.post('/', authenticateAdmin, async (req, res) => {
     );
 
     const newEmployee = result.rows[0];
+
+    // Add primary outlet to employee_outlets table
+    if (finalOutletId) {
+      await pool.query(
+        'INSERT INTO employee_outlets (employee_id, outlet_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [newEmployee.id, finalOutletId]
+      );
+    }
 
     // If multi-outlet manager, add additional outlet assignments
     if (additional_outlet_ids && Array.isArray(additional_outlet_ids) && additional_outlet_ids.length > 0) {
@@ -590,14 +603,26 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       finalOutletId = null;
     }
 
-    // Auto-sync employee_role when position_id changes
+    // Auto-sync employee_role and position text when position_id changes
     const newPositionId = toNullable(position_id);
     let finalEmployeeRole = req.body.employee_role || current.employee_role || 'staff';
+    let finalPosition = position; // Auto-sync position text from position_id
     if (newPositionId && newPositionId !== current.position_id) {
       const mappedRole = await getEmployeeRoleFromPosition(newPositionId);
       if (mappedRole) {
         finalEmployeeRole = mappedRole;
       }
+      // Auto-sync position text from position_id if position not explicitly provided
+      if (!finalPosition) {
+        const posResult = await pool.query('SELECT name FROM positions WHERE id = $1', [newPositionId]);
+        if (posResult.rows.length > 0) {
+          finalPosition = posResult.rows[0].name;
+        }
+      }
+    }
+    // Keep existing position if not being updated
+    if (finalPosition === undefined) {
+      finalPosition = current.position;
     }
 
     // Recalculate if still on probation and dates/months changed
@@ -633,7 +658,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
        WHERE id = $42
        RETURNING *`,
       [
-        employee_id, name, toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(position), toNullable(position_id), toNullable(join_date), status,
+        employee_id, name, toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(finalPosition), toNullable(position_id), toNullable(join_date), status,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
         marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
@@ -645,6 +670,22 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
         toNullable(probation_notes), newProbationStatus, finalEmployeeRole, id
       ]
     );
+
+    // Sync employee_outlets when outlet_id changes
+    if (finalOutletId && finalOutletId !== current.outlet_id) {
+      // Remove old outlet assignment if it was primary
+      if (current.outlet_id) {
+        await pool.query(
+          'DELETE FROM employee_outlets WHERE employee_id = $1 AND outlet_id = $2',
+          [id, current.outlet_id]
+        );
+      }
+      // Add new outlet assignment
+      await pool.query(
+        'INSERT INTO employee_outlets (employee_id, outlet_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [id, finalOutletId]
+      );
+    }
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -725,6 +766,16 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
       }
     }
 
+    // Auto-sync position text when position_id changes (and position not explicitly set)
+    if (positionId && !updates.position) {
+      const posResult = await pool.query('SELECT name FROM positions WHERE id = $1', [positionId]);
+      if (posResult.rows.length > 0) {
+        setClauses.push(`position = $${paramCount}`);
+        values.push(posResult.rows[0].name);
+        paramCount++;
+      }
+    }
+
     // Add updated_at
     setClauses.push(`updated_at = NOW()`);
 
@@ -742,6 +793,17 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Sync employee_outlets when outlet_id changes
+    if (updates.outlet_id !== undefined && updates.outlet_id) {
+      const newOutletId = updates.outlet_id === '' ? null : parseInt(updates.outlet_id);
+      if (newOutletId) {
+        await pool.query(
+          'INSERT INTO employee_outlets (employee_id, outlet_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [id, newOutletId]
+        );
+      }
     }
 
     res.json(result.rows[0]);
@@ -1473,6 +1535,14 @@ router.post('/quick-add', authenticateAdmin, async (req, res) => {
     );
 
     const newEmployee = result.rows[0];
+
+    // Add to employee_outlets table for outlet sync
+    if (outlet_id) {
+      await pool.query(
+        'INSERT INTO employee_outlets (employee_id, outlet_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [newEmployee.id, outlet_id]
+      );
+    }
 
     res.status(201).json({
       message: `Employee ${name} created successfully. They can now login to ESS using Employee ID and IC Number.`,
