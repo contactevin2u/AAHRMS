@@ -211,7 +211,7 @@ router.get('/outlet-colleagues', authenticateEmployee, asyncHandler(async (req, 
 
   // Get all active employees in the same outlet (excluding self)
   const result = await pool.query(
-    `SELECT id, name, employee_id as emp_code
+    `SELECT id, name, employee_id as emp_code, profile_picture
      FROM employees
      WHERE outlet_id = $1
        AND id != $2

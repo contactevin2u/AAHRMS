@@ -10,7 +10,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../db');
 const { authenticateEmployee } = require('../../middleware/auth');
-const { asyncHandler, NotFoundError } = require('../../middleware/errorHandler');
+const { asyncHandler, NotFoundError, ValidationError } = require('../../middleware/errorHandler');
+const { uploadProfilePicture, deleteFile, extractPublicId } = require('../../utils/cloudinaryStorage');
 
 // Required fields for profile to be marked complete
 // Note: EPF, SOCSO, Tax numbers are handled by admin, not required for employee self-service
@@ -333,6 +334,93 @@ router.post('/complete', authenticateEmployee, asyncHandler(async (req, res) => 
     locked_fields: EDITABLE_BEFORE_COMPLETE.filter(f => !EDITABLE_AFTER_COMPLETE.includes(f)),
     editable_fields: EDITABLE_AFTER_COMPLETE
   });
+}));
+
+// Upload profile picture
+router.post('/picture', authenticateEmployee, asyncHandler(async (req, res) => {
+  const employeeId = req.employee.id;
+  const companyId = req.employee.company_id;
+  const { image } = req.body;
+
+  if (!image) {
+    throw new ValidationError('Image data is required');
+  }
+
+  // Validate base64 image
+  if (!image.startsWith('data:image/')) {
+    throw new ValidationError('Invalid image format. Please upload a valid image file.');
+  }
+
+  // Check file size (rough estimate from base64 - actual limit ~2MB)
+  const base64Size = image.length * 0.75; // Approximate decoded size
+  if (base64Size > 5 * 1024 * 1024) { // 5MB limit for base64
+    throw new ValidationError('Image is too large. Please upload an image smaller than 2MB.');
+  }
+
+  // Get current profile picture URL to delete old one later
+  const currentResult = await pool.query(
+    'SELECT profile_picture FROM employees WHERE id = $1',
+    [employeeId]
+  );
+
+  const oldPictureUrl = currentResult.rows[0]?.profile_picture;
+
+  // Upload new picture to Cloudinary (with compression)
+  const pictureUrl = await uploadProfilePicture(image, companyId, employeeId);
+
+  // Update employee record with new picture URL
+  await pool.query(
+    'UPDATE employees SET profile_picture = $1, updated_at = NOW() WHERE id = $2',
+    [pictureUrl, employeeId]
+  );
+
+  // Delete old picture from Cloudinary (non-blocking)
+  if (oldPictureUrl) {
+    const oldPublicId = extractPublicId(oldPictureUrl);
+    if (oldPublicId) {
+      deleteFile(oldPublicId).catch(err => {
+        console.error('Failed to delete old profile picture:', err);
+      });
+    }
+  }
+
+  res.json({
+    message: 'Profile picture updated successfully',
+    profile_picture: pictureUrl
+  });
+}));
+
+// Delete profile picture
+router.delete('/picture', authenticateEmployee, asyncHandler(async (req, res) => {
+  const employeeId = req.employee.id;
+
+  // Get current profile picture URL
+  const result = await pool.query(
+    'SELECT profile_picture FROM employees WHERE id = $1',
+    [employeeId]
+  );
+
+  const pictureUrl = result.rows[0]?.profile_picture;
+
+  if (!pictureUrl) {
+    return res.status(400).json({ error: 'No profile picture to delete' });
+  }
+
+  // Remove from database
+  await pool.query(
+    'UPDATE employees SET profile_picture = NULL, updated_at = NOW() WHERE id = $1',
+    [employeeId]
+  );
+
+  // Delete from Cloudinary (non-blocking)
+  const publicId = extractPublicId(pictureUrl);
+  if (publicId) {
+    deleteFile(publicId).catch(err => {
+      console.error('Failed to delete profile picture from Cloudinary:', err);
+    });
+  }
+
+  res.json({ message: 'Profile picture deleted successfully' });
 }));
 
 module.exports = router;

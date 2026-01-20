@@ -168,9 +168,59 @@ function extractPublicId(url) {
   }
 }
 
+/**
+ * Upload profile picture to Cloudinary
+ *
+ * Compression settings for profile pictures:
+ * - Width/Height: 400px (square crop)
+ * - Quality: auto:good (balance between quality and size)
+ * - Format: jpg
+ * - Face detection: center crop on face if detected
+ *
+ * @param {string} base64Data - Base64 encoded image (with or without data URI prefix)
+ * @param {number} companyId - Company ID
+ * @param {number} employeeId - Employee ID
+ * @returns {Promise<string>} - Cloudinary secure URL
+ */
+async function uploadProfilePicture(base64Data, companyId, employeeId) {
+  try {
+    // Ensure proper data URI format
+    let uploadData = base64Data;
+    if (!base64Data.startsWith('data:')) {
+      uploadData = `data:image/jpeg;base64,${base64Data}`;
+    }
+
+    const timestamp = Date.now();
+    const publicId = `hrms/profiles/${companyId}/${employeeId}/avatar_${timestamp}`;
+
+    const result = await cloudinary.uploader.upload(uploadData, {
+      public_id: publicId,
+      resource_type: 'image',
+      overwrite: true,
+      folder: '',
+      transformation: [
+        {
+          width: 400,
+          height: 400,
+          crop: 'fill',
+          gravity: 'face',  // Center on face if detected
+          quality: 'auto:good',
+          format: 'jpg'
+        }
+      ]
+    });
+
+    return result.secure_url;
+  } catch (error) {
+    console.error('Cloudinary profile picture upload error:', error);
+    throw new Error(`Failed to upload profile picture: ${error.message}`);
+  }
+}
+
 module.exports = {
   uploadAttendance,
   uploadClaim,
+  uploadProfilePicture,
   deleteFile,
   extractPublicId
 };

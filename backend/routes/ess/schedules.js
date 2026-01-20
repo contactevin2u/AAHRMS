@@ -393,7 +393,7 @@ router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res
 
     // Get employees in managed outlets
     const empResult = await pool.query(
-      `SELECT e.id, e.employee_id, e.name, e.outlet_id, o.name as outlet_name
+      `SELECT e.id, e.employee_id, e.name, e.profile_picture, e.outlet_id, o.name as outlet_name
        FROM employees e
        LEFT JOIN outlets o ON e.outlet_id = o.id
        WHERE e.outlet_id = ANY($1)
@@ -424,7 +424,7 @@ router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res
 
     // Get employees in managed departments
     const empResult = await pool.query(
-      `SELECT e.id, e.employee_id, e.name, e.department_id, d.name as department_name
+      `SELECT e.id, e.employee_id, e.name, e.profile_picture, e.department_id, d.name as department_name
        FROM employees e
        LEFT JOIN departments d ON e.department_id = d.id
        WHERE e.department_id = ANY($1)

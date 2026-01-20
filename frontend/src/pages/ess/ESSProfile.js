@@ -1,9 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import { isMimixCompany } from '../../utils/permissions';
 import './ESSProfile.css';
+
+// Helper to compress image before upload
+const compressImage = (file, maxWidth = 800, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Scale down if wider than maxWidth
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to base64 with compression
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 
 // Field labels for display
 const FIELD_LABELS = {
@@ -34,6 +69,11 @@ function ESSProfile() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
+
+  // Profile picture upload states
+  const fileInputRef = useRef(null);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+  const [pictureError, setPictureError] = useState('');
 
   useEffect(() => {
     fetchProfile();
@@ -105,6 +145,84 @@ function ESSProfile() {
     setIsEditing(false);
     initEditForm(profile);
     setSaveError('');
+  };
+
+  // Profile picture handlers
+  const handlePictureClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setPictureError('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB before compression)
+    if (file.size > 5 * 1024 * 1024) {
+      setPictureError('Image is too large. Please select an image smaller than 5MB.');
+      return;
+    }
+
+    setPictureError('');
+    setUploadingPicture(true);
+
+    try {
+      // Compress image before upload
+      const compressedImage = await compressImage(file, 800, 0.8);
+
+      // Upload to server
+      const res = await essApi.uploadProfilePicture(compressedImage);
+
+      // Update profile with new picture
+      setProfile(prev => ({
+        ...prev,
+        profile_picture: res.data.profile_picture
+      }));
+
+      setSaveSuccess('Profile picture updated!');
+      setTimeout(() => setSaveSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error uploading picture:', err);
+      setPictureError(err.response?.data?.error || 'Failed to upload picture');
+    } finally {
+      setUploadingPicture(false);
+      // Clear file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeletePicture = async () => {
+    if (!window.confirm('Are you sure you want to remove your profile picture?')) {
+      return;
+    }
+
+    setPictureError('');
+    setUploadingPicture(true);
+
+    try {
+      await essApi.deleteProfilePicture();
+
+      // Update profile to remove picture
+      setProfile(prev => ({
+        ...prev,
+        profile_picture: null
+      }));
+
+      setSaveSuccess('Profile picture removed!');
+      setTimeout(() => setSaveSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error deleting picture:', err);
+      setPictureError(err.response?.data?.error || 'Failed to delete picture');
+    } finally {
+      setUploadingPicture(false);
+    }
   };
 
   const formatDate = (date) => {
@@ -231,8 +349,43 @@ function ESSProfile() {
       <div className="ess-profile">
         {/* Header */}
         <div className="profile-header">
-          <div className="profile-avatar">
-            {profile.name?.charAt(0)?.toUpperCase() || '?'}
+          <div className="profile-avatar-container">
+            <div
+              className={`profile-avatar ${uploadingPicture ? 'uploading' : ''}`}
+              onClick={handlePictureClick}
+              style={profile.profile_picture ? {
+                backgroundImage: `url(${profile.profile_picture})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center'
+              } : {}}
+            >
+              {!profile.profile_picture && (profile.name?.charAt(0)?.toUpperCase() || '?')}
+              {uploadingPicture && <div className="upload-spinner"></div>}
+            </div>
+            <button
+              className="change-photo-btn"
+              onClick={handlePictureClick}
+              disabled={uploadingPicture}
+            >
+              {profile.profile_picture ? 'Change' : 'Add Photo'}
+            </button>
+            {profile.profile_picture && (
+              <button
+                className="remove-photo-btn"
+                onClick={handleDeletePicture}
+                disabled={uploadingPicture}
+              >
+                Remove
+              </button>
+            )}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+            {pictureError && <p className="picture-error">{pictureError}</p>}
           </div>
           <div className="profile-title">
             <h1>{profile.name || 'New Employee'}</h1>
