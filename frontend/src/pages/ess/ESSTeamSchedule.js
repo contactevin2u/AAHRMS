@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { isMimixCompany, isSupervisorOrManager } from '../../utils/permissions';
 import './ESSTeamSchedule.css';
 
-function ESSTeamSchedule() {
+function ESSTeamSchedule({ embedded = false }) {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [employees, setEmployees] = useState([]);
@@ -306,20 +306,18 @@ function ESSTeamSchedule() {
   };
 
   if (!canManageSchedules) {
-    return (
-      <ESSLayout>
-        <div className="ts-access-denied">
-          <div className="ts-denied-icon">🔒</div>
-          <h2>Access Denied</h2>
-          <p>This page is only for Supervisors and Managers.</p>
-        </div>
-      </ESSLayout>
+    const accessDenied = (
+      <div className="ts-access-denied">
+        <div className="ts-denied-icon">🔒</div>
+        <h2>Access Denied</h2>
+        <p>This page is only for Supervisors and Managers.</p>
+      </div>
     );
+    return embedded ? accessDenied : <ESSLayout>{accessDenied}</ESSLayout>;
   }
 
-  return (
-    <ESSLayout>
-      <div className="ts-container">
+  const content = (
+    <div className="ts-container">
         {/* Header */}
         <div className="ts-header">
           <div className="ts-header-left">
@@ -764,8 +762,9 @@ function ESSTeamSchedule() {
           +
         </button>
       </div>
-    </ESSLayout>
   );
+
+  return embedded ? content : <ESSLayout>{content}</ESSLayout>;
 }
 
 export default ESSTeamSchedule;

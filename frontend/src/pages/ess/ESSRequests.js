@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ESSLayout from '../../components/ESSLayout';
+import ESSLeave from './ESSLeave';
+import ESSClaims from './ESSClaims';
+import ESSOTApproval from './ESSOTApproval';
 import { isSupervisorOrManager, isMimixCompany } from '../../utils/permissions';
 import './ESSRequests.css';
 
 function ESSRequests() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
 
   // Check if user can see OT approvals
@@ -48,29 +50,12 @@ function ESSRequests() {
           )}
         </div>
 
-        {/* Tab Content */}
-        {activeTab === 'leave' && <RequestCard title="Leave Requests" icon="🏖️" description="Apply for annual leave, medical leave, or other time off" buttonText="Manage Leave" path="/ess/leave" navigate={navigate} />}
-        {activeTab === 'claims' && <RequestCard title="Expense Claims" icon="🧾" description="Submit and track your expense claims" buttonText="Manage Claims" path="/ess/claims" navigate={navigate} />}
-        {activeTab === 'ot' && showOTTab && <RequestCard title="OT Approvals" icon="⏰" description="Review and approve overtime requests from your team" buttonText="View OT Requests" path="/ess/ot-approval" navigate={navigate} />}
+        {/* Tab Content - Directly embedded components */}
+        {activeTab === 'leave' && <ESSLeave embedded={true} />}
+        {activeTab === 'claims' && <ESSClaims embedded={true} />}
+        {activeTab === 'ot' && showOTTab && <ESSOTApproval embedded={true} />}
       </div>
     </ESSLayout>
-  );
-}
-
-// Request Card Component
-function RequestCard({ title, icon, description, buttonText, path, navigate }) {
-  return (
-    <div className="request-card-content">
-      <div className="request-icon">{icon}</div>
-      <h3 className="request-title">{title}</h3>
-      <p className="request-description">{description}</p>
-      <button
-        className="request-action-btn"
-        onClick={() => navigate(path)}
-      >
-        {buttonText}
-      </button>
-    </div>
   );
 }
 

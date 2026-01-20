@@ -4,7 +4,7 @@ import { essApi } from '../../api';
 import { toast } from 'react-toastify';
 import { isSupervisorOrManager } from '../../utils/permissions';
 
-function ESSOTApproval() {
+function ESSOTApproval({ embedded = false }) {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [pendingOT, setPendingOT] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,19 +81,17 @@ function ESSOTApproval() {
   const hasAccess = isSupervisorOrManager(employeeInfo) || employeeInfo.position === 'Manager';
 
   if (!hasAccess) {
-    return (
-      <ESSLayout>
-        <div style={{ padding: '40px', textAlign: 'center' }}>
-          <h2>Access Denied</h2>
-          <p>This page is only available for Supervisors and Managers.</p>
-        </div>
-      </ESSLayout>
+    const accessDenied = (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <h2>Access Denied</h2>
+        <p>This page is only available for Supervisors and Managers.</p>
+      </div>
     );
+    return embedded ? accessDenied : <ESSLayout>{accessDenied}</ESSLayout>;
   }
 
-  return (
-    <ESSLayout>
-      <div style={{ paddingBottom: '80px' }}>
+  const content = (
+      <div style={{ paddingBottom: embedded ? '20px' : '80px' }}>
         <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>
             <span style={{ marginRight: '8px' }}>&#x23F0;</span>
@@ -275,8 +273,9 @@ function ESSOTApproval() {
           </div>
         )}
       </div>
-    </ESSLayout>
   );
+
+  return embedded ? content : <ESSLayout>{content}</ESSLayout>;
 }
 
 export default ESSOTApproval;

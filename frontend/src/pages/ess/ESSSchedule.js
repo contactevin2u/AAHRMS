@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import ESSLayout from '../../components/ESSLayout';
+import ESSTeamSchedule from './ESSTeamSchedule';
 import { essApi } from '../../api';
 import { isSupervisorOrManager, isMimixCompany } from '../../utils/permissions';
 import './ESSSchedule.css';
 
 function ESSSchedule() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
 
   // Check if user can see team features
@@ -47,7 +47,7 @@ function ESSSchedule() {
 
         {/* Tab Content */}
         {activeTab === 'my' && <MyScheduleContent />}
-        {activeTab === 'team' && showTeamTab && <TeamScheduleContent navigate={navigate} />}
+        {activeTab === 'team' && showTeamTab && <ESSTeamSchedule embedded={true} />}
       </div>
     </ESSLayout>
   );
@@ -288,34 +288,6 @@ function MyScheduleContent() {
         </div>
       )}
     </>
-  );
-}
-
-// Team Schedule Content - Shows link to full team schedule page
-function TeamScheduleContent({ navigate }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-      <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
-      <h3 style={{ margin: '0 0 8px', fontSize: '18px', color: '#1e293b' }}>Team Schedule Management</h3>
-      <p style={{ margin: '0 0 24px', fontSize: '14px', color: '#64748b' }}>
-        View and manage your team's work schedules
-      </p>
-      <button
-        onClick={() => navigate('/ess/team-schedule')}
-        style={{
-          padding: '14px 32px',
-          background: '#1976d2',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          fontSize: '15px',
-          fontWeight: '600',
-          cursor: 'pointer'
-        }}
-      >
-        Open Team Schedule
-      </button>
-    </div>
   );
 }
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ESSLayout from '../../components/ESSLayout';
 import { essApi } from '../../api';
 
-function ESSClaims() {
+function ESSClaims({ embedded = false }) {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -92,9 +92,8 @@ function ESSClaims() {
   const totalPending = claims.filter(c => c.status === 'pending').reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
   const totalApproved = claims.filter(c => c.status === 'approved').reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
 
-  return (
-    <ESSLayout>
-      <div style={{ paddingBottom: '80px' }}>
+  const content = (
+      <div style={{ paddingBottom: embedded ? '20px' : '80px' }}>
         <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>Claims</h1>
           <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>Submit and track expense claims</p>
@@ -187,8 +186,9 @@ function ESSClaims() {
           </div>
         )}
       </div>
-    </ESSLayout>
   );
+
+  return embedded ? content : <ESSLayout>{content}</ESSLayout>;
 }
 
 export default ESSClaims;

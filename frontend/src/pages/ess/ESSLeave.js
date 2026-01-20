@@ -3,7 +3,7 @@ import ESSLayout from '../../components/ESSLayout';
 import { essApi } from '../../api';
 import './ESSLeave.css';
 
-function ESSLeave() {
+function ESSLeave({ embedded = false }) {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [activeTab, setActiveTab] = useState('apply');
   const [leaveBalances, setLeaveBalances] = useState([]);
@@ -112,8 +112,7 @@ function ESSLeave() {
     available: lt.entitled_days_for_service || lt.default_days_per_year || 0
   }));
 
-  return (
-    <ESSLayout>
+  const content = (
       <div className="ess-leave">
         <div className="ess-page-header">
           <h1>Leave</h1>
@@ -280,8 +279,9 @@ function ESSLeave() {
           </div>
         )}
       </div>
-    </ESSLayout>
   );
+
+  return embedded ? content : <ESSLayout>{content}</ESSLayout>;
 }
 
 export default ESSLeave;
