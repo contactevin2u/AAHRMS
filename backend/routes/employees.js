@@ -10,6 +10,49 @@ const { sanitizeEmployeeData, escapeHtml } = require('../middleware/sanitize');
 const { formatIC, detectIDType } = require('../utils/statutory');
 
 /**
+ * Extract date of birth from Malaysian IC number
+ * IC format: YYMMDD-PB-XXXX
+ * @param {string} icNumber - IC number with or without dashes
+ * @returns {string|null} Date in YYYY-MM-DD format or null
+ */
+const extractDOBFromIC = (icNumber) => {
+  if (!icNumber) return null;
+  const cleaned = icNumber.replace(/[-\s]/g, '');
+  if (cleaned.length < 6) return null;
+
+  const yy = parseInt(cleaned.substring(0, 2));
+  const mm = cleaned.substring(2, 4);
+  const dd = cleaned.substring(4, 6);
+
+  // Determine century: if YY > current year's last 2 digits, assume 1900s
+  const currentYear = new Date().getFullYear() % 100;
+  const century = yy > currentYear ? '19' : '20';
+  const yyyy = century + cleaned.substring(0, 2);
+
+  // Validate month and day
+  const month = parseInt(mm);
+  const day = parseInt(dd);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+/**
+ * Extract gender from Malaysian IC number
+ * Last digit: odd = male, even = female
+ * @param {string} icNumber - IC number with or without dashes
+ * @returns {string|null} 'male' or 'female' or null
+ */
+const extractGenderFromIC = (icNumber) => {
+  if (!icNumber) return null;
+  const cleaned = icNumber.replace(/[-\s]/g, '');
+  if (cleaned.length < 12) return null;
+
+  const lastDigit = parseInt(cleaned.charAt(11));
+  return lastDigit % 2 === 1 ? 'male' : 'female';
+};
+
+/**
  * Get Mimix salary configuration based on position role, work type, and employment status
  * @param {number} companyId - Company ID (should be Mimix = 3)
  * @param {string} positionRole - Position role (supervisor, crew, manager)
@@ -373,6 +416,18 @@ router.post('/', authenticateAdmin, async (req, res) => {
       formattedIC = formatIC(ic_number);
     }
 
+    // Auto-extract date of birth and gender from IC if not provided
+    let finalDateOfBirth = date_of_birth;
+    let finalGender = req.body.gender;
+    if (id_type === 'ic' && ic_number) {
+      if (!finalDateOfBirth) {
+        finalDateOfBirth = extractDOBFromIC(ic_number);
+      }
+      if (!finalGender) {
+        finalGender = extractGenderFromIC(ic_number);
+      }
+    }
+
     // Hash IC number as initial password (employee will change on first login)
     const cleanIC = ic_number.replace(/[-\s]/g, '');
     const passwordHash = await bcrypt.hash(cleanIC, 10);
@@ -459,20 +514,20 @@ router.post('/', authenticateAdmin, async (req, res) => {
         employee_id, name, email, phone, ic_number, id_type, department_id, outlet_id, position, position_id, join_date,
         address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
-        marital_status, spouse_working, children_count, date_of_birth,
+        marital_status, spouse_working, children_count, date_of_birth, gender,
         default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
         default_bonus, default_incentive, hourly_rate, work_type,
         employment_type, probation_months, probation_end_date, probation_status,
         salary_before_confirmation, salary_after_confirmation, increment_amount,
         company_id, profile_completed, password_hash, must_change_password
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45)
        RETURNING *`,
       [
         employee_id, toNullable(name), toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(finalPosition), toNullable(position_id), join_date,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
-        marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
+        marital_status || 'single', spouse_working || false, children_count || 0, toNullable(finalDateOfBirth), toNullable(finalGender),
         finalBasicSalary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
         default_bonus || 0, default_incentive || 0, finalHourlyRate || 0, finalWorkType,
         empType, probMonths, probation_end_date, empType === 'confirmed' ? 'confirmed' : 'ongoing',
@@ -583,6 +638,26 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       id_type = current.id_type || 'ic';
     }
 
+    // Auto-extract date of birth and gender from IC if IC is being updated and DOB/gender not provided
+    let finalDateOfBirth = date_of_birth;
+    let finalGender = req.body.gender;
+    if (ic_number && id_type === 'ic') {
+      // Only auto-extract if not explicitly provided
+      if (finalDateOfBirth === undefined || finalDateOfBirth === null || finalDateOfBirth === '') {
+        finalDateOfBirth = extractDOBFromIC(ic_number);
+      }
+      if (finalGender === undefined || finalGender === null || finalGender === '') {
+        finalGender = extractGenderFromIC(ic_number);
+      }
+    }
+    // Keep existing values if not being updated
+    if (finalDateOfBirth === undefined) {
+      finalDateOfBirth = current.date_of_birth;
+    }
+    if (finalGender === undefined) {
+      finalGender = current.gender;
+    }
+
     // Calculate probation end date if join_date or probation_months changed
     let probation_end_date = current.probation_end_date;
     const newJoinDate = join_date || current.join_date;
@@ -647,21 +722,21 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
            department_id = $7, outlet_id = $8, position = $9, position_id = $10, join_date = $11, status = $12,
            address = $13, bank_name = $14, bank_account_no = $15, bank_account_holder = $16,
            epf_number = $17, socso_number = $18, tax_number = $19, epf_contribution_type = $20,
-           marital_status = $21, spouse_working = $22, children_count = $23, date_of_birth = $24,
-           default_basic_salary = $25, default_allowance = $26, commission_rate = $27,
-           per_trip_rate = $28, ot_rate = $29, outstation_rate = $30,
-           default_bonus = $31, default_incentive = $32,
-           employment_type = $33, probation_months = $34, probation_end_date = $35,
-           salary_before_confirmation = $36, salary_after_confirmation = $37, increment_amount = $38,
-           probation_notes = $39, probation_status = $40, employee_role = $41,
+           marital_status = $21, spouse_working = $22, children_count = $23, date_of_birth = $24, gender = $25,
+           default_basic_salary = $26, default_allowance = $27, commission_rate = $28,
+           per_trip_rate = $29, ot_rate = $30, outstation_rate = $31,
+           default_bonus = $32, default_incentive = $33,
+           employment_type = $34, probation_months = $35, probation_end_date = $36,
+           salary_before_confirmation = $37, salary_after_confirmation = $38, increment_amount = $39,
+           probation_notes = $40, probation_status = $41, employee_role = $42,
            updated_at = NOW()
-       WHERE id = $42
+       WHERE id = $43
        RETURNING *`,
       [
         employee_id, name, toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(finalPosition), toNullable(position_id), toNullable(join_date), status,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
-        marital_status || 'single', spouse_working || false, children_count || 0, toNullable(date_of_birth),
+        marital_status || 'single', spouse_working || false, children_count || 0, toNullable(finalDateOfBirth), toNullable(finalGender),
         default_basic_salary || 0, default_allowance || 0, commission_rate || 0,
         per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
         default_bonus || 0, default_incentive || 0,
@@ -1515,6 +1590,14 @@ router.post('/quick-add', authenticateAdmin, async (req, res) => {
     const id_type = detectIDType(ic_number);
     const formattedIC = id_type === 'ic' ? formatIC(ic_number) : ic_number;
 
+    // Auto-extract date of birth and gender from IC
+    let dateOfBirth = null;
+    let gender = null;
+    if (id_type === 'ic' && ic_number) {
+      dateOfBirth = extractDOBFromIC(ic_number);
+      gender = extractGenderFromIC(ic_number);
+    }
+
     // Hash IC number as initial password (without dashes)
     const cleanIC = ic_number.replace(/[-\s]/g, '');
     const passwordHash = await bcrypt.hash(cleanIC, 10);
@@ -1526,12 +1609,13 @@ router.post('/quick-add', authenticateAdmin, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO employees (
         employee_id, name, ic_number, id_type, company_id, outlet_id, join_date,
+        date_of_birth, gender,
         status, ess_enabled, password_hash, must_change_password,
         employment_type, probation_months, profile_completed
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', true, $8, true, 'probation', 3, false)
-       RETURNING id, employee_id, name, ic_number, id_type, outlet_id, status, ess_enabled`,
-      [employee_id, name, formattedIC, id_type, companyId, outlet_id || null, today, passwordHash]
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', true, $10, true, 'probation', 3, false)
+       RETURNING id, employee_id, name, ic_number, id_type, outlet_id, status, ess_enabled, date_of_birth, gender`,
+      [employee_id, name, formattedIC, id_type, companyId, outlet_id || null, today, dateOfBirth, gender, passwordHash]
     );
 
     const newEmployee = result.rows[0];
