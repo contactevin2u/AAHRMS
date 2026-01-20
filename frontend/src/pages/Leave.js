@@ -302,6 +302,9 @@ function Leave() {
     return <span className={classes[status] || 'status-badge'}>{status}</span>;
   };
 
+  // Get pending requests for the alert card
+  const pendingRequests = requests.filter(r => r.status === 'pending');
+
   return (
     <Layout>
       <div className="leave-page">
@@ -311,14 +314,57 @@ function Leave() {
             <p>Manage employee leave requests and balances</p>
           </div>
           <div className="header-actions">
-            {pendingCount > 0 && (
-              <span className="pending-badge">{pendingCount} Pending</span>
-            )}
             <button onClick={() => setShowRequestModal(true)} className="add-btn">
               + New Request
             </button>
           </div>
         </header>
+
+        {/* Pending Requests Alert Card */}
+        {pendingCount > 0 && (
+          <div className="pending-alert-card">
+            <div className="pending-alert-header">
+              <div className="pending-alert-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <div className="pending-alert-text">
+                <strong>{pendingCount} Leave Request{pendingCount > 1 ? 's' : ''} Pending Approval</strong>
+                <span>Review and approve/reject these requests</span>
+              </div>
+              <button
+                className="view-pending-btn"
+                onClick={() => {
+                  setActiveTab('requests');
+                  setFilter({ ...filter, status: 'pending' });
+                }}
+              >
+                View All Pending
+              </button>
+            </div>
+            {pendingRequests.length > 0 && activeTab !== 'requests' && (
+              <div className="pending-preview-list">
+                {pendingRequests.slice(0, 3).map(req => (
+                  <div key={req.id} className="pending-preview-item">
+                    <div className="pending-preview-info">
+                      <span className="pending-preview-name">{req.employee_name}</span>
+                      <span className="pending-preview-detail">
+                        {req.leave_type_name} • {formatDate(req.start_date)} - {formatDate(req.end_date)} ({req.total_days} days)
+                      </span>
+                    </div>
+                    <div className="pending-preview-actions">
+                      <button onClick={() => handleApprove(req.id)} className="btn-approve-sm">Approve</button>
+                      <button onClick={() => handleReject(req.id)} className="btn-reject-sm">Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="tabs">
           <button

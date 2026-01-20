@@ -43,6 +43,166 @@
   font-size: 13px;
 }
 
+/* Pending Alert Card */
+.pending-alert-card {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.pending-alert-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #fef3c7;
+}
+
+.pending-alert-icon {
+  width: 40px;
+  height: 40px;
+  background: #f59e0b;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.pending-alert-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pending-alert-text strong {
+  font-size: 15px;
+  color: #92400e;
+}
+
+.pending-alert-text span {
+  font-size: 13px;
+  color: #a16207;
+}
+
+.view-pending-btn {
+  background: #f59e0b;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.view-pending-btn:hover {
+  background: #d97706;
+}
+
+.pending-preview-list {
+  padding: 12px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pending-preview-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #fcd34d;
+}
+
+.pending-preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pending-preview-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.pending-preview-detail {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.pending-preview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-approve-sm {
+  background: #22c55e;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-approve-sm:hover {
+  background: #16a34a;
+}
+
+.btn-reject-sm {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-reject-sm:hover {
+  background: #dc2626;
+}
+
+@media (max-width: 768px) {
+  .pending-alert-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .view-pending-btn {
+    width: 100%;
+  }
+
+  .pending-preview-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .pending-preview-actions {
+    width: 100%;
+  }
+
+  .btn-approve-sm,
+  .btn-reject-sm {
+    flex: 1;
+  }
+}
+
 .add-btn {
   background: #3b82f6;
   color: white;
