@@ -453,7 +453,7 @@ function Leave() {
                     <div className="pending-preview-info">
                       <span className="pending-preview-name">
                         {req.employee_name}
-                        <span className="pending-preview-dept"> - {isMimix ? req.outlet_name : req.department_name}</span>
+                        <span className="pending-preview-dept"> ({req.emp_code}) - {isMimix ? req.outlet_name : req.department_name}</span>
                       </span>
                       <span className="pending-preview-detail">
                         {req.leave_type_name} • {formatDate(req.start_date)} - {formatDate(req.end_date)} ({req.total_days} days)
@@ -553,7 +553,7 @@ function Leave() {
                           <td>
                             <strong>{req.employee_name}</strong>
                             <div className="employee-sub-info">
-                              {isMimix ? req.outlet_name : req.department_name}
+                              {req.emp_code} • {isMimix ? req.outlet_name : req.department_name}
                             </div>
                           </td>
                           <td>
