@@ -57,6 +57,7 @@ function ESSProfile() {
       name: data.name || '',
       email: data.email || '',
       phone: data.phone || '',
+      username: data.username || '',
       date_of_birth: data.date_of_birth ? data.date_of_birth.split('T')[0] : '',
       address: data.address || '',
       bank_name: data.bank_name || '',
@@ -255,9 +256,51 @@ function ESSProfile() {
             onClick={() => navigate('/ess/change-password')}
           >
             <span className="quick-link-icon">🔐</span>
-            <span>Account Settings</span>
+            <span>Change Password</span>
           </button>
         </div>
+
+        {/* Login Settings Section */}
+        <section className="profile-section" style={{ marginTop: '16px' }}>
+          <div className="section-header">
+            <h2>Login Settings</h2>
+          </div>
+          <p className="section-note" style={{ marginBottom: '12px' }}>
+            Use your username to login to ESS
+          </p>
+          {isEditing ? (
+            <div className="edit-form">
+              <div className="form-group">
+                <label>Username</label>
+                <input
+                  type="text"
+                  name="username"
+                  value={editForm.username}
+                  onChange={(e) => setEditForm({ ...editForm, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+                  placeholder="Enter username (letters, numbers, underscore)"
+                  maxLength={30}
+                  style={{ textTransform: 'lowercase' }}
+                />
+                <small style={{ color: '#64748b', fontSize: '11px' }}>
+                  Min 4 characters. Only letters, numbers, and underscore allowed.
+                </small>
+              </div>
+            </div>
+          ) : (
+            <div className="info-grid">
+              <div className="info-item">
+                <label>Username</label>
+                <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>
+                  {profile.username || <em className="empty">Not set</em>}
+                </span>
+              </div>
+              <div className="info-item">
+                <label>Employee ID</label>
+                <span style={{ fontFamily: 'monospace' }}>{profile.employee_id}</span>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Profile Completion Banner */}
         {!isProfileComplete && (

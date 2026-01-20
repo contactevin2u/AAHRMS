@@ -22,13 +22,13 @@ const PROFILE_REQUIRED_FIELDS = [
 // Fields employee can edit BEFORE profile is complete (during onboarding)
 // Note: EPF, SOCSO, Tax numbers are handled by admin
 const EDITABLE_BEFORE_COMPLETE = [
-  'name', 'date_of_birth', 'address', 'phone', 'email',
+  'name', 'date_of_birth', 'address', 'phone', 'email', 'username',
   'bank_name', 'bank_account_no', 'bank_account_holder',
   'marital_status', 'spouse_working', 'children_count'
 ];
 
 // Fields employee can edit AFTER profile is complete
-const EDITABLE_AFTER_COMPLETE = ['phone', 'address'];
+const EDITABLE_AFTER_COMPLETE = ['phone', 'address', 'username'];
 
 // Fields to HIDE from employee profile response (sensitive financial data)
 const HIDDEN_FIELDS = [
@@ -181,6 +181,30 @@ router.put('/', authenticateEmployee, asyncHandler(async (req, res) => {
 
   const isProfileCompleted = currentResult.rows[0].profile_completed;
   const allowedFields = isProfileCompleted ? EDITABLE_AFTER_COMPLETE : EDITABLE_BEFORE_COMPLETE;
+
+  // Validate username if provided
+  if (req.body.username !== undefined) {
+    const username = req.body.username?.trim().toLowerCase();
+    if (username) {
+      // Check minimum length
+      if (username.length < 4) {
+        return res.status(400).json({ error: 'Username must be at least 4 characters' });
+      }
+      // Check for valid characters (alphanumeric and underscore only)
+      if (!/^[a-z0-9_]+$/.test(username)) {
+        return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+      }
+      // Check uniqueness
+      const existingUser = await pool.query(
+        'SELECT id FROM employees WHERE LOWER(username) = $1 AND id != $2',
+        [username, employeeId]
+      );
+      if (existingUser.rows.length > 0) {
+        return res.status(400).json({ error: 'Username is already taken' });
+      }
+      req.body.username = username; // Normalize to lowercase
+    }
+  }
 
   // Filter incoming data to only allowed fields
   const updateData = {};
