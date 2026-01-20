@@ -423,4 +423,61 @@ router.delete('/picture', authenticateEmployee, asyncHandler(async (req, res) =>
   res.json({ message: 'Profile picture deleted successfully' });
 }));
 
+// Set preset avatar (Mixue avatars for Mimix company only)
+const ALLOWED_PRESET_AVATARS = [
+  '/avatars/mixue/love.jpg',
+  '/avatars/mixue/icecream.jpg',
+  '/avatars/mixue/search.png',
+  '/avatars/mixue/king.png'
+];
+
+router.post('/preset-avatar', authenticateEmployee, asyncHandler(async (req, res) => {
+  const employeeId = req.employee.id;
+  const companyId = req.employee.company_id;
+  const { avatar_url } = req.body;
+
+  // Only allow for Mimix company (company_id = 3)
+  if (companyId !== 3) {
+    return res.status(403).json({ error: 'Preset avatars are only available for Mimix employees' });
+  }
+
+  if (!avatar_url) {
+    throw new ValidationError('Avatar URL is required');
+  }
+
+  // Validate it's an allowed preset avatar
+  if (!ALLOWED_PRESET_AVATARS.includes(avatar_url)) {
+    throw new ValidationError('Invalid preset avatar');
+  }
+
+  // Get current profile picture URL to delete old Cloudinary image if exists
+  const currentResult = await pool.query(
+    'SELECT profile_picture FROM employees WHERE id = $1',
+    [employeeId]
+  );
+
+  const oldPictureUrl = currentResult.rows[0]?.profile_picture;
+
+  // Update employee record with preset avatar URL
+  await pool.query(
+    'UPDATE employees SET profile_picture = $1, updated_at = NOW() WHERE id = $2',
+    [avatar_url, employeeId]
+  );
+
+  // Delete old Cloudinary picture if it was a custom upload (not a preset)
+  if (oldPictureUrl && oldPictureUrl.includes('cloudinary.com')) {
+    const oldPublicId = extractPublicId(oldPictureUrl);
+    if (oldPublicId) {
+      deleteFile(oldPublicId).catch(err => {
+        console.error('Failed to delete old profile picture:', err);
+      });
+    }
+  }
+
+  res.json({
+    message: 'Avatar updated successfully',
+    profile_picture: avatar_url
+  });
+}));
+
 module.exports = router;

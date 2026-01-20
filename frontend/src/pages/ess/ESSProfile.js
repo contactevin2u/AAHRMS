@@ -40,6 +40,14 @@ const compressImage = (file, maxWidth = 800, quality = 0.8) => {
   });
 };
 
+// Mixue preset avatars (for Mimix company only)
+const MIXUE_AVATARS = [
+  { id: 'love', name: 'Love', url: '/avatars/mixue/love.jpg' },
+  { id: 'icecream', name: 'Ice Cream', url: '/avatars/mixue/icecream.jpg' },
+  { id: 'search', name: 'Search', url: '/avatars/mixue/search.png' },
+  { id: 'king', name: 'Snow King', url: '/avatars/mixue/king.png' },
+];
+
 // Field labels for display
 const FIELD_LABELS = {
   name: 'Full Name',
@@ -74,6 +82,7 @@ function ESSProfile() {
   const fileInputRef = useRef(null);
   const [uploadingPicture, setUploadingPicture] = useState(false);
   const [pictureError, setPictureError] = useState('');
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -225,6 +234,32 @@ function ESSProfile() {
     }
   };
 
+  // Handle preset avatar selection (Mixue only)
+  const handleSelectPresetAvatar = async (avatarUrl) => {
+    setPictureError('');
+    setUploadingPicture(true);
+    setShowAvatarPicker(false);
+
+    try {
+      // Use the preset URL directly
+      const res = await essApi.setPresetAvatar(avatarUrl);
+
+      // Update profile with new picture
+      setProfile(prev => ({
+        ...prev,
+        profile_picture: res.data.profile_picture
+      }));
+
+      setSaveSuccess('Avatar updated!');
+      setTimeout(() => setSaveSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error setting avatar:', err);
+      setPictureError(err.response?.data?.error || 'Failed to set avatar');
+    } finally {
+      setUploadingPicture(false);
+    }
+  };
+
   const formatDate = (date) => {
     if (!date) return '-';
     return new Date(date).toLocaleDateString('en-MY', {
@@ -352,7 +387,7 @@ function ESSProfile() {
           <div className="profile-avatar-container">
             <div
               className={`profile-avatar ${uploadingPicture ? 'uploading' : ''}`}
-              onClick={handlePictureClick}
+              onClick={() => isMimixCompany(profile) ? setShowAvatarPicker(true) : fileInputRef.current?.click()}
               style={profile.profile_picture ? {
                 backgroundImage: `url(${profile.profile_picture})`,
                 backgroundSize: 'cover',
@@ -364,7 +399,7 @@ function ESSProfile() {
             </div>
             <button
               className="change-photo-btn"
-              onClick={handlePictureClick}
+              onClick={() => isMimixCompany(profile) ? setShowAvatarPicker(true) : fileInputRef.current?.click()}
               disabled={uploadingPicture}
             >
               {profile.profile_picture ? 'Change' : 'Add Photo'}
@@ -394,6 +429,51 @@ function ESSProfile() {
             {getStatusBadge(profile.status)}
           </div>
         </div>
+
+        {/* Avatar Picker Modal (Mimix only) */}
+        {showAvatarPicker && isMimixCompany(profile) && (
+          <div className="avatar-picker-overlay" onClick={() => setShowAvatarPicker(false)}>
+            <div className="avatar-picker-modal" onClick={e => e.stopPropagation()}>
+              <div className="avatar-picker-header">
+                <h3>Choose Profile Picture</h3>
+                <button className="close-btn" onClick={() => setShowAvatarPicker(false)}>&times;</button>
+              </div>
+
+              <div className="avatar-picker-section">
+                <h4>Mixue Avatars</h4>
+                <div className="avatar-grid">
+                  {MIXUE_AVATARS.map(avatar => (
+                    <div
+                      key={avatar.id}
+                      className={`avatar-option ${profile.profile_picture === avatar.url ? 'selected' : ''}`}
+                      onClick={() => handleSelectPresetAvatar(avatar.url)}
+                    >
+                      <img src={avatar.url} alt={avatar.name} />
+                      <span>{avatar.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="avatar-picker-divider">
+                <span>or</span>
+              </div>
+
+              <div className="avatar-picker-section">
+                <h4>Upload Your Own Photo</h4>
+                <button
+                  className="upload-photo-btn"
+                  onClick={() => {
+                    setShowAvatarPicker(false);
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  Choose from Gallery
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Links */}
         <div className="profile-quick-links">

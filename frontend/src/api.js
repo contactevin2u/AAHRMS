@@ -487,6 +487,7 @@ export const essApi = {
   completeProfile: () => api.post('/ess/profile/complete', {}, essApiConfig),
   uploadProfilePicture: (imageData) => api.post('/ess/profile/picture', { image: imageData }, essApiConfig),
   deleteProfilePicture: () => api.delete('/ess/profile/picture', essApiConfig),
+  setPresetAvatar: (avatarUrl) => api.post('/ess/profile/preset-avatar', { avatar_url: avatarUrl }, essApiConfig),
 
   // Payslips
   getPayslips: (params) => api.get('/ess/payslips', { params, ...essApiConfig }),
