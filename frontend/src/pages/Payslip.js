@@ -13,6 +13,10 @@ function Payslip() {
   const [loading, setLoading] = useState(true);
   const printRef = useRef();
 
+  // Check if company uses outlets (Mimix = company_id 3)
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isMimix = adminInfo.company_id === 3;
+
   useEffect(() => {
     fetchPayslip();
   }, [id]);
@@ -137,8 +141,8 @@ function Payslip() {
                 <span className="value">{payslip.employee.ic_number || '-'}</span>
               </div>
               <div className="info-row">
-                <span className="label">Department:</span>
-                <span className="value">{payslip.employee.department || '-'}</span>
+                <span className="label">{isMimix ? 'Outlet' : 'Department'}:</span>
+                <span className="value">{isMimix ? payslip.employee.outlet_name : payslip.employee.department || '-'}</span>
               </div>
               <div className="info-row">
                 <span className="label">Position:</span>

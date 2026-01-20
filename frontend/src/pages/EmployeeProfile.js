@@ -7,6 +7,9 @@ function EmployeeProfile() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
 
+  // Check if employee is from Mimix (company_id 3)
+  const isMimix = profile?.company_id === 3;
+
   useEffect(() => {
     fetchProfile();
   }, []);
@@ -96,8 +99,8 @@ function EmployeeProfile() {
             <h2>Employment Information</h2>
             <div className="profile-grid">
               <div className="profile-item">
-                <label>Department</label>
-                <span>{profile?.department_name || '-'}</span>
+                <label>{isMimix ? 'Outlet' : 'Department'}</label>
+                <span>{isMimix ? profile?.outlet_name : profile?.department_name || '-'}</span>
               </div>
               <div className="profile-item">
                 <label>Position</label>

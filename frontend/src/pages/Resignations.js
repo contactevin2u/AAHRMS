@@ -4,6 +4,10 @@ import Layout from '../components/Layout';
 import './Resignations.css';
 
 function Resignations() {
+  // Check if company uses outlets (Mimix = company_id 3)
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isMimix = adminInfo.company_id === 3;
+
   const [resignations, setResignations] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -289,7 +293,7 @@ function Resignations() {
                     <div className="card-header">
                       <div>
                         <h3>{r.employee_name}</h3>
-                        <p className="emp-info">{r.emp_code} - {r.department_name || 'No Dept'}</p>
+                        <p className="emp-info">{r.emp_code} - {isMimix ? (r.outlet_name || 'No Outlet') : (r.department_name || 'No Dept')}</p>
                       </div>
                       {getStatusBadge(r.status)}
                     </div>
@@ -449,7 +453,7 @@ function Resignations() {
                   <div className="info-grid">
                     <div><span>Name:</span><strong>{selectedResignation.employee_name}</strong></div>
                     <div><span>ID:</span><strong>{selectedResignation.emp_code}</strong></div>
-                    <div><span>Department:</span><strong>{selectedResignation.department_name || '-'}</strong></div>
+                    <div><span>{isMimix ? 'Outlet' : 'Department'}:</span><strong>{isMimix ? selectedResignation.outlet_name : selectedResignation.department_name || '-'}</strong></div>
                     <div><span>Basic Salary:</span><strong>{formatAmount(selectedResignation.default_basic_salary)}</strong></div>
                   </div>
                 </div>

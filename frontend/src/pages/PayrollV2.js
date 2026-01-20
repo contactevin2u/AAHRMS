@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { payrollV2Api, departmentApi, payrollApi } from '../api';
+import { payrollV2Api, departmentApi, payrollApi, outletsApi } from '../api';
 import Layout from '../components/Layout';
 import './PayrollV2.css';
 
 function PayrollV2() {
+  // Check if company uses outlets (Mimix = company_id 3)
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isMimix = adminInfo.company_id === 3;
+
   const [runs, setRuns] = useState([]);
   const [selectedRun, setSelectedRun] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -11,6 +15,7 @@ function PayrollV2() {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [departments, setDepartments] = useState([]);
+  const [outlets, setOutlets] = useState([]);
 
   // OT Summary state
   const [otSummary, setOtSummary] = useState(null);
@@ -60,10 +65,15 @@ function PayrollV2() {
 
   const fetchDepartments = async () => {
     try {
-      const res = await departmentApi.getAll();
-      setDepartments(res.data);
+      if (isMimix) {
+        const res = await outletsApi.getAll();
+        setOutlets(res.data);
+      } else {
+        const res = await departmentApi.getAll();
+        setDepartments(res.data);
+      }
     } catch (error) {
-      console.error('Error fetching departments:', error);
+      console.error('Error fetching departments/outlets:', error);
     }
   };
 
@@ -388,7 +398,7 @@ function PayrollV2() {
             <h3>Employee Details</h3>
             <p><strong>Name:</strong> ${emp.name || '-'}</p>
             <p><strong>Employee ID:</strong> ${emp.code || '-'}</p>
-            <p><strong>Department:</strong> ${emp.department || '-'}</p>
+            <p><strong>${isMimix ? 'Outlet' : 'Department'}:</strong> ${isMimix ? emp.outlet_name : emp.department || '-'}</p>
             <p><strong>Position:</strong> ${emp.position || '-'}</p>
           </div>
           <div class="info-block">
@@ -702,20 +712,20 @@ function PayrollV2() {
                   </div>
                 </div>
                 <div className="form-group">
-                  <label>Department</label>
+                  <label>{isMimix ? 'Outlet' : 'Department'}</label>
                   <select
                     value={createForm.department_id}
                     onChange={(e) => setCreateForm({ ...createForm, department_id: e.target.value })}
                   >
-                    <option value="">All Departments</option>
-                    {departments.map(dept => (
-                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    <option value="">{isMimix ? 'All Outlets' : 'All Departments'}</option>
+                    {(isMimix ? outlets : departments).map(item => (
+                      <option key={item.id} value={item.id}>{item.name}</option>
                     ))}
                   </select>
                 </div>
                 <div className="info-box">
                   {createForm.department_id
-                    ? `This will create payroll items for active employees in the selected department.`
+                    ? `This will create payroll items for active employees in the selected ${isMimix ? 'outlet' : 'department'}.`
                     : `This will create payroll items for all active employees.`
                   }
                   {' '}Unpaid leave and approved claims will be auto-calculated.
@@ -767,7 +777,7 @@ function PayrollV2() {
                             <thead>
                               <tr>
                                 <th>Employee</th>
-                                <th>Dept</th>
+                                <th>{isMimix ? 'Outlet' : 'Dept'}</th>
                                 <th className="right">Approved</th>
                                 <th className="right">Pending</th>
                                 <th className="right">Est. Pay</th>
@@ -777,7 +787,7 @@ function PayrollV2() {
                               {otSummary.summary.map(emp => (
                                 <tr key={emp.employee_id} className={emp.pending_ot_hours > 0 ? 'has-pending' : ''}>
                                   <td>{emp.employee_name}</td>
-                                  <td>{emp.department_name || '-'}</td>
+                                  <td>{isMimix ? emp.outlet_name : emp.department_name || '-'}</td>
                                   <td className="right">{emp.approved_ot_hours} hrs</td>
                                   <td className="right">{emp.pending_ot_hours > 0 ? `${emp.pending_ot_hours} hrs` : '-'}</td>
                                   <td className="right">RM {emp.estimated_ot_pay.toLocaleString()}</td>
@@ -811,7 +821,7 @@ function PayrollV2() {
           <div className="modal-overlay" onClick={() => setShowItemModal(false)}>
             <div className="modal large" onClick={(e) => e.stopPropagation()}>
               <h2>Edit Payroll - {editingItem.employee_name}</h2>
-              <p className="dept-info">Department: <strong>{editingItem.department_name || 'Unknown'}</strong></p>
+              <p className="dept-info">{isMimix ? 'Outlet' : 'Department'}: <strong>{isMimix ? editingItem.outlet_name : editingItem.department_name || 'Unknown'}</strong></p>
               <form onSubmit={handleUpdateItem}>
                 {/* Basic Salary - All departments */}
                 <div className="form-row">
