@@ -159,7 +159,7 @@ function App() {
           path="/admin/leave"
           element={
             <ProtectedRoute>
-              <LeaveBalances />
+              <Leave />
             </ProtectedRoute>
           }
         />
