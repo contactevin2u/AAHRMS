@@ -663,6 +663,325 @@
   background: #2563eb;
 }
 
+/* =====================================================
+   LEAVE BALANCES TABLE STYLES (from LeaveBalances)
+   ===================================================== */
+
+/* Search Input */
+.leave-page .search-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: 300px;
+}
+
+/* Group Toggle Button */
+.leave-page .group-toggle-btn {
+  padding: 10px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.leave-page .group-toggle-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+/* Groups */
+.leave-page .leave-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.leave-page .leave-group {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+}
+
+.leave-page .leave-group.outlet-group .group-header {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.leave-page .leave-group.dept-group .group-header {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.leave-page .group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  cursor: pointer;
+  color: white;
+}
+
+.leave-page .collapse-icon {
+  font-size: 12px;
+  width: 16px;
+}
+
+.leave-page .group-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.leave-page .group-count {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+/* Table */
+.leave-page .table-wrapper {
+  background: white;
+  overflow-x: auto;
+}
+
+.leave-page .balance-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.leave-page .balance-table thead tr {
+  background: #f8fafc;
+}
+
+.leave-page .balance-table th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.leave-page .balance-table td {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.leave-page .balance-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* Column widths */
+.leave-page .col-id {
+  width: 90px;
+  white-space: nowrap;
+}
+
+.leave-page .col-dept {
+  width: 180px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leave-page .col-name {
+  min-width: 200px;
+  font-weight: 500;
+}
+
+.leave-page .col-balance {
+  width: 70px;
+  text-align: center !important;
+}
+
+.leave-page .col-actions {
+  width: 70px;
+  text-align: center !important;
+}
+
+/* Grouped table - no dept column */
+.leave-page .balance-table.grouped .col-name {
+  min-width: 280px;
+}
+
+/* Balance cells */
+.leave-page .balance-cell {
+  text-align: center !important;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.leave-page .balance-cell.al {
+  color: #2563eb;
+}
+
+.leave-page .balance-cell.ml {
+  color: #059669;
+}
+
+.leave-page .balance-cell.hl {
+  color: #7c3aed;
+}
+
+.leave-page .balance-cell.ul {
+  color: #64748b;
+}
+
+.leave-page .balance-cell.ul.negative {
+  color: #dc2626;
+}
+
+.leave-page .balance-cell .clickable {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.leave-page .balance-cell .clickable:hover {
+  color: #991b1b;
+}
+
+/* Edit Button */
+.leave-page .edit-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.leave-page .edit-btn:hover {
+  background: #2563eb;
+}
+
+/* Edit sections in modal */
+.leave-page .edit-section {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.leave-page .edit-section h3 {
+  font-size: 14px;
+  color: #1e293b;
+  margin: 0 0 12px 0;
+  font-weight: 600;
+}
+
+.leave-page .edit-row {
+  display: flex;
+  gap: 12px;
+}
+
+.leave-page .edit-field {
+  flex: 1;
+}
+
+.leave-page .edit-field label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.leave-page .edit-field input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.leave-page .edit-field input:disabled {
+  background: #e2e8f0;
+  color: #059669;
+  font-weight: 600;
+}
+
+.leave-page .edit-field input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* Unpaid leave modal */
+.leave-page .unpaid-total {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  color: #991b1b;
+}
+
+.leave-page .unpaid-total strong {
+  color: #dc2626;
+}
+
+.leave-page .unpaid-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.leave-page .unpaid-month {
+  background: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.leave-page .unpaid-month .month-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #e2e8f0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.leave-page .unpaid-month .month-days {
+  color: #dc2626;
+}
+
+.leave-page .unpaid-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.leave-page .unpaid-item:last-child {
+  border-bottom: none;
+}
+
+.leave-page .unpaid-item .dates {
+  color: #475569;
+}
+
+.leave-page .unpaid-item .days {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.leave-page .error {
+  text-align: center;
+  padding: 20px;
+  color: #dc2626;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .leave-page {
@@ -684,8 +1003,10 @@
     flex-direction: column;
   }
 
-  .filters-row select {
+  .filters-row select,
+  .leave-page .search-input {
     width: 100%;
+    max-width: none;
   }
 
   .form-row {
@@ -695,5 +1016,13 @@
 
   .balance-cards {
     grid-template-columns: 1fr;
+  }
+
+  .leave-page .edit-row {
+    flex-direction: column;
+  }
+
+  .leave-page .balance-table {
+    min-width: 800px;
   }
 }

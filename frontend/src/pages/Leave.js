@@ -16,10 +16,41 @@ function Leave() {
   const [pendingCount, setPendingCount] = useState(0);
   const [expandedGroups, setExpandedGroups] = useState({});
 
-  // Detect if company uses outlets or departments
-  const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
-  const isOutletBased = outlets.length > 0;
-  const isDepartmentBased = !isOutletBased && departments.length > 0;
+  // Get company_id from adminInfo
+  const [companyId] = useState(() => {
+    try {
+      const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+      if (adminInfo.role === 'super_admin') {
+        const selectedCompanyId = localStorage.getItem('selectedCompanyId');
+        return selectedCompanyId ? parseInt(selectedCompanyId) : null;
+      }
+      return adminInfo.company_id;
+    } catch {
+      return null;
+    }
+  });
+
+  const isMimix = companyId === 3;
+
+  // Grouping for balances table
+  const [groupByEnabled, setGroupByEnabled] = useState(true);
+  const [balanceSearch, setBalanceSearch] = useState('');
+
+  // Edit balance modal (table style)
+  const [showEditBalanceModal, setShowEditBalanceModal] = useState(false);
+  const [editingBalance, setEditingBalance] = useState(null);
+  const [editBalanceForm, setEditBalanceForm] = useState({
+    al_entitled: 0, al_used: 0,
+    ml_entitled: 0, ml_used: 0,
+    hl_entitled: 0, hl_used: 0
+  });
+  const [savingBalance, setSavingBalance] = useState(false);
+
+  // Unpaid leave detail modal
+  const [showUnpaidModal, setShowUnpaidModal] = useState(false);
+  const [unpaidEmployee, setUnpaidEmployee] = useState(null);
+  const [unpaidData, setUnpaidData] = useState(null);
+  const [loadingUnpaid, setLoadingUnpaid] = useState(false);
 
   // Filters
   const [filter, setFilter] = useState({
@@ -69,7 +100,7 @@ function Leave() {
     } else if (activeTab === 'holidays') {
       fetchHolidays();
     }
-  }, [activeTab, filter]);
+  }, [activeTab, filter, balanceSearch]);
 
   const fetchInitialData = async () => {
     try {
@@ -111,11 +142,11 @@ function Leave() {
   const fetchBalances = async () => {
     setLoading(true);
     try {
-      const params = { year: filter.year };
+      const params = { year: filter.year, search: balanceSearch };
       if (filter.outlet_id) params.outlet_id = filter.outlet_id;
       if (filter.department_id) params.department_id = filter.department_id;
-      const res = await leaveApi.getBalances(params);
-      setBalances(res.data);
+      const res = await leaveApi.getBalancesTable(params);
+      setBalances(res.data.employees || []);
     } catch (error) {
       console.error('Error fetching balances:', error);
     } finally {
@@ -123,41 +154,111 @@ function Leave() {
     }
   };
 
-  // Group balances by outlet or department
+  // Group balances by outlet or department (table style from LeaveBalances)
   const getBalancesByGroup = () => {
     const grouped = {};
     balances.forEach(emp => {
-      // Determine grouping key based on what's available
       let groupKey, groupName;
-      if (emp.outlet_id) {
+      if (isMimix && emp.outlet_id) {
         groupKey = 'outlet-' + emp.outlet_id;
-        groupName = emp.outlet_name;
-      } else if (emp.department_id) {
+        groupName = emp.outlet_name || 'Unknown Outlet';
+      } else if (!isMimix && emp.department_id) {
         groupKey = 'dept-' + emp.department_id;
-        groupName = emp.department_name;
+        groupName = emp.department_name || 'Unknown Department';
       } else {
         groupKey = 'no-group';
-        groupName = 'No Group Assigned';
+        groupName = isMimix ? 'No Outlet Assigned' : 'No Department Assigned';
       }
 
       if (!grouped[groupKey]) {
         grouped[groupKey] = {
-          group_id: emp.outlet_id || emp.department_id,
+          group_id: isMimix ? emp.outlet_id : emp.department_id,
           group_name: groupName,
-          group_type: emp.outlet_id ? 'outlet' : 'department',
-          employees: [],
-          supervisors: [],
-          managers: []
+          group_type: isMimix ? 'outlet' : 'department',
+          employees: []
         };
-      }
-      if (emp.employee_role === 'supervisor') {
-        grouped[groupKey].supervisors.push(emp);
-      } else if (emp.employee_role === 'manager') {
-        grouped[groupKey].managers.push(emp);
       }
       grouped[groupKey].employees.push(emp);
     });
     return grouped;
+  };
+
+  // Format number - remove unnecessary decimals
+  const formatNum = (num) => {
+    const n = parseFloat(num) || 0;
+    return Number.isInteger(n) ? n : n.toFixed(1).replace(/\.0$/, '');
+  };
+
+  // Format balance display: available/entitled
+  const formatBalance = (available, entitled) => {
+    return `${formatNum(available)}/${formatNum(entitled)}`;
+  };
+
+  // Edit balance handler (table style)
+  const handleEditBalance = (emp) => {
+    setEditingBalance(emp);
+    setEditBalanceForm({
+      al_entitled: emp.al_entitled || 0,
+      al_used: emp.al_used || 0,
+      ml_entitled: emp.ml_entitled || 0,
+      ml_used: emp.ml_used || 0,
+      hl_entitled: emp.hl_entitled || 0,
+      hl_used: emp.hl_used || 0
+    });
+    setShowEditBalanceModal(true);
+  };
+
+  const handleSaveBalanceEdit = async () => {
+    if (!editingBalance) return;
+    setSavingBalance(true);
+    try {
+      const updates = [];
+      if (editingBalance.al_balance_id) {
+        updates.push(leaveApi.updateBalance(editingBalance.al_balance_id, {
+          entitled_days: editBalanceForm.al_entitled,
+          used_days: editBalanceForm.al_used,
+          carried_forward: 0
+        }));
+      }
+      if (editingBalance.ml_balance_id) {
+        updates.push(leaveApi.updateBalance(editingBalance.ml_balance_id, {
+          entitled_days: editBalanceForm.ml_entitled,
+          used_days: editBalanceForm.ml_used,
+          carried_forward: 0
+        }));
+      }
+      if (editingBalance.hl_balance_id) {
+        updates.push(leaveApi.updateBalance(editingBalance.hl_balance_id, {
+          entitled_days: editBalanceForm.hl_entitled,
+          used_days: editBalanceForm.hl_used,
+          carried_forward: 0
+        }));
+      }
+      await Promise.all(updates);
+      setShowEditBalanceModal(false);
+      fetchBalances();
+    } catch (error) {
+      console.error('Error saving balance:', error);
+      alert('Failed to save changes');
+    } finally {
+      setSavingBalance(false);
+    }
+  };
+
+  // View unpaid leave details
+  const handleViewUnpaid = async (emp) => {
+    setUnpaidEmployee(emp);
+    setShowUnpaidModal(true);
+    setLoadingUnpaid(true);
+    try {
+      const res = await leaveApi.getUnpaidMonthly(emp.id, filter.year);
+      setUnpaidData(res.data);
+    } catch (error) {
+      console.error('Error fetching unpaid details:', error);
+      setUnpaidData(null);
+    } finally {
+      setLoadingUnpaid(false);
+    }
   };
 
   const toggleGroup = (groupKey) => {
@@ -478,7 +579,7 @@ function Leave() {
           </>
         )}
 
-        {/* Balances Tab */}
+        {/* Balances Tab - Table Layout */}
         {activeTab === 'balances' && (
           <>
             <div className="filters-row">
@@ -490,138 +591,157 @@ function Leave() {
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
-              {outlets.length > 0 && (
+              {isMimix ? (
                 <select
                   value={filter.outlet_id}
-                  onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value, department_id: '' })}
+                  onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value })}
                 >
                   <option value="">All Outlets</option>
-                  {outlets.map(outlet => (
-                    <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
+                  {outlets.map(o => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
                   ))}
                 </select>
-              )}
-              {departments.length > 0 && (
+              ) : (
                 <select
                   value={filter.department_id}
-                  onChange={(e) => setFilter({ ...filter, department_id: e.target.value, outlet_id: '' })}
+                  onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}
                 >
                   <option value="">All Departments</option>
-                  {departments.map(dept => (
-                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
               )}
+              <input
+                type="text"
+                placeholder="Search by name or ID..."
+                value={balanceSearch}
+                onChange={(e) => setBalanceSearch(e.target.value)}
+                className="search-input"
+              />
+              <button
+                className={`group-toggle-btn ${groupByEnabled ? 'active' : ''}`}
+                onClick={() => setGroupByEnabled(!groupByEnabled)}
+              >
+                {groupByEnabled ? 'Grouped' : 'Flat'}
+              </button>
               <button onClick={handleInitializeAllBalances} className="add-btn">
-                Initialize All Balances
+                Initialize All
               </button>
             </div>
 
             {loading ? (
               <div className="loading">Loading...</div>
-            ) : (
-              <div className="outlet-groups">
-                {Object.entries(getBalancesByGroup()).map(([groupKey, groupData]) => (
-                  <div key={groupKey} className="outlet-group">
-                    <div
-                      className="outlet-header"
-                      onClick={() => toggleGroup(groupKey)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '12px 16px',
-                        backgroundColor: groupData.group_type === 'department' ? '#059669' : '#1e40af',
-                        color: 'white',
-                        borderRadius: '8px 8px 0 0',
-                        cursor: 'pointer',
-                        marginTop: '16px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '18px' }}>{expandedGroups[groupKey] ? '▼' : '▶'}</span>
-                        <div>
-                          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>{groupData.group_name}</h3>
-                          <div style={{ fontSize: '12px', opacity: 0.9, marginTop: '2px' }}>
-                            {groupData.employees.length} staff
-                            {groupData.supervisors.length > 0 && ` • ${groupData.supervisors.length} supervisor${groupData.supervisors.length > 1 ? 's' : ''}`}
-                            {groupData.managers.length > 0 && ` • ${groupData.managers.length} manager${groupData.managers.length > 1 ? 's' : ''}`}
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '12px', textAlign: 'right' }}>
-                        {groupData.managers.length > 0 && (
-                          <div><span style={{ opacity: 0.8 }}>Manager: </span>{groupData.managers.map(m => m.employee_name).join(', ')}</div>
-                        )}
-                        {groupData.supervisors.length > 0 && (
-                          <div><span style={{ opacity: 0.8 }}>Supervisor: </span>{groupData.supervisors.map(s => s.employee_name).join(', ')}</div>
-                        )}
-                      </div>
+            ) : groupByEnabled ? (
+              // Grouped View
+              <div className="leave-groups">
+                {Object.entries(getBalancesByGroup()).map(([groupKey, group]) => (
+                  <div
+                    key={groupKey}
+                    className={`leave-group ${group.group_type === 'outlet' ? 'outlet-group' : 'dept-group'}`}
+                  >
+                    <div className="group-header" onClick={() => toggleGroup(groupKey)}>
+                      <span className="collapse-icon">
+                        {expandedGroups[groupKey] ? '▼' : '▶'}
+                      </span>
+                      <span className="group-name">{group.group_name}</span>
+                      <span className="group-count">({group.employees.length} employees)</span>
                     </div>
-
                     {expandedGroups[groupKey] && (
-                      <div className="balance-cards" style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                        gap: '12px',
-                        padding: '16px',
-                        backgroundColor: '#f8fafc',
-                        borderRadius: '0 0 8px 8px',
-                        border: '1px solid #e2e8f0',
-                        borderTop: 'none'
-                      }}>
-                        {groupData.employees.map(emp => {
-                          const empBalances = emp.balances || [];
-                          const isSupervisor = emp.employee_role === 'supervisor';
-                          const isManager = emp.employee_role === 'manager';
-                          return (
-                            <div key={emp.employee_id} className="balance-card" style={{
-                              border: isSupervisor ? '2px solid #f59e0b' : isManager ? '2px solid #8b5cf6' : '1px solid #e2e8f0',
-                              backgroundColor: 'white'
-                            }}>
-                              <div className="balance-card-header">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <h3 style={{ margin: 0, fontSize: '14px' }}>{emp.employee_name}</h3>
-                                  {isSupervisor && <span style={{ fontSize: '10px', backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 6px', borderRadius: '4px' }}>SV</span>}
-                                  {isManager && <span style={{ fontSize: '10px', backgroundColor: '#ede9fe', color: '#7c3aed', padding: '2px 6px', borderRadius: '4px' }}>MGR</span>}
-                                </div>
-                                <span className="emp-code">{emp.emp_code}</span>
-                              </div>
-                              <div className="balance-items">
-                                {empBalances.filter(b => b.code !== 'UL' && b.leave_type_id).map(balance => {
-                                  const entitled = parseFloat(balance.entitled) || 0;
-                                  const used = parseFloat(balance.used) || 0;
-                                  const available = entitled - used;
-                                  return (
-                                    <div key={balance.leave_type_id} className="balance-item">
-                                      <span className="balance-type">{balance.code}</span>
-                                      <span className="balance-value">
-                                        {balance.entitled !== null ? (
-                                          <>{available} / {entitled}</>
-                                        ) : (
-                                          <span className="not-init">-</span>
-                                        )}
+                      <div className="table-wrapper">
+                        <table className="balance-table grouped">
+                          <thead>
+                            <tr>
+                              <th className="col-id">ID</th>
+                              <th className="col-name">Name</th>
+                              <th className="col-balance">AL</th>
+                              <th className="col-balance">ML</th>
+                              <th className="col-balance">HL</th>
+                              <th className="col-balance">UL</th>
+                              <th className="col-actions">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.employees.map(emp => {
+                              const ulDays = parseFloat(emp.ul_days) || 0;
+                              const isNegativeUL = ulDays > 0;
+                              return (
+                                <tr key={emp.id}>
+                                  <td className="col-id">{emp.emp_code}</td>
+                                  <td className="col-name">{emp.name}</td>
+                                  <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
+                                  <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
+                                  <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
+                                  <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>
+                                    {isNegativeUL ? (
+                                      <span className="clickable" onClick={() => handleViewUnpaid(emp)}>
+                                        -{formatNum(ulDays)}
                                       </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                              <button
-                                className="init-btn"
-                                onClick={() => {
-                                  setSelectedEmployee(employees.find(e => e.id === emp.employee_id) || emp);
-                                  setShowBalanceModal(true);
-                                }}
-                              >
-                                + Add Balance
-                              </button>
-                            </div>
-                          );
-                        })}
+                                    ) : '0'}
+                                  </td>
+                                  <td className="col-actions">
+                                    <button className="edit-btn" onClick={() => handleEditBalance(emp)}>Edit</button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>
                 ))}
+                {Object.keys(getBalancesByGroup()).length === 0 && (
+                  <div className="no-data">No employees found</div>
+                )}
+              </div>
+            ) : (
+              // Flat View
+              <div className="table-wrapper">
+                <table className="balance-table">
+                  <thead>
+                    <tr>
+                      <th className="col-id">ID</th>
+                      <th className="col-dept">Dept/Outlet</th>
+                      <th className="col-name">Name</th>
+                      <th className="col-balance">AL</th>
+                      <th className="col-balance">ML</th>
+                      <th className="col-balance">HL</th>
+                      <th className="col-balance">UL</th>
+                      <th className="col-actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {balances.length === 0 ? (
+                      <tr><td colSpan="8" className="no-data">No employees found</td></tr>
+                    ) : (
+                      balances.map(emp => {
+                        const ulDays = parseFloat(emp.ul_days) || 0;
+                        const isNegativeUL = ulDays > 0;
+                        return (
+                          <tr key={emp.id}>
+                            <td className="col-id">{emp.emp_code}</td>
+                            <td className="col-dept">{emp.department_name || emp.outlet_name || '-'}</td>
+                            <td className="col-name">{emp.name}</td>
+                            <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
+                            <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
+                            <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
+                            <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>
+                              {isNegativeUL ? (
+                                <span className="clickable" onClick={() => handleViewUnpaid(emp)}>
+                                  -{formatNum(ulDays)}
+                                </span>
+                              ) : '0'}
+                            </td>
+                            <td className="col-actions">
+                              <button className="edit-btn" onClick={() => handleEditBalance(emp)}>Edit</button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
             )}
           </>
@@ -841,6 +961,157 @@ function Leave() {
                   <button type="submit" className="save-btn">Add Holiday</button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Balance Modal (Table Style) */}
+        {showEditBalanceModal && editingBalance && (
+          <div className="modal-overlay" onClick={() => setShowEditBalanceModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Edit Leave Balances</h2>
+              <p className="modal-subtitle">{editingBalance.name} ({editingBalance.emp_code})</p>
+
+              <div className="edit-section">
+                <h3>Annual Leave (AL)</h3>
+                <div className="edit-row">
+                  <div className="edit-field">
+                    <label>Entitled</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editBalanceForm.al_entitled}
+                      onChange={(e) => setEditBalanceForm({ ...editBalanceForm, al_entitled: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="edit-field">
+                    <label>Used</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editBalanceForm.al_used}
+                      onChange={(e) => setEditBalanceForm({ ...editBalanceForm, al_used: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="edit-field">
+                    <label>Available</label>
+                    <input type="text" value={formatNum(editBalanceForm.al_entitled - editBalanceForm.al_used)} disabled />
+                  </div>
+                </div>
+              </div>
+
+              <div className="edit-section">
+                <h3>Medical Leave (ML)</h3>
+                <div className="edit-row">
+                  <div className="edit-field">
+                    <label>Entitled</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editBalanceForm.ml_entitled}
+                      onChange={(e) => setEditBalanceForm({ ...editBalanceForm, ml_entitled: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="edit-field">
+                    <label>Used</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editBalanceForm.ml_used}
+                      onChange={(e) => setEditBalanceForm({ ...editBalanceForm, ml_used: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="edit-field">
+                    <label>Available</label>
+                    <input type="text" value={formatNum(editBalanceForm.ml_entitled - editBalanceForm.ml_used)} disabled />
+                  </div>
+                </div>
+              </div>
+
+              <div className="edit-section">
+                <h3>Hospitalization Leave (HL)</h3>
+                <div className="edit-row">
+                  <div className="edit-field">
+                    <label>Entitled</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editBalanceForm.hl_entitled}
+                      onChange={(e) => setEditBalanceForm({ ...editBalanceForm, hl_entitled: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="edit-field">
+                    <label>Used</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editBalanceForm.hl_used}
+                      onChange={(e) => setEditBalanceForm({ ...editBalanceForm, hl_used: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="edit-field">
+                    <label>Available</label>
+                    <input type="text" value={formatNum(editBalanceForm.hl_entitled - editBalanceForm.hl_used)} disabled />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button className="cancel-btn" onClick={() => setShowEditBalanceModal(false)}>Cancel</button>
+                <button className="save-btn" onClick={handleSaveBalanceEdit} disabled={savingBalance}>
+                  {savingBalance ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Unpaid Leave Detail Modal */}
+        {showUnpaidModal && unpaidEmployee && (
+          <div className="modal-overlay" onClick={() => setShowUnpaidModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Unpaid Leave Details</h2>
+              <p className="modal-subtitle">{unpaidEmployee.name} - {filter.year}</p>
+
+              {loadingUnpaid ? (
+                <div className="loading">Loading...</div>
+              ) : unpaidData ? (
+                <>
+                  <div className="unpaid-total">
+                    Total: <strong>{formatNum(unpaidData.total_unpaid_days)} days</strong>
+                  </div>
+
+                  {unpaidData.monthly_breakdown.length === 0 ? (
+                    <div className="no-data">No unpaid leave records</div>
+                  ) : (
+                    <div className="unpaid-list">
+                      {unpaidData.monthly_breakdown.map(month => (
+                        <div key={month.month} className="unpaid-month">
+                          <div className="month-header">
+                            <span>{month.month_name}</span>
+                            <span className="month-days">{formatNum(month.total_days)} days</span>
+                          </div>
+                          {month.requests.map(req => (
+                            <div key={req.id} className="unpaid-item">
+                              <span className="dates">
+                                {new Date(req.start_date).toLocaleDateString()}
+                                {req.start_date !== req.end_date && ` - ${new Date(req.end_date).toLocaleDateString()}`}
+                              </span>
+                              <span className="days">{formatNum(req.total_days)}d</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="error">Failed to load data</div>
+              )}
+
+              <div className="modal-actions">
+                <button className="cancel-btn" onClick={() => setShowUnpaidModal(false)}>Close</button>
+              </div>
             </div>
           </div>
         )}
