@@ -198,14 +198,14 @@ function ESSDashboard() {
             <h2>Pending Approvals</h2>
             <div className="approvals-grid">
               {pendingApprovals.leave > 0 && (
-                <Link to="/ess/leave" className="approval-card leave">
+                <Link to="/ess/requests?tab=leave-approval" className="approval-card leave">
                   <div className="approval-badge">{pendingApprovals.leave}</div>
                   <div className="approval-icon">&#x1F4C5;</div>
                   <span className="approval-label">Leave Requests</span>
                 </Link>
               )}
               {pendingApprovals.ot > 0 && (
-                <Link to="/ess/ot-approval" className="approval-card ot">
+                <Link to="/ess/requests?tab=ot" className="approval-card ot">
                   <div className="approval-badge">{pendingApprovals.ot}</div>
                   <div className="approval-icon">&#x23F0;</div>
                   <span className="approval-label">OT Approvals</span>
@@ -220,7 +220,7 @@ function ESSDashboard() {
                 </Link>
               )} */}
               {pendingApprovals.claims > 0 && (
-                <Link to="/ess/claims" className="approval-card claims">
+                <Link to="/ess/requests?tab=claims-approval" className="approval-card claims">
                   <div className="approval-badge">{pendingApprovals.claims}</div>
                   <div className="approval-icon">&#x1F4B3;</div>
                   <span className="approval-label">Claims</span>
