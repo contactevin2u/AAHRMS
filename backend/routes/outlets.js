@@ -61,7 +61,7 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 // Create outlet
 router.post('/', authenticateAdmin, async (req, res) => {
   try {
-    const { name, address, latitude, longitude } = req.body;
+    const { name, address, latitude, longitude, min_staff } = req.body;
     const companyId = req.companyId || req.admin?.company_id;
 
     if (!companyId) {
@@ -73,10 +73,10 @@ router.post('/', authenticateAdmin, async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO outlets (company_id, name, address, latitude, longitude)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO outlets (company_id, name, address, latitude, longitude, min_staff)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [companyId, name, address, latitude, longitude]
+      [companyId, name, address, latitude, longitude, min_staff || 2]
     );
 
     res.status(201).json(result.rows[0]);
@@ -93,7 +93,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, address, latitude, longitude } = req.body;
+    const { name, address, latitude, longitude, min_staff } = req.body;
     const companyId = getCompanyFilter(req);
 
     // Verify outlet belongs to user's company
@@ -110,10 +110,10 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE outlets SET name = $1, address = $2, latitude = $3, longitude = $4
-       WHERE id = $5
+      `UPDATE outlets SET name = $1, address = $2, latitude = $3, longitude = $4, min_staff = $5
+       WHERE id = $6
        RETURNING *`,
-      [name, address, latitude, longitude, id]
+      [name, address, latitude, longitude, min_staff || 2, id]
     );
 
     res.json(result.rows[0]);
