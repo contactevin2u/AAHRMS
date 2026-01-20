@@ -55,6 +55,39 @@ const isManagerOrAbove = async (positionId, positionName, employeeRole) => {
  * Positions at level >= 40 (assistant supervisor and above) should have employment_type = 'confirmed'
  * This includes: assistant supervisor (40), supervisor (60), manager (80), director (90), admin/boss (100)
  */
+/**
+ * Get employee_role based on position's role field
+ * Maps: crew -> staff, supervisor -> supervisor, manager -> manager
+ * @param {number} positionId - The position ID to look up
+ * @returns {Promise<string|null>} The mapped employee_role or null if not found
+ */
+const getEmployeeRoleFromPosition = async (positionId) => {
+  if (!positionId) return null;
+
+  try {
+    const result = await pool.query(
+      'SELECT role FROM positions WHERE id = $1',
+      [positionId]
+    );
+
+    if (result.rows.length === 0) return null;
+
+    const positionRole = result.rows[0].role?.toLowerCase();
+
+    // Map position role to employee_role
+    const roleMapping = {
+      'crew': 'staff',
+      'supervisor': 'supervisor',
+      'manager': 'manager'
+    };
+
+    return roleMapping[positionRole] || 'staff';
+  } catch (err) {
+    console.error('Error getting employee role from position:', err);
+    return null;
+  }
+};
+
 const isHighLevelPosition = async (positionId, positionName, employeeRole) => {
   // High-level roles that should be auto-confirmed (level >= 40)
   const highLevelRoles = ['assistant supervisor', 'assistant_supervisor', 'asst supervisor', 'asst. supervisor',
@@ -442,6 +475,16 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       finalOutletId = null;
     }
 
+    // Auto-sync employee_role when position_id changes
+    const newPositionId = toNullable(position_id);
+    let finalEmployeeRole = req.body.employee_role || current.employee_role || 'staff';
+    if (newPositionId && newPositionId !== current.position_id) {
+      const mappedRole = await getEmployeeRoleFromPosition(newPositionId);
+      if (mappedRole) {
+        finalEmployeeRole = mappedRole;
+      }
+    }
+
     // Recalculate if still on probation and dates/months changed
     if (newEmpType === 'probation' && newJoinDate) {
       const joinDateObj = new Date(newJoinDate);
@@ -470,9 +513,9 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
            default_bonus = $31, default_incentive = $32,
            employment_type = $33, probation_months = $34, probation_end_date = $35,
            salary_before_confirmation = $36, salary_after_confirmation = $37, increment_amount = $38,
-           probation_notes = $39, probation_status = $40,
+           probation_notes = $39, probation_status = $40, employee_role = $41,
            updated_at = NOW()
-       WHERE id = $41
+       WHERE id = $42
        RETURNING *`,
       [
         employee_id, name, toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(position), toNullable(position_id), toNullable(join_date), status,
@@ -484,7 +527,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
         default_bonus || 0, default_incentive || 0,
         newEmpType, newProbMonths, probation_end_date,
         toNullable(salary_before_confirmation), toNullable(salary_after_confirmation), toNullable(calcIncrement),
-        toNullable(probation_notes), newProbationStatus, id
+        toNullable(probation_notes), newProbationStatus, finalEmployeeRole, id
       ]
     );
 
@@ -553,6 +596,16 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
       if (isManager) {
         setClauses.push(`outlet_id = $${paramCount}`);
         values.push(null);
+        paramCount++;
+      }
+    }
+
+    // Auto-sync employee_role when position_id changes (and employee_role not explicitly set)
+    if (positionId && !updates.employee_role) {
+      const mappedRole = await getEmployeeRoleFromPosition(positionId);
+      if (mappedRole) {
+        setClauses.push(`employee_role = $${paramCount}`);
+        values.push(mappedRole);
         paramCount++;
       }
     }
