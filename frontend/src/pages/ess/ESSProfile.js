@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
+import { isMimixCompany } from '../../utils/permissions';
 import './ESSProfile.css';
 
 // Field labels for display
@@ -602,8 +603,8 @@ function ESSProfile() {
               <span>{profile.employee_id || '-'}</span>
             </div>
             <div className="info-item">
-              <label>Department</label>
-              <span>{profile.department_name || profile.outlet_name || '-'}</span>
+              <label>{isMimixCompany(profile) ? 'Outlet' : 'Department'}</label>
+              <span>{isMimixCompany(profile) ? profile.outlet_name : profile.department_name || '-'}</span>
             </div>
             <div className="info-item">
               <label>Position</label>
