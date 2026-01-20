@@ -13,7 +13,41 @@
   color: white;
   padding: 24px;
   border-radius: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+}
+
+/* Quick Links */
+.profile-quick-links {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.quick-link-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-link-btn:hover {
+  background: #f8fafc;
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+.quick-link-icon {
+  font-size: 18px;
 }
 
 .profile-avatar {

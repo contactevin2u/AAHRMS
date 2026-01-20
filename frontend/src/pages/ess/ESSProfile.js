@@ -238,14 +238,24 @@ function ESSProfile() {
             <p className="position">{profile.position || 'Employee'}</p>
             {getStatusBadge(profile.status)}
           </div>
-          <div className="profile-actions">
-            <button
-              className="btn-change-password"
-              onClick={() => navigate('/ess/change-password')}
-            >
-              Change Password
-            </button>
-          </div>
+        </div>
+
+        {/* Quick Links */}
+        <div className="profile-quick-links">
+          <button
+            className="quick-link-btn"
+            onClick={() => navigate('/ess/payslips')}
+          >
+            <span className="quick-link-icon">💵</span>
+            <span>View Payslips</span>
+          </button>
+          <button
+            className="quick-link-btn"
+            onClick={() => navigate('/ess/change-password')}
+          >
+            <span className="quick-link-icon">🔑</span>
+            <span>Change Password</span>
+          </button>
         </div>
 
         {/* Profile Completion Banner */}

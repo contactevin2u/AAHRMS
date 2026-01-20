@@ -153,7 +153,7 @@ function ESSLayout({ children }) {
         {children}
       </main>
 
-      {/* Bottom Navigation - Simplified 6 items */}
+      {/* Bottom Navigation - 5 items max for mobile */}
       <nav className="ess-bottom-nav">
         <NavLink
           to="/ess/dashboard"
@@ -169,82 +169,35 @@ function ESSLayout({ children }) {
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
             <span className="nav-icon">&#x23F0;</span>
-            <span className="nav-label">Attendance</span>
+            <span className="nav-label">Clock In</span>
           </NavLink>
         )}
-
-        <NavLink
-          to="/ess/leave"
-          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-        >
-          <span className="nav-icon">&#x1F4C5;</span>
-          <span className="nav-label">Leave</span>
-        </NavLink>
-
-        <NavLink
-          to="/ess/claims"
-          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-        >
-          <span className="nav-icon">&#x1F4DD;</span>
-          <span className="nav-label">Claims</span>
-        </NavLink>
 
         {showCalendar && (
           <NavLink
-            to="/ess/calendar"
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            to="/ess/schedule"
+            className={({ isActive }) => `nav-item ${isActive || location.pathname.includes('/ess/calendar') || location.pathname.includes('/ess/team-schedule') ? 'active' : ''}`}
           >
             <span className="nav-icon">&#x1F5D3;</span>
-            <span className="nav-label">Calendar</span>
+            <span className="nav-label">Schedule</span>
           </NavLink>
         )}
 
         <NavLink
-          to="/ess/payslips"
-          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          to="/ess/requests"
+          className={({ isActive }) => `nav-item ${isActive || location.pathname.includes('/ess/leave') || location.pathname.includes('/ess/claims') || location.pathname.includes('/ess/ot-approval') ? 'active' : ''}`}
         >
-          <span className="nav-icon">&#x1F4B5;</span>
-          <span className="nav-label">Pay</span>
+          <span className="nav-icon">&#x1F4CB;</span>
+          <span className="nav-label">Requests</span>
         </NavLink>
 
         <NavLink
           to="/ess/profile"
-          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          className={({ isActive }) => `nav-item ${isActive || location.pathname.includes('/ess/payslips') ? 'active' : ''}`}
         >
           <span className="nav-icon">&#x1F464;</span>
           <span className="nav-label">Profile</span>
         </NavLink>
-
-        {showTeamFeatures && (
-          <NavLink
-            to="/ess/team-schedule"
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <span className="nav-icon">&#x1F4CB;</span>
-            <span className="nav-label">Team</span>
-          </NavLink>
-        )}
-
-        {showTeamFeatures && isMimix && (
-          <NavLink
-            to="/ess/ot-approval"
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <span className="nav-icon">&#x2705;</span>
-            <span className="nav-label">OT</span>
-          </NavLink>
-        )}
-
-        {/* Overview only for manager level and above (not supervisors) */}
-        {employeeInfo?.employee_role === 'manager' && isMimix && (
-          <NavLink
-            to="/ess/manager-overview"
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <span className="nav-icon">&#x1F3E2;</span>
-            <span className="nav-label">Overview</span>
-          </NavLink>
-        )}
       </nav>
     </div>
   );

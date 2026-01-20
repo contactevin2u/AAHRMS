@@ -41,8 +41,8 @@ import EmployeeLetters from './pages/EmployeeLetters';
 // Mimix Staff Portal - Legacy
 import MimixLogin from './pages/MimixLogin';
 import StaffClockIn from './pages/StaffClockIn';
-// New Unified ESS PWA (6 main pages + auth + support pages)
-import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSProfile, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters, ESSTeamSchedule, ESSOTApproval, ESSManagerOverview } from './pages/ess';
+// New Unified ESS PWA (5 main nav items + auth + support pages)
+import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSProfile, ESSSchedule, ESSRequests, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters, ESSTeamSchedule, ESSOTApproval, ESSManagerOverview } from './pages/ess';
 import Schedules from './pages/Schedules';
 import IndoorSalesSchedule from './pages/IndoorSalesSchedule';
 import IndoorSalesCommission from './pages/IndoorSalesCommission';
@@ -462,13 +462,30 @@ function App() {
             </ESSProtectedRoute>
           }
         />
-        {/* Redirect /ess/schedule to /ess/calendar (schedule is inside calendar) */}
-        <Route path="/ess/schedule" element={<Navigate to="/ess/calendar" replace />} />
+        {/* Combined Schedule page (My + Team tabs) */}
+        <Route
+          path="/ess/schedule"
+          element={
+            <ESSProtectedRoute>
+              <ESSSchedule />
+            </ESSProtectedRoute>
+          }
+        />
+        {/* Legacy calendar route - still accessible */}
         <Route
           path="/ess/calendar"
           element={
             <ESSProtectedRoute>
               <ESSCalendar />
+            </ESSProtectedRoute>
+          }
+        />
+        {/* Combined Requests page (Leave + Claims + OT tabs) */}
+        <Route
+          path="/ess/requests"
+          element={
+            <ESSProtectedRoute>
+              <ESSRequests />
             </ESSProtectedRoute>
           }
         />
