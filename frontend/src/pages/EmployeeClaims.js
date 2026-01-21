@@ -21,6 +21,11 @@ function EmployeeClaims() {
   const [processingImage, setProcessingImage] = useState(false);
   const [cameraPermission, setCameraPermission] = useState(null);
 
+  // AI Verification states
+  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState(null);
+  const [showMismatchWarning, setShowMismatchWarning] = useState(false);
+
   const [form, setForm] = useState({
     category: '',
     amount: '',
@@ -199,11 +204,15 @@ function EmployeeClaims() {
 
       setCapturedReceipt(compressedDataUrl);
       setForm(prev => ({ ...prev, receipt_url: compressedDataUrl }));
+      setVerification(null);
+      setShowMismatchWarning(false);
       stopCamera();
     } catch (err) {
       console.error('Compression error:', err);
       setCapturedReceipt(rawDataUrl);
       setForm(prev => ({ ...prev, receipt_url: rawDataUrl }));
+      setVerification(null);
+      setShowMismatchWarning(false);
       stopCamera();
     } finally {
       setProcessingImage(false);
@@ -213,18 +222,78 @@ function EmployeeClaims() {
   const retakeReceipt = () => {
     setCapturedReceipt(null);
     setForm(prev => ({ ...prev, receipt_url: '' }));
+    setVerification(null);
+    setShowMismatchWarning(false);
     startCamera();
   };
 
   const removeReceipt = () => {
     setCapturedReceipt(null);
     setForm(prev => ({ ...prev, receipt_url: '' }));
+    setVerification(null);
+    setShowMismatchWarning(false);
+  };
+
+  // AI Receipt Verification
+  const verifyReceiptAI = async () => {
+    if (!form.receipt_url || !form.amount) {
+      return null;
+    }
+
+    setVerifying(true);
+    setVerification(null);
+    setShowMismatchWarning(false);
+
+    try {
+      const response = await essApi.verifyReceipt({
+        receipt_base64: form.receipt_url,
+        amount: parseFloat(form.amount)
+      });
+
+      const result = response.data.verification;
+      setVerification(result);
+
+      if (result.isRejected) {
+        alert(`Claim Rejected: ${result.rejectionReason}`);
+        return result;
+      }
+
+      if (!result.amountMatch && result.aiData?.amount !== null) {
+        setShowMismatchWarning(true);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Verification error:', error);
+      setVerification({ requiresManualApproval: true, warnings: ['Receipt verification unavailable. Manual approval required.'] });
+      return null;
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleAmountChange = (e) => {
+    setForm({ ...form, amount: e.target.value });
+    setVerification(null);
+    setShowMismatchWarning(false);
+  };
+
+  const useAiAmount = () => {
+    if (verification?.aiData?.amount) {
+      setForm(prev => ({ ...prev, amount: verification.aiData.amount.toString() }));
+      setShowMismatchWarning(false);
+      setTimeout(() => verifyReceiptAI(), 100);
+    }
   };
 
   // Handle file upload (images and PDFs)
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Reset verification when receipt changes
+    setVerification(null);
+    setShowMismatchWarning(false);
 
     const maxSize = 5 * 1024 * 1024; // 5MB limit
 
@@ -281,18 +350,52 @@ function EmployeeClaims() {
       return;
     }
 
+    // Run verification if not done yet
+    let verificationResult = verification;
+    if (!verificationResult) {
+      verificationResult = await verifyReceiptAI();
+    }
+
+    // If duplicate detected, don't submit
+    if (verificationResult?.isRejected) {
+      return;
+    }
+
+    // If amount mismatch and user hasn't acknowledged
+    if (verificationResult && !verificationResult.amountMatch && verificationResult.aiData?.amount !== null && !showMismatchWarning) {
+      setShowMismatchWarning(true);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      await essApi.submitClaim(form);
+      const response = await essApi.submitClaim({
+        ...form,
+        receipt_base64: form.receipt_url,
+        amount_mismatch_ignored: showMismatchWarning && !verificationResult?.amountMatch
+      });
+
       setShowSubmitModal(false);
       setForm({ category: '', amount: '', description: '', claim_date: '', receipt_url: '' });
       setCapturedReceipt(null);
+      setVerification(null);
+      setShowMismatchWarning(false);
       stopCamera();
       fetchClaims();
-      alert('Claim submitted successfully!');
+
+      if (response.data.autoApproved) {
+        alert('Claim submitted and auto-approved!');
+      } else {
+        alert('Claim submitted successfully! Pending approval.');
+      }
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to submit claim');
+      const errorData = error.response?.data;
+      if (errorData?.autoRejected) {
+        alert(`Claim Rejected: ${errorData.reason}`);
+      } else {
+        alert(errorData?.error || 'Failed to submit claim');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -460,7 +563,7 @@ function EmployeeClaims() {
                         step="0.01"
                         min="0"
                         value={form.amount}
-                        onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                        onChange={handleAmountChange}
                         placeholder="0.00"
                         required
                       />
@@ -563,14 +666,91 @@ function EmployeeClaims() {
                     </div>
                     <small className="form-hint">Scan with camera or upload image/PDF (max 5MB). Images will be compressed automatically.</small>
                   </div>
+
+                  {/* Verify Receipt Button */}
+                  {form.receipt_url && form.amount && !verification && (
+                    <button
+                      type="button"
+                      onClick={verifyReceiptAI}
+                      disabled={verifying}
+                      className="verify-receipt-btn"
+                      style={{ width: '100%', padding: '12px', background: '#f0f9ff', color: '#0369a1', border: '1px solid #0369a1', borderRadius: '8px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', marginBottom: '16px', opacity: verifying ? 0.7 : 1 }}
+                    >
+                      {verifying ? 'Verifying Receipt...' : 'Verify Receipt'}
+                    </button>
+                  )}
+
+                  {/* Verification Result */}
+                  {verification && (
+                    <div className="verification-result" style={{ marginBottom: '16px', padding: '12px', borderRadius: '8px', background: verification.isRejected ? '#fef2f2' : verification.canAutoApprove ? '#f0fdf4' : '#fffbeb', border: `1px solid ${verification.isRejected ? '#fecaca' : verification.canAutoApprove ? '#bbf7d0' : '#fde68a'}` }}>
+                      {verification.isRejected ? (
+                        <div style={{ color: '#dc2626', fontSize: '14px' }}>
+                          <strong>Rejected:</strong> {verification.rejectionReason}
+                        </div>
+                      ) : verification.canAutoApprove ? (
+                        <div style={{ color: '#16a34a', fontSize: '14px' }}>
+                          <strong>Verified!</strong> Receipt matches. Will be auto-approved.
+                          {verification.aiData && (
+                            <div style={{ marginTop: '8px', fontSize: '13px', color: '#15803d' }}>
+                              Detected: {verification.aiData.merchant} - RM {verification.aiData.amount?.toFixed(2)}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ color: '#ca8a04', fontSize: '14px' }}>
+                          <strong>Manual Approval Required</strong>
+                          {verification.warnings?.map((w, i) => (
+                            <div key={i} style={{ marginTop: '4px', fontSize: '13px' }}>{w}</div>
+                          ))}
+                          {verification.aiData && (
+                            <div style={{ marginTop: '8px', fontSize: '13px' }}>
+                              AI detected: {verification.aiData.merchant || 'Unknown'} - RM {verification.aiData.amount?.toFixed(2) || 'N/A'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Amount Mismatch Warning */}
+                  {showMismatchWarning && verification && !verification.amountMatch && verification.aiData?.amount !== null && (
+                    <div className="mismatch-warning" style={{ marginBottom: '16px', padding: '12px', borderRadius: '8px', background: '#fef3c7', border: '1px solid #fcd34d' }}>
+                      <div style={{ color: '#92400e', fontSize: '14px', marginBottom: '8px' }}>
+                        <strong>Amount Mismatch!</strong>
+                        <br />
+                        Your amount: <strong>RM {parseFloat(form.amount).toFixed(2)}</strong>
+                        <br />
+                        Receipt shows: <strong>RM {verification.aiData.amount.toFixed(2)}</strong>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={useAiAmount}
+                          style={{ flex: 1, padding: '10px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}
+                        >
+                          Use RM {verification.aiData.amount.toFixed(2)}
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={submitting}
+                          style={{ flex: 1, padding: '10px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}
+                        >
+                          Keep My Amount
+                        </button>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#78716c', marginTop: '8px' }}>
+                        * Keeping your amount requires manual approval
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="modal-footer">
-                  <button type="button" className="cancel-btn" onClick={() => setShowSubmitModal(false)}>
+                  <button type="button" className="cancel-btn" onClick={() => { setShowSubmitModal(false); setVerification(null); setShowMismatchWarning(false); }}>
                     Cancel
                   </button>
-                  <button type="submit" className="submit-btn" disabled={submitting}>
-                    {submitting ? 'Submitting...' : 'Submit Claim'}
+                  <button type="submit" className="submit-btn" disabled={submitting || verifying || verification?.isRejected}>
+                    {submitting ? 'Submitting...' : verifying ? 'Verifying...' : 'Submit Claim'}
                   </button>
                 </div>
               </form>

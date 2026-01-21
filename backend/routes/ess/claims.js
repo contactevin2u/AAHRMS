@@ -10,6 +10,7 @@ const { authenticateEmployee } = require('../../middleware/auth');
 const { asyncHandler, ValidationError } = require('../../middleware/errorHandler');
 const { uploadClaim } = require('../../utils/cloudinaryStorage');
 const { isSupervisorOrManager, canApproveForEmployee } = require('../../middleware/essPermissions');
+const { verifyReceipt, generateReceiptHash, extractReceiptData } = require('../../utils/receiptAI');
 
 // Get claims history
 router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
@@ -40,12 +41,77 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
   res.json(result.rows);
 }));
 
+// =====================================================
+// AI RECEIPT VERIFICATION
+// =====================================================
+
+// Verify receipt before submission (AI-powered)
+router.post('/verify-receipt', authenticateEmployee, asyncHandler(async (req, res) => {
+  const { receipt_base64, amount } = req.body;
+
+  if (!receipt_base64) {
+    throw new ValidationError('Receipt image is required');
+  }
+
+  if (!amount || isNaN(parseFloat(amount))) {
+    throw new ValidationError('Valid amount is required');
+  }
+
+  // Get employee's company_id
+  const empResult = await pool.query(
+    'SELECT company_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const companyId = empResult.rows[0]?.company_id;
+
+  if (!companyId) {
+    throw new ValidationError('Employee company not found');
+  }
+
+  // Run AI verification
+  const verification = await verifyReceipt(receipt_base64, parseFloat(amount), companyId);
+
+  res.json({
+    success: true,
+    verification: {
+      canAutoApprove: verification.canAutoApprove,
+      requiresManualApproval: verification.requiresManualApproval,
+      isRejected: verification.isRejected,
+      rejectionReason: verification.rejectionReason,
+      amountMatch: verification.amountMatch,
+      amountDifference: verification.amountDifference,
+      warnings: verification.warnings,
+      duplicateInfo: verification.duplicateInfo,
+      aiData: verification.aiData ? {
+        amount: verification.aiData.amount,
+        merchant: verification.aiData.merchant,
+        date: verification.aiData.date,
+        confidence: verification.aiData.confidence
+      } : null
+    }
+  });
+}));
+
 // Submit a claim
 router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
-  const { claim_date, category, description, amount, receipt_url, receipt_base64 } = req.body;
+  const {
+    claim_date,
+    category,
+    description,
+    amount,
+    receipt_url,
+    receipt_base64,
+    // AI verification data from frontend
+    amount_mismatch_ignored,
+    ai_verification
+  } = req.body;
 
   if (!claim_date || !category || !amount) {
     throw new ValidationError('Claim date, category, and amount are required');
+  }
+
+  if (!receipt_base64 && !receipt_url) {
+    throw new ValidationError('Receipt is required');
   }
 
   // Get employee's company_id for Cloudinary folder organization
@@ -55,26 +121,82 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   );
   const companyId = empResult.rows[0]?.company_id || 0;
 
-  let finalReceiptUrl = receipt_url || null;
+  // Get the base64 data for AI processing
+  const receiptData = receipt_base64 || receipt_url;
 
-  // Check if receipt is base64 data and upload to Cloudinary
-  if (receipt_base64 && receipt_base64.startsWith('data:')) {
-    const timestamp = Date.now();
-    finalReceiptUrl = await uploadClaim(receipt_base64, companyId, req.employee.id, timestamp);
-  } else if (receipt_url && receipt_url.startsWith('data:')) {
-    // Legacy: receipt_url might contain base64 data
-    const timestamp = Date.now();
-    finalReceiptUrl = await uploadClaim(receipt_url, companyId, req.employee.id, timestamp);
+  // Run AI verification if not already done on frontend
+  let verification = ai_verification;
+  if (!verification && receiptData && receiptData.startsWith('data:')) {
+    verification = await verifyReceipt(receiptData, parseFloat(amount), companyId);
   }
 
+  // Check if this is a duplicate - auto reject
+  if (verification && verification.isRejected) {
+    return res.status(400).json({
+      error: 'Claim rejected',
+      reason: verification.rejectionReason,
+      duplicateInfo: verification.duplicateInfo,
+      autoRejected: true
+    });
+  }
+
+  // Upload receipt to Cloudinary
+  let finalReceiptUrl = null;
+  if (receiptData && receiptData.startsWith('data:')) {
+    const timestamp = Date.now();
+    finalReceiptUrl = await uploadClaim(receiptData, companyId, req.employee.id, timestamp);
+  }
+
+  // Determine claim status based on AI verification
+  let claimStatus = 'pending';
+  let autoApproved = false;
+  let approvedAt = null;
+
+  if (verification && verification.canAutoApprove && !amount_mismatch_ignored) {
+    claimStatus = 'approved';
+    autoApproved = true;
+    approvedAt = new Date();
+  }
+
+  // Insert claim with AI data
   const result = await pool.query(
-    `INSERT INTO claims (employee_id, claim_date, category, description, amount, receipt_url, status)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+    `INSERT INTO claims (
+      employee_id, claim_date, category, description, amount, receipt_url, status,
+      receipt_hash, ai_extracted_amount, ai_extracted_merchant, ai_extracted_date,
+      ai_confidence, amount_mismatch_ignored, auto_approved, approved_at
+    )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
-    [req.employee.id, claim_date, category, description, amount, finalReceiptUrl]
+    [
+      req.employee.id,
+      claim_date,
+      category,
+      description,
+      amount,
+      finalReceiptUrl,
+      claimStatus,
+      verification?.receiptHash || null,
+      verification?.aiData?.amount || null,
+      verification?.aiData?.merchant || null,
+      verification?.aiData?.date || null,
+      verification?.aiData?.confidence || null,
+      amount_mismatch_ignored || false,
+      autoApproved,
+      approvedAt
+    ]
   );
 
-  res.status(201).json(result.rows[0]);
+  const claim = result.rows[0];
+
+  res.status(201).json({
+    ...claim,
+    autoApproved,
+    verificationResult: verification ? {
+      amountMatch: verification.amountMatch,
+      warnings: verification.warnings,
+      aiData: verification.aiData
+    } : null
+  });
 }));
 
 // =====================================================
