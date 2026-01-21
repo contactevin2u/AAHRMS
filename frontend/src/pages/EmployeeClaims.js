@@ -221,8 +221,66 @@ function EmployeeClaims() {
     setForm(prev => ({ ...prev, receipt_url: '' }));
   };
 
+  // Handle file upload (images and PDFs)
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const maxSize = 5 * 1024 * 1024; // 5MB limit
+
+    if (file.type === 'application/pdf') {
+      // PDF handling with size limit
+      if (file.size > maxSize) {
+        alert('PDF file is too large. Maximum size is 5MB. Please compress your PDF before uploading.');
+        e.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCapturedReceipt(reader.result);
+        setForm(prev => ({ ...prev, receipt_url: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    } else if (file.type.startsWith('image/')) {
+      // Compress images using existing utility
+      setProcessingImage(true);
+      try {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          try {
+            const compressedDataUrl = await compressReceiptPhoto(reader.result);
+            const sizeKB = getBase64SizeKB(compressedDataUrl);
+            console.log(`Receipt uploaded: ${sizeKB} KB`);
+            setCapturedReceipt(compressedDataUrl);
+            setForm(prev => ({ ...prev, receipt_url: compressedDataUrl }));
+          } catch (err) {
+            console.error('Compression error:', err);
+            setCapturedReceipt(reader.result);
+            setForm(prev => ({ ...prev, receipt_url: reader.result }));
+          } finally {
+            setProcessingImage(false);
+          }
+        };
+        reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('File read error:', err);
+        setProcessingImage(false);
+      }
+    } else {
+      alert('Please upload an image or PDF file.');
+      e.target.value = '';
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate receipt is uploaded
+    if (!form.receipt_url) {
+      alert('Please upload or scan a receipt (image or PDF)');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -432,12 +490,24 @@ function EmployeeClaims() {
 
                   {/* Receipt Photo Section */}
                   <div className="form-group">
-                    <label>Receipt Photo</label>
+                    <label>Receipt *</label>
                     <div className="receipt-capture-section">
                       {!cameraActive && !capturedReceipt && (
-                        <button type="button" onClick={startCamera} className="scan-receipt-btn">
-                          Scan Receipt
-                        </button>
+                        <div className="receipt-upload-options">
+                          <button type="button" onClick={startCamera} className="scan-receipt-btn">
+                            Scan Receipt
+                          </button>
+                          <span className="upload-divider">or</span>
+                          <label className="file-upload-btn">
+                            Upload File
+                            <input
+                              type="file"
+                              accept="image/*,.pdf,application/pdf"
+                              onChange={handleFileUpload}
+                              style={{ display: 'none' }}
+                            />
+                          </label>
+                        </div>
                       )}
 
                       {cameraActive && (
@@ -466,9 +536,20 @@ function EmployeeClaims() {
                         </div>
                       )}
 
+                      {processingImage && !cameraActive && (
+                        <div className="processing-indicator">Processing image...</div>
+                      )}
+
                       {capturedReceipt && (
                         <div className="receipt-preview">
-                          <img src={capturedReceipt} alt="Receipt" />
+                          {capturedReceipt.startsWith('data:application/pdf') ? (
+                            <div className="pdf-preview">
+                              <span className="pdf-icon">📄</span>
+                              <span>PDF Receipt Uploaded</span>
+                            </div>
+                          ) : (
+                            <img src={capturedReceipt} alt="Receipt" />
+                          )}
                           <div className="receipt-actions">
                             <button type="button" onClick={retakeReceipt} className="retake-btn">
                               Retake
@@ -480,7 +561,7 @@ function EmployeeClaims() {
                         </div>
                       )}
                     </div>
-                    <small className="form-hint">Use back camera to scan receipt. Image will be enhanced for text clarity.</small>
+                    <small className="form-hint">Scan with camera or upload image/PDF (max 5MB). Images will be compressed automatically.</small>
                   </div>
                 </div>
 

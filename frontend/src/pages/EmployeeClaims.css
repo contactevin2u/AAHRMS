@@ -549,6 +549,72 @@
   font-size: 0.85rem;
 }
 
+/* Receipt Upload Options */
+.receipt-upload-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.receipt-upload-options .scan-receipt-btn {
+  flex: 1;
+}
+
+.upload-divider {
+  color: #7a8a9a;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.file-upload-btn {
+  flex: 1;
+  padding: 16px;
+  background: linear-gradient(135deg, #5a7ab0 0%, #4a6a9c 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  text-align: center;
+}
+
+.file-upload-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(90, 122, 176, 0.3);
+}
+
+.pdf-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: #f8fafc;
+  gap: 12px;
+}
+
+.pdf-preview .pdf-icon {
+  font-size: 48px;
+}
+
+.pdf-preview span:last-child {
+  color: #445566;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.processing-indicator {
+  padding: 40px 20px;
+  text-align: center;
+  color: #5478a8;
+  font-weight: 500;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 2px dashed #dce6f0;
+}
+
 @media (max-width: 768px) {
   .claims-summary {
     grid-template-columns: 1fr;
@@ -569,5 +635,14 @@
     width: 100%;
     justify-content: space-between;
     align-items: center;
+  }
+
+  .receipt-upload-options {
+    flex-direction: column;
+  }
+
+  .receipt-upload-options .scan-receipt-btn,
+  .file-upload-btn {
+    width: 100%;
   }
 }

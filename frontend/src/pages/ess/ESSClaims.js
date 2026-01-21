@@ -36,6 +36,13 @@ function ESSClaims({ embedded = false }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate receipt is uploaded
+    if (!submitForm.receipt) {
+      alert('Please upload a receipt (image or PDF)');
+      return;
+    }
+
     setSubmitting(true);
     try {
       await essApi.submitClaim({
@@ -56,14 +63,72 @@ function ESSClaims({ embedded = false }) {
     }
   };
 
-  const handleReceiptChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
+  const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setSubmitForm({...submitForm, receipt: reader.result});
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Scale down if larger than maxWidth
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to compressed JPEG
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        };
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
+    });
+  };
+
+  const handleReceiptChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const maxSize = 5 * 1024 * 1024; // 5MB limit
+
+      if (file.type === 'application/pdf') {
+        // PDF handling with size limit
+        if (file.size > maxSize) {
+          alert('PDF file is too large. Maximum size is 5MB. Please compress your PDF before uploading.');
+          e.target.value = '';
+          return;
+        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setSubmitForm({...submitForm, receipt: reader.result});
+        };
+        reader.readAsDataURL(file);
+      } else if (file.type.startsWith('image/')) {
+        // Compress images
+        try {
+          const compressedBase64 = await compressImage(file);
+          setSubmitForm({...submitForm, receipt: compressedBase64});
+        } catch (err) {
+          console.error('Error compressing image:', err);
+          // Fallback to original if compression fails
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setSubmitForm({...submitForm, receipt: reader.result});
+          };
+          reader.readAsDataURL(file);
+        }
+      } else {
+        alert('Please upload an image or PDF file.');
+        e.target.value = '';
+      }
     }
   };
 
@@ -172,8 +237,9 @@ function ESSClaims({ embedded = false }) {
                   <textarea value={submitForm.description} onChange={e => setSubmitForm({...submitForm, description: e.target.value})} required rows={3} style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} placeholder="Enter claim details" />
                 </div>
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Receipt (optional)</label>
-                  <input type="file" accept="image/*" onChange={handleReceiptChange} style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Receipt *</label>
+                  <input type="file" accept="image/*,.pdf,application/pdf" onChange={handleReceiptChange} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Accepted: Images or PDF (max 5MB)</div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                   <button type="button" onClick={() => setShowSubmitModal(false)} style={{ flex: 1, padding: '14px', border: '1px solid #e5e7eb', background: 'white', borderRadius: '8px', fontSize: '15px', cursor: 'pointer' }}>Cancel</button>
