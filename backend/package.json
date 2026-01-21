@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "canvas": "^3.2.1",
     "cloudinary": "^2.8.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -24,6 +25,7 @@
     "multer": "^2.0.2",
     "node-cron": "^3.0.3",
     "openai": "^6.16.0",
+    "pdfjs-dist": "^5.4.530",
     "pdfkit": "^0.17.2",
     "pg": "^8.11.3"
   },

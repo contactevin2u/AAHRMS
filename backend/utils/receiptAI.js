@@ -8,6 +8,101 @@ const openai = new OpenAI({
 });
 
 /**
+ * Convert PDF base64 to image base64 using pdf.js and canvas
+ * @param {string} pdfBase64 - Base64 encoded PDF data
+ * @returns {string} - Base64 encoded image (JPEG)
+ */
+async function convertPdfToImage(pdfBase64) {
+  try {
+    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.mjs');
+    const { createCanvas, Image } = require('canvas');
+
+    // Remove data URL prefix if present
+    const pdfData = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+    const pdfBuffer = Buffer.from(pdfData, 'base64');
+
+    // Convert Buffer to Uint8Array (required by pdfjs-dist)
+    const pdfUint8Array = new Uint8Array(pdfBuffer);
+
+    // Create a custom canvas factory for pdfjs
+    class NodeCanvasFactory {
+      create(width, height) {
+        const canvas = createCanvas(width, height);
+        const context = canvas.getContext('2d');
+        return { canvas, context };
+      }
+      reset(canvasAndContext, width, height) {
+        canvasAndContext.canvas.width = width;
+        canvasAndContext.canvas.height = height;
+      }
+      destroy(canvasAndContext) {
+        canvasAndContext.canvas.width = 0;
+        canvasAndContext.canvas.height = 0;
+        canvasAndContext.canvas = null;
+        canvasAndContext.context = null;
+      }
+    }
+
+    // Load the PDF with canvas factory
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfUint8Array,
+      canvasFactory: new NodeCanvasFactory(),
+      // Disable font/image loading that causes issues
+      disableFontFace: true,
+      isEvalSupported: false
+    });
+    const pdf = await loadingTask.promise;
+
+    // Get the first page
+    const page = await pdf.getPage(1);
+
+    // Set scale for good quality (2x for clarity)
+    const scale = 2.0;
+    const viewport = page.getViewport({ scale });
+
+    // Create canvas
+    const canvas = createCanvas(viewport.width, viewport.height);
+    const context = canvas.getContext('2d');
+
+    // Fill with white background
+    context.fillStyle = 'white';
+    context.fillRect(0, 0, viewport.width, viewport.height);
+
+    // Render page to canvas
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+      canvasFactory: new NodeCanvasFactory()
+    }).promise;
+
+    // Convert to JPEG base64
+    const imageBase64 = canvas.toDataURL('image/jpeg', 0.9);
+    return imageBase64;
+  } catch (error) {
+    console.error('PDF to image conversion error:', error);
+    throw new Error('Failed to convert PDF to image: ' + error.message);
+  }
+}
+
+/**
+ * Check if the data is a PDF
+ * @param {string} data - Base64 encoded data or URL
+ * @returns {boolean}
+ */
+function isPdf(data) {
+  return data.startsWith('data:application/pdf') || data.toLowerCase().endsWith('.pdf');
+}
+
+/**
+ * Check if the data is a URL
+ * @param {string} data - Data string to check
+ * @returns {boolean}
+ */
+function isUrl(data) {
+  return data.startsWith('http://') || data.startsWith('https://');
+}
+
+/**
  * Generate a hash from receipt image data for duplicate detection
  * @param {string} base64Image - Base64 encoded image data
  * @returns {string} - SHA256 hash of the image
@@ -20,16 +115,73 @@ function generateReceiptHash(base64Image) {
 
 /**
  * Extract receipt information using GPT-4o-mini vision
- * @param {string} base64Image - Base64 encoded image (with or without data URL prefix)
+ * @param {string} imageData - Base64 encoded image/PDF or URL
  * @returns {Object} - Extracted receipt data
  */
-async function extractReceiptData(base64Image) {
+async function extractReceiptData(imageData) {
   try {
-    // Ensure proper data URL format
-    let imageUrl = base64Image;
-    if (!base64Image.startsWith('data:')) {
-      // Assume JPEG if no prefix
-      imageUrl = `data:image/jpeg;base64,${base64Image}`;
+    let imageUrl = imageData;
+
+    // Check if it's a URL (Cloudinary, etc.)
+    if (isUrl(imageData)) {
+      console.log('Processing image from URL...');
+      // OpenAI Vision API can directly fetch URLs
+      // But if it's a PDF URL, we need to fetch and convert
+      if (isPdf(imageData)) {
+        console.log('PDF URL detected, fetching and converting...');
+        try {
+          const https = require('https');
+          const http = require('http');
+          const protocol = imageData.startsWith('https') ? https : http;
+
+          // Fetch the PDF
+          const pdfBuffer = await new Promise((resolve, reject) => {
+            protocol.get(imageData, (response) => {
+              const chunks = [];
+              response.on('data', chunk => chunks.push(chunk));
+              response.on('end', () => resolve(Buffer.concat(chunks)));
+              response.on('error', reject);
+            }).on('error', reject);
+          });
+
+          // Convert PDF buffer to base64 for conversion
+          const pdfBase64 = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
+          imageUrl = await convertPdfToImage(pdfBase64);
+          console.log('PDF fetched and converted successfully');
+        } catch (pdfError) {
+          console.error('PDF fetch/conversion failed:', pdfError.message);
+          return {
+            success: false,
+            amount: null,
+            merchant: null,
+            date: null,
+            confidence: 'unreadable',
+            error: 'Failed to process PDF URL: ' + pdfError.message
+          };
+        }
+      }
+      // For regular image URLs, OpenAI can use them directly
+      // imageUrl is already set to the URL
+    } else if (isPdf(imageData)) {
+      // Base64 PDF
+      console.log('Converting PDF to image for AI processing...');
+      try {
+        imageUrl = await convertPdfToImage(imageData);
+        console.log('PDF converted successfully');
+      } catch (pdfError) {
+        console.error('PDF conversion failed:', pdfError.message);
+        return {
+          success: false,
+          amount: null,
+          merchant: null,
+          date: null,
+          confidence: 'unreadable',
+          error: 'Failed to convert PDF: ' + pdfError.message
+        };
+      }
+    } else if (!imageData.startsWith('data:')) {
+      // Raw base64 without prefix - assume JPEG
+      imageUrl = `data:image/jpeg;base64,${imageData}`;
     }
 
     const response = await openai.chat.completions.create({
@@ -227,13 +379,13 @@ async function checkSimilarReceipt(merchant, date, amount, companyId, excludeCla
 
 /**
  * Full verification of a receipt for claim submission
- * @param {string} base64Image - Base64 encoded receipt image
+ * @param {string} imageData - Base64 encoded receipt image/PDF or URL
  * @param {number} claimedAmount - Amount claimed by employee
  * @param {number} companyId - Company ID
  * @param {number} excludeClaimId - Optional claim ID to exclude (for updates)
  * @returns {Object} - Complete verification result
  */
-async function verifyReceipt(base64Image, claimedAmount, companyId, excludeClaimId = null) {
+async function verifyReceipt(imageData, claimedAmount, companyId, excludeClaimId = null) {
   const result = {
     canAutoApprove: false,
     requiresManualApproval: true,
@@ -248,8 +400,13 @@ async function verifyReceipt(base64Image, claimedAmount, companyId, excludeClaim
   };
 
   try {
-    // Step 1: Generate receipt hash
-    result.receiptHash = generateReceiptHash(base64Image);
+    // Step 1: Generate receipt hash (only for base64 data, not URLs)
+    if (!isUrl(imageData)) {
+      result.receiptHash = generateReceiptHash(imageData);
+    } else {
+      // For URLs, use the URL itself as a simple hash (or skip hash-based duplicate check)
+      result.receiptHash = crypto.createHash('sha256').update(imageData).digest('hex');
+    }
 
     // Step 2: Check for exact duplicate (same image)
     const duplicateCheck = await checkDuplicateReceipt(result.receiptHash, companyId, excludeClaimId);
@@ -260,8 +417,8 @@ async function verifyReceipt(base64Image, claimedAmount, companyId, excludeClaim
       return result;
     }
 
-    // Step 3: Extract receipt data with AI
-    const aiData = await extractReceiptData(base64Image);
+    // Step 3: Extract receipt data with AI (handles PDF conversion and URLs automatically)
+    const aiData = await extractReceiptData(imageData);
     result.aiData = aiData;
 
     // Step 4: Check if AI could read the receipt
@@ -287,15 +444,20 @@ async function verifyReceipt(base64Image, claimedAmount, companyId, excludeClaim
       return result;
     }
 
-    // Step 6: Compare amounts (0% tolerance - exact match)
+    // Step 6: Compare amounts
+    // RULE: Accept if claimed amount <= receipt amount (employee can claim less)
+    // Only flag if claimed amount > receipt amount (over-claiming)
     const aiAmount = parseFloat(aiData.amount);
     const claimAmount = parseFloat(claimedAmount);
-    result.amountDifference = Math.abs(aiAmount - claimAmount);
-    result.amountMatch = (aiAmount === claimAmount);
+    result.amountDifference = claimAmount - aiAmount; // Positive = over-claim, Negative = under-claim
+
+    // Amount is acceptable if claimed <= receipt (exact match or claiming less)
+    result.amountMatch = (claimAmount <= aiAmount);
 
     if (!result.amountMatch) {
+      // Employee is claiming MORE than the receipt shows - flag this
       result.requiresManualApproval = true;
-      result.warnings.push(`Amount mismatch: Receipt shows ${aiData.currency} ${aiAmount.toFixed(2)}, but claimed amount is ${aiData.currency} ${claimAmount.toFixed(2)}.`);
+      result.warnings.push(`Over-claim detected: Receipt shows ${aiData.currency} ${aiAmount.toFixed(2)}, but claimed amount is ${aiData.currency} ${claimAmount.toFixed(2)} (over by ${aiData.currency} ${result.amountDifference.toFixed(2)}).`);
       return result;
     }
 
@@ -324,5 +486,8 @@ module.exports = {
   extractReceiptData,
   checkDuplicateReceipt,
   checkSimilarReceipt,
-  verifyReceipt
+  verifyReceipt,
+  convertPdfToImage,
+  isPdf,
+  isUrl
 };
