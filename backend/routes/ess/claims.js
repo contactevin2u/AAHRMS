@@ -46,6 +46,7 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
 // =====================================================
 
 // Verify receipt before submission (AI-powered)
+// NOTE: AI verification is only enabled for AA Alive (company_id = 1)
 router.post('/verify-receipt', authenticateEmployee, asyncHandler(async (req, res) => {
   const { receipt_base64, amount } = req.body;
 
@@ -68,7 +69,28 @@ router.post('/verify-receipt', authenticateEmployee, asyncHandler(async (req, re
     throw new ValidationError('Employee company not found');
   }
 
-  // Run AI verification
+  // AI verification is only enabled for AA Alive (company_id = 1)
+  // For other companies (e.g., Mimix), skip AI and require manual approval
+  if (companyId !== 1) {
+    return res.json({
+      success: true,
+      verification: {
+        canAutoApprove: false,
+        requiresManualApproval: true,
+        isRejected: false,
+        rejectionReason: null,
+        amountMatch: true,
+        amountDifference: null,
+        warnings: [],
+        duplicateInfo: null,
+        aiData: null,
+        aiDisabled: true,
+        message: 'AI verification not enabled for this company'
+      }
+    });
+  }
+
+  // Run AI verification (AA Alive only)
   const verification = await verifyReceipt(receipt_base64, parseFloat(amount), companyId);
 
   res.json({
@@ -125,8 +147,9 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   const receiptData = receipt_base64 || receipt_url;
 
   // Run AI verification if not already done on frontend
+  // NOTE: AI verification is only enabled for AA Alive (company_id = 1)
   let verification = ai_verification;
-  if (!verification && receiptData && receiptData.startsWith('data:')) {
+  if (companyId === 1 && !verification && receiptData && receiptData.startsWith('data:')) {
     verification = await verifyReceipt(receiptData, parseFloat(amount), companyId);
   }
 
@@ -148,11 +171,12 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   }
 
   // Determine claim status based on AI verification
+  // NOTE: Auto-approval is only enabled for AA Alive (company_id = 1)
   let claimStatus = 'pending';
   let autoApproved = false;
   let approvedAt = null;
 
-  if (verification && verification.canAutoApprove && !amount_mismatch_ignored) {
+  if (companyId === 1 && verification && verification.canAutoApprove && !amount_mismatch_ignored) {
     claimStatus = 'approved';
     autoApproved = true;
     approvedAt = new Date();
