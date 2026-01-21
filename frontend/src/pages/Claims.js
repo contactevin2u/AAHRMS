@@ -220,53 +220,53 @@ function Claims() {
     return `RM ${parseFloat(amount).toFixed(2)}`;
   };
 
-  const getStatusBadge = (status, claim) => {
+  const getStatusBadge = (status) => {
     const classes = {
       pending: 'status-badge pending',
       approved: 'status-badge approved',
       rejected: 'status-badge rejected'
     };
-
-    // Check if auto-approved by AI
-    if (status === 'approved' && claim.auto_approved) {
-      return (
-        <span className="status-badge approved" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '10px' }}>🤖</span> AI Approved
-        </span>
-      );
-    }
-
     return <span className={classes[status] || 'status-badge'}>{status}</span>;
   };
 
-  // Get AI verification reason for manual approval
-  const getManualApprovalReason = (claim) => {
-    if (claim.status !== 'pending') return null;
-
-    const reasons = [];
-
-    // Check for amount mismatch (over-claim)
-    if (claim.amount_mismatch_ignored) {
-      const aiAmount = claim.ai_extracted_amount ? parseFloat(claim.ai_extracted_amount).toFixed(2) : '?';
-      reasons.push(`Over-claim: Receipt RM ${aiAmount}, Claimed RM ${parseFloat(claim.amount).toFixed(2)}`);
+  // Get AI info for the claim
+  const getAIInfo = (claim) => {
+    // For approved claims, show if it was AI auto-approved
+    if (claim.status === 'approved' && claim.auto_approved) {
+      return { type: 'auto-approved', reasons: ['Auto-approved by AI'] };
     }
 
-    // Check for unreadable receipt
-    if (claim.ai_confidence === 'unreadable' || claim.ai_confidence === 'low') {
-      reasons.push('Receipt unreadable by AI');
+    // For pending claims, show why manual approval is needed
+    if (claim.status === 'pending') {
+      const reasons = [];
+
+      // Check for amount mismatch (over-claim)
+      if (claim.amount_mismatch_ignored) {
+        const aiAmount = claim.ai_extracted_amount ? parseFloat(claim.ai_extracted_amount).toFixed(2) : '?';
+        reasons.push(`Over-claim: Receipt RM ${aiAmount}, Claimed RM ${parseFloat(claim.amount).toFixed(2)}`);
+      }
+
+      // Check for unreadable receipt
+      if (claim.ai_confidence === 'unreadable' || claim.ai_confidence === 'low') {
+        reasons.push('Receipt unreadable by AI');
+      }
+
+      // Check if amount exceeds auto-approve limit
+      if (parseFloat(claim.amount) > 100 && !claim.amount_mismatch_ignored && claim.ai_confidence !== 'unreadable') {
+        reasons.push('Amount exceeds RM 100 limit');
+      }
+
+      // If we have AI data but no specific reason, it might be a legacy claim
+      if (reasons.length === 0 && !claim.ai_extracted_amount && !claim.receipt_hash) {
+        reasons.push('Submitted before AI verification');
+      }
+
+      if (reasons.length > 0) {
+        return { type: 'manual-required', reasons };
+      }
     }
 
-    // Check if amount exceeds auto-approve limit
-    if (parseFloat(claim.amount) > 100 && !claim.amount_mismatch_ignored && claim.ai_confidence !== 'unreadable') {
-      reasons.push('Amount exceeds RM 100 limit');
-    }
-
-    // If we have AI data but no specific reason, it might be a legacy claim
-    if (reasons.length === 0 && !claim.ai_extracted_amount && !claim.receipt_hash) {
-      reasons.push('Submitted before AI verification');
-    }
-
-    return reasons.length > 0 ? reasons : null;
+    return null;
   };
 
   // Check if claim needs attention (manual approval with AI warnings)
@@ -427,7 +427,7 @@ function Claims() {
                   </tr>
                 ) : (
                   claims.map(claim => {
-                    const approvalReasons = getManualApprovalReason(claim);
+                    const aiInfo = getAIInfo(claim);
                     const attention = needsAttention(claim);
 
                     return (
@@ -463,19 +463,19 @@ function Claims() {
                           <span className="no-receipt">-</span>
                         )}
                       </td>
-                      <td>{getStatusBadge(claim.status, claim)}</td>
+                      <td>{getStatusBadge(claim.status)}</td>
                       <td>
                         {claim.linked_payroll_item_id ? (
                           <span className="linked-badge">Linked</span>
-                        ) : approvalReasons ? (
+                        ) : aiInfo ? (
                           <span
                             className="ai-reason-badge"
-                            title={approvalReasons.join('\n')}
+                            title={aiInfo.reasons.join('\n')}
                             style={{
                               display: 'inline-block',
                               padding: '2px 8px',
-                              background: attention ? '#fef3c7' : '#f3f4f6',
-                              color: attention ? '#92400e' : '#6b7280',
+                              background: aiInfo.type === 'auto-approved' ? '#f0fdf4' : (attention ? '#fef3c7' : '#f3f4f6'),
+                              color: aiInfo.type === 'auto-approved' ? '#16a34a' : (attention ? '#92400e' : '#6b7280'),
                               borderRadius: '4px',
                               fontSize: '11px',
                               maxWidth: '150px',
@@ -485,7 +485,7 @@ function Claims() {
                               cursor: 'help'
                             }}
                           >
-                            {attention ? '⚠️ ' : ''}{approvalReasons[0]}
+                            {aiInfo.type === 'auto-approved' ? '🤖 ' : (attention ? '⚠️ ' : '')}{aiInfo.reasons[0]}
                           </span>
                         ) : '-'}
                       </td>
