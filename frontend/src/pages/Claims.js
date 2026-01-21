@@ -220,13 +220,59 @@ function Claims() {
     return `RM ${parseFloat(amount).toFixed(2)}`;
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status, claim) => {
     const classes = {
       pending: 'status-badge pending',
       approved: 'status-badge approved',
       rejected: 'status-badge rejected'
     };
+
+    // Check if auto-approved by AI
+    if (status === 'approved' && claim.auto_approved) {
+      return (
+        <span className="status-badge approved" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ fontSize: '10px' }}>🤖</span> AI Approved
+        </span>
+      );
+    }
+
     return <span className={classes[status] || 'status-badge'}>{status}</span>;
+  };
+
+  // Get AI verification reason for manual approval
+  const getManualApprovalReason = (claim) => {
+    if (claim.status !== 'pending') return null;
+
+    const reasons = [];
+
+    // Check for amount mismatch (over-claim)
+    if (claim.amount_mismatch_ignored) {
+      const aiAmount = claim.ai_extracted_amount ? parseFloat(claim.ai_extracted_amount).toFixed(2) : '?';
+      reasons.push(`Over-claim: Receipt RM ${aiAmount}, Claimed RM ${parseFloat(claim.amount).toFixed(2)}`);
+    }
+
+    // Check for unreadable receipt
+    if (claim.ai_confidence === 'unreadable' || claim.ai_confidence === 'low') {
+      reasons.push('Receipt unreadable by AI');
+    }
+
+    // Check if amount exceeds auto-approve limit
+    if (parseFloat(claim.amount) > 100 && !claim.amount_mismatch_ignored && claim.ai_confidence !== 'unreadable') {
+      reasons.push('Amount exceeds RM 100 limit');
+    }
+
+    // If we have AI data but no specific reason, it might be a legacy claim
+    if (reasons.length === 0 && !claim.ai_extracted_amount && !claim.receipt_hash) {
+      reasons.push('Submitted before AI verification');
+    }
+
+    return reasons.length > 0 ? reasons : null;
+  };
+
+  // Check if claim needs attention (manual approval with AI warnings)
+  const needsAttention = (claim) => {
+    if (claim.status !== 'pending') return false;
+    return claim.amount_mismatch_ignored || claim.ai_confidence === 'unreadable' || claim.ai_confidence === 'low';
   };
 
   const getCategoryLabel = (value) => {
@@ -370,7 +416,7 @@ function Claims() {
                   <th>Amount</th>
                   <th>Receipt</th>
                   <th>Status</th>
-                  <th>Linked</th>
+                  <th>AI Info</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -380,8 +426,12 @@ function Claims() {
                     <td colSpan="10" className="no-data">No claims found</td>
                   </tr>
                 ) : (
-                  claims.map(claim => (
-                    <tr key={claim.id}>
+                  claims.map(claim => {
+                    const approvalReasons = getManualApprovalReason(claim);
+                    const attention = needsAttention(claim);
+
+                    return (
+                    <tr key={claim.id} className={attention ? 'needs-attention' : ''}>
                       <td>
                         {claim.status === 'pending' && !claim.linked_payroll_item_id && (
                           <input
@@ -413,10 +463,30 @@ function Claims() {
                           <span className="no-receipt">-</span>
                         )}
                       </td>
-                      <td>{getStatusBadge(claim.status)}</td>
+                      <td>{getStatusBadge(claim.status, claim)}</td>
                       <td>
                         {claim.linked_payroll_item_id ? (
                           <span className="linked-badge">Linked</span>
+                        ) : approvalReasons ? (
+                          <span
+                            className="ai-reason-badge"
+                            title={approvalReasons.join('\n')}
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              background: attention ? '#fef3c7' : '#f3f4f6',
+                              color: attention ? '#92400e' : '#6b7280',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              maxWidth: '150px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              cursor: 'help'
+                            }}
+                          >
+                            {attention ? '⚠️ ' : ''}{approvalReasons[0]}
+                          </span>
                         ) : '-'}
                       </td>
                       <td>
@@ -439,7 +509,7 @@ function Claims() {
                         )}
                       </td>
                     </tr>
-                  ))
+                  )}))
                 )}
               </tbody>
             </table>

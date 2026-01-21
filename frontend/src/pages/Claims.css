@@ -577,3 +577,31 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* AI Verification - Needs Attention Row */
+.data-table tr.needs-attention {
+  background: #fffbeb;
+}
+
+.data-table tr.needs-attention:hover {
+  background: #fef3c7;
+}
+
+/* AI Info Badge */
+.ai-reason-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Locked Indicator */
+.locked-indicator {
+  font-size: 16px;
+  cursor: help;
+}
