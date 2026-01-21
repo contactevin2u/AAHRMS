@@ -510,7 +510,7 @@ function Claims() {
                       </td>
                     </tr>
                     );
-                  }))
+                  })
                 )}
               </tbody>
             </table>
