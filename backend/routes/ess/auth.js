@@ -236,16 +236,16 @@ router.post('/reset-password', asyncHandler(async (req, res) => {
   res.json({ message: 'Password reset successfully. You can now login.' });
 }));
 
-// Login with Employee ID and IC Number (available for all companies)
+// Login with Employee ID and IC/Passport Number (available for all companies)
 router.post('/login-ic', asyncHandler(async (req, res) => {
   const { employee_id, ic_number } = req.body;
 
   if (!employee_id || !ic_number) {
-    throw new ValidationError('Employee ID and IC number are required');
+    throw new ValidationError('Employee ID and IC/Passport number are required');
   }
 
-  // Clean IC number - remove dashes
-  const cleanIC = ic_number.replace(/-/g, '');
+  // Clean ID number - remove dashes and spaces, uppercase for passport
+  const cleanIC = ic_number.replace(/[-\s]/g, '').toUpperCase();
 
   // Find employee by employee_id and verify IC, including company info
   const result = await pool.query(
@@ -268,10 +268,10 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
 
   const employee = result.rows[0];
 
-  // Verify IC number (compare without dashes)
-  const storedIC = (employee.ic_number || '').replace(/-/g, '');
+  // Verify IC/Passport number (compare without dashes/spaces, case-insensitive)
+  const storedIC = (employee.ic_number || '').replace(/[-\s]/g, '').toUpperCase();
   if (storedIC !== cleanIC) {
-    throw new AuthenticationError('Invalid IC number');
+    throw new AuthenticationError('Invalid IC/Passport number');
   }
 
   // Check if ESS is enabled for this employee
@@ -339,16 +339,16 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
   });
 }));
 
-// Login with Full Name and IC Number (available for all companies)
+// Login with Full Name and IC/Passport Number (available for all companies)
 router.post('/login-name', asyncHandler(async (req, res) => {
   const { name, ic_number } = req.body;
 
   if (!name || !ic_number) {
-    throw new ValidationError('Full name and IC number are required');
+    throw new ValidationError('Full name and IC/Passport number are required');
   }
 
-  // Clean IC number - remove dashes
-  const cleanIC = ic_number.replace(/-/g, '');
+  // Clean ID number - remove dashes and spaces, uppercase for passport
+  const cleanIC = ic_number.replace(/[-\s]/g, '').toUpperCase();
 
   // Find employee by name (case-insensitive) and verify IC, including company info
   const result = await pool.query(
@@ -366,15 +366,15 @@ router.post('/login-name', asyncHandler(async (req, res) => {
   );
 
   if (result.rows.length === 0) {
-    throw new AuthenticationError('Invalid name or IC number');
+    throw new AuthenticationError('Invalid name or IC/Passport number');
   }
 
   const employee = result.rows[0];
 
-  // Verify IC number (compare without dashes)
-  const storedIC = (employee.ic_number || '').replace(/-/g, '');
+  // Verify IC/Passport number (compare without dashes/spaces, case-insensitive)
+  const storedIC = (employee.ic_number || '').replace(/[-\s]/g, '').toUpperCase();
   if (storedIC !== cleanIC) {
-    throw new AuthenticationError('Invalid name or IC number');
+    throw new AuthenticationError('Invalid name or IC/Passport number');
   }
 
   // Check if ESS is enabled for this employee
@@ -447,25 +447,34 @@ router.post('/set-password', asyncHandler(async (req, res) => {
   const { employee_id, ic_number, newPassword } = req.body;
 
   if (!employee_id || !ic_number || !newPassword) {
-    throw new ValidationError('Employee ID, IC number, and new password are required');
+    throw new ValidationError('Employee ID, IC/Passport number, and new password are required');
   }
 
   if (newPassword.length < 6) {
     throw new ValidationError('Password must be at least 6 characters long');
   }
 
-  // Find employee and verify IC number
+  // Clean the provided IC/Passport number
+  const cleanIC = ic_number.replace(/[-\s]/g, '').toUpperCase();
+
+  // Find employee by employee_id
   const result = await pool.query(
-    `SELECT id, password_hash FROM employees
-     WHERE employee_id = $1 AND ic_number = $2 AND status = 'active'`,
-    [employee_id, ic_number]
+    `SELECT id, password_hash, ic_number FROM employees
+     WHERE employee_id = $1 AND status = 'active'`,
+    [employee_id]
   );
 
   if (result.rows.length === 0) {
-    throw new ValidationError('Employee not found or IC number does not match');
+    throw new ValidationError('Employee not found');
   }
 
   const employee = result.rows[0];
+
+  // Verify IC/Passport number (compare cleaned versions)
+  const storedIC = (employee.ic_number || '').replace(/[-\s]/g, '').toUpperCase();
+  if (storedIC !== cleanIC) {
+    throw new ValidationError('IC/Passport number does not match');
+  }
 
   // Check if password is already set
   if (employee.password_hash) {

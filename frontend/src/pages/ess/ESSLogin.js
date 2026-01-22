@@ -12,6 +12,7 @@ function ESSLogin() {
     name: '',
     ic_number: ''
   });
+  const [idType, setIdType] = useState('ic'); // 'ic' or 'passport'
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
@@ -116,7 +117,7 @@ function ESSLogin() {
             className={`tab ${loginMethod === 'ic' ? 'active' : ''}`}
             onClick={() => setLoginMethod('ic')}
           >
-            IC Number
+            IC / Passport
           </button>
         </div>
 
@@ -157,7 +158,7 @@ function ESSLogin() {
                 <span className="hint-icon">💡</span>
                 <div className="hint-text">
                   <strong>First time login?</strong>
-                  <p>Your password is your IC number without dashes (e.g. 901234145678)</p>
+                  <p>Your password is your IC/Passport number without dashes or spaces</p>
                 </div>
               </div>
             </>
@@ -174,30 +175,78 @@ function ESSLogin() {
                 />
               </div>
               <div className="form-group">
-                <label>IC Number (MyKad)</label>
+                <label>{idType === 'ic' ? 'IC Number (MyKad)' : 'Passport Number'}</label>
+                {/* ID Type Toggle */}
+                <div className="id-type-toggle" style={{ marginBottom: '8px' }}>
+                  <button
+                    type="button"
+                    className={`id-type-btn ${idType === 'ic' ? 'active' : ''}`}
+                    onClick={() => {
+                      setIdType('ic');
+                      setFormData({ ...formData, ic_number: '' });
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '4px 0 0 4px',
+                      background: idType === 'ic' ? '#3b82f6' : '#fff',
+                      color: idType === 'ic' ? '#fff' : '#64748b',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    IC
+                  </button>
+                  <button
+                    type="button"
+                    className={`id-type-btn ${idType === 'passport' ? 'active' : ''}`}
+                    onClick={() => {
+                      setIdType('passport');
+                      setFormData({ ...formData, ic_number: '' });
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                      border: '1px solid #e2e8f0',
+                      borderLeft: 'none',
+                      borderRadius: '0 4px 4px 0',
+                      background: idType === 'passport' ? '#3b82f6' : '#fff',
+                      color: idType === 'passport' ? '#fff' : '#64748b',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Passport
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={formData.ic_number}
                   onChange={(e) => {
-                    // Allow only numbers and dashes
-                    let value = e.target.value.replace(/[^0-9-]/g, '');
-                    // Auto-insert dashes as user types
-                    const digits = value.replace(/-/g, '');
-                    if (digits.length >= 6 && digits.length < 8) {
-                      value = `${digits.slice(0,6)}-${digits.slice(6)}`;
-                    } else if (digits.length >= 8) {
-                      value = `${digits.slice(0,6)}-${digits.slice(6,8)}-${digits.slice(8,12)}`;
+                    if (idType === 'ic') {
+                      // Allow only numbers and dashes for IC
+                      let value = e.target.value.replace(/[^0-9-]/g, '');
+                      // Auto-insert dashes as user types
+                      const digits = value.replace(/-/g, '');
+                      if (digits.length >= 6 && digits.length < 8) {
+                        value = `${digits.slice(0,6)}-${digits.slice(6)}`;
+                      } else if (digits.length >= 8) {
+                        value = `${digits.slice(0,6)}-${digits.slice(6,8)}-${digits.slice(8,12)}`;
+                      } else {
+                        value = digits;
+                      }
+                      setFormData({ ...formData, ic_number: value });
                     } else {
-                      value = digits;
+                      // Passport: allow alphanumeric, no auto-formatting
+                      const value = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                      setFormData({ ...formData, ic_number: value });
                     }
-                    setFormData({ ...formData, ic_number: value });
                   }}
-                  placeholder="e.g. 901234-12-5678"
+                  placeholder={idType === 'ic' ? 'e.g. 901234-12-5678' : 'e.g. A12345678'}
                   required
-                  maxLength="14"
+                  maxLength={idType === 'ic' ? 14 : 20}
                 />
                 <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                  Format: YYMMDD-SS-NNNN
+                  {idType === 'ic' ? 'Format: YYMMDD-SS-NNNN' : 'Enter passport number as shown on document'}
                 </small>
               </div>
             </>
