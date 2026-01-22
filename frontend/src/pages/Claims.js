@@ -12,6 +12,8 @@ function Claims() {
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [summary, setSummary] = useState([]);
+  const [restrictions, setRestrictions] = useState([]);
+  const [activeTab, setActiveTab] = useState('claims'); // 'claims' or 'restrictions'
 
   // Get company info for filtering
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
@@ -54,18 +56,20 @@ function Claims() {
 
   const fetchInitialData = async () => {
     try {
-      const [empRes, catRes, countRes, outletsRes, deptsRes] = await Promise.all([
+      const [empRes, catRes, countRes, outletsRes, deptsRes, restrictionsRes] = await Promise.all([
         employeeApi.getAll({ status: 'active' }),
         claimsApi.getCategories(),
         claimsApi.getPendingCount(),
         outletsApi.getAll().catch(() => ({ data: [] })),
-        departmentApi.getAll().catch(() => ({ data: [] }))
+        departmentApi.getAll().catch(() => ({ data: [] })),
+        claimsApi.getRestrictions().catch(() => ({ data: [] }))
       ]);
       setEmployees(empRes.data);
       setCategories(catRes.data);
       setPendingCount(countRes.data.count);
       setOutlets(outletsRes.data || []);
       setDepartments(deptsRes.data || []);
+      setRestrictions(restrictionsRes.data || []);
     } catch (error) {
       console.error('Error fetching initial data:', error);
     }
@@ -131,6 +135,19 @@ function Claims() {
         fetchInitialData();
       } catch (error) {
         alert(error.response?.data?.error || 'Failed to reject claim');
+      }
+    }
+  };
+
+  const handleRevert = async (id) => {
+    if (window.confirm('Revert this approved claim back to pending?')) {
+      try {
+        await claimsApi.revert(id);
+        fetchClaims();
+        fetchSummary();
+        fetchInitialData();
+      } catch (error) {
+        alert(error.response?.data?.error || 'Failed to revert claim');
       }
     }
   };
@@ -295,12 +312,32 @@ function Claims() {
             {pendingCount > 0 && (
               <span className="pending-badge">{pendingCount} Pending</span>
             )}
-            <button onClick={() => { resetForm(); setShowModal(true); }} className="add-btn">
-              + New Claim
-            </button>
+            {activeTab === 'claims' && (
+              <button onClick={() => { resetForm(); setShowModal(true); }} className="add-btn">
+                + New Claim
+              </button>
+            )}
           </div>
         </header>
 
+        {/* Tabs */}
+        <div className="claims-tabs">
+          <button
+            className={`tab-btn ${activeTab === 'claims' ? 'active' : ''}`}
+            onClick={() => setActiveTab('claims')}
+          >
+            Claims List
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'restrictions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('restrictions')}
+          >
+            Claim Restrictions
+          </button>
+        </div>
+
+        {activeTab === 'claims' && (
+          <>
         {/* Summary Stats */}
         <div className="stats-row">
           <div className="stat-box">
@@ -498,6 +535,10 @@ function Claims() {
                             <button onClick={() => handleEdit(claim)} className="action-btn edit">Edit</button>
                           </>
                         )}
+                        {/* Show revert button for approved claims not linked to payroll */}
+                        {claim.status === 'approved' && !claim.linked_payroll_item_id && (
+                          <button onClick={() => handleRevert(claim.id)} className="action-btn revert">Revert</button>
+                        )}
                         {/* Delete button - Testing mode, shows for all statuses (not linked to payroll) */}
                         {/* TODO: Remove after real data starts */}
                         {!claim.linked_payroll_item_id && (
@@ -529,6 +570,45 @@ function Claims() {
                   <span className="summary-count">{s.count} claims</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+          </>
+        )}
+
+        {/* Restrictions Tab */}
+        {activeTab === 'restrictions' && (
+          <div className="restrictions-section">
+            <div className="restrictions-header">
+              <h2>Claim Restrictions & Rules</h2>
+              <p>The following rules and limits apply to all expense claims</p>
+            </div>
+
+            <div className="restrictions-grid">
+              {restrictions.map(restriction => (
+                <div
+                  key={restriction.category}
+                  className={`restriction-card ${restriction.autoCapEnabled ? 'auto-cap' : ''}`}
+                >
+                  <div className="restriction-header">
+                    <h3>{restriction.label}</h3>
+                    {restriction.autoCapEnabled && (
+                      <span className="auto-cap-badge">Auto-Cap</span>
+                    )}
+                  </div>
+                  {restriction.maxAmount && (
+                    <div className="restriction-limit">
+                      <span className="limit-label">Maximum Limit:</span>
+                      <span className="limit-value">RM {restriction.maxAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <p className="restriction-rule">{restriction.rule}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="restrictions-note">
+              <strong>Note:</strong> Claims marked with "Auto-Cap" will automatically have their amounts adjusted to the maximum limit if exceeded. Other limits are enforced during approval.
             </div>
           </div>
         )}

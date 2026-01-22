@@ -213,11 +213,21 @@ router.post('/', authenticateAdmin, async (req, res) => {
       });
     }
 
+    // Apply accommodation cap - hotel claims capped at RM80
+    let finalAmount = parseFloat(amount);
+    let amountCapped = false;
+    const ACCOMMODATION_CAP = 80.00;
+
+    if (category.toLowerCase() === 'accommodation' && finalAmount > ACCOMMODATION_CAP) {
+      finalAmount = ACCOMMODATION_CAP;
+      amountCapped = true;
+    }
+
     const result = await pool.query(`
       INSERT INTO claims (employee_id, claim_date, category, description, amount, receipt_url)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
-    `, [employee_id, claim_date, category.toUpperCase(), description, amount, receipt_url]);
+    `, [employee_id, claim_date, category.toUpperCase(), description, finalAmount, receipt_url]);
 
     const claim = result.rows[0];
 
@@ -239,7 +249,10 @@ router.post('/', authenticateAdmin, async (req, res) => {
 
     res.status(201).json({
       ...claim,
-      auto_approval_result: autoApprovalResult
+      auto_approval_result: autoApprovalResult,
+      amount_capped: amountCapped,
+      original_amount: amountCapped ? parseFloat(amount) : null,
+      cap_message: amountCapped ? `Accommodation claim capped from RM${parseFloat(amount).toFixed(2)} to RM${ACCOMMODATION_CAP.toFixed(2)}` : null
     });
   } catch (error) {
     console.error('Error creating claim:', error);
@@ -285,6 +298,17 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Only pending claims can be updated' });
     }
 
+    // Apply accommodation cap - hotel claims capped at RM80
+    let finalAmount = amount ? parseFloat(amount) : null;
+    let amountCapped = false;
+    const ACCOMMODATION_CAP = 80.00;
+    const effectiveCategory = category || claim.category;
+
+    if (finalAmount && effectiveCategory.toLowerCase() === 'accommodation' && finalAmount > ACCOMMODATION_CAP) {
+      finalAmount = ACCOMMODATION_CAP;
+      amountCapped = true;
+    }
+
     const result = await pool.query(`
       UPDATE claims
       SET claim_date = COALESCE($1, claim_date),
@@ -295,9 +319,14 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
           updated_at = NOW()
       WHERE id = $6
       RETURNING *
-    `, [claim_date, category, description, amount, receipt_url, id]);
+    `, [claim_date, category, description, finalAmount, receipt_url, id]);
 
-    res.json(result.rows[0]);
+    res.json({
+      ...result.rows[0],
+      amount_capped: amountCapped,
+      original_amount: amountCapped ? parseFloat(amount) : null,
+      cap_message: amountCapped ? `Accommodation claim capped from RM${parseFloat(amount).toFixed(2)} to RM${ACCOMMODATION_CAP.toFixed(2)}` : null
+    });
   } catch (error) {
     console.error('Error updating claim:', error);
     res.status(500).json({ error: 'Failed to update claim' });
@@ -343,6 +372,67 @@ router.post('/:id/reject', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error rejecting claim:', error);
     res.status(500).json({ error: 'Failed to reject claim' });
+  }
+});
+
+// Revert approved claim back to pending
+router.post('/:id/revert', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Check if claim exists and belongs to this company
+    const claimCheck = await pool.query(`
+      SELECT c.*, e.company_id
+      FROM claims c
+      JOIN employees e ON c.employee_id = e.id
+      WHERE c.id = $1 AND e.company_id = $2
+    `, [id, companyId]);
+
+    if (claimCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Claim not found' });
+    }
+
+    const claim = claimCheck.rows[0];
+
+    // Can only revert approved claims
+    if (claim.status !== 'approved') {
+      return res.status(400).json({ error: 'Only approved claims can be reverted' });
+    }
+
+    // Cannot revert claims linked to payroll
+    if (claim.linked_payroll_item_id) {
+      return res.status(400).json({
+        error: 'Cannot revert claim linked to payroll',
+        message: 'This claim is already included in a payroll run and cannot be reverted.'
+      });
+    }
+
+    // Revert to pending status
+    const result = await pool.query(`
+      UPDATE claims
+      SET status = 'pending',
+          approved_at = NULL,
+          auto_approved = false,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `, [id]);
+
+    // Log the revert action
+    try {
+      await logClaimAction(id, req.admin.id, 'revert', 'Reverted from approved to pending');
+    } catch (logErr) {
+      console.log('Audit log failed (non-critical):', logErr.message);
+    }
+
+    res.json({ message: 'Claim reverted to pending', claim: result.rows[0] });
+  } catch (error) {
+    console.error('Error reverting claim:', error);
+    res.status(500).json({ error: 'Failed to revert claim' });
   }
 });
 
@@ -485,6 +575,89 @@ router.get('/categories', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error fetching categories:', error);
     res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+// Get claim restrictions/rules
+router.get('/restrictions', authenticateAdmin, async (req, res) => {
+  try {
+    // Return claim restrictions and rules
+    const restrictions = [
+      {
+        category: 'accommodation',
+        label: 'Accommodation/Hotel',
+        maxAmount: 80.00,
+        rule: 'Hotel claims must not exceed RM80 per night. Claims above RM80 will be automatically capped at RM80.',
+        autoCapEnabled: true
+      },
+      {
+        category: 'meal',
+        label: 'Meal/Entertainment',
+        maxAmount: 50.00,
+        rule: 'Meal claims should not exceed RM50 per claim.',
+        autoCapEnabled: false
+      },
+      {
+        category: 'parking',
+        label: 'Parking',
+        maxAmount: 30.00,
+        rule: 'Parking claims should not exceed RM30 per day.',
+        autoCapEnabled: false
+      },
+      {
+        category: 'toll',
+        label: 'Toll',
+        maxAmount: null,
+        rule: 'Toll claims require receipt for verification.',
+        autoCapEnabled: false
+      },
+      {
+        category: 'travel',
+        label: 'Travel/Transport',
+        maxAmount: 200.00,
+        rule: 'Travel claims should not exceed RM200 per trip. E-hailing receipts required.',
+        autoCapEnabled: false
+      },
+      {
+        category: 'fuel',
+        label: 'Fuel/Petrol',
+        maxAmount: null,
+        rule: 'Fuel claims require petrol receipt with vehicle number.',
+        autoCapEnabled: false
+      },
+      {
+        category: 'medical',
+        label: 'Medical',
+        maxAmount: 500.00,
+        rule: 'Medical claims require original receipt from clinic/pharmacy.',
+        autoCapEnabled: false
+      },
+      {
+        category: 'phone',
+        label: 'Phone/Internet',
+        maxAmount: 100.00,
+        rule: 'Phone/Internet claims capped at RM100 per month.',
+        autoCapEnabled: false
+      },
+      {
+        category: 'office_supplies',
+        label: 'Office Supplies',
+        maxAmount: null,
+        rule: 'Office supplies must be pre-approved by supervisor.',
+        autoCapEnabled: false
+      },
+      {
+        category: 'other',
+        label: 'Other',
+        maxAmount: null,
+        rule: 'Other expenses require detailed description and receipt.',
+        autoCapEnabled: false
+      }
+    ];
+    res.json(restrictions);
+  } catch (error) {
+    console.error('Error fetching restrictions:', error);
+    res.status(500).json({ error: 'Failed to fetch restrictions' });
   }
 });
 

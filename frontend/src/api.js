@@ -179,6 +179,7 @@ export const claimsApi = {
   getPendingCount: () => api.get('/claims/pending-count'),
   getSummary: (params) => api.get('/claims/summary', { params }),
   getCategories: () => api.get('/claims/categories'),
+  getRestrictions: () => api.get('/claims/restrictions'),
   getForPayroll: (params) => api.get('/claims/for-payroll', { params }),
 
   create: (data) => api.post('/claims', data),
@@ -187,6 +188,7 @@ export const claimsApi = {
 
   approve: (id) => api.post(`/claims/${id}/approve`),
   reject: (id, data) => api.post(`/claims/${id}/reject`, data),
+  revert: (id) => api.post(`/claims/${id}/revert`),
   bulkApprove: (claimIds) => api.post('/claims/bulk-approve', { claim_ids: claimIds }),
   linkToPayroll: (data) => api.post('/claims/link-to-payroll', data),
 };
