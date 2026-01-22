@@ -584,31 +584,84 @@ function Claims() {
               <p>The following rules and limits apply to all expense claims</p>
             </div>
 
-            <div className="restrictions-grid">
-              {restrictions.map(restriction => (
-                <div
-                  key={restriction.category}
-                  className={`restriction-card ${restriction.autoCapEnabled ? 'auto-cap' : ''}`}
-                >
-                  <div className="restriction-header">
-                    <h3>{restriction.label}</h3>
-                    {restriction.autoCapEnabled && (
-                      <span className="auto-cap-badge">Auto-Cap</span>
-                    )}
-                  </div>
-                  {restriction.maxAmount && (
-                    <div className="restriction-limit">
-                      <span className="limit-label">Maximum Limit:</span>
-                      <span className="limit-value">RM {restriction.maxAmount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <p className="restriction-rule">{restriction.rule}</p>
-                </div>
-              ))}
+            {/* Summary Table */}
+            <div className="restrictions-table-container">
+              <h3>Claim Limits Summary</h3>
+              <table className="restrictions-table">
+                <thead>
+                  <tr>
+                    <th>Claim Type</th>
+                    <th>Maximum Limit (RM)</th>
+                    <th>Auto-Cap</th>
+                    <th>Receipt Required</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {restrictions.map(r => (
+                    <tr key={r.category} className={r.autoCapEnabled ? 'auto-cap-row' : ''}>
+                      <td><strong>{r.label}</strong></td>
+                      <td className="amount-cell">
+                        {r.maxAmount ? (
+                          <span className="limit-amount">RM {r.maxAmount.toFixed(2)}</span>
+                        ) : (
+                          <span className="no-limit">No Limit</span>
+                        )}
+                      </td>
+                      <td>
+                        {r.autoCapEnabled ? (
+                          <span className="badge-yes">Yes</span>
+                        ) : (
+                          <span className="badge-no">No</span>
+                        )}
+                      </td>
+                      <td>
+                        {r.category === 'meal' || r.category === 'parking' ? (
+                          <span className="badge-optional">Optional</span>
+                        ) : (
+                          <span className="badge-yes">Yes</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <div className="restrictions-note">
-              <strong>Note:</strong> Claims marked with "Auto-Cap" will automatically have their amounts adjusted to the maximum limit if exceeded. Other limits are enforced during approval.
+            {/* Detailed Rules */}
+            <div className="restrictions-rules">
+              <h3>Detailed Rules & Logic</h3>
+              <div className="rules-list">
+                {restrictions.map(r => (
+                  <div key={r.category} className={`rule-item ${r.autoCapEnabled ? 'auto-cap' : ''}`}>
+                    <div className="rule-category">
+                      {r.label}
+                      {r.autoCapEnabled && <span className="auto-cap-badge">Auto-Cap</span>}
+                    </div>
+                    <div className="rule-content">
+                      <p>{r.rule}</p>
+                      {r.maxAmount && (
+                        <div className="rule-limit">
+                          Max: <strong>RM {r.maxAmount.toFixed(2)}</strong>
+                          {r.autoCapEnabled && (
+                            <span className="cap-note"> - Amount will be automatically reduced to this limit</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Important Notes */}
+            <div className="restrictions-notes">
+              <h3>Important Notes</h3>
+              <ul>
+                <li><strong>Auto-Cap:</strong> Claims marked with "Auto-Cap" will automatically have their amounts adjusted to the maximum limit if the claimed amount exceeds the limit.</li>
+                <li><strong>Manual Review:</strong> Claims without auto-cap that exceed limits will require manual approval and may be rejected or adjusted.</li>
+                <li><strong>Receipts:</strong> All claims should include receipts for verification. Claims without receipts may be rejected.</li>
+                <li><strong>Payroll Link:</strong> Once a claim is linked to payroll, it cannot be modified or deleted.</li>
+              </ul>
             </div>
           </div>
         )}
