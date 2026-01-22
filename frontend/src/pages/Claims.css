@@ -193,20 +193,20 @@
 .data-table th {
   background: #f8fafc;
   color: #475569;
-  padding: 12px 14px;
+  padding: 8px 10px;
   text-align: left;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid #e2e8f0;
 }
 
 .data-table td {
-  padding: 12px 14px;
+  padding: 6px 10px;
   border-bottom: 1px solid #f1f5f9;
   color: #1e293b;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .data-table tr:hover {
@@ -214,8 +214,8 @@
 }
 
 .data-table input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   cursor: pointer;
   accent-color: #3b82f6;
 }
@@ -236,11 +236,11 @@
 /* Category Badge */
 .category-badge {
   display: inline-block;
-  padding: 4px 10px;
+  padding: 2px 8px;
   background: #f1f5f9;
   color: #475569;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -254,11 +254,11 @@
 /* Receipt Link */
 .receipt-link {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 2px 8px;
   background: #3b82f6;
   color: white;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   text-decoration: none;
   transition: background 0.2s;
@@ -274,9 +274,9 @@
 
 /* Status Badge */
 .status-badge {
-  padding: 4px 10px;
+  padding: 2px 8px;
   border-radius: 20px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   text-transform: capitalize;
 }
@@ -298,23 +298,23 @@
 
 .linked-badge {
   display: inline-block;
-  padding: 4px 8px;
+  padding: 2px 6px;
   background: #eff6ff;
   color: #2563eb;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
 }
 
 /* Action Buttons */
 .action-btn {
-  padding: 5px 10px;
+  padding: 3px 8px;
   border: none;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  margin-right: 4px;
+  margin-right: 3px;
   transition: all 0.15s ease;
 }
 
