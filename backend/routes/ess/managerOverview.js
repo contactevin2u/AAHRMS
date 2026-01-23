@@ -108,12 +108,12 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
 
     // Get today's attendance for this outlet
     const attendanceResult = await pool.query(`
-      SELECT cr.id, cr.clock_in_time, cr.clock_out_time, cr.status,
+      SELECT cr.id, cr.clock_in_1 as clock_in_time, cr.clock_out_2 as clock_out_time, cr.status,
              e.name as employee_name, e.employee_id as emp_code
       FROM clock_in_records cr
       JOIN employees e ON cr.employee_id = e.id
-      WHERE e.outlet_id = $1 AND cr.date = $2
-      ORDER BY cr.clock_in_time DESC
+      WHERE e.outlet_id = $1 AND cr.work_date = $2
+      ORDER BY cr.clock_in_1 DESC
     `, [outlet.id, today]);
 
     // Get scheduled today but not clocked in
@@ -122,7 +122,7 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
              s.shift_start, s.shift_end
       FROM schedules s
       JOIN employees e ON s.employee_id = e.id
-      LEFT JOIN clock_in_records cr ON cr.employee_id = e.id AND cr.date = $1
+      LEFT JOIN clock_in_records cr ON cr.employee_id = e.id AND cr.work_date = $1
       WHERE e.outlet_id = $2
         AND s.schedule_date = $1
         AND s.status = 'scheduled'
@@ -346,12 +346,12 @@ router.get('/outlet/:outletId/attendance', authenticateEmployee, asyncHandler(as
     SELECT e.id, e.name, e.employee_id, e.position,
            p.name as position_name,
            s.shift_start, s.shift_end, s.status as schedule_status,
-           cr.clock_in_time, cr.clock_out_time, cr.status as attendance_status,
+           cr.clock_in_1 as clock_in_time, cr.clock_out_2 as clock_out_time, cr.status as attendance_status,
            cr.total_hours, cr.late_minutes, cr.ot_hours
     FROM employees e
     LEFT JOIN positions p ON e.position_id = p.id
     LEFT JOIN schedules s ON s.employee_id = e.id AND s.schedule_date = $2
-    LEFT JOIN clock_in_records cr ON cr.employee_id = e.id AND cr.date = $2
+    LEFT JOIN clock_in_records cr ON cr.employee_id = e.id AND cr.work_date = $2
     WHERE e.outlet_id = $1 AND e.status = 'active'
     ORDER BY e.name
   `, [outletId, targetDate]);
