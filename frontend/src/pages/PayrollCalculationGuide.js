@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Layout from '../components/Layout';
 import './PayrollCalculationGuide.css';
 
 // SOCSO Contribution Table (exact copy from backend)
@@ -200,11 +201,12 @@ function PayrollCalculationGuide() {
   ];
 
   return (
-    <div className="calc-guide-container">
-      <div className="calc-guide-header">
-        <h1>Payroll Calculation Guide</h1>
-        <p>This page shows the exact calculation formulas used in the system. Read-only reference.</p>
-      </div>
+    <Layout>
+      <div className="calc-guide-container">
+        <div className="calc-guide-header">
+          <h1>Payroll Calculation Guide</h1>
+          <p>This page shows the exact calculation formulas used in the system. Read-only reference.</p>
+        </div>
 
       <div className="calc-guide-nav">
         {sections.map(s => (
@@ -644,8 +646,9 @@ function PayrollCalculationGuide() {
             </div>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 
