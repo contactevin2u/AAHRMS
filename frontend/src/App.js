@@ -8,6 +8,7 @@ import EmployeeEdit from './pages/Employees/EmployeeEdit';
 import EmployeeAdd from './pages/Employees/EmployeeAdd';
 import Payroll from './pages/Payroll';
 import PayrollUnified from './pages/PayrollUnified';
+import PayrollCalculationGuide from './pages/PayrollCalculationGuide';
 import SalaryEntry from './pages/SalaryEntry';
 import Payslip from './pages/Payslip';
 import Departments from './pages/Departments';
@@ -155,6 +156,14 @@ function App() {
           element={
             <ProtectedRoute>
               <PayrollUnified />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/payroll-guide"
+          element={
+            <ProtectedRoute>
+              <PayrollCalculationGuide />
             </ProtectedRoute>
           }
         />

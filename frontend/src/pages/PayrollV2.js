@@ -362,7 +362,7 @@ Please adjust the changes based on this feedback.`;
       // Office: basic + allowance + bonus + OT
       showAllowance: dept === 'office' || dept === 'outdoor sales',
       showBonus: dept === 'office' || dept === 'outdoor sales',
-      showOT: dept === 'office' || dept === 'driver',
+      showOT: true, // OT available for all departments
       // Indoor Sales: basic + commission
       showCommission: dept === 'indoor sales' || dept === 'outdoor sales',
       // Outdoor Sales: basic + commission + allowance + bonus

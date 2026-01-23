@@ -64,7 +64,7 @@ const calculateAgeFromIC = (icNumber) => {
 // EPF Contribution Rates (effective 2024)
 // Employee: 11% standard, 0% for age > 60
 // Employer: 13% (salary <= RM5000) or 12% (salary > RM5000), 4% for age > 60
-// Non-Malaysian: Different rates may apply (simplified to same for now)
+// KWSP rounds contributions to nearest RM (not cents)
 const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', isMalaysian = true) => {
   let employeeRate, employerRate;
 
@@ -81,9 +81,10 @@ const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', isMala
   // EPF wage ceiling is RM20,000 for contribution calculation
   const epfWage = Math.min(grossSalary, 20000);
 
+  // KWSP rounds to nearest RM (not cents)
   return {
-    employee: Math.round(epfWage * employeeRate * 100) / 100,
-    employer: Math.round(epfWage * employerRate * 100) / 100
+    employee: Math.round(epfWage * employeeRate),
+    employer: Math.round(epfWage * employerRate)
   };
 };
 
