@@ -306,10 +306,11 @@
   font-weight: 500;
 }
 
-/* Action Buttons */
+/* Action Buttons - Fixed 4-column grid */
 .action-buttons {
-  display: flex;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 18px 18px 18px 18px;
+  gap: 4px;
   align-items: center;
 }
 
@@ -320,21 +321,22 @@
   box-shadow: none !important;
   padding: 0;
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   transition: transform 0.1s ease;
+  text-align: center;
 }
 
 .action-btn:hover {
   transform: scale(1.2);
 }
 
-.action-btn.approve { color: #22c55e; }
-.action-btn.reject { color: #f59e0b; }
-.action-btn.edit { color: #3b82f6; }
-.action-btn.delete { color: #ef4444; }
-.action-btn.revert { color: #8b5cf6; }
+.action-btn.approve { color: #22c55e; grid-column: 1; }
+.action-btn.reject { color: #f59e0b; grid-column: 2; }
+.action-btn.edit { color: #3b82f6; grid-column: 3; }
+.action-btn.delete { color: #ef4444; grid-column: 4; }
+.action-btn.revert { color: #8b5cf6; grid-column: 1; }
 
 /* Category Summary */
 .category-summary {
