@@ -28,6 +28,9 @@ function PayrollV2() {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiComparison, setAiComparison] = useState(null);
+  const [aiConversation, setAiConversation] = useState([]); // Chat history
+  const [aiMode, setAiMode] = useState('initial'); // 'initial', 'reviewing', 'feedback'
+  const [aiFeedback, setAiFeedback] = useState('');
 
   // Create form
   const [createForm, setCreateForm] = useState({
@@ -189,17 +192,31 @@ function PayrollV2() {
   };
 
   // AI Assistant functions
-  const handleAIAnalyze = async () => {
-    if (!aiInstruction.trim() || !selectedRun) return;
+  const handleAIAnalyze = async (instruction = aiInstruction) => {
+    if (!instruction.trim() || !selectedRun) return;
 
     setAiLoading(true);
-    setAiAnalysis(null);
     try {
+      // Add to conversation history
+      const newConversation = [...aiConversation, { role: 'user', content: instruction }];
+      setAiConversation(newConversation);
+
       const res = await payrollV2Api.aiAnalyze({
         run_id: selectedRun.id,
-        instruction: aiInstruction
+        instruction: instruction,
+        conversation: newConversation // Send history for context
       });
+
       setAiAnalysis(res.data.analysis);
+      setAiMode('reviewing');
+      setAiInstruction('');
+
+      // Add AI response to conversation
+      setAiConversation([...newConversation, {
+        role: 'assistant',
+        content: res.data.analysis.summary,
+        analysis: res.data.analysis
+      }]);
     } catch (error) {
       alert(error.response?.data?.error || 'AI analysis failed');
     } finally {
@@ -210,8 +227,6 @@ function PayrollV2() {
   const handleAIApply = async () => {
     if (!aiAnalysis?.changes || aiAnalysis.changes.length === 0) return;
 
-    if (!window.confirm(`Apply ${aiAnalysis.changes.length} changes to payroll?`)) return;
-
     setAiLoading(true);
     try {
       await payrollV2Api.aiApply({
@@ -221,14 +236,41 @@ function PayrollV2() {
       // Refresh data
       fetchRunDetails(selectedRun.id);
       fetchRuns();
+
+      // Add success to conversation
+      setAiConversation([...aiConversation, {
+        role: 'system',
+        content: `✅ Changes applied successfully! ${aiAnalysis.changes.length} item(s) updated.`
+      }]);
+
       setAiAnalysis(null);
-      setAiInstruction('');
-      alert('Changes applied successfully!');
+      setAiMode('initial');
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to apply changes');
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const handleAIDisagree = () => {
+    // Switch to feedback mode
+    setAiMode('feedback');
+    setAiFeedback('');
+  };
+
+  const handleAIFeedback = async () => {
+    if (!aiFeedback.trim()) return;
+
+    // Combine original instruction with feedback
+    const refinedInstruction = `Previous request: "${aiConversation.find(c => c.role === 'user')?.content || ''}"
+
+HR Feedback: "${aiFeedback}"
+
+Please adjust the changes based on this feedback.`;
+
+    setAiFeedback('');
+    setAiMode('reviewing');
+    await handleAIAnalyze(refinedInstruction);
   };
 
   const handleAICompare = async () => {
@@ -249,6 +291,9 @@ function PayrollV2() {
     setAiAnalysis(null);
     setAiComparison(null);
     setAiInstruction('');
+    setAiConversation([]);
+    setAiMode('initial');
+    setAiFeedback('');
   };
 
   const handleFinalizeRun = async (id) => {
@@ -761,12 +806,38 @@ function PayrollV2() {
                       </div>
                     )}
 
+                    {/* Conversation History */}
+                    {aiConversation.length > 0 && (
+                      <div className="ai-conversation">
+                        {aiConversation.map((msg, idx) => (
+                          <div key={idx} className={`ai-message ${msg.role}`}>
+                            {msg.role === 'user' && <span className="msg-icon">👤</span>}
+                            {msg.role === 'assistant' && <span className="msg-icon">🤖</span>}
+                            {msg.role === 'system' && <span className="msg-icon">✅</span>}
+                            <span className="msg-content">{msg.content}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {/* AI Analysis Results */}
-                    {aiAnalysis && (
+                    {aiAnalysis && aiMode === 'reviewing' && (
                       <div className="ai-analysis">
                         {!aiAnalysis.understood ? (
                           <div className="ai-clarification">
                             <p>🤔 {aiAnalysis.clarification || 'I need more information to understand your request.'}</p>
+                            <div className="ai-input-section" style={{ marginTop: '15px' }}>
+                              <input
+                                type="text"
+                                value={aiInstruction}
+                                onChange={(e) => setAiInstruction(e.target.value)}
+                                placeholder="Provide more details..."
+                                onKeyPress={(e) => e.key === 'Enter' && handleAIAnalyze()}
+                              />
+                              <button onClick={() => handleAIAnalyze()} className="ai-analyze-btn" disabled={aiLoading}>
+                                Send
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <>
@@ -812,16 +883,48 @@ function PayrollV2() {
 
                                 <div className="ai-decision">
                                   <button onClick={handleAIApply} className="ai-agree-btn" disabled={aiLoading}>
-                                    ✅ Agree & Apply Changes
+                                    ✅ Agree & Apply
                                   </button>
-                                  <button onClick={resetAIAssistant} className="ai-disagree-btn">
+                                  <button onClick={handleAIDisagree} className="ai-disagree-btn">
                                     ❌ Disagree
+                                  </button>
+                                  <button onClick={resetAIAssistant} className="ai-reset-btn">
+                                    🔄 Start Over
                                   </button>
                                 </div>
                               </div>
                             )}
                           </>
                         )}
+                      </div>
+                    )}
+
+                    {/* Feedback Mode - When HR disagrees */}
+                    {aiMode === 'feedback' && (
+                      <div className="ai-feedback-section">
+                        <div className="feedback-header">
+                          <h4>🤔 What's wrong with the changes?</h4>
+                          <p>Tell me what needs to be adjusted and I'll fix it.</p>
+                        </div>
+                        <div className="ai-input-section">
+                          <textarea
+                            value={aiFeedback}
+                            onChange={(e) => setAiFeedback(e.target.value)}
+                            placeholder="Examples:
+• The amount for Ali should be RM400, not RM300
+• Don't include HAFIZ in the changes
+• Also add bonus for MAHADI
+• Change it to allowance instead of bonus"
+                            rows={4}
+                            autoFocus
+                          />
+                          <button onClick={handleAIFeedback} className="ai-analyze-btn" disabled={aiLoading || !aiFeedback.trim()}>
+                            {aiLoading ? 'Analyzing...' : '✨ Update'}
+                          </button>
+                        </div>
+                        <button onClick={() => setAiMode('reviewing')} className="ai-back-btn">
+                          ← Back to review
+                        </button>
                       </div>
                     )}
                   </div>
