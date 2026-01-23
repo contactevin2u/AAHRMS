@@ -129,29 +129,31 @@ function ESSLogin() {
         )}
 
         {/* Login Form */}
-        <form onSubmit={handleSubmit} className="login-form">
+        <form onSubmit={handleSubmit} className="login-form" autoComplete="off">
           {loginMethod === 'email' ? (
             <>
               <div className="form-group">
                 <label>Username or Employee ID</label>
                 <input
                   type="text"
+                  name="login_field"
                   value={formData.login}
                   onChange={(e) => setFormData({ ...formData, login: e.target.value })}
                   placeholder="Enter username or employee ID"
                   required
-                  autoComplete="username"
+                  autoComplete="off"
                 />
               </div>
               <div className="form-group">
                 <label>Password</label>
                 <input
                   type="password"
+                  name="password_field"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="Enter password"
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                 />
               </div>
               <div className="login-hint">
@@ -168,10 +170,12 @@ function ESSLogin() {
                 <label>Full Name</label>
                 <input
                   type="text"
+                  name="name_field"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Enter your full name"
                   required
+                  autoComplete="off"
                 />
               </div>
               <div className="form-group">

@@ -47,15 +47,17 @@ function AdminLogin() {
           <p>Admin Portal</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
+        <form onSubmit={handleSubmit} className="login-form" autoComplete="off">
           <div className="form-group">
             <label htmlFor="username">Username</label>
             <input
               type="text"
               id="username"
+              name="username_field"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter username"
+              autoComplete="off"
               required
             />
           </div>
@@ -65,9 +67,11 @@ function AdminLogin() {
             <input
               type="password"
               id="password"
+              name="password_field"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
+              autoComplete="new-password"
               required
             />
           </div>

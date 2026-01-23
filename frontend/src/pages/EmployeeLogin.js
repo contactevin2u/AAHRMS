@@ -155,15 +155,17 @@ function EmployeeLogin() {
         </div>
 
         {view === 'login' && (
-          <form onSubmit={handleLogin} className="login-form">
+          <form onSubmit={handleLogin} className="login-form" autoComplete="off">
             <div className="form-group">
               <label htmlFor="login">Employee ID / Email</label>
               <input
                 type="text"
                 id="login"
+                name="login_field"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
                 placeholder="Enter Employee ID or Email"
+                autoComplete="off"
                 required
               />
             </div>
@@ -173,9 +175,11 @@ function EmployeeLogin() {
               <input
                 type="password"
                 id="password"
+                name="password_field"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"
+                autoComplete="new-password"
                 required
               />
             </div>
@@ -198,7 +202,7 @@ function EmployeeLogin() {
         )}
 
         {view === 'forgot' && (
-          <form onSubmit={handleForgotPassword} className="login-form">
+          <form onSubmit={handleForgotPassword} className="login-form" autoComplete="off">
             <h3>Forgot Password</h3>
             <p className="form-desc">Enter your registered email to receive a password reset link.</p>
 
@@ -207,9 +211,11 @@ function EmployeeLogin() {
               <input
                 type="email"
                 id="email"
+                name="email_field"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
+                autoComplete="off"
                 required
               />
             </div>
@@ -233,7 +239,7 @@ function EmployeeLogin() {
         )}
 
         {view === 'reset' && (
-          <form onSubmit={handleResetPassword} className="login-form">
+          <form onSubmit={handleResetPassword} className="login-form" autoComplete="off">
             <h3>Reset Password</h3>
             <p className="form-desc">Enter your reset token and new password.</p>
 
@@ -242,9 +248,11 @@ function EmployeeLogin() {
               <input
                 type="text"
                 id="resetToken"
+                name="token_field"
                 value={resetToken}
                 onChange={(e) => setResetToken(e.target.value)}
                 placeholder="Enter reset token"
+                autoComplete="off"
                 required
               />
             </div>
@@ -254,9 +262,11 @@ function EmployeeLogin() {
               <input
                 type="password"
                 id="newPassword"
+                name="new_pass_field"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter new password (min 6 chars)"
+                autoComplete="new-password"
                 required
                 minLength={6}
               />
@@ -267,9 +277,11 @@ function EmployeeLogin() {
               <input
                 type="password"
                 id="confirmPassword"
+                name="confirm_pass_field"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm new password"
+                autoComplete="new-password"
                 required
               />
             </div>
@@ -290,7 +302,7 @@ function EmployeeLogin() {
         )}
 
         {view === 'setup' && (
-          <form onSubmit={handleSetupPassword} className="login-form">
+          <form onSubmit={handleSetupPassword} className="login-form" autoComplete="off">
             <h3>First Time Setup</h3>
             <p className="form-desc">Set up your password using your Employee ID and IC Number for verification.</p>
 
@@ -299,9 +311,11 @@ function EmployeeLogin() {
               <input
                 type="text"
                 id="employeeId"
+                name="emp_id_setup"
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
                 placeholder="e.g. EMP001"
+                autoComplete="off"
                 required
               />
             </div>
@@ -311,9 +325,11 @@ function EmployeeLogin() {
               <input
                 type="text"
                 id="icNumber"
+                name="ic_setup"
                 value={icNumber}
                 onChange={(e) => setIcNumber(e.target.value)}
                 placeholder="e.g. 901234-56-7890"
+                autoComplete="off"
                 required
               />
             </div>
@@ -323,9 +339,11 @@ function EmployeeLogin() {
               <input
                 type="password"
                 id="setupPassword"
+                name="setup_pass"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter password (min 6 chars)"
+                autoComplete="new-password"
                 required
                 minLength={6}
               />
@@ -336,9 +354,11 @@ function EmployeeLogin() {
               <input
                 type="password"
                 id="setupConfirmPassword"
+                name="setup_confirm"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm password"
+                autoComplete="new-password"
                 required
               />
             </div>

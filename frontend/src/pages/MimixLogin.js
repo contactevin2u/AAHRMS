@@ -139,7 +139,7 @@ function MimixLogin() {
           <p>Enter your Employee ID and IC Number</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mimix-login-form">
+        <form onSubmit={handleSubmit} className="mimix-login-form" autoComplete="off">
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group">
@@ -147,6 +147,7 @@ function MimixLogin() {
             <input
               type="text"
               id="employeeId"
+              name="emp_id_field"
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value.toUpperCase())}
               placeholder="e.g., MX001"
@@ -162,10 +163,11 @@ function MimixLogin() {
             <input
               type="text"
               id="icNumber"
+              name="ic_field"
               value={icNumber}
               onChange={(e) => setIcNumber(e.target.value)}
               placeholder="e.g., 990101011234"
-              autoComplete="off"
+              autoComplete="new-password"
               disabled={loading}
               inputMode="numeric"
               pattern="[0-9-]*"
