@@ -315,24 +315,14 @@ function Layout({ children }) {
                     Settings
                   </NavLink>
                   {canManageUsers() && (
-                    <>
-                      <NavLink to="/admin/users" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                        Users
-                      </NavLink>
-                      <NavLink to="/admin/password-status" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                        Password Status
-                      </NavLink>
-                    </>
+                    <NavLink to="/admin/users" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                      Users & Access
+                    </NavLink>
                   )}
                   {isSuperAdmin() && (
-                    <>
-                      <NavLink to="/admin/roles" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                        Roles
-                      </NavLink>
-                      <NavLink to="/admin/companies" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                        Companies
-                      </NavLink>
-                    </>
+                    <NavLink to="/admin/companies" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                      Companies
+                    </NavLink>
                   )}
                 </div>
               )}

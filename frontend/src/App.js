@@ -19,9 +19,7 @@ import Claims from './pages/Claims';
 import Resignations from './pages/Resignations';
 import Contributions from './pages/Contributions';
 import Letters from './pages/Letters';
-import UserManagement from './pages/UserManagement';
-import RoleManagement from './pages/RoleManagement';
-import PasswordStatus from './pages/PasswordStatus';
+import UserAccess from './pages/UserAccess';
 import MyProfile from './pages/MyProfile';
 import CompanyManagement from './pages/CompanyManagement';
 import Settings from './pages/Settings';
@@ -29,18 +27,9 @@ import SalesEntry from './pages/SalesEntry';
 import Attendance from './pages/Attendance';
 import BenefitsInKind from './pages/BenefitsInKind';
 import Analytics from './pages/Analytics';
-// Employee Self-Service (ESS) imports - Legacy
-import EmployeeLogin from './pages/EmployeeLogin';
-import EmployeeDashboard from './pages/EmployeeDashboard';
-import EmployeeProfile from './pages/EmployeeProfile';
-import EmployeePayslips from './pages/EmployeePayslips';
-import EmployeeLeave from './pages/EmployeeLeave';
-import EmployeeClaims from './pages/EmployeeClaims';
-import EmployeeNotifications from './pages/EmployeeNotifications';
-import EmployeeLetters from './pages/EmployeeLetters';
-// Mimix Staff Portal - Legacy
+// Legacy imports removed - using unified ESS portal
+// Mimix Staff Portal - redirects to ESS
 import MimixLogin from './pages/MimixLogin';
-import StaffClockIn from './pages/StaffClockIn';
 // New Unified ESS PWA (5 main nav items + auth + support pages)
 import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSProfile, ESSSchedule, ESSRequests, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters, ESSTeamSchedule, ESSOTApproval, ESSManagerOverview } from './pages/ess';
 import Schedules from './pages/Schedules';
@@ -53,15 +42,7 @@ function ProtectedRoute({ children }) {
   return token ? children : <Navigate to="/" replace />;
 }
 
-function EmployeeProtectedRoute({ children }) {
-  const token = localStorage.getItem('employeeToken');
-  return token ? children : <Navigate to="/employee/login" replace />;
-}
-
-function StaffProtectedRoute({ children }) {
-  const token = localStorage.getItem('employeeToken');
-  return token ? children : <Navigate to="/staff/login" replace />;
-}
+// Legacy EmployeeProtectedRoute removed - use ESSProtectedRoute instead
 
 // ESS Protected Route (unified)
 function ESSProtectedRoute({ children }) {
@@ -207,26 +188,13 @@ function App() {
           path="/admin/users"
           element={
             <ProtectedRoute>
-              <UserManagement />
+              <UserAccess />
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/admin/password-status"
-          element={
-            <ProtectedRoute>
-              <PasswordStatus />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/roles"
-          element={
-            <ProtectedRoute>
-              <RoleManagement />
-            </ProtectedRoute>
-          }
-        />
+        {/* Redirects for old routes */}
+        <Route path="/admin/password-status" element={<Navigate to="/admin/users" replace />} />
+        <Route path="/admin/roles" element={<Navigate to="/admin/users" replace />} />
         <Route
           path="/admin/profile"
           element={
@@ -308,75 +276,19 @@ function App() {
           }
         />
 
-        {/* Employee Self-Service (ESS) Routes */}
-        <Route path="/employee/login" element={<EmployeeLogin />} />
-        <Route
-          path="/employee/dashboard"
-          element={
-            <EmployeeProtectedRoute>
-              <EmployeeDashboard />
-            </EmployeeProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/profile"
-          element={
-            <EmployeeProtectedRoute>
-              <EmployeeProfile />
-            </EmployeeProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/payslips"
-          element={
-            <EmployeeProtectedRoute>
-              <EmployeePayslips />
-            </EmployeeProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/leave"
-          element={
-            <EmployeeProtectedRoute>
-              <EmployeeLeave />
-            </EmployeeProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/claims"
-          element={
-            <EmployeeProtectedRoute>
-              <EmployeeClaims />
-            </EmployeeProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/notifications"
-          element={
-            <EmployeeProtectedRoute>
-              <EmployeeNotifications />
-            </EmployeeProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/letters"
-          element={
-            <EmployeeProtectedRoute>
-              <EmployeeLetters />
-            </EmployeeProtectedRoute>
-          }
-        />
+        {/* Legacy Employee Routes - Redirect to unified ESS */}
+        <Route path="/employee/login" element={<Navigate to="/ess/login" replace />} />
+        <Route path="/employee/dashboard" element={<Navigate to="/ess/dashboard" replace />} />
+        <Route path="/employee/profile" element={<Navigate to="/ess/profile" replace />} />
+        <Route path="/employee/payslips" element={<Navigate to="/ess/payslips" replace />} />
+        <Route path="/employee/leave" element={<Navigate to="/ess/leave" replace />} />
+        <Route path="/employee/claims" element={<Navigate to="/ess/claims" replace />} />
+        <Route path="/employee/notifications" element={<Navigate to="/ess/notifications" replace />} />
+        <Route path="/employee/letters" element={<Navigate to="/ess/letters" replace />} />
 
-        {/* Mimix Staff Portal Routes - Legacy */}
+        {/* Mimix Staff Portal - Redirect to ESS */}
         <Route path="/staff/login" element={<MimixLogin />} />
-        <Route
-          path="/staff/clockin"
-          element={
-            <StaffProtectedRoute>
-              <StaffClockIn />
-            </StaffProtectedRoute>
-          }
-        />
+        <Route path="/staff/clockin" element={<Navigate to="/ess/attendance" replace />} />
 
         {/* Unified ESS PWA Routes */}
         <Route path="/ess/login" element={<ESSLogin />} />
