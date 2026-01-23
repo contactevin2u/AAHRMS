@@ -1358,16 +1358,27 @@ Human Resources Department
       CREATE INDEX IF NOT EXISTS idx_payroll_commission_items_payroll ON payroll_commission_items(payroll_item_id);
       CREATE INDEX IF NOT EXISTS idx_payroll_allowance_items_payroll ON payroll_allowance_items(payroll_item_id);
 
-      -- Insert default commission types
+      -- Add unique constraints if not exists
+      DO $$ BEGIN
+        ALTER TABLE commission_types ADD CONSTRAINT unique_commission_name_company UNIQUE (name, company_id);
+      EXCEPTION WHEN duplicate_table THEN NULL;
+      END $$;
+
+      DO $$ BEGIN
+        ALTER TABLE allowance_types ADD CONSTRAINT unique_allowance_name_company UNIQUE (name, company_id);
+      EXCEPTION WHEN duplicate_table THEN NULL;
+      END $$;
+
+      -- Insert default commission types (skip if exists)
       INSERT INTO commission_types (name, description, calculation_type, company_id) VALUES
         ('Sales Commission', 'Commission based on sales', 'percentage', 1),
         ('Referral Commission', 'Commission for referrals', 'fixed', 1),
         ('Target Bonus', 'Bonus for hitting targets', 'fixed', 1),
         ('Performance Bonus', 'Performance-based bonus', 'fixed', 1),
         ('Project Commission', 'Commission per project', 'fixed', 1)
-      ON CONFLICT DO NOTHING;
+      ON CONFLICT (name, company_id) DO NOTHING;
 
-      -- Insert default allowance types
+      -- Insert default allowance types (skip if exists)
       INSERT INTO allowance_types (name, description, is_taxable, company_id) VALUES
         ('Transport Allowance', 'Monthly transport allowance', TRUE, 1),
         ('Meal Allowance', 'Daily meal allowance', TRUE, 1),
@@ -1375,7 +1386,7 @@ Human Resources Department
         ('Petrol Allowance', 'Fuel reimbursement', TRUE, 1),
         ('Parking Allowance', 'Parking fees', TRUE, 1),
         ('Housing Allowance', 'Housing assistance', TRUE, 1)
-      ON CONFLICT DO NOTHING;
+      ON CONFLICT (name, company_id) DO NOTHING;
 
       -- =====================================================
       -- OUTLETS TABLE (for outlet-based companies like Mimix)
