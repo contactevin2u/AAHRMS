@@ -33,15 +33,19 @@ function ESSManagerOverview() {
       setOverviewData(res.data);
     } catch (err) {
       console.error('Error fetching overview:', err);
-      // Handle different error response formats
+      // Handle different error response formats - ensure we always get a string
       const errorData = err.response?.data;
       let errorMessage = 'Failed to load team overview';
       if (typeof errorData === 'string') {
         errorMessage = errorData;
-      } else if (errorData?.error) {
+      } else if (typeof errorData?.error === 'string') {
         errorMessage = errorData.error;
-      } else if (errorData?.message) {
+      } else if (typeof errorData?.message === 'string') {
         errorMessage = errorData.message;
+      } else if (errorData?.error?.message) {
+        errorMessage = errorData.error.message;
+      } else if (err.message) {
+        errorMessage = err.message;
       }
       setError(errorMessage);
     } finally {
@@ -87,9 +91,19 @@ function ESSManagerOverview() {
       // Refresh data
       fetchOverview();
     } catch (err) {
+      // Ensure error message is a string
+      let errorMsg = 'Failed to add employee';
+      const errorData = err.response?.data;
+      if (typeof errorData?.error === 'string') {
+        errorMsg = errorData.error;
+      } else if (typeof errorData?.message === 'string') {
+        errorMsg = errorData.message;
+      } else if (typeof errorData === 'string') {
+        errorMsg = errorData;
+      }
       setQuickAddResult({
         success: false,
-        message: err.response?.data?.error || 'Failed to add employee'
+        message: errorMsg
       });
     } finally {
       setQuickAddLoading(false);
