@@ -192,8 +192,10 @@ function PayrollV2() {
   };
 
   // AI Assistant functions
-  const handleAIAnalyze = async (instruction = aiInstruction) => {
-    if (!instruction.trim() || !selectedRun) return;
+  const handleAIAnalyze = async (instructionParam) => {
+    // Handle case where event is passed (from onClick) vs string (from code)
+    const instruction = typeof instructionParam === 'string' ? instructionParam : aiInstruction;
+    if (!instruction || !instruction.trim() || !selectedRun) return;
 
     setAiLoading(true);
     try {
@@ -259,7 +261,7 @@ function PayrollV2() {
   };
 
   const handleAIFeedback = async () => {
-    if (!aiFeedback.trim()) return;
+    if (!aiFeedback || !aiFeedback.trim()) return;
 
     // Combine original instruction with feedback
     const refinedInstruction = `Previous request: "${aiConversation.find(c => c.role === 'user')?.content || ''}"
