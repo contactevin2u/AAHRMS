@@ -46,6 +46,15 @@ function MimixLogin() {
     };
   }, []);
 
+  // Clear any browser autofilled values
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setEmployeeId('');
+      setIcNumber('');
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();

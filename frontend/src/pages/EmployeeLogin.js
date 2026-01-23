@@ -29,6 +29,13 @@ function EmployeeLogin() {
     if (token) {
       navigate('/ess/dashboard');
     }
+
+    // Clear any browser autofilled values
+    const timer = setTimeout(() => {
+      setLogin('');
+      setPassword('');
+    }, 100);
+    return () => clearTimeout(timer);
   }, [navigate]);
 
   const handleLogin = async (e) => {

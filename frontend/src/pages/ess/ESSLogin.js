@@ -24,6 +24,12 @@ function ESSLogin() {
     if (token) {
       navigate('/ess/dashboard');
     }
+
+    // Clear any browser autofilled values
+    const timer = setTimeout(() => {
+      setFormData({ login: '', password: '', name: '', ic_number: '' });
+    }, 100);
+    return () => clearTimeout(timer);
   }, [navigate]);
 
   // PWA Install prompt

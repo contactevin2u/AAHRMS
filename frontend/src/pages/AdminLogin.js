@@ -16,6 +16,13 @@ function AdminLogin() {
     if (token) {
       navigate('/admin/dashboard');
     }
+
+    // Clear any browser autofilled values
+    const timer = setTimeout(() => {
+      setUsername('');
+      setPassword('');
+    }, 100);
+    return () => clearTimeout(timer);
   }, [navigate]);
 
   const handleSubmit = async (e) => {
