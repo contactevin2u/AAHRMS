@@ -158,7 +158,10 @@ async function calculateOTFromClockIn(employeeId, companyId, departmentId, perio
   const endDate = new Date(periodEnd);
   endDate.setHours(23, 59, 59, 999);
 
-  const clockRecords = await getClockRecords(employeeId, startDate, endDate);
+  // AA Alive (company 1, 2): No OT approval needed - all OT counts automatically
+  // Mimix (company 3): OT requires approval before it counts for payroll
+  const otRequiresApproval = companyId === 3;
+  const clockRecords = await getClockRecords(employeeId, startDate, endDate, otRequiresApproval);
 
   // Get public holidays
   const phDates = new Set();

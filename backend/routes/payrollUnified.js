@@ -1534,21 +1534,38 @@ router.get('/ot-summary/:year/:month', authenticateAdmin, async (req, res) => {
     let totalRejected = 0;
     let totalEstimatedPay = 0;
 
+    // Check if this company requires OT approval
+    // AA Alive (company 1, 2): No approval needed - all OT auto-approved
+    // Mimix (company 3): OT requires approval
+    const otRequiresApproval = companyId === 3;
+
     for (const emp of employees.rows) {
       // Get OT records for this employee in the specified month
       // Note: OT is stored in ot_minutes, convert to hours for display
+      // For AA Alive: All OT is auto-approved (no approval workflow)
+      // For Mimix: Only explicitly approved OT counts
       const otRecords = await pool.query(`
         SELECT
-          COALESCE(SUM(CASE WHEN ot_approved = true THEN COALESCE(ot_minutes, 0) / 60.0 ELSE 0 END), 0) as approved_ot_hours,
-          COALESCE(SUM(CASE WHEN ot_approved IS NULL AND COALESCE(ot_minutes, 0) > 0 THEN ot_minutes / 60.0 ELSE 0 END), 0) as pending_ot_hours,
-          COALESCE(SUM(CASE WHEN ot_approved = false THEN COALESCE(ot_minutes, 0) / 60.0 ELSE 0 END), 0) as rejected_ot_hours,
-          COUNT(CASE WHEN ot_approved IS NULL AND COALESCE(ot_minutes, 0) > 0 THEN 1 END) as pending_records_count
+          COALESCE(SUM(CASE
+            WHEN $4 = false THEN COALESCE(ot_minutes, 0) / 60.0
+            WHEN ot_approved = true THEN COALESCE(ot_minutes, 0) / 60.0
+            ELSE 0
+          END), 0) as approved_ot_hours,
+          COALESCE(SUM(CASE
+            WHEN $4 = true AND ot_approved IS NULL AND COALESCE(ot_minutes, 0) > 0 THEN ot_minutes / 60.0
+            ELSE 0
+          END), 0) as pending_ot_hours,
+          COALESCE(SUM(CASE
+            WHEN $4 = true AND ot_approved = false THEN COALESCE(ot_minutes, 0) / 60.0
+            ELSE 0
+          END), 0) as rejected_ot_hours,
+          COUNT(CASE WHEN $4 = true AND ot_approved IS NULL AND COALESCE(ot_minutes, 0) > 0 THEN 1 END) as pending_records_count
         FROM clock_in_records
         WHERE employee_id = $1
           AND EXTRACT(MONTH FROM work_date) = $2
           AND EXTRACT(YEAR FROM work_date) = $3
           AND status IN ('clocked_out', 'approved', 'completed')
-      `, [emp.id, month, year]);
+      `, [emp.id, month, year, otRequiresApproval]);
 
       const otData = otRecords.rows[0];
       const approvedHours = parseFloat(otData.approved_ot_hours) || 0;
