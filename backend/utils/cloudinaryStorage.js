@@ -152,12 +152,25 @@ async function uploadClaim(base64Data, companyId, employeeId, claimId) {
       isPDF = base64Data.includes('application/pdf');
     }
 
+    // Convert PDF to image FIRST for reliable OpenAI reading
+    if (isPDF) {
+      console.log('Converting PDF to image before upload...');
+      try {
+        uploadData = await convertPdfToImageLocal(uploadData);
+        console.log('PDF converted to image successfully');
+        isPDF = false; // Now it's an image
+      } catch (convError) {
+        console.error('PDF conversion failed, uploading original:', convError.message);
+        // Fall back to Cloudinary's PDF handling
+      }
+    }
+
     const timestamp = Date.now();
     const publicId = `hrms/claims/${companyId}/${employeeId}/claim_${claimId || timestamp}`;
 
     const uploadOptions = {
       public_id: publicId,
-      resource_type: isPDF ? 'image' : 'image', // Force image type for PDF conversion
+      resource_type: 'image',
       overwrite: true,
       folder: '',
       transformation: [
@@ -171,10 +184,10 @@ async function uploadClaim(base64Data, companyId, employeeId, claimId) {
       ]
     };
 
-    // For PDFs, extract page 1 only
+    // For PDFs that weren't converted, use Cloudinary's PDF handling
     if (isPDF) {
-      uploadOptions.pages = true; // Enable page extraction
-      uploadOptions.transformation[0].page = 1; // First page only
+      uploadOptions.pages = true;
+      uploadOptions.transformation[0].page = 1;
     }
 
     const result = await cloudinary.uploader.upload(uploadData, uploadOptions);
