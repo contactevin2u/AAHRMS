@@ -59,6 +59,7 @@ const {
   isSupervisorOrManager,
   getManagedOutlets,
   isMimixCompany,
+  isAAAliveCompany,
   canApproveForOutlet,
   canApproveBasedOnHierarchy
 } = require('../../middleware/essPermissions');
@@ -375,9 +376,19 @@ function validateClockData(data, action) {
 
 // Get today's status (supports 4-action structure)
 // Also checks for open shifts from yesterday (for night shift workers)
+// AA Alive: 2-action flow (clock_in_1, clock_out_1 = session end, optional clock_in_2/clock_out_2 for 2nd session)
+// Mimix: 4-action flow (clock_in_1, clock_out_1 = break, clock_in_2, clock_out_2)
 router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   const employeeId = req.employee.id;
   const today = getCurrentDate();
+
+  // Get employee's company to determine flow type
+  const empCompanyResult = await pool.query(
+    'SELECT company_id FROM employees WHERE id = $1',
+    [employeeId]
+  );
+  const companyId = empCompanyResult.rows[0]?.company_id;
+  const isAAAlive = isAAAliveCompany(companyId);
 
   // First, check if there's an open shift from yesterday that needs to be closed
   // This handles night shift workers who clock out after midnight
@@ -450,13 +461,23 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   const record = result.rows[0];
   let status = 'not_started';
   let nextAction = 'clock_in_1';
+  let nextActionOptional = false;
 
   if (record.clock_in_1 && !record.clock_out_1) {
     status = 'working';
     nextAction = 'clock_out_1';
   } else if (record.clock_out_1 && !record.clock_in_2) {
-    status = 'on_break';
-    nextAction = 'clock_in_2';
+    if (isAAAlive) {
+      // AA Alive: clock_out_1 ends the session (no break tracking)
+      // Optional clock_in_2 for a second session/job
+      status = 'session_ended';
+      nextAction = 'clock_in_2';
+      nextActionOptional = true;
+    } else {
+      // Mimix: clock_out_1 is break start
+      status = 'on_break';
+      nextAction = 'clock_in_2';
+    }
   } else if (record.clock_in_2 && !record.clock_out_2) {
     status = 'working';
     nextAction = 'clock_out_2';
@@ -468,6 +489,8 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   res.json({
     status,
     next_action: nextAction,
+    next_action_optional: nextActionOptional,
+    is_aa_alive: isAAAlive,
     record: {
       ...record,
       total_hours: record.total_work_minutes ? (record.total_work_minutes / 60).toFixed(2) : null,
@@ -645,40 +668,91 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     }
 
   } else if (action === 'clock_out_1') {
-    // Break time
+    // AA Alive: Session end (no break tracking)
+    // Mimix: Break time
     if (existingRecord.rows.length === 0 || !existingRecord.rows[0].clock_in_1) {
       throw new ValidationError('You must clock in first');
     }
     if (existingRecord.rows[0].clock_out_1) {
-      throw new ValidationError('You have already taken your break');
+      throw new ValidationError(isAAAliveCompany(company_id) ? 'You have already clocked out for this session' : 'You have already taken your break');
     }
 
     // Upload photo to Cloudinary
     const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_1');
 
-    record = await pool.query(
-      `UPDATE clock_in_records SET
-         clock_out_1 = $1, photo_out_1 = $2, location_out_1 = $3, address_out_1 = $4,
-         face_detected_out_1 = $5, face_confidence_out_1 = $6
-       WHERE employee_id = $7 AND work_date = $8
-       RETURNING *`,
-      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, workDate]
-    );
+    if (isAAAliveCompany(company_id)) {
+      // AA Alive: This is session end, calculate work time and OT
+      const empWorkTypeResult = await pool.query(
+        'SELECT work_type FROM employees WHERE id = $1',
+        [employeeId]
+      );
+      const workType = empWorkTypeResult.rows[0]?.work_type || 'full_time';
 
-    res.json({
-      message: 'Break started. Enjoy your break!',
-      action: 'clock_out_1',
-      time: currentTime,
-      record: record.rows[0]
-    });
+      // Calculate work time for this session
+      const updatedRecord = {
+        ...existingRecord.rows[0],
+        clock_out_1: currentTime
+      };
+      const { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
+
+      // OT flagging (only for full-time)
+      const otFlagged = workType === 'full_time' && otMinutes > 0;
+      // AA Alive: auto-approve OT
+      const otAutoApproved = otFlagged;
+
+      record = await pool.query(
+        `UPDATE clock_in_records SET
+           clock_out_1 = $1, photo_out_1 = $2, location_out_1 = $3, address_out_1 = $4,
+           face_detected_out_1 = $5, face_confidence_out_1 = $6,
+           total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9,
+           ot_approved = $10, status = 'session_ended'
+         WHERE employee_id = $11 AND work_date = $12
+         RETURNING *`,
+        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0,
+         totalMinutes, otMinutes, otFlagged, otAutoApproved ? true : null, employeeId, workDate]
+      );
+
+      let otMessage = otHours > 0 ? ` (OT: ${otHours}h)` : '';
+      res.json({
+        message: `Session ended! You worked ${totalHours} hours${otMessage}. You can clock in again if you have another job.`,
+        action: 'clock_out_1',
+        time: currentTime,
+        total_hours: totalHours,
+        ot_hours: otHours,
+        ot_flagged: otFlagged,
+        ot_approved: otAutoApproved || null,
+        can_start_new_session: true,
+        record: record.rows[0]
+      });
+    } else {
+      // Mimix: This is break start
+      record = await pool.query(
+        `UPDATE clock_in_records SET
+           clock_out_1 = $1, photo_out_1 = $2, location_out_1 = $3, address_out_1 = $4,
+           face_detected_out_1 = $5, face_confidence_out_1 = $6
+         WHERE employee_id = $7 AND work_date = $8
+         RETURNING *`,
+        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, workDate]
+      );
+
+      res.json({
+        message: 'Break started. Enjoy your break!',
+        action: 'clock_out_1',
+        time: currentTime,
+        record: record.rows[0]
+      });
+    }
 
   } else if (action === 'clock_in_2') {
-    // Return from break
+    // AA Alive: New session start
+    // Mimix: Return from break
+    const isAAAlive = isAAAliveCompany(company_id);
+
     if (existingRecord.rows.length === 0 || !existingRecord.rows[0].clock_out_1) {
-      throw new ValidationError('You must go on break first');
+      throw new ValidationError(isAAAlive ? 'You must end your first session first' : 'You must go on break first');
     }
     if (existingRecord.rows[0].clock_in_2) {
-      throw new ValidationError('You have already returned from break');
+      throw new ValidationError(isAAAlive ? 'You have already started a second session' : 'You have already returned from break');
     }
 
     // Upload photo to Cloudinary
@@ -687,26 +761,35 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     record = await pool.query(
       `UPDATE clock_in_records SET
          clock_in_2 = $1, photo_in_2 = $2, location_in_2 = $3, address_in_2 = $4,
-         face_detected_in_2 = $5, face_confidence_in_2 = $6
+         face_detected_in_2 = $5, face_confidence_in_2 = $6,
+         status = 'in_progress'
        WHERE employee_id = $7 AND work_date = $8
        RETURNING *`,
       [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, employeeId, workDate]
     );
 
     res.json({
-      message: 'Welcome back! Break ended.',
+      message: isAAAlive ? 'New session started! Good luck with your work.' : 'Welcome back! Break ended.',
       action: 'clock_in_2',
       time: currentTime,
+      is_new_session: isAAAlive,
       record: record.rows[0]
     });
 
   } else if (action === 'clock_out_2') {
-    // End of day
+    // End of day / End of second session
+    const isAAAlive = isAAAliveCompany(company_id);
+
     if (existingRecord.rows.length === 0 || !existingRecord.rows[0].clock_in_1) {
       throw new ValidationError('You must clock in first');
     }
     if (existingRecord.rows[0].clock_out_2) {
       throw new ValidationError('You have already clocked out for the day');
+    }
+    // AA Alive: Must have started second session (clock_in_2) before ending it
+    // Mimix: Can clock out after break return (clock_in_2) OR directly after clock_in_1 (no break)
+    if (isAAAlive && !existingRecord.rows[0].clock_in_2) {
+      throw new ValidationError('You must start a second session (clock in again) before clocking out. If you only worked one session, your day is already complete.');
     }
 
     // Get employee work_type for hours calculation
@@ -739,14 +822,19 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       otFlagged = false;
     }
 
+    // AA Alive: auto-approve OT (no approval needed)
+    // Mimix: OT requires supervisor approval
+    const otAutoApproved = otFlagged && isAAAliveCompany(company_id);
+
     record = await pool.query(
       `UPDATE clock_in_records SET
          clock_out_2 = $1, photo_out_2 = $2, location_out_2 = $3, address_out_2 = $4,
          face_detected_out_2 = $5, face_confidence_out_2 = $6,
-         total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9, status = 'completed'
+         total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9,
+         ot_approved = $12, status = 'completed'
        WHERE employee_id = $10 AND work_date = $11
        RETURNING *`,
-      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, workDate]
+      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, workDate, otAutoApproved ? true : null]
     );
 
     // If OT flagged for Mimix company, create notification for supervisor
@@ -769,13 +857,20 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       }
     }
 
+    // Build response message based on company
+    let otMessage = '';
+    if (otHours > 0) {
+      otMessage = otAutoApproved ? ` (OT: ${otHours}h)` : ` (OT: ${otHours}h pending approval)`;
+    }
+
     res.json({
-      message: `Day complete! You worked ${totalHours} hours${otHours > 0 ? ` (OT: ${otHours}h pending approval)` : ''}.`,
+      message: `Day complete! You worked ${totalHours} hours${otMessage}.`,
       action: 'clock_out_2',
       time: currentTime,
       total_hours: totalHours,
       ot_hours: otHours,
       ot_flagged: otFlagged,
+      ot_approved: otAutoApproved || null,
       record: record.rows[0]
     });
   }
@@ -951,6 +1046,10 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
   // Full Time: OT after 8.5 hrs, Part Time: No OT flagging
   const otFlagged = workType === 'full_time' && otMinutes > 0;
 
+  // AA Alive: auto-approve OT (no approval needed)
+  // Mimix: OT requires supervisor approval
+  const otAutoApproved = otFlagged && isAAAliveCompany(company_id);
+
   const record = await pool.query(
     `UPDATE clock_in_records SET
        clock_out_2 = $1,
@@ -962,10 +1061,11 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
        total_work_minutes = $7,
        ot_minutes = $8,
        ot_flagged = $9,
+       ot_approved = $12,
        status = 'completed'
      WHERE employee_id = $10 AND work_date = $11
      RETURNING *`,
-    [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, today]
+    [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, today, otAutoApproved ? true : null]
   );
 
   res.json({
@@ -973,7 +1073,8 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
     record: {
       ...record.rows[0],
       hours_worked: totalHours,
-      ot_flagged: otFlagged
+      ot_flagged: otFlagged,
+      ot_approved: otAutoApproved || null
     }
   });
 }));

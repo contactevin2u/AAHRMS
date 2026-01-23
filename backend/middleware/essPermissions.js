@@ -195,6 +195,13 @@ const isMimixCompany = (companyId) => {
 };
 
 /**
+ * Check if company is AA Alive
+ */
+const isAAAliveCompany = (companyId) => {
+  return parseInt(companyId) === COMPANIES.AA_ALIVE;
+};
+
+/**
  * Get outlet IDs that employee can manage
  * - Supervisor: own outlet only
  * - Manager: all assigned outlets
@@ -371,6 +378,7 @@ module.exports = {
   isSupervisorOrManager,
   canViewTeam,
   isMimixCompany,
+  isAAAliveCompany,
   getManagedOutlets,
   getManagedDepartments,
   getTeamEmployeeIds,

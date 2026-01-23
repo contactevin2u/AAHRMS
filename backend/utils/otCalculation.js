@@ -74,7 +74,7 @@ async function getClockRecords(employeeId, startDate, endDate, onlyApprovedOT = 
     WHERE employee_id = $1
       AND clock_in_time >= $2
       AND clock_in_time <= $3
-      AND status IN ('clocked_out', 'approved')
+      AND status IN ('clocked_out', 'approved', 'completed', 'session_ended')
     ORDER BY clock_in_time
   `, [employeeId, startDate, endDate]);
 
