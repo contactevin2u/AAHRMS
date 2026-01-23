@@ -267,53 +267,34 @@ function Letters() {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: 794, // A4 width at 96 DPI
-        windowHeight: 1123 // A4 height at 96 DPI
+        backgroundColor: '#ffffff'
       });
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
 
-      // A4 dimensions
+      // A4 dimensions with margins
       const pageWidth = 210;
       const pageHeight = 297;
-
-      // Calculate image dimensions to fit A4 with margins
-      const margin = 10; // 10mm margins
+      const margin = 15;
       const contentWidth = pageWidth - (margin * 2);
-      const imgWidth = contentWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const contentHeight = pageHeight - (margin * 2);
 
-      // If content fits on one page
-      if (imgHeight <= pageHeight - (margin * 2)) {
-        pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight);
-      } else {
-        // Multi-page handling
-        let heightLeft = imgHeight;
-        let position = margin;
-        let pageNum = 0;
+      // Calculate aspect ratio
+      const imgRatio = canvas.height / canvas.width;
+      let finalWidth = contentWidth;
+      let finalHeight = contentWidth * imgRatio;
 
-        while (heightLeft > 0) {
-          if (pageNum > 0) {
-            pdf.addPage();
-          }
-
-          const pageContentHeight = Math.min(pageHeight - (margin * 2), heightLeft);
-          const srcY = pageNum * (pageHeight - (margin * 2)) * (canvas.height / imgHeight);
-
-          pdf.addImage(
-            imgData, 'PNG',
-            margin, position,
-            imgWidth, imgHeight,
-            undefined, 'FAST',
-            0
-          );
-
-          heightLeft -= (pageHeight - (margin * 2));
-          pageNum++;
-        }
+      // If height exceeds page, scale down to fit
+      if (finalHeight > contentHeight) {
+        finalHeight = contentHeight;
+        finalWidth = contentHeight / imgRatio;
       }
+
+      // Center horizontally
+      const xOffset = margin + (contentWidth - finalWidth) / 2;
+
+      pdf.addImage(imgData, 'PNG', xOffset, margin, finalWidth, finalHeight);
 
       const fileName = `Letter_${selectedLetter.employee_name}_${new Date(selectedLetter.created_at).toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
