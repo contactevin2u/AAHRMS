@@ -1,13 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { earningsApi } from '../api';
+import api from '../api';
 import Layout from '../components/Layout';
 import './Settings.css';
 
 function Settings() {
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isSuperAdmin = adminInfo.role === 'super_admin';
+
   const [activeTab, setActiveTab] = useState('commissions');
   const [commissionTypes, setCommissionTypes] = useState([]);
   const [allowanceTypes, setAllowanceTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Company management state (super admin only)
+  const [companies, setCompanies] = useState([]);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [editingCompany, setEditingCompany] = useState(null);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [companyForm, setCompanyForm] = useState({
+    name: '', code: '', email: '', phone: '', address: '', registration_number: ''
+  });
+  const [adminForm, setAdminForm] = useState({
+    username: '', password: '', name: '', email: '', role: 'boss'
+  });
 
   // Modal states
   const [showCommissionModal, setShowCommissionModal] = useState(false);
@@ -30,6 +47,7 @@ function Settings() {
 
   useEffect(() => {
     fetchData();
+    if (isSuperAdmin) fetchCompanies();
   }, []);
 
   const fetchData = async () => {
@@ -46,6 +64,70 @@ function Settings() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Company management functions
+  const fetchCompanies = async () => {
+    try {
+      const response = await api.get('/companies');
+      setCompanies(response.data);
+    } catch (err) {
+      console.error('Failed to fetch companies:', err);
+    }
+  };
+
+  const handleCompanySubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingCompany) {
+        await api.put(`/companies/${editingCompany.id}`, companyForm);
+      } else {
+        await api.post('/companies', companyForm);
+      }
+      setShowCompanyModal(false);
+      setEditingCompany(null);
+      setCompanyForm({ name: '', code: '', email: '', phone: '', address: '', registration_number: '' });
+      fetchCompanies();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to save company');
+    }
+  };
+
+  const handleCreateAdmin = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(`/companies/${selectedCompany.id}/admin`, adminForm);
+      alert(`Admin created for ${selectedCompany.name}`);
+      setShowAdminModal(false);
+      setSelectedCompany(null);
+      setAdminForm({ username: '', password: '', name: '', email: '', role: 'boss' });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to create admin');
+    }
+  };
+
+  const handleCompanyStatus = async (companyId, newStatus) => {
+    try {
+      await api.patch(`/companies/${companyId}/status`, { status: newStatus });
+      fetchCompanies();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update status');
+    }
+  };
+
+  const openEditCompany = (company) => {
+    setEditingCompany(company);
+    setCompanyForm({
+      name: company.name || '', code: company.code || '', email: company.email || '',
+      phone: company.phone || '', address: company.address || '', registration_number: company.registration_number || ''
+    });
+    setShowCompanyModal(true);
+  };
+
+  const openCreateAdmin = (company) => {
+    setSelectedCompany(company);
+    setAdminForm({ username: '', password: '', name: '', email: '', role: 'boss' });
+    setShowAdminModal(true);
   };
 
   // Commission handlers
@@ -157,14 +239,22 @@ function Settings() {
             className={`tab-btn ${activeTab === 'commissions' ? 'active' : ''}`}
             onClick={() => setActiveTab('commissions')}
           >
-            Commission Types
+            Commissions
           </button>
           <button
             className={`tab-btn ${activeTab === 'allowances' ? 'active' : ''}`}
             onClick={() => setActiveTab('allowances')}
           >
-            Allowance Types
+            Allowances
           </button>
+          {isSuperAdmin && (
+            <button
+              className={`tab-btn ${activeTab === 'companies' ? 'active' : ''}`}
+              onClick={() => setActiveTab('companies')}
+            >
+              Companies
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -258,6 +348,59 @@ function Settings() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'companies' && isSuperAdmin && (
+              <div className="type-section">
+                <div className="section-header">
+                  <h2>Companies</h2>
+                  <button onClick={() => { setEditingCompany(null); setCompanyForm({ name: '', code: '', email: '', phone: '', address: '', registration_number: '' }); setShowCompanyModal(true); }} className="add-btn">
+                    + Add Company
+                  </button>
+                </div>
+                <p className="section-desc">Manage companies in the system. Each company can have its own employees and admins.</p>
+
+                <div className="companies-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Company</th>
+                        <th>Code</th>
+                        <th>Employees</th>
+                        <th>Admins</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {companies.map(company => (
+                        <tr key={company.id}>
+                          <td>
+                            <strong>{company.name}</strong>
+                            {company.email && <small className="company-email">{company.email}</small>}
+                          </td>
+                          <td>{company.code}</td>
+                          <td className="center">{company.employee_count || 0}</td>
+                          <td className="center">{company.admin_count || 0}</td>
+                          <td className="center">
+                            <span className={`status-badge ${company.status}`}>{company.status}</span>
+                          </td>
+                          <td className="actions">
+                            <button onClick={() => openEditCompany(company)} className="edit-btn">Edit</button>
+                            <button onClick={() => openCreateAdmin(company)} className="add-btn small">+ Admin</button>
+                            {company.id !== 1 && (
+                              <button onClick={() => handleCompanyStatus(company.id, company.status === 'active' ? 'suspended' : 'active')}
+                                className={company.status === 'active' ? 'delete-btn' : 'edit-btn'}>
+                                {company.status === 'active' ? 'Suspend' : 'Activate'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
@@ -356,6 +499,85 @@ function Settings() {
                   <button type="submit" className="save-btn">
                     {editingAllowance ? 'Update' : 'Create'}
                   </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Company Modal */}
+        {showCompanyModal && (
+          <div className="modal-overlay" onClick={() => setShowCompanyModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>{editingCompany ? 'Edit Company' : 'Add Company'}</h2>
+              <form onSubmit={handleCompanySubmit}>
+                <div className="form-group">
+                  <label>Company Name *</label>
+                  <input type="text" value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label>Code *</label>
+                  <input type="text" value={companyForm.code} onChange={(e) => setCompanyForm({ ...companyForm, code: e.target.value.toUpperCase() })} required disabled={!!editingCompany} placeholder="e.g., ACME" />
+                </div>
+                <div className="form-group">
+                  <label>Email</label>
+                  <input type="email" value={companyForm.email} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label>Phone</label>
+                  <input type="text" value={companyForm.phone} onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label>Address</label>
+                  <textarea value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} rows="2" />
+                </div>
+                <div className="form-group">
+                  <label>Registration Number</label>
+                  <input type="text" value={companyForm.registration_number} onChange={(e) => setCompanyForm({ ...companyForm, registration_number: e.target.value })} />
+                </div>
+                <div className="modal-actions">
+                  <button type="button" onClick={() => setShowCompanyModal(false)} className="cancel-btn">Cancel</button>
+                  <button type="submit" className="save-btn">{editingCompany ? 'Update' : 'Create'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Create Admin Modal */}
+        {showAdminModal && selectedCompany && (
+          <div className="modal-overlay" onClick={() => setShowAdminModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Create Admin for {selectedCompany.name}</h2>
+              <form onSubmit={handleCreateAdmin}>
+                <div className="form-group">
+                  <label>Username *</label>
+                  <input type="text" value={adminForm.username} onChange={(e) => setAdminForm({ ...adminForm, username: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label>Password *</label>
+                  <input type="password" value={adminForm.password} onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label>Full Name *</label>
+                  <input type="text" value={adminForm.name} onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label>Email</label>
+                  <input type="email" value={adminForm.email} onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label>Role</label>
+                  <select value={adminForm.role} onChange={(e) => setAdminForm({ ...adminForm, role: e.target.value })}>
+                    <option value="boss">Boss</option>
+                    <option value="director">Director</option>
+                    <option value="hr">HR</option>
+                    <option value="manager">Manager</option>
+                  </select>
+                </div>
+                <div className="modal-actions">
+                  <button type="button" onClick={() => setShowAdminModal(false)} className="cancel-btn">Cancel</button>
+                  <button type="submit" className="save-btn">Create Admin</button>
                 </div>
               </form>
             </div>

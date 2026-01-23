@@ -7,7 +7,7 @@ import Employees from './pages/Employees/index';
 import EmployeeEdit from './pages/Employees/EmployeeEdit';
 import EmployeeAdd from './pages/Employees/EmployeeAdd';
 import Payroll from './pages/Payroll';
-import PayrollV2 from './pages/PayrollV2';
+import PayrollUnified from './pages/PayrollUnified';
 import SalaryEntry from './pages/SalaryEntry';
 import Payslip from './pages/Payslip';
 import Departments from './pages/Departments';
@@ -17,11 +17,9 @@ import Leave from './pages/Leave';
 import LeaveBalances from './pages/LeaveBalances';
 import Claims from './pages/Claims';
 import Resignations from './pages/Resignations';
-import Contributions from './pages/Contributions';
 import Letters from './pages/Letters';
 import UserAccess from './pages/UserAccess';
 import MyProfile from './pages/MyProfile';
-import CompanyManagement from './pages/CompanyManagement';
 import Settings from './pages/Settings';
 import SalesEntry from './pages/SalesEntry';
 import Attendance from './pages/Attendance';
@@ -156,7 +154,7 @@ function App() {
           path="/admin/payroll-v2"
           element={
             <ProtectedRoute>
-              <PayrollV2 />
+              <PayrollUnified />
             </ProtectedRoute>
           }
         />
@@ -168,14 +166,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/admin/contributions"
-          element={
-            <ProtectedRoute>
-              <Contributions />
-            </ProtectedRoute>
-          }
-        />
+        {/* Contributions merged into Payroll */}
+        <Route path="/admin/contributions" element={<Navigate to="/admin/payroll-v2" replace />} />
         <Route
           path="/admin/letters"
           element={
@@ -203,14 +195,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/admin/companies"
-          element={
-            <ProtectedRoute>
-              <CompanyManagement />
-            </ProtectedRoute>
-          }
-        />
+        {/* Companies merged into Settings */}
+        <Route path="/admin/companies" element={<Navigate to="/admin/settings" replace />} />
         <Route
           path="/admin/settings"
           element={

@@ -44,6 +44,36 @@
   background: #333;
 }
 
+/* ========== MAIN TABS ========== */
+.main-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e5e5e5;
+}
+
+.main-tab {
+  padding: 12px 24px;
+  border: none;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.main-tab:hover {
+  color: #111;
+}
+
+.main-tab.active {
+  color: #111;
+  border-bottom-color: #111;
+}
+
 /* ========== LAYOUT ========== */
 .payroll-layout {
   display: grid;

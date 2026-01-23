@@ -234,10 +234,7 @@ function Layout({ children }) {
             {expandedSection === 'payroll' && (
               <div className="section-items">
                 <NavLink to="/admin/payroll-v2" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                  Run Payroll
-                </NavLink>
-                <NavLink to="/admin/contributions" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                  Contributions
+                  Payroll
                 </NavLink>
                 {!usesOutlets() && (
                   <NavLink to="/admin/sales-entry" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
@@ -257,48 +254,27 @@ function Layout({ children }) {
             </button>
             {expandedSection === 'hr' && (
               <div className="section-items">
-                <NavLink to="/admin/resignations" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                  Resignations
-                </NavLink>
                 <NavLink to="/admin/letters" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                   HR Letters
+                </NavLink>
+                <NavLink to="/admin/resignations" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Resignations
                 </NavLink>
                 {!usesOutlets() && (
                   <NavLink to="/admin/departments" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                     Departments
                   </NavLink>
                 )}
-                {isAAAlive() && (
-                  <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                    Feedback
-                  </NavLink>
-                )}
-                <NavLink to="/admin/benefits-in-kind" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                  Benefits In Kind
-                </NavLink>
               </div>
             )}
           </div>
 
-          {/* Indoor Sales for AA Alive */}
+          {/* Indoor Sales for AA Alive - Combined into single link */}
           {isAAAlive() && (
-            <div className="nav-section">
-              <button className={`section-header ${expandedSection === 'sales' ? 'expanded' : ''}`} onClick={() => toggleSection('sales')}>
-                <span className="section-icon">🛒</span>
-                <span>Indoor Sales</span>
-                <span className="expand-icon">{expandedSection === 'sales' ? '−' : '+'}</span>
-              </button>
-              {expandedSection === 'sales' && (
-                <div className="section-items">
-                  <NavLink to="/admin/indoor-sales/schedule" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                    Roster
-                  </NavLink>
-                  <NavLink to="/admin/indoor-sales/commission" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                    Commission
-                  </NavLink>
-                </div>
-              )}
-            </div>
+            <NavLink to="/admin/indoor-sales/schedule" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              <span className="nav-icon">🛒</span>
+              <span>Indoor Sales</span>
+            </NavLink>
           )}
 
           {/* SYSTEM SECTION */}
@@ -317,11 +293,6 @@ function Layout({ children }) {
                   {canManageUsers() && (
                     <NavLink to="/admin/users" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                       Users & Access
-                    </NavLink>
-                  )}
-                  {isSuperAdmin() && (
-                    <NavLink to="/admin/companies" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-                      Companies
                     </NavLink>
                   )}
                 </div>
