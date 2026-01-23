@@ -10,6 +10,66 @@
 const cloudinary = require('../config/cloudinary');
 
 /**
+ * Convert PDF to image using pdf.js (for reliable OpenAI reading)
+ */
+async function convertPdfToImageLocal(pdfBase64) {
+  try {
+    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.mjs');
+    const { createCanvas } = require('canvas');
+
+    // Remove data URL prefix if present
+    const pdfData = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+    const pdfBuffer = Buffer.from(pdfData, 'base64');
+    const pdfUint8Array = new Uint8Array(pdfBuffer);
+
+    class NodeCanvasFactory {
+      create(width, height) {
+        const canvas = createCanvas(width, height);
+        const context = canvas.getContext('2d');
+        return { canvas, context };
+      }
+      reset(canvasAndContext, width, height) {
+        canvasAndContext.canvas.width = width;
+        canvasAndContext.canvas.height = height;
+      }
+      destroy(canvasAndContext) {
+        canvasAndContext.canvas.width = 0;
+        canvasAndContext.canvas.height = 0;
+      }
+    }
+
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfUint8Array,
+      canvasFactory: new NodeCanvasFactory(),
+      disableFontFace: true,
+      isEvalSupported: false
+    });
+    const pdf = await loadingTask.promise;
+    const page = await pdf.getPage(1);
+
+    const scale = 2.0;
+    const viewport = page.getViewport({ scale });
+    const canvas = createCanvas(viewport.width, viewport.height);
+    const context = canvas.getContext('2d');
+
+    context.fillStyle = 'white';
+    context.fillRect(0, 0, viewport.width, viewport.height);
+
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+      canvasFactory: new NodeCanvasFactory()
+    }).promise;
+
+    // Return as JPEG base64
+    return canvas.toDataURL('image/jpeg', 0.9);
+  } catch (error) {
+    console.error('PDF to image conversion error:', error);
+    throw new Error('Failed to convert PDF: ' + error.message);
+  }
+}
+
+/**
  * Upload attendance photo to Cloudinary
  *
  * Compression settings for selfies:
