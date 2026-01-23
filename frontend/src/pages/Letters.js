@@ -109,8 +109,12 @@ function Letters() {
   };
 
   // Replace auto-fill placeholders with actual values
-  const replaceAutoFillPlaceholders = (content, subject) => {
-    const selectedEmployee = employees.find(e => e.id === parseInt(form.employee_id));
+  const replaceAutoFillPlaceholders = (content, subject, employeeId = null) => {
+    // Use passed employeeId or fall back to form.employee_id
+    const empId = employeeId || form.employee_id;
+    const selectedEmployee = employees.find(e =>
+      String(e.id) === String(empId) || e.id === parseInt(empId)
+    );
     const today = new Date().toLocaleDateString('en-MY', { year: 'numeric', month: 'long', day: 'numeric' });
 
     let newContent = content;
@@ -152,6 +156,9 @@ function Letters() {
       return;
     }
 
+    // Store current employee_id to use later (avoid stale closure)
+    const currentEmployeeId = form.employee_id;
+
     // Check for user-input placeholders
     const userPlaceholders = getUserInputPlaceholders(template.content);
 
@@ -160,11 +167,11 @@ function Letters() {
       const initialInputs = {};
       userPlaceholders.forEach(p => { initialInputs[p] = ''; });
       setPlaceholderInputs(initialInputs);
-      setPendingTemplate(template);
+      setPendingTemplate({ ...template, _employeeId: currentEmployeeId }); // Store employee_id with template
       setShowPlaceholderModal(true);
     } else {
       // No user input needed, just replace auto-fill placeholders
-      const { content, subject } = replaceAutoFillPlaceholders(template.content, template.subject);
+      const { content, subject } = replaceAutoFillPlaceholders(template.content, template.subject, currentEmployeeId);
       setForm({
         ...form,
         letter_type: template.letter_type,
@@ -177,8 +184,11 @@ function Letters() {
   const handlePlaceholderSubmit = () => {
     if (!pendingTemplate) return;
 
+    // Use stored employee_id from when template was selected
+    const employeeId = pendingTemplate._employeeId || form.employee_id;
+
     // First replace auto-fill, then user inputs
-    let { content, subject } = replaceAutoFillPlaceholders(pendingTemplate.content, pendingTemplate.subject);
+    let { content, subject } = replaceAutoFillPlaceholders(pendingTemplate.content, pendingTemplate.subject, employeeId);
     ({ content, subject } = replaceUserInputPlaceholders(content, subject, placeholderInputs));
 
     setForm({
