@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { claimsApi, employeeApi, outletsApi, departmentApi } from '../api';
+import { claimsApi, employeeApi, outletsApi, departmentApi, advancesApi } from '../api';
 import Layout from '../components/Layout';
 import './Claims.css';
 
@@ -13,7 +13,9 @@ function Claims() {
   const [pendingCount, setPendingCount] = useState(0);
   const [summary, setSummary] = useState([]);
   const [restrictions, setRestrictions] = useState([]);
-  const [activeTab, setActiveTab] = useState('claims'); // 'claims' or 'restrictions'
+  const [advances, setAdvances] = useState([]);
+  const [advancesSummary, setAdvancesSummary] = useState([]);
+  const [activeTab, setActiveTab] = useState('claims'); // 'claims', 'advances', 'restrictions'
 
   // Get company info for filtering
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
@@ -31,6 +33,7 @@ function Claims() {
 
   // Modals
   const [showModal, setShowModal] = useState(false);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [editingClaim, setEditingClaim] = useState(null);
 
   // Form
@@ -40,6 +43,18 @@ function Claims() {
     category: '',
     description: '',
     amount: ''
+  });
+
+  // Advance Form
+  const [advanceForm, setAdvanceForm] = useState({
+    employee_id: '',
+    amount: '',
+    advance_date: new Date().toISOString().split('T')[0],
+    reason: '',
+    deduction_method: 'full',
+    installment_amount: '',
+    expected_deduction_month: new Date().getMonth() + 2,
+    expected_deduction_year: new Date().getFullYear()
   });
 
   // Selection for bulk approve
@@ -52,6 +67,7 @@ function Claims() {
   useEffect(() => {
     fetchClaims();
     fetchSummary();
+    fetchAdvances();
   }, [filter]);
 
   const fetchInitialData = async () => {
@@ -96,6 +112,19 @@ function Claims() {
     }
   };
 
+  const fetchAdvances = async () => {
+    try {
+      const [advRes, sumRes] = await Promise.all([
+        advancesApi.getAll({ month: filter.month, year: filter.year }).catch(() => ({ data: [] })),
+        advancesApi.getSummary({ month: filter.month, year: filter.year }).catch(() => ({ data: [] }))
+      ]);
+      setAdvances(advRes.data || []);
+      setAdvancesSummary(sumRes.data || []);
+    } catch (error) {
+      console.error('Error fetching advances:', error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -111,6 +140,24 @@ function Claims() {
       fetchInitialData();
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to save claim');
+    }
+  };
+
+  const handleAdvanceSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await advancesApi.create({
+        ...advanceForm,
+        expected_deduction_month: advanceForm.expected_deduction_month > 12
+          ? advanceForm.expected_deduction_month - 12
+          : advanceForm.expected_deduction_month
+      });
+      setShowAdvanceModal(false);
+      resetAdvanceForm();
+      fetchAdvances();
+      alert('Salary advance recorded successfully');
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to save advance');
     }
   };
 
@@ -183,6 +230,17 @@ function Claims() {
     }
   };
 
+  const handleCancelAdvance = async (id) => {
+    if (window.confirm('Cancel this advance? This cannot be undone.')) {
+      try {
+        await advancesApi.cancel(id);
+        fetchAdvances();
+      } catch (error) {
+        alert(error.response?.data?.error || 'Failed to cancel advance');
+      }
+    }
+  };
+
   const handleEdit = (claim) => {
     setEditingClaim(claim);
     setForm({
@@ -206,6 +264,19 @@ function Claims() {
     });
   };
 
+  const resetAdvanceForm = () => {
+    setAdvanceForm({
+      employee_id: '',
+      amount: '',
+      advance_date: new Date().toISOString().split('T')[0],
+      reason: '',
+      deduction_method: 'full',
+      installment_amount: '',
+      expected_deduction_month: new Date().getMonth() + 2,
+      expected_deduction_year: new Date().getFullYear()
+    });
+  };
+
   const toggleSelectClaim = (id) => {
     setSelectedClaims(prev =>
       prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
@@ -213,7 +284,6 @@ function Claims() {
   };
 
   const toggleSelectAll = () => {
-    // Only select pending claims that are NOT linked to payroll
     const selectableClaims = claims
       .filter(c => c.status === 'pending' && !c.linked_payroll_item_id)
       .map(c => c.id);
@@ -234,59 +304,47 @@ function Claims() {
   };
 
   const formatAmount = (amount) => {
-    return `RM ${parseFloat(amount).toFixed(2)}`;
+    return `RM ${parseFloat(amount || 0).toFixed(2)}`;
   };
 
   const getStatusBadge = (status) => {
     const classes = {
       pending: 'status-badge pending',
       approved: 'status-badge approved',
-      rejected: 'status-badge rejected'
+      rejected: 'status-badge rejected',
+      active: 'status-badge pending',
+      completed: 'status-badge approved',
+      cancelled: 'status-badge rejected'
     };
     return <span className={classes[status] || 'status-badge'}>{status}</span>;
   };
 
-  // Get AI info for the claim
   const getAIInfo = (claim) => {
-    // For approved claims, show if it was AI auto-approved
     if (claim.status === 'approved' && claim.auto_approved) {
       return { type: 'auto-approved', reasons: ['Auto-approved by AI'] };
     }
-
-    // For pending claims, show why manual approval is needed
     if (claim.status === 'pending') {
       const reasons = [];
-
-      // Check for amount mismatch (over-claim)
       if (claim.amount_mismatch_ignored) {
         const aiAmount = claim.ai_extracted_amount ? parseFloat(claim.ai_extracted_amount).toFixed(2) : '?';
         reasons.push(`Over-claim: Receipt RM ${aiAmount}, Claimed RM ${parseFloat(claim.amount).toFixed(2)}`);
       }
-
-      // Check for unreadable receipt
       if (claim.ai_confidence === 'unreadable' || claim.ai_confidence === 'low') {
         reasons.push('Receipt unreadable by AI');
       }
-
-      // Check if amount exceeds auto-approve limit
       if (parseFloat(claim.amount) > 100 && !claim.amount_mismatch_ignored && claim.ai_confidence !== 'unreadable') {
         reasons.push('Amount exceeds RM 100 limit');
       }
-
-      // If we have AI data but no specific reason, it might be a legacy claim
       if (reasons.length === 0 && !claim.ai_extracted_amount && !claim.receipt_hash) {
         reasons.push('Submitted before AI verification');
       }
-
       if (reasons.length > 0) {
         return { type: 'manual-required', reasons };
       }
     }
-
     return null;
   };
 
-  // Check if claim needs attention (manual approval with AI warnings)
   const needsAttention = (claim) => {
     if (claim.status !== 'pending') return false;
     return claim.amount_mismatch_ignored || claim.ai_confidence === 'unreadable' || claim.ai_confidence === 'low';
@@ -297,16 +355,54 @@ function Claims() {
     return cat ? cat.label : value;
   };
 
+  // Calculate totals
   const totalApproved = summary.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
   const totalPending = claims.filter(c => c.status === 'pending').reduce((sum, c) => sum + parseFloat(c.amount), 0);
+  const totalAdvanceDeductions = advancesSummary.reduce((sum, a) => sum + parseFloat(a.deduction_this_month || 0), 0);
+
+  // Group claims by employee for summary
+  const employeeSummary = {};
+  claims.forEach(c => {
+    if (!employeeSummary[c.employee_id]) {
+      employeeSummary[c.employee_id] = {
+        name: c.employee_name,
+        emp_code: c.emp_code,
+        totalClaims: 0,
+        approvedClaims: 0,
+        pendingClaims: 0
+      };
+    }
+    employeeSummary[c.employee_id].totalClaims += parseFloat(c.amount);
+    if (c.status === 'approved') {
+      employeeSummary[c.employee_id].approvedClaims += parseFloat(c.amount);
+    } else if (c.status === 'pending') {
+      employeeSummary[c.employee_id].pendingClaims += parseFloat(c.amount);
+    }
+  });
+
+  // Add advance deductions to employee summary
+  advancesSummary.forEach(a => {
+    if (employeeSummary[a.employee_id]) {
+      employeeSummary[a.employee_id].advanceDeduction = parseFloat(a.deduction_this_month || 0);
+    } else {
+      employeeSummary[a.employee_id] = {
+        name: a.employee_name,
+        emp_code: a.emp_code,
+        totalClaims: 0,
+        approvedClaims: 0,
+        pendingClaims: 0,
+        advanceDeduction: parseFloat(a.deduction_this_month || 0)
+      };
+    }
+  });
 
   return (
     <Layout>
       <div className="claims-page">
         <header className="page-header">
           <div>
-            <h1>Claims</h1>
-            <p>Manage employee expense claims</p>
+            <h1>Claims & Advances</h1>
+            <p>Manage employee expense claims and salary advances</p>
           </div>
           <div className="header-actions">
             {pendingCount > 0 && (
@@ -315,6 +411,11 @@ function Claims() {
             {activeTab === 'claims' && (
               <button onClick={() => { resetForm(); setShowModal(true); }} className="add-btn">
                 + New Claim
+              </button>
+            )}
+            {activeTab === 'advances' && (
+              <button onClick={() => { resetAdvanceForm(); setShowAdvanceModal(true); }} className="add-btn">
+                + New Advance
               </button>
             )}
           </div>
@@ -329,6 +430,18 @@ function Claims() {
             Claims List
           </button>
           <button
+            className={`tab-btn ${activeTab === 'advances' ? 'active' : ''}`}
+            onClick={() => setActiveTab('advances')}
+          >
+            Salary Advances
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'summary' ? 'active' : ''}`}
+            onClick={() => setActiveTab('summary')}
+          >
+            Employee Summary
+          </button>
+          <button
             className={`tab-btn ${activeTab === 'restrictions' ? 'active' : ''}`}
             onClick={() => setActiveTab('restrictions')}
           >
@@ -336,36 +449,41 @@ function Claims() {
           </button>
         </div>
 
-        {activeTab === 'claims' && (
-          <>
-        {/* Summary Stats - Clickable to filter */}
+        {/* Summary Stats */}
         <div className="stats-row">
           <div
             className={`stat-box clickable ${filter.status === '' ? 'active' : ''}`}
-            onClick={() => setFilter({ ...filter, status: '' })}
+            onClick={() => { setFilter({ ...filter, status: '' }); setActiveTab('claims'); }}
           >
             <span className="stat-num">{claims.length}</span>
             <span className="stat-text">Total Claims</span>
           </div>
           <div
             className={`stat-box clickable pending ${filter.status === 'pending' ? 'active' : ''}`}
-            onClick={() => setFilter({ ...filter, status: 'pending' })}
+            onClick={() => { setFilter({ ...filter, status: 'pending' }); setActiveTab('claims'); }}
           >
             <span className="stat-num">{formatAmount(totalPending)}</span>
             <span className="stat-text">Pending Amount</span>
           </div>
           <div
             className={`stat-box clickable approved ${filter.status === 'approved' ? 'active' : ''}`}
-            onClick={() => setFilter({ ...filter, status: 'approved' })}
+            onClick={() => { setFilter({ ...filter, status: 'approved' }); setActiveTab('claims'); }}
           >
             <span className="stat-num">{formatAmount(totalApproved)}</span>
             <span className="stat-text">Approved (Month)</span>
+          </div>
+          <div
+            className="stat-box advance-box"
+            onClick={() => setActiveTab('advances')}
+            style={{ cursor: 'pointer' }}
+          >
+            <span className="stat-num" style={{ color: '#dc2626' }}>{formatAmount(totalAdvanceDeductions)}</span>
+            <span className="stat-text">Advance Deductions</span>
           </div>
         </div>
 
         {/* Filters */}
         <div className="filters-row">
-          {/* Outlet filter for Mimix */}
           {isMimix && outlets.length > 0 && (
             <select
               value={filter.outlet_id}
@@ -377,7 +495,6 @@ function Claims() {
               ))}
             </select>
           )}
-          {/* Department filter for AA Alive */}
           {!isMimix && departments.length > 0 && (
             <select
               value={filter.department_id}
@@ -427,164 +544,297 @@ function Claims() {
           </select>
         </div>
 
-        {/* Bulk Actions */}
-        {selectedClaims.length > 0 && (
-          <div className="bulk-actions">
-            <span>{selectedClaims.length} selected</span>
-            <button onClick={handleBulkApprove} className="bulk-approve-btn">
-              Approve Selected
-            </button>
-            <button onClick={() => setSelectedClaims([])} className="clear-btn">
-              Clear
-            </button>
-          </div>
-        )}
+        {/* Claims Tab */}
+        {activeTab === 'claims' && (
+          <>
+            {selectedClaims.length > 0 && (
+              <div className="bulk-actions">
+                <span>{selectedClaims.length} selected</span>
+                <button onClick={handleBulkApprove} className="bulk-approve-btn">
+                  Approve Selected
+                </button>
+                <button onClick={() => setSelectedClaims([])} className="clear-btn">
+                  Clear
+                </button>
+              </div>
+            )}
 
-        {/* Claims Table */}
-        {loading ? (
-          <div className="loading">Loading...</div>
-        ) : (
-          <div className="data-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>
-                    <input
-                      type="checkbox"
-                      checked={selectedClaims.length > 0 && selectedClaims.length === claims.filter(c => c.status === 'pending' && !c.linked_payroll_item_id).length}
-                      onChange={toggleSelectAll}
-                    />
-                  </th>
-                  <th>Date</th>
-                  <th>Employee</th>
-                  <th>Category</th>
-                  <th>Description</th>
-                  <th>Amount</th>
-                  <th>Receipt</th>
-                  <th>Status</th>
-                  <th>AI Info</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {claims.length === 0 ? (
-                  <tr>
-                    <td colSpan="10" className="no-data">No claims found</td>
-                  </tr>
-                ) : (
-                  claims.map(claim => {
-                    const aiInfo = getAIInfo(claim);
-                    const attention = needsAttention(claim);
-
-                    return (
-                    <tr key={claim.id} className={attention ? 'needs-attention' : ''}>
-                      <td>
-                        {claim.status === 'pending' && !claim.linked_payroll_item_id && (
-                          <input
-                            type="checkbox"
-                            checked={selectedClaims.includes(claim.id)}
-                            onChange={() => toggleSelectClaim(claim.id)}
-                          />
-                        )}
-                      </td>
-                      <td>{formatDate(claim.claim_date)}</td>
-                      <td><strong>{claim.employee_name}</strong></td>
-                      <td>
-                        <span className="category-badge">{getCategoryLabel(claim.category)}</span>
-                      </td>
-                      <td className="desc-cell">{claim.description || '-'}</td>
-                      <td><strong>{formatAmount(claim.amount)}</strong></td>
-                      <td>
-                        {claim.receipt_url ? (
-                          <a
-                            href={claim.receipt_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="receipt-link"
-                            title="View Receipt"
-                          >
-                            View
-                          </a>
-                        ) : (
-                          <span className="no-receipt">-</span>
-                        )}
-                      </td>
-                      <td>{getStatusBadge(claim.status)}</td>
-                      <td>
-                        {claim.linked_payroll_item_id ? (
-                          <span className="linked-badge">Linked</span>
-                        ) : aiInfo ? (
-                          <span
-                            className="ai-reason-badge"
-                            title={aiInfo.reasons.join('\n')}
-                            style={{
-                              display: 'inline-block',
-                              padding: '2px 8px',
-                              background: aiInfo.type === 'auto-approved' ? '#f0fdf4' : (attention ? '#fef3c7' : '#f3f4f6'),
-                              color: aiInfo.type === 'auto-approved' ? '#16a34a' : (attention ? '#92400e' : '#6b7280'),
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              maxWidth: '150px',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              cursor: 'help'
-                            }}
-                          >
-                            {aiInfo.type === 'auto-approved' ? '🤖 ' : (attention ? '⚠️ ' : '')}{aiInfo.reasons[0]}
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td>
-                        <div className="action-buttons">
-                          {/* Show approve/reject/edit only if pending AND not linked to payroll */}
-                          {claim.status === 'pending' && !claim.linked_payroll_item_id && (
-                            <>
-                              <button onClick={() => handleApprove(claim.id)} className="action-btn approve" title="Approve">✓</button>
-                              <button onClick={() => handleReject(claim.id)} className="action-btn reject" title="Reject">✕</button>
-                              <button onClick={() => handleEdit(claim)} className="action-btn edit" title="Edit">✎</button>
-                            </>
-                          )}
-                          {/* Show revert button for approved claims not linked to payroll */}
-                          {claim.status === 'approved' && !claim.linked_payroll_item_id && (
-                            <button onClick={() => handleRevert(claim.id)} className="action-btn revert" title="Revert to Pending">↩</button>
-                          )}
-                          {/* Delete button - Testing mode, shows for all statuses (not linked to payroll) */}
-                          {/* TODO: Remove after real data starts */}
-                          {!claim.linked_payroll_item_id && (
-                            <button onClick={() => handleDelete(claim.id)} className="action-btn delete" title="Delete">🗑</button>
-                          )}
-                          {/* Show locked indicator for linked claims */}
-                          {claim.linked_payroll_item_id && (
-                            <span className="locked-indicator" title="Linked to payroll - cannot modify">🔒</span>
-                          )}
-                        </div>
-                      </td>
+            {loading ? (
+              <div className="loading">Loading...</div>
+            ) : (
+              <div className="data-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={selectedClaims.length > 0 && selectedClaims.length === claims.filter(c => c.status === 'pending' && !c.linked_payroll_item_id).length}
+                          onChange={toggleSelectAll}
+                        />
+                      </th>
+                      <th>Date</th>
+                      <th>Employee</th>
+                      <th>Category</th>
+                      <th>Description</th>
+                      <th>Amount</th>
+                      <th>Receipt</th>
+                      <th>Status</th>
+                      <th>AI Info</th>
+                      <th>Actions</th>
                     </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {claims.length === 0 ? (
+                      <tr>
+                        <td colSpan="10" className="no-data">No claims found</td>
+                      </tr>
+                    ) : (
+                      claims.map(claim => {
+                        const aiInfo = getAIInfo(claim);
+                        const attention = needsAttention(claim);
+
+                        return (
+                          <tr key={claim.id} className={attention ? 'needs-attention' : ''}>
+                            <td>
+                              {claim.status === 'pending' && !claim.linked_payroll_item_id && (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedClaims.includes(claim.id)}
+                                  onChange={() => toggleSelectClaim(claim.id)}
+                                />
+                              )}
+                            </td>
+                            <td>{formatDate(claim.claim_date)}</td>
+                            <td><strong>{claim.employee_name}</strong></td>
+                            <td>
+                              <span className="category-badge">{getCategoryLabel(claim.category)}</span>
+                            </td>
+                            <td className="desc-cell">{claim.description || '-'}</td>
+                            <td><strong>{formatAmount(claim.amount)}</strong></td>
+                            <td>
+                              {claim.receipt_url ? (
+                                <a
+                                  href={claim.receipt_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="receipt-link"
+                                  title="View Receipt"
+                                >
+                                  View
+                                </a>
+                              ) : (
+                                <span className="no-receipt">-</span>
+                              )}
+                            </td>
+                            <td>{getStatusBadge(claim.status)}</td>
+                            <td>
+                              {claim.linked_payroll_item_id ? (
+                                <span className="linked-badge">Linked</span>
+                              ) : aiInfo ? (
+                                <span
+                                  className="ai-reason-badge"
+                                  title={aiInfo.reasons.join('\n')}
+                                  style={{
+                                    display: 'inline-block',
+                                    padding: '2px 8px',
+                                    background: aiInfo.type === 'auto-approved' ? '#f0fdf4' : (attention ? '#fef3c7' : '#f3f4f6'),
+                                    color: aiInfo.type === 'auto-approved' ? '#16a34a' : (attention ? '#92400e' : '#6b7280'),
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    maxWidth: '150px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    cursor: 'help'
+                                  }}
+                                >
+                                  {aiInfo.type === 'auto-approved' ? '🤖 ' : (attention ? '⚠️ ' : '')}{aiInfo.reasons[0]}
+                                </span>
+                              ) : '-'}
+                            </td>
+                            <td>
+                              <div className="action-buttons">
+                                {claim.status === 'pending' && !claim.linked_payroll_item_id && (
+                                  <>
+                                    <button onClick={() => handleApprove(claim.id)} className="action-btn approve" title="Approve">✓</button>
+                                    <button onClick={() => handleReject(claim.id)} className="action-btn reject" title="Reject">✕</button>
+                                    <button onClick={() => handleEdit(claim)} className="action-btn edit" title="Edit">✎</button>
+                                  </>
+                                )}
+                                {claim.status === 'approved' && !claim.linked_payroll_item_id && (
+                                  <button onClick={() => handleRevert(claim.id)} className="action-btn revert" title="Revert to Pending">↩</button>
+                                )}
+                                {!claim.linked_payroll_item_id && (
+                                  <button onClick={() => handleDelete(claim.id)} className="action-btn delete" title="Delete">🗑</button>
+                                )}
+                                {claim.linked_payroll_item_id && (
+                                  <span className="locked-indicator" title="Linked to payroll - cannot modify">🔒</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {summary.length > 0 && (
+              <div className="category-summary">
+                <h3>Category Summary ({filter.month}/{filter.year})</h3>
+                <div className="summary-grid">
+                  {summary.map(s => (
+                    <div key={s.category} className="summary-item">
+                      <span className="summary-label">{getCategoryLabel(s.category)}</span>
+                      <span className="summary-value">{formatAmount(s.total_amount)}</span>
+                      <span className="summary-count">{s.count} claims</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Category Summary */}
-        {summary.length > 0 && (
-          <div className="category-summary">
-            <h3>Category Summary ({filter.month}/{filter.year})</h3>
-            <div className="summary-grid">
-              {summary.map(s => (
-                <div key={s.category} className="summary-item">
-                  <span className="summary-label">{getCategoryLabel(s.category)}</span>
-                  <span className="summary-value">{formatAmount(s.total_amount)}</span>
-                  <span className="summary-count">{s.count} claims</span>
-                </div>
-              ))}
+        {/* Advances Tab */}
+        {activeTab === 'advances' && (
+          <div className="advances-section">
+            <div className="data-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Employee</th>
+                    <th>Amount</th>
+                    <th>Reason</th>
+                    <th>Method</th>
+                    <th>Deducted</th>
+                    <th>Remaining</th>
+                    <th>Deduction Month</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {advances.length === 0 ? (
+                    <tr>
+                      <td colSpan="10" className="no-data">No advances found</td>
+                    </tr>
+                  ) : (
+                    advances.map(adv => (
+                      <tr key={adv.id}>
+                        <td>{formatDate(adv.advance_date)}</td>
+                        <td><strong>{adv.employee_name}</strong></td>
+                        <td><strong>{formatAmount(adv.amount)}</strong></td>
+                        <td className="desc-cell">{adv.reason || '-'}</td>
+                        <td>
+                          <span className={`method-badge ${adv.deduction_method}`}>
+                            {adv.deduction_method === 'full' ? 'Full' : `RM ${adv.installment_amount}/mo`}
+                          </span>
+                        </td>
+                        <td style={{ color: '#16a34a' }}>{formatAmount(adv.total_deducted)}</td>
+                        <td style={{ color: '#dc2626' }}>{formatAmount(adv.remaining_balance)}</td>
+                        <td>{adv.expected_deduction_month}/{adv.expected_deduction_year}</td>
+                        <td>{getStatusBadge(adv.status)}</td>
+                        <td>
+                          <div className="action-buttons">
+                            {adv.status === 'active' && (
+                              <button onClick={() => handleCancelAdvance(adv.id)} className="action-btn delete" title="Cancel">✕</button>
+                            )}
+                            {adv.status === 'completed' && (
+                              <span className="locked-indicator" title="Fully deducted">✓</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="info-box" style={{ marginTop: '20px', padding: '15px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+              <h4 style={{ margin: '0 0 10px 0', color: '#0369a1' }}>How Salary Advances Work</h4>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#0c4a6e' }}>
+                <li><strong>Full Deduction:</strong> The entire advance is deducted in the specified month</li>
+                <li><strong>Installment:</strong> A fixed amount is deducted each month until fully paid</li>
+                <li>Advances are automatically deducted from payroll when the payroll is generated</li>
+                <li>Deductions appear in the employee's payslip under "Advance Deduction"</li>
+              </ul>
             </div>
           </div>
         )}
-          </>
+
+        {/* Employee Summary Tab */}
+        {activeTab === 'summary' && (
+          <div className="summary-section">
+            <h3>Employee Claims & Deductions Summary - {new Date(filter.year, filter.month - 1).toLocaleString('en', { month: 'long' })} {filter.year}</h3>
+            <div className="data-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Total Claims</th>
+                    <th>Approved</th>
+                    <th>Pending</th>
+                    <th>Advance Deduction</th>
+                    <th>Net to Salary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.keys(employeeSummary).length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="no-data">No data for this period</td>
+                    </tr>
+                  ) : (
+                    Object.entries(employeeSummary).map(([empId, data]) => {
+                      const advDed = data.advanceDeduction || 0;
+                      const netToSalary = data.approvedClaims - advDed;
+                      return (
+                        <tr key={empId}>
+                          <td><strong>{data.name}</strong></td>
+                          <td>{formatAmount(data.totalClaims)}</td>
+                          <td style={{ color: '#16a34a' }}>{formatAmount(data.approvedClaims)}</td>
+                          <td style={{ color: '#d97706' }}>{formatAmount(data.pendingClaims)}</td>
+                          <td style={{ color: '#dc2626' }}>{advDed > 0 ? `-${formatAmount(advDed)}` : '-'}</td>
+                          <td style={{ fontWeight: 'bold', color: netToSalary >= 0 ? '#16a34a' : '#dc2626' }}>
+                            {formatAmount(netToSalary)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr style={{ fontWeight: 'bold', background: '#f3f4f6' }}>
+                    <td>TOTAL</td>
+                    <td>{formatAmount(Object.values(employeeSummary).reduce((s, d) => s + d.totalClaims, 0))}</td>
+                    <td style={{ color: '#16a34a' }}>{formatAmount(Object.values(employeeSummary).reduce((s, d) => s + d.approvedClaims, 0))}</td>
+                    <td style={{ color: '#d97706' }}>{formatAmount(Object.values(employeeSummary).reduce((s, d) => s + d.pendingClaims, 0))}</td>
+                    <td style={{ color: '#dc2626' }}>{formatAmount(Object.values(employeeSummary).reduce((s, d) => s + (d.advanceDeduction || 0), 0))}</td>
+                    <td style={{ color: '#16a34a' }}>
+                      {formatAmount(
+                        Object.values(employeeSummary).reduce((s, d) => s + d.approvedClaims, 0) -
+                        Object.values(employeeSummary).reduce((s, d) => s + (d.advanceDeduction || 0), 0)
+                      )}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div className="info-box" style={{ marginTop: '20px', padding: '15px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+              <h4 style={{ margin: '0 0 10px 0', color: '#166534' }}>How Claims Affect Payroll</h4>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#14532d' }}>
+                <li><strong>Approved Claims:</strong> Added to gross salary (reimbursement - no EPF/SOCSO/PCB deduction)</li>
+                <li><strong>Advance Deductions:</strong> Subtracted from net pay</li>
+                <li><strong>Net to Salary:</strong> Approved Claims - Advance Deductions = Amount added to pay</li>
+              </ul>
+            </div>
+          </div>
         )}
 
         {/* Restrictions Tab */}
@@ -595,7 +845,6 @@ function Claims() {
               <p>The following rules and limits apply to all expense claims</p>
             </div>
 
-            {/* Summary Table */}
             <div className="restrictions-table-container">
               <h3>Claim Limits Summary</h3>
               <table className="restrictions-table">
@@ -638,7 +887,6 @@ function Claims() {
               </table>
             </div>
 
-            {/* Detailed Rules */}
             <div className="restrictions-rules">
               <h3>Detailed Rules & Logic</h3>
               <div className="rules-list">
@@ -664,7 +912,6 @@ function Claims() {
               </div>
             </div>
 
-            {/* Important Notes */}
             <div className="restrictions-notes">
               <h3>Important Notes</h3>
               <ul>
@@ -748,6 +995,123 @@ function Claims() {
                   </button>
                   <button type="submit" className="save-btn">
                     {editingClaim ? 'Update' : 'Submit'} Claim
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Advance Modal */}
+        {showAdvanceModal && (
+          <div className="modal-overlay" onClick={() => setShowAdvanceModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Record Salary Advance</h2>
+              <form onSubmit={handleAdvanceSubmit}>
+                <div className="form-group">
+                  <label>Employee *</label>
+                  <select
+                    value={advanceForm.employee_id}
+                    onChange={(e) => setAdvanceForm({ ...advanceForm, employee_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Select employee</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Advance Date *</label>
+                    <input
+                      type="date"
+                      value={advanceForm.advance_date}
+                      onChange={(e) => setAdvanceForm({ ...advanceForm, advance_date: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Amount (RM) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={advanceForm.amount}
+                      onChange={(e) => setAdvanceForm({ ...advanceForm, amount: e.target.value })}
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Reason</label>
+                  <textarea
+                    value={advanceForm.reason}
+                    onChange={(e) => setAdvanceForm({ ...advanceForm, reason: e.target.value })}
+                    rows="2"
+                    placeholder="Optional reason for the advance"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Deduction Method *</label>
+                  <select
+                    value={advanceForm.deduction_method}
+                    onChange={(e) => setAdvanceForm({ ...advanceForm, deduction_method: e.target.value })}
+                    required
+                  >
+                    <option value="full">Full Deduction (deduct all at once)</option>
+                    <option value="installment">Installment (deduct monthly)</option>
+                  </select>
+                </div>
+                {advanceForm.deduction_method === 'installment' && (
+                  <div className="form-group">
+                    <label>Monthly Installment Amount (RM) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={advanceForm.installment_amount}
+                      onChange={(e) => setAdvanceForm({ ...advanceForm, installment_amount: e.target.value })}
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                )}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Start Deduction Month *</label>
+                    <select
+                      value={advanceForm.expected_deduction_month}
+                      onChange={(e) => setAdvanceForm({ ...advanceForm, expected_deduction_month: parseInt(e.target.value) })}
+                      required
+                    >
+                      {[...Array(12)].map((_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          {new Date(2000, i, 1).toLocaleString('en', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Year *</label>
+                    <select
+                      value={advanceForm.expected_deduction_year}
+                      onChange={(e) => setAdvanceForm({ ...advanceForm, expected_deduction_year: parseInt(e.target.value) })}
+                      required
+                    >
+                      {[2024, 2025, 2026, 2027].map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="modal-actions">
+                  <button type="button" onClick={() => setShowAdvanceModal(false)} className="cancel-btn">
+                    Cancel
+                  </button>
+                  <button type="submit" className="save-btn">
+                    Record Advance
                   </button>
                 </div>
               </form>

@@ -193,6 +193,19 @@ export const claimsApi = {
   linkToPayroll: (data) => api.post('/claims/link-to-payroll', data),
 };
 
+// Salary Advances
+export const advancesApi = {
+  getAll: (params) => api.get('/advances', { params }),
+  getSummary: (params) => api.get('/advances/summary', { params }),
+  getPending: (employeeId, params) => api.get(`/advances/pending/${employeeId}`, { params }),
+
+  create: (data) => api.post('/advances', data),
+  update: (id, data) => api.put(`/advances/${id}`, data),
+  cancel: (id) => api.post(`/advances/${id}/cancel`),
+  recordDeduction: (id, data) => api.post(`/advances/${id}/deduct`, data),
+  getHistory: (id) => api.get(`/advances/${id}/history`),
+};
+
 // Contributions (Government Payments)
 export const contributionsApi = {
   getSummary: (runId) => api.get(`/contributions/summary/${runId}`),

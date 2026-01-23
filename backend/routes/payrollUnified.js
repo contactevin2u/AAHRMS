@@ -705,6 +705,38 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       });
     }
 
+    // Get pending salary advances for deduction
+    let advancesMap = {};
+    try {
+      const advancesResult = await client.query(`
+        SELECT
+          employee_id,
+          SUM(
+            CASE
+              WHEN deduction_method = 'full' THEN remaining_balance
+              WHEN deduction_method = 'installment' THEN LEAST(installment_amount, remaining_balance)
+              ELSE remaining_balance
+            END
+          ) as total_advance_deduction
+        FROM salary_advances
+        WHERE company_id = $1
+          AND status = 'active'
+          AND remaining_balance > 0
+          AND (
+            (expected_deduction_year < $2) OR
+            (expected_deduction_year = $2 AND expected_deduction_month <= $3)
+          )
+        GROUP BY employee_id
+      `, [companyId, year, month]);
+
+      advancesResult.rows.forEach(r => {
+        advancesMap[r.employee_id] = parseFloat(r.total_advance_deduction) || 0;
+      });
+    } catch (e) {
+      // Table might not exist yet, continue without advances
+      console.warn('Salary advances table not found, skipping advance deductions');
+    }
+
     // Process each employee
     let stats = { created: 0, totalGross: 0, totalNet: 0, totalDeductions: 0, totalEmployerCost: 0 };
     let warnings = [];
@@ -829,8 +861,11 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // Claims
+      // Claims (reimbursements - added to pay)
       const claimsAmount = claimsMap[emp.id] || 0;
+
+      // Salary advance deductions
+      const advanceDeduction = advancesMap[emp.id] || 0;
 
       // Calculate totals
       const totalAllowances = fixedAllowance + flexAllowance;
@@ -860,8 +895,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
       const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
 
-      const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb;
-      const netPay = grossSalary - totalDeductions + unpaidDeduction;
+      const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction;
+      const netPay = grossSalary - totalDeductions + unpaidDeduction; // unpaidDeduction already subtracted from gross
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       // Variance calculation
@@ -878,7 +913,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           payroll_run_id, employee_id,
           basic_salary, fixed_allowance, commission_amount, claims_amount,
           ot_hours, ot_amount, ph_days_worked, ph_pay,
-          unpaid_leave_days, unpaid_leave_deduction,
+          unpaid_leave_days, unpaid_leave_deduction, advance_deduction,
           gross_salary, statutory_base,
           epf_employee, epf_employer,
           socso_employee, socso_employer,
@@ -888,12 +923,12 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           sales_amount, salary_calculation_method,
           ytd_gross, ytd_epf, ytd_pcb,
           prev_month_net, variance_amount, variance_percent
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
       `, [
         runId, emp.id,
         basicSalary, totalAllowances, commissionAmount, claimsAmount,
         otHours, otAmount, phDaysWorked, phPay,
-        unpaidDays, unpaidDeduction,
+        unpaidDays, unpaidDeduction, advanceDeduction,
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer,
         socsoEmployee, socsoEmployer,

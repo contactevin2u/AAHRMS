@@ -32,6 +32,7 @@ const positionsRoutes = require('./routes/positions');
 // Shift swap disabled - employees must work assigned shifts only
 // const shiftSwapRoutes = require('./routes/shiftSwap');
 const commissionRoutes = require('./routes/commission');  // Indoor Sales commissions
+const advancesRoutes = require('./routes/advances');  // Salary Advances
 
 // Scheduled jobs
 const { initScheduler, triggerAutoClockOut } = require('./jobs/scheduler');
@@ -81,6 +82,7 @@ app.use('/api/positions', positionsRoutes);  // Job Positions
 // Shift swap disabled - employees must work assigned shifts only
 // app.use('/api/shift-swap', shiftSwapRoutes);
 app.use('/api/commission', commissionRoutes);  // Indoor Sales commissions
+app.use('/api/advances', advancesRoutes);  // Salary Advances
 
 // Health check
 app.get('/api/health', (req, res) => {
