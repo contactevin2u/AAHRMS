@@ -820,9 +820,12 @@ function PayrollV2() {
           return (
           <div className="modal-overlay" onClick={() => setShowItemModal(false)}>
             <div className="modal large" onClick={(e) => e.stopPropagation()}>
-              <h2>Edit Payroll - {editingItem.employee_name}</h2>
-              <p className="dept-info">{isMimix ? 'Outlet' : 'Department'}: <strong>{isMimix ? editingItem.outlet_name : editingItem.department_name || 'Unknown'}</strong></p>
+              <div className="modal-header">
+                <h2>Edit Payroll - {editingItem.employee_name}</h2>
+                <p className="dept-info">{isMimix ? 'Outlet' : 'Department'}: <strong>{isMimix ? editingItem.outlet_name : editingItem.department_name || 'Unknown'}</strong></p>
+              </div>
               <form onSubmit={handleUpdateItem}>
+                <div className="modal-scroll-content">
                 {/* Basic Salary - All departments */}
                 <div className="form-row">
                   <div className="form-group">
@@ -1045,6 +1048,7 @@ function PayrollV2() {
                   <p>Claims: RM {formatNum(editingItem.claims_amount)}</p>
                 </div>
 
+                </div>
                 <div className="modal-actions">
                   <button type="button" onClick={() => setShowItemModal(false)} className="cancel-btn">
                     Cancel
