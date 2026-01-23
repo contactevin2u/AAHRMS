@@ -322,16 +322,6 @@ tr:hover {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-  display: flex;
-  flex-direction: column;
-}
-
-.modal form {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  overflow-y: auto;
-  max-height: calc(90vh - 120px);
 }
 
 .modal h2 {
@@ -404,10 +394,6 @@ tr:hover {
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px solid #e2e8f0;
-  background: white;
-  position: sticky;
-  bottom: 0;
-  padding-bottom: 4px;
 }
 
 .cancel-btn {
