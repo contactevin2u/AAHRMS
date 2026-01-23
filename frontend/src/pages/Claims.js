@@ -171,7 +171,7 @@ function Claims() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this claim?')) {
+    if (window.confirm('Delete this claim?\n\n⚠️ This action cannot be undone.')) {
       try {
         await claimsApi.delete(id);
         fetchClaims();
