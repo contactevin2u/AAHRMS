@@ -134,6 +134,8 @@ export const payrollV2Api = {
   // Payroll Items
   updateItem: (id, data) => api.put(`/payroll/items/${id}`, data),
   getItemPayslip: (id) => api.get(`/payroll/items/${id}/payslip`),
+  recalculateItem: (id) => api.post(`/payroll/items/${id}/recalculate`),
+  recalculateAll: (runId) => api.post(`/payroll/runs/${runId}/recalculate-all`),
 };
 
 // Leave Management

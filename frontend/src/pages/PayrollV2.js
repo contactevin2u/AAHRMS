@@ -157,6 +157,30 @@ function PayrollV2() {
     }
   };
 
+  // Recalculate all items in a run (refresh OT from clock-in records)
+  const handleRecalculateAll = async (id) => {
+    if (window.confirm('Recalculate OT and statutory deductions for all employees from clock-in records?\n\nThis will update OT hours, OT amount, EPF, SOCSO, EIS, and PCB.')) {
+      try {
+        const res = await payrollV2Api.recalculateAll(id);
+        fetchRunDetails(id);
+        fetchRuns();
+        alert(`Recalculated ${res.data.recalculated} of ${res.data.total} employees.\n\nOT and statutory deductions have been updated from clock-in records.`);
+      } catch (error) {
+        alert(error.response?.data?.error || 'Failed to recalculate');
+      }
+    }
+  };
+
+  // Recalculate single item
+  const handleRecalculateItem = async (itemId) => {
+    try {
+      await payrollV2Api.recalculateItem(itemId);
+      fetchRunDetails(selectedRun.id);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to recalculate');
+    }
+  };
+
   const handleFinalizeRun = async (id) => {
     if (window.confirm('Finalize this payroll run? This will lock all items and link claims. This action cannot be undone.')) {
       try {
@@ -549,6 +573,9 @@ function PayrollV2() {
                   <div className="details-actions">
                     {selectedRun.status === 'draft' && (
                       <>
+                        <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn" title="Refresh OT from clock-in records">
+                          Recalculate OT
+                        </button>
                         <button onClick={() => handleFinalizeRun(selectedRun.id)} className="finalize-btn">
                           Finalize
                         </button>
@@ -585,54 +612,108 @@ function PayrollV2() {
                   </div>
                 </div>
 
-                {/* Items Table */}
-                <div className="items-table">
+                {/* Items Table - Full Calculation Breakdown */}
+                <div className="items-table full-breakdown">
                   <table>
                     <thead>
                       <tr>
-                        <th>Employee</th>
-                        <th>Basic</th>
-                        <th>Allowance</th>
-                        <th>Gross</th>
-                        <th>EPF</th>
-                        <th>SOCSO</th>
-                        <th>EIS</th>
-                        <th>PCB</th>
-                        <th>Total Ded.</th>
-                        <th>Net</th>
-                        <th>Actions</th>
+                        <th rowSpan="2">Employee</th>
+                        <th colSpan="6" className="group-header earnings">Earnings</th>
+                        <th colSpan="5" className="group-header deductions">Deductions</th>
+                        <th rowSpan="2">Net Pay</th>
+                        <th rowSpan="2">Actions</th>
+                      </tr>
+                      <tr>
+                        <th className="sub-header">Basic</th>
+                        <th className="sub-header">OT</th>
+                        <th className="sub-header">Allowance</th>
+                        <th className="sub-header">Claims</th>
+                        <th className="sub-header">Comm.</th>
+                        <th className="sub-header">Gross</th>
+                        <th className="sub-header">EPF</th>
+                        <th className="sub-header">SOCSO</th>
+                        <th className="sub-header">EIS</th>
+                        <th className="sub-header">PCB</th>
+                        <th className="sub-header">Advance</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedRun.items?.map(item => (
-                        <tr key={item.id}>
-                          <td>
-                            <strong>{item.employee_name}</strong>
-                            <br />
-                            <small>{item.emp_code}</small>
-                          </td>
-                          <td>{formatAmount(item.basic_salary)}</td>
-                          <td>{formatAmount(item.fixed_allowance)}</td>
-                          <td><strong>{formatAmount(item.gross_salary)}</strong></td>
-                          <td>{formatAmount(item.epf_employee)}</td>
-                          <td>{formatAmount(item.socso_employee)}</td>
-                          <td>{formatAmount(item.eis_employee)}</td>
-                          <td>{formatAmount(item.pcb)}</td>
-                          <td>{formatAmount(item.total_deductions)}</td>
-                          <td><strong>{formatAmount(item.net_pay)}</strong></td>
-                          <td>
-                            {selectedRun.status === 'draft' && (
-                              <button onClick={() => handleEditItem(item)} className="action-btn edit">
-                                Edit
+                      {selectedRun.items?.map(item => {
+                        const hasOT = parseFloat(item.ot_hours) > 0;
+                        const hasClaims = parseFloat(item.claims_amount) > 0;
+                        const hasAdvance = parseFloat(item.advance_deduction) > 0;
+                        const hasCommission = parseFloat(item.commission_amount) > 0 || parseFloat(item.trade_commission_amount) > 0;
+
+                        return (
+                          <tr key={item.id}>
+                            <td className="employee-cell">
+                              <strong>{item.employee_name}</strong>
+                              <small>{item.emp_code}</small>
+                            </td>
+                            <td>{formatAmount(item.basic_salary)}</td>
+                            <td className={hasOT ? 'has-value' : 'zero-value'}>
+                              {hasOT ? (
+                                <span title={`${item.ot_hours} hrs`}>
+                                  {formatAmount(item.ot_amount)}
+                                  <small className="hours-label">{item.ot_hours}h</small>
+                                </span>
+                              ) : '-'}
+                            </td>
+                            <td className={parseFloat(item.fixed_allowance) > 0 ? '' : 'zero-value'}>
+                              {parseFloat(item.fixed_allowance) > 0 ? formatAmount(item.fixed_allowance) : '-'}
+                            </td>
+                            <td className={hasClaims ? 'has-value claims' : 'zero-value'}>
+                              {hasClaims ? formatAmount(item.claims_amount) : '-'}
+                            </td>
+                            <td className={hasCommission ? 'has-value' : 'zero-value'}>
+                              {hasCommission ? formatAmount((parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0)) : '-'}
+                            </td>
+                            <td className="gross-cell"><strong>{formatAmount(item.gross_salary)}</strong></td>
+                            <td className="deduction">{formatAmount(item.epf_employee)}</td>
+                            <td className="deduction">{formatAmount(item.socso_employee)}</td>
+                            <td className="deduction">{formatAmount(item.eis_employee)}</td>
+                            <td className="deduction">{formatAmount(item.pcb)}</td>
+                            <td className={hasAdvance ? 'deduction advance' : 'zero-value'}>
+                              {hasAdvance ? formatAmount(item.advance_deduction) : '-'}
+                            </td>
+                            <td className="net-cell"><strong>{formatAmount(item.net_pay)}</strong></td>
+                            <td className="actions-cell">
+                              {selectedRun.status === 'draft' && (
+                                <>
+                                  <button onClick={() => handleRecalculateItem(item.id)} className="action-btn recalc" title="Recalculate OT">
+                                    ↻
+                                  </button>
+                                  <button onClick={() => handleEditItem(item)} className="action-btn edit" title="Edit">
+                                    ✎
+                                  </button>
+                                </>
+                              )}
+                              <button onClick={() => handleViewPayslip(item.id)} className="action-btn view" title="View Payslip">
+                                📄
                               </button>
-                            )}
-                            <button onClick={() => handleViewPayslip(item.id)} className="action-btn view">
-                              Payslip
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
+                    <tfoot>
+                      <tr className="totals-row">
+                        <td><strong>TOTAL</strong></td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.basic_salary || 0), 0))}</td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.ot_amount || 0), 0))}</td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.fixed_allowance || 0), 0))}</td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.claims_amount || 0), 0))}</td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.commission_amount || 0) + parseFloat(i.trade_commission_amount || 0), 0))}</td>
+                        <td><strong>{formatAmount(selectedRun.total_gross)}</strong></td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.epf_employee || 0), 0))}</td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.socso_employee || 0), 0))}</td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.eis_employee || 0), 0))}</td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.pcb || 0), 0))}</td>
+                        <td>{formatAmount(selectedRun.items?.reduce((s, i) => s + parseFloat(i.advance_deduction || 0), 0))}</td>
+                        <td><strong>{formatAmount(selectedRun.total_net)}</strong></td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
 

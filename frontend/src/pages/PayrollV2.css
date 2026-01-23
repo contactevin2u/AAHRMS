@@ -298,6 +298,146 @@
   background: #e8d4c8;
 }
 
+.action-btn.recalc {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.action-btn.recalc:hover {
+  background: #fde68a;
+}
+
+/* Recalculate Button */
+.recalculate-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 8px;
+}
+
+.recalculate-btn:hover {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  transform: translateY(-1px);
+}
+
+/* Full Breakdown Table */
+.items-table.full-breakdown {
+  overflow-x: auto;
+}
+
+.items-table.full-breakdown table {
+  min-width: 1200px;
+}
+
+.items-table .group-header {
+  text-align: center;
+  border-left: 2px solid rgba(255,255,255,0.3);
+  border-right: 2px solid rgba(255,255,255,0.3);
+}
+
+.items-table .group-header.earnings {
+  background: #166534;
+}
+
+.items-table .group-header.deductions {
+  background: #991b1b;
+}
+
+.items-table .sub-header {
+  background: #334155;
+  font-size: 0.75rem;
+  padding: 8px 6px;
+  text-align: right;
+}
+
+.items-table .employee-cell {
+  min-width: 150px;
+}
+
+.items-table .employee-cell strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.items-table .employee-cell small {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.items-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.items-table td:first-child {
+  text-align: left;
+}
+
+.items-table .zero-value {
+  color: #cbd5e1;
+}
+
+.items-table .has-value {
+  color: #166534;
+  font-weight: 500;
+}
+
+.items-table .has-value.claims {
+  background: #f0fdf4;
+}
+
+.items-table .deduction {
+  color: #991b1b;
+}
+
+.items-table .deduction.advance {
+  background: #fef2f2;
+  font-weight: 600;
+}
+
+.items-table .gross-cell {
+  background: #f0fdf4;
+  border-left: 2px solid #bbf7d0;
+}
+
+.items-table .net-cell {
+  background: #eff6ff;
+  border-left: 2px solid #bfdbfe;
+  font-size: 1rem;
+}
+
+.items-table .hours-label {
+  display: block;
+  font-size: 0.65rem;
+  color: #64748b;
+  font-weight: normal;
+}
+
+.items-table .actions-cell {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.items-table tfoot .totals-row {
+  background: #1e293b;
+  color: white;
+}
+
+.items-table tfoot .totals-row td {
+  color: white;
+  font-weight: 600;
+  border-bottom: none;
+}
+
+.items-table tfoot .totals-row td:first-child {
+  text-align: left;
+}
+
 /* Statutory Totals */
 .statutory-totals {
   background: #f8fafc;

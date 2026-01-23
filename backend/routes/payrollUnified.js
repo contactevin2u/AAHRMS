@@ -1117,6 +1117,302 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
 });
 
 /**
+ * POST /api/payroll/items/:id/recalculate
+ * Recalculate OT and statutory for a payroll item from clock-in records
+ */
+router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Get current item with employee and run info
+    const itemResult = await pool.query(`
+      SELECT pi.*, pr.month, pr.year, pr.status as run_status, pr.company_id,
+             pr.period_start_date, pr.period_end_date,
+             e.id as emp_id, e.department_id, e.default_basic_salary,
+             e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pi.id = $1
+    `, [id]);
+
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll item not found' });
+    }
+
+    const item = itemResult.rows[0];
+
+    if (item.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (item.run_status === 'finalized') {
+      return res.status(400).json({ error: 'Cannot recalculate finalized payroll' });
+    }
+
+    const settings = await getCompanySettings(companyId);
+    const { rates, statutory, features } = settings;
+
+    // Recalculate OT from clock-in records
+    let otHours = 0, otAmount = 0;
+    if (features.auto_ot_from_clockin) {
+      try {
+        const otResult = await calculateOTFromClockIn(
+          item.emp_id, companyId, item.department_id,
+          item.period_start_date, item.period_end_date,
+          parseFloat(item.basic_salary) || 0
+        );
+        otHours = otResult.total_ot_hours || 0;
+        otAmount = otResult.total_ot_amount || 0;
+      } catch (e) {
+        console.warn('OT calculation failed:', e.message);
+      }
+    }
+
+    // Get current values
+    const basicSalary = parseFloat(item.basic_salary) || 0;
+    const fixedAllowance = parseFloat(item.fixed_allowance) || 0;
+    const phPay = parseFloat(item.ph_pay) || 0;
+    const incentiveAmount = parseFloat(item.incentive_amount) || 0;
+    const commissionAmount = parseFloat(item.commission_amount) || 0;
+    const tradeCommission = parseFloat(item.trade_commission_amount) || 0;
+    const outstationAmount = parseFloat(item.outstation_amount) || 0;
+    const bonus = parseFloat(item.bonus) || 0;
+    const claimsAmount = parseFloat(item.claims_amount) || 0;
+    const advanceDeduction = parseFloat(item.advance_deduction) || 0;
+    const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
+    const otherDeductions = parseFloat(item.other_deductions) || 0;
+
+    // Calculate gross
+    const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
+                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction;
+
+    // Statutory base
+    let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
+    if (statutory.statutory_on_ot) statutoryBase += otAmount;
+    if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
+    if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
+
+    // Get YTD data
+    let ytdData = null;
+    if (features.ytd_pcb_calculation) {
+      ytdData = await getYTDData(item.emp_id, item.year, item.month);
+    }
+
+    // Recalculate statutory
+    const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, ytdData);
+
+    const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
+    const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
+    const socsoEmployee = statutory.socso_enabled ? statutoryResult.socso.employee : 0;
+    const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
+    const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
+    const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
+    const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+
+    const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
+    const netPay = grossSalary + unpaidDeduction - totalDeductions;
+    const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
+
+    // Update item
+    const result = await pool.query(`
+      UPDATE payroll_items SET
+        ot_hours = $1, ot_amount = $2,
+        gross_salary = $3, statutory_base = $4,
+        epf_employee = $5, epf_employer = $6,
+        socso_employee = $7, socso_employer = $8,
+        eis_employee = $9, eis_employer = $10,
+        pcb = $11,
+        total_deductions = $12, net_pay = $13, employer_total_cost = $14,
+        updated_at = NOW()
+      WHERE id = $15
+      RETURNING *
+    `, [
+      otHours, otAmount,
+      grossSalary, statutoryBase,
+      epfEmployee, epfEmployer,
+      socsoEmployee, socsoEmployer,
+      eisEmployee, eisEmployer,
+      pcb,
+      totalDeductions, netPay, employerCost,
+      id
+    ]);
+
+    // Update run totals
+    await updateRunTotals(item.payroll_run_id);
+
+    res.json({
+      item: result.rows[0],
+      recalculated: {
+        ot_hours: otHours,
+        ot_amount: otAmount,
+        statutory_base: statutoryBase,
+        epf_employee: epfEmployee,
+        socso_employee: socsoEmployee,
+        eis_employee: eisEmployee,
+        pcb: pcb,
+        gross_salary: grossSalary,
+        net_pay: netPay
+      }
+    });
+  } catch (error) {
+    console.error('Error recalculating payroll item:', error);
+    res.status(500).json({ error: 'Failed to recalculate: ' + error.message });
+  }
+});
+
+/**
+ * POST /api/payroll/runs/:id/recalculate-all
+ * Recalculate all items in a payroll run
+ */
+router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Get run
+    const runResult = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [id]);
+    if (runResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll run not found' });
+    }
+
+    const run = runResult.rows[0];
+    if (run.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (run.status === 'finalized') {
+      return res.status(400).json({ error: 'Cannot recalculate finalized payroll' });
+    }
+
+    // Get all items
+    const itemsResult = await pool.query(
+      'SELECT id FROM payroll_items WHERE payroll_run_id = $1',
+      [id]
+    );
+
+    let recalculatedCount = 0;
+    let errors = [];
+
+    // Recalculate each item
+    for (const item of itemsResult.rows) {
+      try {
+        // Call the recalculate logic inline (simplified)
+        const itemData = await pool.query(`
+          SELECT pi.*, pr.month, pr.year, pr.period_start_date, pr.period_end_date,
+                 e.id as emp_id, e.department_id,
+                 e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count
+          FROM payroll_items pi
+          JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+          JOIN employees e ON pi.employee_id = e.id
+          WHERE pi.id = $1
+        `, [item.id]);
+
+        const i = itemData.rows[0];
+        const settings = await getCompanySettings(companyId);
+        const { statutory, features } = settings;
+
+        // Recalculate OT
+        let otHours = 0, otAmount = 0;
+        if (features.auto_ot_from_clockin) {
+          try {
+            const otResult = await calculateOTFromClockIn(
+              i.emp_id, companyId, i.department_id,
+              i.period_start_date, i.period_end_date,
+              parseFloat(i.basic_salary) || 0
+            );
+            otHours = otResult.total_ot_hours || 0;
+            otAmount = otResult.total_ot_amount || 0;
+          } catch (e) {}
+        }
+
+        // Calculate values
+        const basicSalary = parseFloat(i.basic_salary) || 0;
+        const fixedAllowance = parseFloat(i.fixed_allowance) || 0;
+        const phPay = parseFloat(i.ph_pay) || 0;
+        const incentiveAmount = parseFloat(i.incentive_amount) || 0;
+        const commissionAmount = parseFloat(i.commission_amount) || 0;
+        const tradeCommission = parseFloat(i.trade_commission_amount) || 0;
+        const outstationAmount = parseFloat(i.outstation_amount) || 0;
+        const bonus = parseFloat(i.bonus) || 0;
+        const claimsAmount = parseFloat(i.claims_amount) || 0;
+        const advanceDeduction = parseFloat(i.advance_deduction) || 0;
+        const unpaidDeduction = parseFloat(i.unpaid_leave_deduction) || 0;
+        const otherDeductions = parseFloat(i.other_deductions) || 0;
+
+        const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
+                          commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction;
+
+        let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
+        if (statutory.statutory_on_ot) statutoryBase += otAmount;
+        if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
+        if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
+
+        let ytdData = null;
+        if (features.ytd_pcb_calculation) {
+          ytdData = await getYTDData(i.emp_id, i.year, i.month);
+        }
+
+        const statutoryResult = calculateAllStatutory(statutoryBase, i, i.month, ytdData);
+
+        const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
+        const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
+        const socsoEmployee = statutory.socso_enabled ? statutoryResult.socso.employee : 0;
+        const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
+        const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
+        const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
+        const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+
+        const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
+        const netPay = grossSalary + unpaidDeduction - totalDeductions;
+        const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
+
+        await pool.query(`
+          UPDATE payroll_items SET
+            ot_hours = $1, ot_amount = $2,
+            gross_salary = $3, statutory_base = $4,
+            epf_employee = $5, epf_employer = $6,
+            socso_employee = $7, socso_employer = $8,
+            eis_employee = $9, eis_employer = $10,
+            pcb = $11,
+            total_deductions = $12, net_pay = $13, employer_total_cost = $14,
+            updated_at = NOW()
+          WHERE id = $15
+        `, [
+          otHours, otAmount, grossSalary, statutoryBase,
+          epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
+          eisEmployee, eisEmployer, pcb,
+          totalDeductions, netPay, employerCost, item.id
+        ]);
+
+        recalculatedCount++;
+      } catch (e) {
+        errors.push(`Item ${item.id}: ${e.message}`);
+      }
+    }
+
+    // Update run totals
+    await updateRunTotals(id);
+
+    res.json({
+      message: `Recalculated ${recalculatedCount} of ${itemsResult.rows.length} items`,
+      recalculated: recalculatedCount,
+      total: itemsResult.rows.length,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Error recalculating all items:', error);
+    res.status(500).json({ error: 'Failed to recalculate: ' + error.message });
+  }
+});
+
+/**
  * POST /api/payroll/runs/:id/finalize
  * Finalize a payroll run
  */
