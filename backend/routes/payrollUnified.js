@@ -1536,12 +1536,13 @@ router.get('/ot-summary/:year/:month', authenticateAdmin, async (req, res) => {
 
     for (const emp of employees.rows) {
       // Get OT records for this employee in the specified month
+      // Note: OT is stored in ot_minutes, convert to hours for display
       const otRecords = await pool.query(`
         SELECT
-          COALESCE(SUM(CASE WHEN ot_approved = true THEN ot_hours ELSE 0 END), 0) as approved_ot_hours,
-          COALESCE(SUM(CASE WHEN ot_approved IS NULL AND ot_hours > 0 THEN ot_hours ELSE 0 END), 0) as pending_ot_hours,
-          COALESCE(SUM(CASE WHEN ot_approved = false THEN ot_hours ELSE 0 END), 0) as rejected_ot_hours,
-          COUNT(CASE WHEN ot_approved IS NULL AND ot_hours > 0 THEN 1 END) as pending_records_count
+          COALESCE(SUM(CASE WHEN ot_approved = true THEN COALESCE(ot_minutes, 0) / 60.0 ELSE 0 END), 0) as approved_ot_hours,
+          COALESCE(SUM(CASE WHEN ot_approved IS NULL AND COALESCE(ot_minutes, 0) > 0 THEN ot_minutes / 60.0 ELSE 0 END), 0) as pending_ot_hours,
+          COALESCE(SUM(CASE WHEN ot_approved = false THEN COALESCE(ot_minutes, 0) / 60.0 ELSE 0 END), 0) as rejected_ot_hours,
+          COUNT(CASE WHEN ot_approved IS NULL AND COALESCE(ot_minutes, 0) > 0 THEN 1 END) as pending_records_count
         FROM clock_in_records
         WHERE employee_id = $1
           AND EXTRACT(MONTH FROM work_date) = $2
