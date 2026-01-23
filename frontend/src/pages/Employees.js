@@ -1719,10 +1719,17 @@ function Employees() {
                   return isManagerOrSupervisor && (
                     <div className="form-row">
                       <div className="form-group full-width">
-                        <label>Managed Outlets</label>
+                        <label>
+                          Managed Outlets
+                          <span className="outlet-count">({managerOutlets.length} selected)</span>
+                        </label>
+                        <div className="outlet-actions">
+                          <button type="button" className="outlet-action-btn" onClick={() => setManagerOutlets(outlets.map(o => o.id))}>Select All</button>
+                          <button type="button" className="outlet-action-btn" onClick={() => setManagerOutlets([])}>Clear All</button>
+                        </div>
                         <div className="outlet-checkbox-grid">
                           {outlets.map(outlet => (
-                            <label key={outlet.id} className="outlet-checkbox">
+                            <label key={outlet.id} className={`outlet-checkbox ${managerOutlets.includes(outlet.id) ? 'selected' : ''}`}>
                               <input
                                 type="checkbox"
                                 checked={managerOutlets.includes(outlet.id)}
@@ -1738,7 +1745,7 @@ function Employees() {
                             </label>
                           ))}
                         </div>
-                        <small className="field-hint">Select which outlets this manager/supervisor can manage</small>
+                        <small className="field-hint">Select which outlets this manager/supervisor can manage. They will only see employees and approve requests from these outlets.</small>
                       </div>
                     </div>
                   );
