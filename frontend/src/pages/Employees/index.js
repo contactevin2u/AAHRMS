@@ -174,7 +174,28 @@ function Employees() {
       toast.success('Updated successfully');
     } catch (error) {
       console.error('Error updating employee:', error);
-      toast.error(error.response?.data?.error || 'Failed to update');
+
+      // Get specific error message from backend
+      const errorMessage = error.response?.data?.error || 'Failed to update';
+      const fieldLabel = {
+        'employee_id': 'Employee ID',
+        'outlet_id': 'Outlet',
+        'position_id': 'Position',
+        'position': 'Position',
+        'department_id': 'Department',
+        'employment_type': 'Employment Type',
+        'status': 'Status',
+        'name': 'Name',
+        'email': 'Email',
+        'phone': 'Phone'
+      }[field] || field;
+
+      // Show toast with specific error
+      toast.error(`Cannot update ${fieldLabel}: ${errorMessage}`, {
+        autoClose: 5000,
+        position: 'top-center'
+      });
+
       throw error;
     }
   };
