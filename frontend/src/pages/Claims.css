@@ -309,70 +309,43 @@
 /* Action Buttons */
 .action-buttons {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   align-items: center;
   flex-wrap: nowrap;
 }
 
 .action-btn {
-  width: 26px;
-  height: 26px;
-  padding: 0;
+  background: none;
   border: none;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 2px 4px;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.15s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  transition: opacity 0.15s ease;
+  opacity: 0.8;
+}
+
+.action-btn:hover {
+  opacity: 1;
 }
 
 .action-btn.approve {
-  background: #f0fdf4;
   color: #16a34a;
 }
 
-.action-btn.approve:hover {
-  background: #dcfce7;
-}
-
 .action-btn.reject {
-  background: #fffbeb;
   color: #d97706;
 }
 
-.action-btn.reject:hover {
-  background: #fef3c7;
-}
-
 .action-btn.edit {
-  background: #eff6ff;
   color: #2563eb;
 }
 
-.action-btn.edit:hover {
-  background: #dbeafe;
-}
-
 .action-btn.delete {
-  background: #fef2f2;
   color: #dc2626;
 }
 
-.action-btn.delete:hover {
-  background: #fee2e2;
-}
-
 .action-btn.revert {
-  background: #f5f3ff;
   color: #7c3aed;
-}
-
-.action-btn.revert:hover {
-  background: #ede9fe;
 }
 
 /* Category Summary */
