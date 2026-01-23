@@ -263,7 +263,11 @@
 }
 
 .view-modal {
-  max-width: 650px;
+  max-width: 900px;
+}
+
+.placeholder-modal {
+  max-width: 500px;
 }
 
 .modal-header {
@@ -554,13 +558,18 @@
   background: #2980b9;
 }
 
-/* Letter Preview with Letterhead */
+/* Letter Preview with Letterhead - A4 Size */
 .letter-preview {
   background: white;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  padding: 40px;
-  margin-bottom: 20px;
+  padding: 15mm 20mm; /* Standard letter margins */
+  margin: 0 auto 20px auto;
+  width: 210mm; /* A4 width */
+  min-height: 297mm; /* A4 height */
+  max-width: 100%;
+  box-sizing: border-box;
+  font-family: 'Times New Roman', Times, serif;
 }
 
 /* Letterhead */

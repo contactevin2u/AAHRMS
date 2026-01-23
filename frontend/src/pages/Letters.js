@@ -34,6 +34,28 @@ function Letters() {
     attachment_name: ''
   });
 
+  // State for placeholder input prompts
+  const [showPlaceholderModal, setShowPlaceholderModal] = useState(false);
+  const [placeholderInputs, setPlaceholderInputs] = useState({});
+  const [pendingTemplate, setPendingTemplate] = useState(null);
+
+  // Auto-fill placeholders (replaced automatically based on selected employee/company)
+  const autoFillPlaceholders = ['employee_name', 'company_name', 'effective_date', 'position'];
+
+  // User-input placeholders (require manual input)
+  const userInputPlaceholders = {
+    reason: { label: 'Reason for Warning', placeholder: 'e.g., Repeated tardiness' },
+    details: { label: 'Details', placeholder: 'Enter specific details...' },
+    new_position: { label: 'New Position', placeholder: 'e.g., Senior Manager' },
+    old_salary: { label: 'Previous Salary (RM)', placeholder: 'e.g., 3000' },
+    new_salary: { label: 'New Salary (RM)', placeholder: 'e.g., 3500' },
+    improvement_1: { label: 'Improvement Area 1', placeholder: 'e.g., Attendance' },
+    improvement_2: { label: 'Improvement Area 2', placeholder: 'e.g., Communication' },
+    improvement_3: { label: 'Improvement Area 3', placeholder: 'e.g., Productivity' },
+    review_period: { label: 'Review Period', placeholder: 'e.g., 30 days' },
+    final_pay_date: { label: 'Final Pay Date', placeholder: 'e.g., 2024-02-28' }
+  };
+
   const letterTypes = [
     { value: 'warning', label: 'Warning Letter (Surat Amaran)', color: '#d85454' },
     { value: 'appreciation', label: 'Appreciation Letter', color: '#2a9d5c' },
@@ -69,25 +91,114 @@ function Letters() {
     }
   };
 
+  // Extract all placeholders from content
+  const extractPlaceholders = (content) => {
+    const matches = content.match(/\{\{(\w+)\}\}/g) || [];
+    return [...new Set(matches.map(m => m.replace(/\{\{|\}\}/g, '')))];
+  };
+
+  // Get user-input placeholders that need to be filled
+  const getUserInputPlaceholders = (content) => {
+    const allPlaceholders = extractPlaceholders(content);
+    return allPlaceholders.filter(p => !autoFillPlaceholders.includes(p) && userInputPlaceholders[p]);
+  };
+
+  // Replace auto-fill placeholders with actual values
+  const replaceAutoFillPlaceholders = (content, subject) => {
+    const selectedEmployee = employees.find(e => e.id === parseInt(form.employee_id));
+    const today = new Date().toLocaleDateString('en-MY', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    let newContent = content;
+    let newSubject = subject;
+
+    const replacements = {
+      employee_name: selectedEmployee?.name || '{{employee_name}}',
+      company_name: 'AA Group',
+      effective_date: today,
+      position: selectedEmployee?.position || selectedEmployee?.designation || '{{position}}'
+    };
+
+    Object.entries(replacements).forEach(([key, value]) => {
+      const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+      newContent = newContent.replace(regex, value);
+      newSubject = newSubject.replace(regex, value);
+    });
+
+    return { content: newContent, subject: newSubject };
+  };
+
+  // Replace user-input placeholders
+  const replaceUserInputPlaceholders = (content, subject, inputs) => {
+    let newContent = content;
+    let newSubject = subject;
+
+    Object.entries(inputs).forEach(([key, value]) => {
+      const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+      newContent = newContent.replace(regex, value || `[${key}]`);
+      newSubject = newSubject.replace(regex, value || `[${key}]`);
+    });
+
+    return { content: newContent, subject: newSubject };
+  };
+
   const handleTemplateSelect = (template) => {
+    if (!form.employee_id) {
+      alert('Please select an employee first');
+      return;
+    }
+
+    // Check for user-input placeholders
+    const userPlaceholders = getUserInputPlaceholders(template.content);
+
+    if (userPlaceholders.length > 0) {
+      // Show placeholder input modal
+      const initialInputs = {};
+      userPlaceholders.forEach(p => { initialInputs[p] = ''; });
+      setPlaceholderInputs(initialInputs);
+      setPendingTemplate(template);
+      setShowPlaceholderModal(true);
+    } else {
+      // No user input needed, just replace auto-fill placeholders
+      const { content, subject } = replaceAutoFillPlaceholders(template.content, template.subject);
+      setForm({
+        ...form,
+        letter_type: template.letter_type,
+        subject,
+        content
+      });
+    }
+  };
+
+  const handlePlaceholderSubmit = () => {
+    if (!pendingTemplate) return;
+
+    // First replace auto-fill, then user inputs
+    let { content, subject } = replaceAutoFillPlaceholders(pendingTemplate.content, pendingTemplate.subject);
+    ({ content, subject } = replaceUserInputPlaceholders(content, subject, placeholderInputs));
+
     setForm({
       ...form,
-      letter_type: template.letter_type,
-      subject: template.subject,
-      content: template.content
+      letter_type: pendingTemplate.letter_type,
+      subject,
+      content
     });
+
+    setShowPlaceholderModal(false);
+    setPendingTemplate(null);
+    setPlaceholderInputs({});
   };
 
   const handleTypeChange = (type) => {
     setForm({ ...form, letter_type: type });
     // Find matching template and pre-fill
     const template = templates.find(t => t.letter_type === type);
-    if (template) {
+    if (template && form.employee_id) {
+      handleTemplateSelect(template);
+    } else if (template) {
+      // No employee selected yet, just set the type
       setForm(prev => ({
         ...prev,
-        letter_type: type,
-        subject: template.subject,
-        content: template.content
+        letter_type: type
       }));
     }
   };
@@ -151,19 +262,58 @@ function Letters() {
     if (!element) return;
 
     try {
+      // Capture with higher scale for better quality
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        windowWidth: 794, // A4 width at 96 DPI
+        windowHeight: 1123 // A4 height at 96 DPI
       });
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210; // A4 width in mm
+
+      // A4 dimensions
+      const pageWidth = 210;
+      const pageHeight = 297;
+
+      // Calculate image dimensions to fit A4 with margins
+      const margin = 10; // 10mm margins
+      const contentWidth = pageWidth - (margin * 2);
+      const imgWidth = contentWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      // If content fits on one page
+      if (imgHeight <= pageHeight - (margin * 2)) {
+        pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight);
+      } else {
+        // Multi-page handling
+        let heightLeft = imgHeight;
+        let position = margin;
+        let pageNum = 0;
+
+        while (heightLeft > 0) {
+          if (pageNum > 0) {
+            pdf.addPage();
+          }
+
+          const pageContentHeight = Math.min(pageHeight - (margin * 2), heightLeft);
+          const srcY = pageNum * (pageHeight - (margin * 2)) * (canvas.height / imgHeight);
+
+          pdf.addImage(
+            imgData, 'PNG',
+            margin, position,
+            imgWidth, imgHeight,
+            undefined, 'FAST',
+            0
+          );
+
+          heightLeft -= (pageHeight - (margin * 2));
+          pageNum++;
+        }
+      }
 
       const fileName = `Letter_${selectedLetter.employee_name}_${new Date(selectedLetter.created_at).toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
@@ -397,12 +547,12 @@ function Letters() {
                   <textarea
                     value={form.content}
                     onChange={(e) => setForm({ ...form, content: e.target.value })}
-                    placeholder="Enter letter content... Use {{employee_name}} for placeholders"
+                    placeholder="Select a template above or enter letter content..."
                     rows="12"
                     required
                   />
                   <span className="field-hint">
-                    Available placeholders: {'{{employee_name}}'}, {'{{company_name}}'}, {'{{effective_date}}'}, {'{{details}}'}
+                    Tip: Select employee first, then choose a template. Placeholders will be auto-filled.
                   </span>
                 </div>
 
@@ -426,6 +576,62 @@ function Letters() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Placeholder Input Modal */}
+      {showPlaceholderModal && pendingTemplate && (
+        <div className="modal-overlay" onClick={() => setShowPlaceholderModal(false)}>
+          <div className="modal placeholder-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Fill in Letter Details</h2>
+              <button className="close-btn" onClick={() => setShowPlaceholderModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: '1rem', color: '#666' }}>
+                Please provide the following information for the <strong>{pendingTemplate.name}</strong>:
+              </p>
+              {Object.keys(placeholderInputs).map(key => (
+                <div className="form-group" key={key}>
+                  <label>{userInputPlaceholders[key]?.label || key} *</label>
+                  {key === 'details' ? (
+                    <textarea
+                      value={placeholderInputs[key]}
+                      onChange={(e) => setPlaceholderInputs({ ...placeholderInputs, [key]: e.target.value })}
+                      placeholder={userInputPlaceholders[key]?.placeholder || `Enter ${key}...`}
+                      rows="4"
+                      required
+                    />
+                  ) : (
+                    <input
+                      type={key.includes('salary') ? 'number' : 'text'}
+                      value={placeholderInputs[key]}
+                      onChange={(e) => setPlaceholderInputs({ ...placeholderInputs, [key]: e.target.value })}
+                      placeholder={userInputPlaceholders[key]?.placeholder || `Enter ${key}...`}
+                      required
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn-cancel" onClick={() => {
+                setShowPlaceholderModal(false);
+                setPendingTemplate(null);
+                setPlaceholderInputs({});
+              }}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-submit"
+                onClick={handlePlaceholderSubmit}
+                disabled={Object.values(placeholderInputs).some(v => !v.trim())}
+              >
+                Apply to Letter
+              </button>
+            </div>
           </div>
         </div>
       )}

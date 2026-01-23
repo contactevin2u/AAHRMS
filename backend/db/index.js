@@ -1115,6 +1115,23 @@ const initDb = async () => {
 
       CREATE INDEX IF NOT EXISTS idx_letter_templates_company ON letter_templates(company_id);
 
+      -- Add unique constraint on letter_type to prevent duplicates
+      DO $$
+      BEGIN
+        -- First, clean up duplicate templates (keep only the first one per letter_type)
+        DELETE FROM letter_templates
+        WHERE id NOT IN (
+          SELECT MIN(id) FROM letter_templates GROUP BY letter_type
+        );
+
+        -- Add unique constraint if it doesn't exist
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'letter_templates_letter_type_key'
+        ) THEN
+          ALTER TABLE letter_templates ADD CONSTRAINT letter_templates_letter_type_key UNIQUE (letter_type);
+        END IF;
+      END $$;
+
       -- Insert default letter templates
       INSERT INTO letter_templates (letter_type, name, subject, content, company_id) VALUES
         ('warning', 'Warning Letter (Surat Amaran)', 'Official Warning Notice',
