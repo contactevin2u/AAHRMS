@@ -253,6 +253,11 @@ export const lettersApi = {
   getTemplates: () => api.get('/letters/templates/all'),
   getTemplatesByType: (type) => api.get(`/letters/templates/type/${type}`),
   getStats: () => api.get('/letters/stats/summary'),
+
+  // AI Features
+  aiImprove: (content, letterType) => api.post('/letters/ai/improve', { content, letterType }),
+  aiTone: (content, tone, letterType) => api.post('/letters/ai/tone', { content, tone, letterType }),
+  aiTranslate: (content, targetLanguage) => api.post('/letters/ai/translate', { content, targetLanguage }),
 };
 
 // Probation Management

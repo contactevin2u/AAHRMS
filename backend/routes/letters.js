@@ -321,4 +321,97 @@ router.get('/employee/:employeeId', authenticateAdmin, async (req, res) => {
   }
 });
 
+// =====================================================
+// AI FEATURES FOR LETTERS
+// =====================================================
+
+const { improveLetterContent, adjustLetterTone, translateLetter } = require('../utils/letterAI');
+
+// AI: Improve letter content
+router.post('/ai/improve', authenticateAdmin, async (req, res) => {
+  try {
+    const { content, letterType } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: 'Content is required' });
+    }
+
+    const result = await improveLetterContent(content, letterType);
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'Failed to improve content' });
+    }
+
+    res.json({
+      success: true,
+      content: result.content
+    });
+  } catch (error) {
+    console.error('AI improve error:', error);
+    res.status(500).json({ error: 'Failed to improve letter content' });
+  }
+});
+
+// AI: Adjust letter tone
+router.post('/ai/tone', authenticateAdmin, async (req, res) => {
+  try {
+    const { content, tone, letterType } = req.body;
+
+    if (!content || !tone) {
+      return res.status(400).json({ error: 'Content and tone are required' });
+    }
+
+    const validTones = ['formal', 'friendly', 'stern', 'neutral'];
+    if (!validTones.includes(tone)) {
+      return res.status(400).json({ error: 'Invalid tone. Must be: formal, friendly, stern, or neutral' });
+    }
+
+    const result = await adjustLetterTone(content, tone, letterType);
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'Failed to adjust tone' });
+    }
+
+    res.json({
+      success: true,
+      content: result.content,
+      tone: result.tone
+    });
+  } catch (error) {
+    console.error('AI tone error:', error);
+    res.status(500).json({ error: 'Failed to adjust letter tone' });
+  }
+});
+
+// AI: Translate letter
+router.post('/ai/translate', authenticateAdmin, async (req, res) => {
+  try {
+    const { content, targetLanguage } = req.body;
+
+    if (!content || !targetLanguage) {
+      return res.status(400).json({ error: 'Content and target language are required' });
+    }
+
+    const validLanguages = ['en', 'ms'];
+    if (!validLanguages.includes(targetLanguage)) {
+      return res.status(400).json({ error: 'Invalid language. Must be: en (English) or ms (Malay)' });
+    }
+
+    const result = await translateLetter(content, targetLanguage);
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'Failed to translate' });
+    }
+
+    res.json({
+      success: true,
+      content: result.content,
+      targetLanguage: result.targetLanguage
+    });
+  } catch (error) {
+    console.error('AI translate error:', error);
+    res.status(500).json({ error: 'Failed to translate letter' });
+  }
+});
+
 module.exports = router;

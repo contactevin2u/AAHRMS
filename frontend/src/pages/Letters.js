@@ -39,6 +39,11 @@ function Letters() {
   const [placeholderInputs, setPlaceholderInputs] = useState({});
   const [pendingTemplate, setPendingTemplate] = useState(null);
 
+  // AI feature states
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showToneModal, setShowToneModal] = useState(false);
+  const [showTranslateModal, setShowTranslateModal] = useState(false);
+
   // Auto-fill placeholders (replaced automatically based on selected employee/company)
   const autoFillPlaceholders = ['employee_name', 'company_name', 'effective_date', 'position'];
 
@@ -186,6 +191,77 @@ function Letters() {
     setShowPlaceholderModal(false);
     setPendingTemplate(null);
     setPlaceholderInputs({});
+  };
+
+  // AI: Improve content
+  const handleAiImprove = async () => {
+    if (!form.content.trim()) {
+      alert('Please enter some content first');
+      return;
+    }
+
+    setAiLoading(true);
+    try {
+      const result = await lettersApi.aiImprove(form.content, form.letter_type);
+      if (result.data.success) {
+        setForm({ ...form, content: result.data.content });
+      } else {
+        alert('Failed to improve content');
+      }
+    } catch (error) {
+      console.error('AI improve error:', error);
+      alert(error.response?.data?.error || 'Failed to improve content');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // AI: Adjust tone
+  const handleAiTone = async (tone) => {
+    if (!form.content.trim()) {
+      alert('Please enter some content first');
+      return;
+    }
+
+    setAiLoading(true);
+    setShowToneModal(false);
+    try {
+      const result = await lettersApi.aiTone(form.content, tone, form.letter_type);
+      if (result.data.success) {
+        setForm({ ...form, content: result.data.content });
+      } else {
+        alert('Failed to adjust tone');
+      }
+    } catch (error) {
+      console.error('AI tone error:', error);
+      alert(error.response?.data?.error || 'Failed to adjust tone');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // AI: Translate
+  const handleAiTranslate = async (targetLanguage) => {
+    if (!form.content.trim()) {
+      alert('Please enter some content first');
+      return;
+    }
+
+    setAiLoading(true);
+    setShowTranslateModal(false);
+    try {
+      const result = await lettersApi.aiTranslate(form.content, targetLanguage);
+      if (result.data.success) {
+        setForm({ ...form, content: result.data.content });
+      } else {
+        alert('Failed to translate');
+      }
+    } catch (error) {
+      console.error('AI translate error:', error);
+      alert(error.response?.data?.error || 'Failed to translate');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleTypeChange = (type) => {
@@ -531,10 +607,43 @@ function Letters() {
                     placeholder="Select a template above or enter letter content..."
                     rows="12"
                     required
+                    disabled={aiLoading}
                   />
                   <span className="field-hint">
                     Tip: Select employee first, then choose a template. Placeholders will be auto-filled.
                   </span>
+
+                  {/* AI Tools */}
+                  <div className="ai-tools">
+                    <span className="ai-label">AI Tools:</span>
+                    <button
+                      type="button"
+                      className="ai-btn ai-improve"
+                      onClick={handleAiImprove}
+                      disabled={aiLoading || !form.content.trim()}
+                      title="Improve writing quality"
+                    >
+                      {aiLoading ? '...' : '✨ Improve'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ai-btn ai-tone"
+                      onClick={() => setShowToneModal(true)}
+                      disabled={aiLoading || !form.content.trim()}
+                      title="Adjust tone"
+                    >
+                      🎭 Tone
+                    </button>
+                    <button
+                      type="button"
+                      className="ai-btn ai-translate"
+                      onClick={() => setShowTranslateModal(true)}
+                      disabled={aiLoading || !form.content.trim()}
+                      title="Translate"
+                    >
+                      🌐 Translate
+                    </button>
+                  </div>
                 </div>
 
                 <div className="form-group">
@@ -612,6 +721,72 @@ function Letters() {
               >
                 Apply to Letter
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Tone Selection Modal */}
+      {showToneModal && (
+        <div className="modal-overlay" onClick={() => setShowToneModal(false)}>
+          <div className="modal ai-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🎭 Adjust Tone</h2>
+              <button className="close-btn" onClick={() => setShowToneModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: '1rem', color: '#666' }}>
+                Select the tone you want for your letter:
+              </p>
+              <div className="tone-options">
+                <button className="tone-btn formal" onClick={() => handleAiTone('formal')}>
+                  <span className="tone-icon">👔</span>
+                  <span className="tone-name">Formal</span>
+                  <span className="tone-desc">Professional, corporate language</span>
+                </button>
+                <button className="tone-btn friendly" onClick={() => handleAiTone('friendly')}>
+                  <span className="tone-icon">😊</span>
+                  <span className="tone-name">Friendly</span>
+                  <span className="tone-desc">Warm and approachable</span>
+                </button>
+                <button className="tone-btn stern" onClick={() => handleAiTone('stern')}>
+                  <span className="tone-icon">😤</span>
+                  <span className="tone-name">Stern</span>
+                  <span className="tone-desc">Serious and firm</span>
+                </button>
+                <button className="tone-btn neutral" onClick={() => handleAiTone('neutral')}>
+                  <span className="tone-icon">😐</span>
+                  <span className="tone-name">Neutral</span>
+                  <span className="tone-desc">Balanced and objective</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Translate Modal */}
+      {showTranslateModal && (
+        <div className="modal-overlay" onClick={() => setShowTranslateModal(false)}>
+          <div className="modal ai-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🌐 Translate Letter</h2>
+              <button className="close-btn" onClick={() => setShowTranslateModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: '1rem', color: '#666' }}>
+                Select target language:
+              </p>
+              <div className="translate-options">
+                <button className="translate-btn" onClick={() => handleAiTranslate('en')}>
+                  <span className="lang-flag">🇬🇧</span>
+                  <span className="lang-name">English</span>
+                </button>
+                <button className="translate-btn" onClick={() => handleAiTranslate('ms')}>
+                  <span className="lang-flag">🇲🇾</span>
+                  <span className="lang-name">Bahasa Malaysia</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

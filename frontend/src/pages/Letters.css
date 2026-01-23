@@ -808,3 +808,151 @@
     height: 60px;
   }
 }
+
+/* AI Tools Section */
+.ai-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+  border-radius: 8px;
+  border: 1px solid #e0e8ff;
+}
+
+.ai-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #5a6a7a;
+  margin-right: 4px;
+}
+
+.ai-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-improve {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.ai-improve:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.ai-tone {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.ai-tone:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+}
+
+.ai-translate {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+}
+
+.ai-translate:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4);
+}
+
+/* AI Modals */
+.ai-modal {
+  max-width: 400px;
+}
+
+.tone-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tone-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 2px solid #e8f0f8;
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.tone-btn:hover {
+  border-color: #3b82f6;
+  background: #f8faff;
+}
+
+.tone-icon {
+  font-size: 1.5rem;
+}
+
+.tone-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.tone-desc {
+  font-size: 0.85rem;
+  color: #7a8a9a;
+  margin-left: auto;
+}
+
+.translate-options {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+.translate-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 30px;
+  border: 2px solid #e8f0f8;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.translate-btn:hover {
+  border-color: #3b82f6;
+  background: #f8faff;
+  transform: translateY(-2px);
+}
+
+.lang-flag {
+  font-size: 2.5rem;
+}
+
+.lang-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
