@@ -935,24 +935,20 @@ Please adjust the changes based on this feedback.`;
                   <table>
                     <thead>
                       <tr>
-                        <th rowSpan="2">Employee</th>
-                        <th colSpan="6" className="group-header earnings">Earnings</th>
-                        <th colSpan="5" className="group-header deductions">Deductions</th>
-                        <th rowSpan="2">Net Pay</th>
-                        <th rowSpan="2">Actions</th>
-                      </tr>
-                      <tr>
-                        <th className="sub-header">Basic</th>
-                        <th className="sub-header">OT</th>
-                        <th className="sub-header">Allowance</th>
-                        <th className="sub-header">Claims</th>
-                        <th className="sub-header">Comm.</th>
-                        <th className="sub-header">Gross</th>
-                        <th className="sub-header">EPF</th>
-                        <th className="sub-header">SOCSO</th>
-                        <th className="sub-header">EIS</th>
-                        <th className="sub-header">PCB</th>
-                        <th className="sub-header">Advance</th>
+                        <th className="th-employee">Employee</th>
+                        <th className="th-earning">Basic</th>
+                        <th className="th-earning">OT</th>
+                        <th className="th-earning">Allowance</th>
+                        <th className="th-earning">Claims</th>
+                        <th className="th-earning">Comm.</th>
+                        <th className="th-gross">Gross</th>
+                        <th className="th-deduction">EPF</th>
+                        <th className="th-deduction">SOCSO</th>
+                        <th className="th-deduction">EIS</th>
+                        <th className="th-deduction">PCB</th>
+                        <th className="th-deduction">Advance</th>
+                        <th className="th-net">Net Pay</th>
+                        <th className="th-actions">Actions</th>
                       </tr>
                     </thead>
                     <tbody>

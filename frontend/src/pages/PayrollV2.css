@@ -910,38 +910,42 @@
 }
 
 .items-table th {
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  background: #1e293b;
   color: white;
-  padding: 16px 14px;
-  text-align: left;
+  padding: 14px 12px;
+  text-align: right;
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
-.items-table .group-header {
+.items-table th.th-employee {
+  text-align: left;
+  background: #1e293b;
+  min-width: 160px;
+}
+
+.items-table th.th-earning {
+  background: #166534;
+}
+
+.items-table th.th-gross {
+  background: #14532d;
+}
+
+.items-table th.th-deduction {
+  background: #991b1b;
+}
+
+.items-table th.th-net {
+  background: #1d4ed8;
+}
+
+.items-table th.th-actions {
+  background: #1e293b;
   text-align: center;
-  border-left: 2px solid rgba(255,255,255,0.15);
-  border-right: 2px solid rgba(255,255,255,0.15);
-  font-size: 0.75rem;
-  letter-spacing: 1px;
-}
-
-.items-table .group-header.earnings {
-  background: linear-gradient(135deg, #166534 0%, #15803d 100%);
-}
-
-.items-table .group-header.deductions {
-  background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%);
-}
-
-.items-table .sub-header {
-  background: #334155;
-  font-size: 0.7rem;
-  padding: 10px 8px;
-  text-align: right;
-  letter-spacing: 0.3px;
 }
 
 .items-table td {
