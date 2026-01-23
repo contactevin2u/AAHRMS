@@ -89,6 +89,9 @@ export const employeeApi = {
   bulkDelete: (employee_ids) => api.post('/employees/bulk-delete', { employee_ids }),
   resetPassword: (id) => api.post(`/employees/${id}/reset-password`),
   getPasswordStatus: (params) => api.get('/employees/password-status/check', { params }),
+  // Manager outlet assignment
+  getEmployeeOutlets: (id) => api.get(`/employees/${id}/outlets`),
+  updateEmployeeOutlets: (id, outlet_ids) => api.put(`/employees/${id}/outlets`, { outlet_ids }),
 };
 
 export const departmentApi = {

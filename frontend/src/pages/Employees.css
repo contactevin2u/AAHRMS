@@ -506,6 +506,61 @@ tr:hover {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.form-group.full-width {
+  flex: 1 1 100%;
+}
+
+/* Manager Outlet Assignment Checkboxes */
+.outlet-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.outlet-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #334155;
+  transition: all 0.15s ease;
+}
+
+.outlet-checkbox:hover {
+  border-color: #3b82f6;
+  background: #f0f9ff;
+}
+
+.outlet-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.outlet-checkbox input[type="checkbox"]:checked + span {
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
 .modal-actions {
   display: flex;
   gap: 12px;

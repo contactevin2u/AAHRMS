@@ -1031,6 +1031,147 @@ router.put('/:id/role', authenticateAdmin, async (req, res) => {
   }
 });
 
+// =====================================================
+// MANAGER OUTLET ASSIGNMENT ENDPOINTS
+// =====================================================
+
+// Get manager's assigned outlets
+router.get('/:id/outlets', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = getCompanyFilter(req);
+
+    // Verify employee exists and is a manager
+    let empQuery = 'SELECT id, name, employee_role, company_id FROM employees WHERE id = $1';
+    const empParams = [id];
+
+    if (companyId !== null) {
+      empQuery += ' AND company_id = $2';
+      empParams.push(companyId);
+    }
+
+    const empResult = await pool.query(empQuery, empParams);
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const employee = empResult.rows[0];
+
+    // Get assigned outlets from employee_outlets junction table
+    const outletsResult = await pool.query(`
+      SELECT o.id, o.name, o.address, eo.created_at as assigned_at
+      FROM employee_outlets eo
+      JOIN outlets o ON eo.outlet_id = o.id
+      WHERE eo.employee_id = $1
+      ORDER BY o.name
+    `, [id]);
+
+    res.json({
+      employee_id: employee.id,
+      employee_name: employee.name,
+      employee_role: employee.employee_role,
+      outlets: outletsResult.rows
+    });
+  } catch (error) {
+    console.error('Error fetching employee outlets:', error);
+    res.status(500).json({ error: 'Failed to fetch employee outlets' });
+  }
+});
+
+// Update manager's assigned outlets
+router.put('/:id/outlets', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { outlet_ids } = req.body;
+    const companyId = getCompanyFilter(req);
+
+    if (!outlet_ids || !Array.isArray(outlet_ids)) {
+      return res.status(400).json({ error: 'outlet_ids must be an array' });
+    }
+
+    // Verify employee exists
+    let empQuery = 'SELECT id, name, employee_role, company_id FROM employees WHERE id = $1';
+    const empParams = [id];
+
+    if (companyId !== null) {
+      empQuery += ' AND company_id = $2';
+      empParams.push(companyId);
+    }
+
+    const empResult = await pool.query(empQuery, empParams);
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const employee = empResult.rows[0];
+
+    // Verify all outlet_ids belong to the same company
+    if (outlet_ids.length > 0) {
+      const outletCheck = await pool.query(
+        'SELECT id FROM outlets WHERE id = ANY($1) AND company_id = $2',
+        [outlet_ids, employee.company_id]
+      );
+
+      if (outletCheck.rows.length !== outlet_ids.length) {
+        return res.status(400).json({ error: 'Some outlets do not exist or belong to a different company' });
+      }
+    }
+
+    // Start transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Remove all existing outlet assignments for this employee
+      await client.query('DELETE FROM employee_outlets WHERE employee_id = $1', [id]);
+
+      // Add new outlet assignments
+      for (const outletId of outlet_ids) {
+        await client.query(
+          'INSERT INTO employee_outlets (employee_id, outlet_id) VALUES ($1, $2)',
+          [id, outletId]
+        );
+      }
+
+      // If employee is a manager, set outlet_id to NULL (managers don't have a single outlet)
+      if (['manager', 'supervisor'].includes(employee.employee_role)) {
+        await client.query(
+          'UPDATE employees SET outlet_id = NULL WHERE id = $1',
+          [id]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      // Fetch updated outlet assignments
+      const updatedOutlets = await pool.query(`
+        SELECT o.id, o.name, o.address
+        FROM employee_outlets eo
+        JOIN outlets o ON eo.outlet_id = o.id
+        WHERE eo.employee_id = $1
+        ORDER BY o.name
+      `, [id]);
+
+      res.json({
+        message: 'Outlet assignments updated successfully',
+        employee_id: id,
+        employee_name: employee.name,
+        outlets: updatedOutlets.rows
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error updating employee outlets:', error);
+    res.status(500).json({ error: 'Failed to update employee outlets' });
+  }
+});
+
 // Get employees by role (for dropdowns)
 router.get('/by-role/:role', authenticateAdmin, async (req, res) => {
   try {

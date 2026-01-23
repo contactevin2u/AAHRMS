@@ -85,6 +85,9 @@ function Employees() {
   const [employeeCommissions, setEmployeeCommissions] = useState([]);
   const [employeeAllowances, setEmployeeAllowances] = useState([]);
 
+  // Manager outlet assignment state (for managers who manage multiple outlets)
+  const [managerOutlets, setManagerOutlets] = useState([]);
+
   // Bulk selection state
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
@@ -294,6 +297,11 @@ function Employees() {
           earningsApi.bulkSaveCommissions(employeeId, validCommissions),
           earningsApi.bulkSaveAllowances(employeeId, validAllowances)
         ]);
+
+        // Save manager outlet assignments (for Mimix managers/supervisors)
+        if (isMimix && managerOutlets.length > 0) {
+          await employeeApi.updateEmployeeOutlets(employeeId, managerOutlets);
+        }
       }
 
       setShowModal(false);
@@ -369,6 +377,19 @@ function Employees() {
       console.error('Error fetching employee earnings:', error);
       setEmployeeCommissions([]);
       setEmployeeAllowances([]);
+    }
+
+    // Fetch manager's assigned outlets (for Mimix managers/supervisors)
+    if (isMimix && ['manager', 'supervisor'].includes(emp.employee_role)) {
+      try {
+        const outletsRes = await employeeApi.getEmployeeOutlets(emp.id);
+        setManagerOutlets(outletsRes.data.outlets?.map(o => o.id) || []);
+      } catch (error) {
+        console.error('Error fetching manager outlets:', error);
+        setManagerOutlets([]);
+      }
+    } else {
+      setManagerOutlets([]);
     }
 
     setShowModal(true);
@@ -454,6 +475,7 @@ function Employees() {
     setSalaryAutoPopulated(false);
     setEmployeeCommissions([]);
     setEmployeeAllowances([]);
+    setManagerOutlets([]);
     setForm({
       employee_id: '',
       name: '',
@@ -1687,6 +1709,40 @@ function Employees() {
                     </select>
                   </div>
                 </div>
+
+                {/* Manager/Supervisor Outlet Assignment (Mimix only) */}
+                {isMimix && (() => {
+                  const selectedPosition = positions.find(p => p.id === parseInt(form.position_id));
+                  const isManagerOrSupervisor = selectedPosition?.role === 'manager' || selectedPosition?.role === 'supervisor' ||
+                    selectedPosition?.name?.toLowerCase().includes('manager') || selectedPosition?.name?.toLowerCase().includes('supervisor') ||
+                    (editingEmployee && ['manager', 'supervisor'].includes(editingEmployee.employee_role));
+                  return isManagerOrSupervisor && (
+                    <div className="form-row">
+                      <div className="form-group full-width">
+                        <label>Managed Outlets</label>
+                        <div className="outlet-checkbox-grid">
+                          {outlets.map(outlet => (
+                            <label key={outlet.id} className="outlet-checkbox">
+                              <input
+                                type="checkbox"
+                                checked={managerOutlets.includes(outlet.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setManagerOutlets([...managerOutlets, outlet.id]);
+                                  } else {
+                                    setManagerOutlets(managerOutlets.filter(id => id !== outlet.id));
+                                  }
+                                }}
+                              />
+                              <span>{outlet.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <small className="field-hint">Select which outlets this manager/supervisor can manage</small>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="form-row">
                   <div className="form-group">
