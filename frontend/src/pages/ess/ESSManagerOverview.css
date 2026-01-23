@@ -4,6 +4,9 @@
 }
 
 .overview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
 }
 
@@ -18,6 +21,22 @@
   font-size: 14px;
   color: #64748b;
   margin: 0;
+}
+
+.quick-add-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.quick-add-btn:hover {
+  background: #2563eb;
 }
 
 /* Quick Stats */
@@ -671,4 +690,206 @@
     flex-direction: column;
     gap: 6px;
   }
+}
+
+/* Quick Add Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.quick-add-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.quick-add-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.quick-add-modal .modal-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.quick-add-modal .close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.quick-add-modal .close-btn:hover {
+  color: #1e293b;
+}
+
+.quick-add-modal form {
+  padding: 20px;
+}
+
+.quick-add-modal .form-group {
+  margin-bottom: 16px;
+}
+
+.quick-add-modal .form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.quick-add-modal .form-group input,
+.quick-add-modal .form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 15px;
+  color: #1e293b;
+  background: #f8fafc;
+  transition: all 0.15s ease;
+}
+
+.quick-add-modal .form-group input:focus,
+.quick-add-modal .form-group select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.quick-add-modal .form-group .hint {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.quick-add-modal .modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.quick-add-modal .btn-secondary {
+  padding: 10px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  color: #64748b;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.quick-add-modal .btn-secondary:hover {
+  background: #f8fafc;
+}
+
+.quick-add-modal .btn-primary {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.quick-add-modal .btn-primary:hover {
+  background: #2563eb;
+}
+
+.quick-add-modal .btn-primary:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.quick-add-modal .error-alert {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.quick-add-success {
+  padding: 30px 20px;
+  text-align: center;
+}
+
+.quick-add-success .success-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.quick-add-success h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.quick-add-success p {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0 0 16px 0;
+}
+
+.login-info-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.login-info-box p {
+  margin: 4px 0;
+  font-size: 14px;
+  color: #334155;
+}
+
+.login-info-box code {
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: #1e293b;
+}
+
+.quick-add-success .modal-actions {
+  justify-content: center;
+  border-top: none;
+  padding-top: 0;
 }

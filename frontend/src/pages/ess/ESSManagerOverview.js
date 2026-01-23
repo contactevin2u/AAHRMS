@@ -11,6 +11,17 @@ function ESSManagerOverview() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOutlet, setSelectedOutlet] = useState('all');
 
+  // Quick Add Employee state
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddForm, setQuickAddForm] = useState({
+    employee_id: '',
+    name: '',
+    ic_number: '',
+    outlet_id: ''
+  });
+  const [quickAddLoading, setQuickAddLoading] = useState(false);
+  const [quickAddResult, setQuickAddResult] = useState(null);
+
   useEffect(() => {
     fetchOverview();
   }, []);
@@ -52,6 +63,48 @@ function ESSManagerOverview() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleQuickAdd = async (e) => {
+    e.preventDefault();
+    setQuickAddLoading(true);
+    setQuickAddResult(null);
+
+    try {
+      const res = await essApi.managerQuickAddEmployee(quickAddForm);
+      setQuickAddResult({
+        success: true,
+        message: res.data.message,
+        loginInfo: res.data.login_info
+      });
+      // Reset form
+      setQuickAddForm({
+        employee_id: '',
+        name: '',
+        ic_number: '',
+        outlet_id: quickAddForm.outlet_id // Keep selected outlet
+      });
+      // Refresh data
+      fetchOverview();
+    } catch (err) {
+      setQuickAddResult({
+        success: false,
+        message: err.response?.data?.error || 'Failed to add employee'
+      });
+    } finally {
+      setQuickAddLoading(false);
+    }
+  };
+
+  const resetQuickAdd = () => {
+    setShowQuickAdd(false);
+    setQuickAddForm({
+      employee_id: '',
+      name: '',
+      ic_number: '',
+      outlet_id: ''
+    });
+    setQuickAddResult(null);
   };
 
   if (loading) {
@@ -124,6 +177,9 @@ function ESSManagerOverview() {
             <h1>Team Overview</h1>
             <p>{new Date().toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
           </div>
+          <button className="quick-add-btn" onClick={() => setShowQuickAdd(true)}>
+            + Add Staff
+          </button>
         </header>
 
         {/* Quick Stats */}
@@ -463,6 +519,96 @@ function ESSManagerOverview() {
                 <p>No pending approvals at this time</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Quick Add Employee Modal */}
+        {showQuickAdd && (
+          <div className="modal-overlay" onClick={resetQuickAdd}>
+            <div className="quick-add-modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Quick Add Staff</h2>
+                <button className="close-btn" onClick={resetQuickAdd}>&times;</button>
+              </div>
+
+              {quickAddResult?.success ? (
+                <div className="quick-add-success">
+                  <div className="success-icon">&#x2705;</div>
+                  <h3>Staff Added Successfully!</h3>
+                  <p>{quickAddResult.message}</p>
+                  <div className="login-info-box">
+                    <p><strong>Login Details:</strong></p>
+                    <p>Employee ID: <code>{quickAddResult.loginInfo.employee_id}</code></p>
+                    <p>Password: <code>{quickAddResult.loginInfo.initial_password}</code></p>
+                  </div>
+                  <div className="modal-actions">
+                    <button className="btn-secondary" onClick={resetQuickAdd}>Done</button>
+                    <button className="btn-primary" onClick={() => setQuickAddResult(null)}>Add Another</button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleQuickAdd}>
+                  {quickAddResult?.success === false && (
+                    <div className="error-alert">{quickAddResult.message}</div>
+                  )}
+
+                  <div className="form-group">
+                    <label>Outlet *</label>
+                    <select
+                      value={quickAddForm.outlet_id}
+                      onChange={(e) => setQuickAddForm({ ...quickAddForm, outlet_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Select outlet</option>
+                      {outlets.map(outlet => (
+                        <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Employee ID *</label>
+                    <input
+                      type="text"
+                      value={quickAddForm.employee_id}
+                      onChange={(e) => setQuickAddForm({ ...quickAddForm, employee_id: e.target.value.toUpperCase() })}
+                      placeholder="e.g. MX001"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Full Name *</label>
+                    <input
+                      type="text"
+                      value={quickAddForm.name}
+                      onChange={(e) => setQuickAddForm({ ...quickAddForm, name: e.target.value.toUpperCase() })}
+                      placeholder="e.g. AHMAD BIN ALI"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>IC Number *</label>
+                    <input
+                      type="text"
+                      value={quickAddForm.ic_number}
+                      onChange={(e) => setQuickAddForm({ ...quickAddForm, ic_number: e.target.value })}
+                      placeholder="e.g. 901234567890"
+                      required
+                    />
+                    <small className="hint">IC number will be used as initial password</small>
+                  </div>
+
+                  <div className="modal-actions">
+                    <button type="button" className="btn-secondary" onClick={resetQuickAdd}>Cancel</button>
+                    <button type="submit" className="btn-primary" disabled={quickAddLoading}>
+                      {quickAddLoading ? 'Adding...' : 'Add Staff'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         )}
       </div>

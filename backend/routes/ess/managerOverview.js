@@ -202,6 +202,128 @@ router.get('/outlet/:outletId/staff', authenticateEmployee, asyncHandler(async (
 }));
 
 /**
+ * Quick Add Employee (Manager only)
+ * Managers can add employees to their managed outlets
+ */
+router.post('/quick-add', authenticateEmployee, asyncHandler(async (req, res) => {
+  const bcrypt = require('bcryptjs');
+  const { formatIC, detectIDType } = require('../../utils/statutory');
+
+  // Check if user is manager
+  const role = req.employee.employee_role;
+  if (role !== 'manager' && role !== 'admin' && role !== 'director') {
+    return res.status(403).json({ error: 'Access denied. Manager level or above required.' });
+  }
+
+  const { employee_id, name, ic_number, outlet_id, position_id } = req.body;
+
+  // Get manager's company and managed outlets
+  const empResult = await pool.query(
+    'SELECT company_id FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const companyId = empResult.rows[0]?.company_id;
+
+  if (!isMimixCompany(companyId)) {
+    return res.status(403).json({ error: 'Quick add is only available for outlet-based companies.' });
+  }
+
+  const employee = { ...req.employee, company_id: companyId };
+  const managedOutlets = await getManagedOutlets(employee);
+
+  // Validate required fields
+  if (!employee_id) {
+    return res.status(400).json({ error: 'Employee ID is required' });
+  }
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+  if (!ic_number) {
+    return res.status(400).json({ error: 'IC Number is required (used for login)' });
+  }
+  if (!outlet_id) {
+    return res.status(400).json({ error: 'Outlet is required' });
+  }
+
+  // Verify manager has access to this outlet
+  if (!managedOutlets.includes(parseInt(outlet_id))) {
+    return res.status(403).json({ error: 'You can only add employees to outlets you manage.' });
+  }
+
+  // Check if employee_id already exists in this company
+  const existingCheck = await pool.query(
+    'SELECT id FROM employees WHERE employee_id = $1 AND company_id = $2',
+    [employee_id, companyId]
+  );
+  if (existingCheck.rows.length > 0) {
+    return res.status(400).json({ error: 'Employee ID already exists in this company' });
+  }
+
+  // Auto-detect and format IC number
+  const id_type = detectIDType(ic_number);
+  const formattedIC = id_type === 'ic' ? formatIC(ic_number) : ic_number;
+
+  // Auto-extract date of birth and gender from IC
+  let dateOfBirth = null;
+  let gender = null;
+  if (id_type === 'ic' && ic_number) {
+    // Extract DOB: YYMMDD from IC
+    const cleaned = ic_number.replace(/[-\s]/g, '');
+    if (cleaned.length >= 6) {
+      const yy = parseInt(cleaned.substring(0, 2));
+      const mm = cleaned.substring(2, 4);
+      const dd = cleaned.substring(4, 6);
+      const currentYear = new Date().getFullYear() % 100;
+      const century = yy > currentYear ? '19' : '20';
+      dateOfBirth = `${century}${cleaned.substring(0, 2)}-${mm}-${dd}`;
+    }
+    // Extract gender: last digit odd = male, even = female
+    if (cleaned.length >= 12) {
+      const lastDigit = parseInt(cleaned.charAt(11));
+      gender = lastDigit % 2 === 1 ? 'male' : 'female';
+    }
+  }
+
+  // Hash IC number as initial password (without dashes)
+  const cleanIC = ic_number.replace(/[-\s]/g, '');
+  const passwordHash = await bcrypt.hash(cleanIC, 10);
+
+  // Set join_date to today
+  const today = new Date().toISOString().split('T')[0];
+
+  // Insert employee with ESS enabled
+  const result = await pool.query(
+    `INSERT INTO employees (
+      employee_id, name, ic_number, id_type, company_id, outlet_id, position_id, join_date,
+      date_of_birth, gender,
+      status, ess_enabled, password_hash, must_change_password,
+      employment_type, probation_months, profile_completed, employee_role
+    )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', true, $11, true, 'probation', 3, false, 'staff')
+     RETURNING id, employee_id, name, ic_number, id_type, outlet_id, status, ess_enabled, date_of_birth, gender`,
+    [employee_id, name, formattedIC, id_type, companyId, outlet_id, position_id || null, today, dateOfBirth, gender, passwordHash]
+  );
+
+  const newEmployee = result.rows[0];
+
+  // Add to employee_outlets table for outlet sync
+  await pool.query(
+    'INSERT INTO employee_outlets (employee_id, outlet_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [newEmployee.id, outlet_id]
+  );
+
+  res.status(201).json({
+    message: `Employee ${name} created successfully. They can now login to ESS.`,
+    employee: newEmployee,
+    login_info: {
+      employee_id: employee_id,
+      initial_password: cleanIC,
+      login_url: '/ess/login'
+    }
+  });
+}));
+
+/**
  * Get attendance report for outlet
  */
 router.get('/outlet/:outletId/attendance', authenticateEmployee, asyncHandler(async (req, res) => {

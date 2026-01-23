@@ -623,6 +623,7 @@ export const essApi = {
   getManagerOverview: () => api.get('/ess/manager-overview', essApiConfig),
   getOutletStaff: (outletId) => api.get(`/ess/manager-overview/outlet/${outletId}/staff`, essApiConfig),
   getOutletAttendance: (outletId, date) => api.get(`/ess/manager-overview/outlet/${outletId}/attendance`, { params: { date }, ...essApiConfig }),
+  managerQuickAddEmployee: (data) => api.post('/ess/manager-overview/quick-add', data, essApiConfig),
 };
 
 export default api;
