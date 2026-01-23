@@ -338,17 +338,26 @@ function Claims() {
 
         {activeTab === 'claims' && (
           <>
-        {/* Summary Stats */}
+        {/* Summary Stats - Clickable to filter */}
         <div className="stats-row">
-          <div className="stat-box">
+          <div
+            className={`stat-box clickable ${filter.status === '' ? 'active' : ''}`}
+            onClick={() => setFilter({ ...filter, status: '' })}
+          >
             <span className="stat-num">{claims.length}</span>
             <span className="stat-text">Total Claims</span>
           </div>
-          <div className="stat-box highlight">
+          <div
+            className={`stat-box clickable pending ${filter.status === 'pending' ? 'active' : ''}`}
+            onClick={() => setFilter({ ...filter, status: 'pending' })}
+          >
             <span className="stat-num">{formatAmount(totalPending)}</span>
             <span className="stat-text">Pending Amount</span>
           </div>
-          <div className="stat-box">
+          <div
+            className={`stat-box clickable approved ${filter.status === 'approved' ? 'active' : ''}`}
+            onClick={() => setFilter({ ...filter, status: 'approved' })}
+          >
             <span className="stat-num">{formatAmount(totalApproved)}</span>
             <span className="stat-text">Approved (Month)</span>
           </div>

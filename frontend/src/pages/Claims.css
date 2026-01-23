@@ -74,12 +74,41 @@
   text-align: center;
   min-width: 120px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
+  border: 2px solid #e2e8f0;
 }
 
-.stat-box.highlight {
+.stat-box.clickable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stat-box.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-box.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.stat-box.pending {
   background: #3b82f6;
   border-color: #3b82f6;
+}
+
+.stat-box.pending .stat-num,
+.stat-box.pending .stat-text {
+  color: white;
+}
+
+.stat-box.pending.active {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+}
+
+.stat-box.approved.active {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
 }
 
 .stat-num {
