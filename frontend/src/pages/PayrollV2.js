@@ -22,6 +22,13 @@ function PayrollV2() {
   const [loadingOtSummary, setLoadingOtSummary] = useState(false);
   const [showOtDetails, setShowOtDetails] = useState(false);
 
+  // AI Assistant state
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState('');
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiComparison, setAiComparison] = useState(null);
+
   // Create form
   const [createForm, setCreateForm] = useState({
     month: new Date().getMonth() + 1,
@@ -179,6 +186,69 @@ function PayrollV2() {
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to recalculate');
     }
+  };
+
+  // AI Assistant functions
+  const handleAIAnalyze = async () => {
+    if (!aiInstruction.trim() || !selectedRun) return;
+
+    setAiLoading(true);
+    setAiAnalysis(null);
+    try {
+      const res = await payrollV2Api.aiAnalyze({
+        run_id: selectedRun.id,
+        instruction: aiInstruction
+      });
+      setAiAnalysis(res.data.analysis);
+    } catch (error) {
+      alert(error.response?.data?.error || 'AI analysis failed');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAIApply = async () => {
+    if (!aiAnalysis?.changes || aiAnalysis.changes.length === 0) return;
+
+    if (!window.confirm(`Apply ${aiAnalysis.changes.length} changes to payroll?`)) return;
+
+    setAiLoading(true);
+    try {
+      await payrollV2Api.aiApply({
+        run_id: selectedRun.id,
+        changes: aiAnalysis.changes
+      });
+      // Refresh data
+      fetchRunDetails(selectedRun.id);
+      fetchRuns();
+      setAiAnalysis(null);
+      setAiInstruction('');
+      alert('Changes applied successfully!');
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to apply changes');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAICompare = async () => {
+    if (!selectedRun) return;
+
+    setAiLoading(true);
+    try {
+      const res = await payrollV2Api.aiCompare({ run_id: selectedRun.id });
+      setAiComparison(res.data);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Comparison failed');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const resetAIAssistant = () => {
+    setAiAnalysis(null);
+    setAiComparison(null);
+    setAiInstruction('');
   };
 
   const handleFinalizeRun = async (id) => {
@@ -610,7 +680,152 @@ function PayrollV2() {
                     <span className="stat-label">Net Total</span>
                     <span className="stat-value">{formatAmount(selectedRun.total_net)}</span>
                   </div>
+                  {selectedRun.status === 'draft' && (
+                    <div
+                      className="summary-stat ai-toggle"
+                      onClick={() => { setShowAIAssistant(!showAIAssistant); resetAIAssistant(); }}
+                    >
+                      <span className="stat-value">🤖</span>
+                      <span className="stat-label">AI Assistant</span>
+                    </div>
+                  )}
                 </div>
+
+                {/* AI Payroll Assistant */}
+                {showAIAssistant && selectedRun.status === 'draft' && (
+                  <div className="ai-assistant-panel">
+                    <div className="ai-header">
+                      <h3>🤖 AI Payroll Assistant</h3>
+                      <p>Describe what changes you want compared to last payroll, or ask for a comparison.</p>
+                    </div>
+
+                    <div className="ai-actions-row">
+                      <button onClick={handleAICompare} className="ai-compare-btn" disabled={aiLoading}>
+                        📊 Compare with Last Month
+                      </button>
+                    </div>
+
+                    <div className="ai-input-section">
+                      <textarea
+                        value={aiInstruction}
+                        onChange={(e) => setAiInstruction(e.target.value)}
+                        placeholder="Examples:
+• Ali got promotion, increase basic salary by RM300
+• Add RM200 bonus for all employees
+• Increase MAHADI's salary to RM3000
+• Deduct RM100 from HAFIZ for uniform"
+                        rows={4}
+                        disabled={aiLoading}
+                      />
+                      <button onClick={handleAIAnalyze} className="ai-analyze-btn" disabled={aiLoading || !aiInstruction.trim()}>
+                        {aiLoading ? 'Analyzing...' : '✨ Analyze'}
+                      </button>
+                    </div>
+
+                    {/* Comparison Results */}
+                    {aiComparison && (
+                      <div className="ai-comparison">
+                        <h4>📊 Comparison: {aiComparison.current_period} vs {aiComparison.previous_period}</h4>
+                        <div className="comparison-summary">
+                          <div className="comp-stat">
+                            <span>Current Total</span>
+                            <strong>{formatAmount(aiComparison.summary.current_total_net)}</strong>
+                          </div>
+                          <div className="comp-stat">
+                            <span>Previous Total</span>
+                            <strong>{formatAmount(aiComparison.summary.previous_total_net)}</strong>
+                          </div>
+                          <div className={`comp-stat ${aiComparison.summary.difference >= 0 ? 'positive' : 'negative'}`}>
+                            <span>Difference</span>
+                            <strong>{aiComparison.summary.difference >= 0 ? '+' : ''}{formatAmount(aiComparison.summary.difference)}</strong>
+                          </div>
+                        </div>
+                        {aiComparison.comparison.filter(c => c.changes.length > 0 || c.is_new).length > 0 && (
+                          <div className="comparison-details">
+                            <h5>Changes Detected:</h5>
+                            <ul>
+                              {aiComparison.comparison.filter(c => c.changes.length > 0 || c.is_new).map((c, idx) => (
+                                <li key={idx}>
+                                  <strong>{c.employee_name}</strong>
+                                  {c.is_new ? ' (New employee)' : ''}
+                                  {c.net_difference !== null && (
+                                    <span className={c.net_difference >= 0 ? 'change-up' : 'change-down'}>
+                                      {' '}Net: {c.net_difference >= 0 ? '+' : ''}{formatAmount(c.net_difference)}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* AI Analysis Results */}
+                    {aiAnalysis && (
+                      <div className="ai-analysis">
+                        {!aiAnalysis.understood ? (
+                          <div className="ai-clarification">
+                            <p>🤔 {aiAnalysis.clarification || 'I need more information to understand your request.'}</p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="ai-summary">
+                              <h4>📝 Summary</h4>
+                              <p>{aiAnalysis.summary}</p>
+                            </div>
+
+                            {aiAnalysis.preview && aiAnalysis.preview.length > 0 && (
+                              <div className="ai-preview">
+                                <h4>📋 Proposed Changes</h4>
+                                <table className="changes-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Employee</th>
+                                      <th>Field</th>
+                                      <th>Current</th>
+                                      <th>New</th>
+                                      <th>Net Impact</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {aiAnalysis.preview.map((change, idx) => (
+                                      <tr key={idx}>
+                                        <td><strong>{change.employee_name}</strong></td>
+                                        <td>{change.field.replace(/_/g, ' ')}</td>
+                                        <td>{formatAmount(change.current_value)}</td>
+                                        <td className="new-value">{formatAmount(change.new_value)}</td>
+                                        <td className={change.difference >= 0 ? 'positive' : 'negative'}>
+                                          {change.difference >= 0 ? '+' : ''}{formatAmount(change.difference)}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+
+                                {aiAnalysis.impact && (
+                                  <div className="ai-impact">
+                                    <span>Total Additional Cost: <strong>{formatAmount(aiAnalysis.impact.total_additional_cost)}</strong></span>
+                                    <span>Affected: <strong>{aiAnalysis.impact.affected_employees}</strong> employee(s)</span>
+                                  </div>
+                                )}
+
+                                <div className="ai-decision">
+                                  <button onClick={handleAIApply} className="ai-agree-btn" disabled={aiLoading}>
+                                    ✅ Agree & Apply Changes
+                                  </button>
+                                  <button onClick={resetAIAssistant} className="ai-disagree-btn">
+                                    ❌ Disagree
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Items Table - Full Calculation Breakdown */}
                 <div className="items-table full-breakdown">

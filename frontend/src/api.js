@@ -136,6 +136,11 @@ export const payrollV2Api = {
   getItemPayslip: (id) => api.get(`/payroll/items/${id}/payslip`),
   recalculateItem: (id) => api.post(`/payroll/items/${id}/recalculate`),
   recalculateAll: (runId) => api.post(`/payroll/runs/${runId}/recalculate-all`),
+
+  // AI Payroll Assistant
+  aiAnalyze: (data) => api.post('/payroll/ai/analyze', data),
+  aiApply: (data) => api.post('/payroll/ai/apply', data),
+  aiCompare: (data) => api.post('/payroll/ai/compare', data),
 };
 
 // Leave Management
