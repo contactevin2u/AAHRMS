@@ -527,27 +527,29 @@ function Claims() {
                         ) : '-'}
                       </td>
                       <td>
-                        {/* Show approve/reject/edit only if pending AND not linked to payroll */}
-                        {claim.status === 'pending' && !claim.linked_payroll_item_id && (
-                          <>
-                            <button onClick={() => handleApprove(claim.id)} className="action-btn approve">Approve</button>
-                            <button onClick={() => handleReject(claim.id)} className="action-btn reject">Reject</button>
-                            <button onClick={() => handleEdit(claim)} className="action-btn edit">Edit</button>
-                          </>
-                        )}
-                        {/* Show revert button for approved claims not linked to payroll */}
-                        {claim.status === 'approved' && !claim.linked_payroll_item_id && (
-                          <button onClick={() => handleRevert(claim.id)} className="action-btn revert">Revert</button>
-                        )}
-                        {/* Delete button - Testing mode, shows for all statuses (not linked to payroll) */}
-                        {/* TODO: Remove after real data starts */}
-                        {!claim.linked_payroll_item_id && (
-                          <button onClick={() => handleDelete(claim.id)} className="action-btn delete">Delete</button>
-                        )}
-                        {/* Show locked indicator for linked claims */}
-                        {claim.linked_payroll_item_id && (
-                          <span className="locked-indicator" title="Linked to payroll - cannot modify">🔒</span>
-                        )}
+                        <div className="action-buttons">
+                          {/* Show approve/reject/edit only if pending AND not linked to payroll */}
+                          {claim.status === 'pending' && !claim.linked_payroll_item_id && (
+                            <>
+                              <button onClick={() => handleApprove(claim.id)} className="action-btn approve" title="Approve">✓</button>
+                              <button onClick={() => handleReject(claim.id)} className="action-btn reject" title="Reject">✕</button>
+                              <button onClick={() => handleEdit(claim)} className="action-btn edit" title="Edit">✎</button>
+                            </>
+                          )}
+                          {/* Show revert button for approved claims not linked to payroll */}
+                          {claim.status === 'approved' && !claim.linked_payroll_item_id && (
+                            <button onClick={() => handleRevert(claim.id)} className="action-btn revert" title="Revert to Pending">↩</button>
+                          )}
+                          {/* Delete button - Testing mode, shows for all statuses (not linked to payroll) */}
+                          {/* TODO: Remove after real data starts */}
+                          {!claim.linked_payroll_item_id && (
+                            <button onClick={() => handleDelete(claim.id)} className="action-btn delete" title="Delete">🗑</button>
+                          )}
+                          {/* Show locked indicator for linked claims */}
+                          {claim.linked_payroll_item_id && (
+                            <span className="locked-indicator" title="Linked to payroll - cannot modify">🔒</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     );
