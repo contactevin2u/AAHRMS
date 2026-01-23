@@ -151,37 +151,23 @@
   gap: 8px;
 }
 
-.btn-approve-sm {
-  background: #22c55e;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-approve-sm:hover {
-  background: #16a34a;
-}
-
+.btn-approve-sm,
 .btn-reject-sm {
-  background: #ef4444;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  background: transparent !important;
+  border: none !important;
+  padding: 0;
+  font-size: 16px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: transform 0.1s ease;
 }
 
+.btn-approve-sm:hover,
 .btn-reject-sm:hover {
-  background: #dc2626;
+  transform: scale(1.2);
 }
+
+.btn-approve-sm { color: #22c55e; }
+.btn-reject-sm { color: #f59e0b; }
 
 @media (max-width: 768px) {
   .pending-alert-header {
@@ -402,44 +388,35 @@
   text-overflow: ellipsis;
 }
 
-/* Action Buttons */
+/* Action Buttons - Fixed 3-column grid */
+.action-buttons {
+  display: grid;
+  grid-template-columns: 18px 18px 18px;
+  gap: 4px;
+  align-items: center;
+}
+
 .action-btn {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1;
   cursor: pointer;
-  margin-right: 6px;
-  transition: all 0.15s ease;
+  transition: transform 0.1s ease;
+  text-align: center;
 }
 
-.action-btn.approve {
-  background: #f0fdf4;
-  color: #16a34a;
+.action-btn:hover {
+  transform: scale(1.2);
 }
 
-.action-btn.approve:hover {
-  background: #dcfce7;
-}
-
-.action-btn.reject {
-  background: #fffbeb;
-  color: #d97706;
-}
-
-.action-btn.reject:hover {
-  background: #fef3c7;
-}
-
-.action-btn.delete {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.action-btn.delete:hover {
-  background: #fee2e2;
-}
+.action-btn.approve { color: #22c55e; grid-column: 1; }
+.action-btn.reject { color: #f59e0b; grid-column: 2; }
+.action-btn.delete { color: #ef4444; grid-column: 3; }
 
 /* Balance Cards */
 .balance-cards {

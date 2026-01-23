@@ -317,7 +317,7 @@ function Leave() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this leave request?')) {
+    if (window.confirm('Delete this leave request?\n\n⚠️ This action cannot be undone.')) {
       try {
         await leaveApi.deleteRequest(id);
         fetchRequests();
@@ -358,7 +358,7 @@ function Leave() {
   };
 
   const handleDeleteHoliday = async (id) => {
-    if (window.confirm('Delete this holiday?')) {
+    if (window.confirm('Delete this holiday?\n\n⚠️ This action cannot be undone.')) {
       try {
         await leaveApi.deleteHoliday(id);
         fetchHolidays();
@@ -460,8 +460,8 @@ function Leave() {
                       </span>
                     </div>
                     <div className="pending-preview-actions">
-                      <button onClick={() => handleApprove(req.id)} className="btn-approve-sm">Approve</button>
-                      <button onClick={() => handleReject(req.id)} className="btn-reject-sm">Reject</button>
+                      <button onClick={() => handleApprove(req.id)} className="btn-approve-sm" title="Approve">✓</button>
+                      <button onClick={() => handleReject(req.id)} className="btn-reject-sm" title="Reject">✕</button>
                     </div>
                   </div>
                 ))}
@@ -567,15 +567,17 @@ function Leave() {
                           <td>{getStatusBadge(req.status)}</td>
                           <td className="reason-cell">{req.reason || '-'}</td>
                           <td>
-                            {req.status === 'pending' && (
-                              <>
-                                <button onClick={() => handleApprove(req.id)} className="action-btn approve">Approve</button>
-                                <button onClick={() => handleReject(req.id)} className="action-btn reject">Reject</button>
-                              </>
-                            )}
-                            {/* Delete button - Testing mode, shows for all statuses */}
-                            {/* TODO: Remove after real data starts */}
-                            <button onClick={() => handleDelete(req.id)} className="action-btn delete">Delete</button>
+                            <div className="action-buttons">
+                              {req.status === 'pending' && (
+                                <>
+                                  <button onClick={() => handleApprove(req.id)} className="action-btn approve" title="Approve">✓</button>
+                                  <button onClick={() => handleReject(req.id)} className="action-btn reject" title="Reject">✕</button>
+                                </>
+                              )}
+                              {/* Delete button - Testing mode, shows for all statuses */}
+                              {/* TODO: Remove after real data starts */}
+                              <button onClick={() => handleDelete(req.id)} className="action-btn delete" title="Delete">🗑</button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -797,9 +799,9 @@ function Leave() {
                           <td>{h.name}</td>
                           <td>{h.is_recurring ? 'Yes' : 'No'}</td>
                           <td>
-                            <button onClick={() => handleDeleteHoliday(h.id)} className="action-btn delete">
-                              Delete
-                            </button>
+                            <div className="action-buttons">
+                              <button onClick={() => handleDeleteHoliday(h.id)} className="action-btn delete" title="Delete">🗑</button>
+                            </div>
                           </td>
                         </tr>
                       ))
