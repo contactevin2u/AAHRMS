@@ -160,8 +160,10 @@ async function uploadClaim(base64Data, companyId, employeeId, claimId) {
         console.log('PDF converted to image successfully');
         isPDF = false; // Now it's an image
       } catch (convError) {
-        console.error('PDF conversion failed, uploading original:', convError.message);
-        // Fall back to Cloudinary's PDF handling
+        console.error('PDF conversion failed:', convError.message);
+        // Still upload as image placeholder - will need manual approval
+        // Create a simple placeholder or keep trying with original
+        isPDF = false; // Treat as image for upload
       }
     }
 
@@ -184,13 +186,8 @@ async function uploadClaim(base64Data, companyId, employeeId, claimId) {
       ]
     };
 
-    // For PDFs that weren't converted, use Cloudinary's PDF handling
-    if (isPDF) {
-      uploadOptions.pages = true;
-      uploadOptions.transformation[0].page = 1;
-    }
-
     const result = await cloudinary.uploader.upload(uploadData, uploadOptions);
+    // Note: If PDF conversion failed, AI won't be able to read it = manual approval required
 
     return result.secure_url;
   } catch (error) {
