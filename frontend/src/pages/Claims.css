@@ -309,44 +309,32 @@
 /* Action Buttons */
 .action-buttons {
   display: flex;
-  gap: 2px;
+  gap: 6px;
   align-items: center;
-  flex-wrap: nowrap;
 }
 
 .action-btn {
-  background: none;
-  border: none;
-  padding: 2px 4px;
-  font-size: 14px;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1;
   cursor: pointer;
-  transition: opacity 0.15s ease;
-  opacity: 0.8;
+  transition: transform 0.1s ease;
 }
 
 .action-btn:hover {
-  opacity: 1;
+  transform: scale(1.2);
 }
 
-.action-btn.approve {
-  color: #16a34a;
-}
-
-.action-btn.reject {
-  color: #d97706;
-}
-
-.action-btn.edit {
-  color: #2563eb;
-}
-
-.action-btn.delete {
-  color: #dc2626;
-}
-
-.action-btn.revert {
-  color: #7c3aed;
-}
+.action-btn.approve { color: #22c55e; }
+.action-btn.reject { color: #f59e0b; }
+.action-btn.edit { color: #3b82f6; }
+.action-btn.delete { color: #ef4444; }
+.action-btn.revert { color: #8b5cf6; }
 
 /* Category Summary */
 .category-summary {
