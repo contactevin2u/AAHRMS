@@ -163,6 +163,17 @@ function ESSLayout({ children }) {
           <span className="nav-label">Home</span>
         </NavLink>
 
+        {/* Team Overview for Mimix Managers */}
+        {isMimix && showTeamFeatures && (
+          <NavLink
+            to="/ess/manager-overview"
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <span className="nav-icon">&#x1F465;</span>
+            <span className="nav-label">Team</span>
+          </NavLink>
+        )}
+
         {showAttendance && (
           <NavLink
             to="/ess/attendance"
