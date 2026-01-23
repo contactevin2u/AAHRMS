@@ -865,6 +865,10 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='has_variance_warning') THEN
           ALTER TABLE payroll_runs ADD COLUMN has_variance_warning BOOLEAN DEFAULT FALSE;
         END IF;
+        -- Add outlet_id for outlet-based companies (Mimix)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='outlet_id') THEN
+          ALTER TABLE payroll_runs ADD COLUMN outlet_id INTEGER REFERENCES outlets(id);
+        END IF;
         -- Drop old unique constraint and add new one with department_id
         IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_runs_month_year_key') THEN
           ALTER TABLE payroll_runs DROP CONSTRAINT payroll_runs_month_year_key;
@@ -872,13 +876,14 @@ const initDb = async () => {
       END $$;
 
       CREATE INDEX IF NOT EXISTS idx_payroll_runs_company ON payroll_runs(company_id);
+      CREATE INDEX IF NOT EXISTS idx_payroll_runs_outlet ON payroll_runs(outlet_id);
 
       -- Drop old unique index without company_id if exists
       DROP INDEX IF EXISTS idx_payroll_runs_unique;
 
-      -- Create unique index for company_id, month, year, department_id (nullable)
+      -- Create unique index for company_id, month, year, department_id/outlet_id (nullable)
       CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_runs_unique
-      ON payroll_runs (company_id, month, year, COALESCE(department_id, -1));
+      ON payroll_runs (company_id, month, year, COALESCE(department_id, -1), COALESCE(outlet_id, -1));
 
       -- Payroll Items (one per employee per payroll run)
       CREATE TABLE IF NOT EXISTS payroll_items (

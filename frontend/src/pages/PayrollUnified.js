@@ -39,7 +39,8 @@ function PayrollUnified() {
   const [createForm, setCreateForm] = useState({
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
-    department_id: ''
+    department_id: '',
+    outlet_id: ''
   });
 
   // Item edit form
@@ -139,7 +140,15 @@ function PayrollUnified() {
   const handleCreateRun = async (e) => {
     e.preventDefault();
     try {
-      const res = await payrollV2Api.createRun(createForm);
+      // For Mimix (outlet-based), send outlet_id instead of department_id
+      const payload = {
+        month: createForm.month,
+        year: createForm.year,
+        ...(isMimix
+          ? { outlet_id: createForm.outlet_id || null }
+          : { department_id: createForm.department_id || null })
+      };
+      const res = await payrollV2Api.createRun(payload);
       setShowCreateModal(false);
       fetchRuns();
       fetchRunDetails(res.data.run.id);
@@ -790,7 +799,13 @@ function PayrollUnified() {
                 </div>
                 <div className="form-group">
                   <label>{isMimix ? 'Outlet' : 'Department'}</label>
-                  <select value={createForm.department_id} onChange={(e) => setCreateForm({ ...createForm, department_id: e.target.value })}>
+                  <select
+                    value={isMimix ? createForm.outlet_id : createForm.department_id}
+                    onChange={(e) => setCreateForm({
+                      ...createForm,
+                      ...(isMimix ? { outlet_id: e.target.value } : { department_id: e.target.value })
+                    })}
+                  >
                     <option value="">All</option>
                     {(isMimix ? outlets : departments).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                   </select>

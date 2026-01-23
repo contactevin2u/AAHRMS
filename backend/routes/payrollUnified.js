@@ -465,7 +465,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { month, year, department_id, notes, employee_ids } = req.body;
+    const { month, year, department_id, outlet_id, notes, employee_ids } = req.body;
     const companyId = req.companyId;
     if (!companyId) {
       return res.status(403).json({ error: 'Company context required' });
@@ -477,16 +477,25 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
     await client.query('BEGIN');
 
+    // Get company settings first to determine grouping type
+    const settings = await getCompanySettings(companyId);
+    const { features, rates, period: periodConfig, statutory } = settings;
+    const isOutletBased = settings.groupingType === 'outlet';
+
+    // Determine the grouping ID (department_id or outlet_id based on company type)
+    const groupingId = isOutletBased ? outlet_id : department_id;
+    const groupingColumn = isOutletBased ? 'outlet_id' : 'department_id';
+
     // CRITICAL: Use SELECT FOR UPDATE to prevent race conditions
     // Lock existing runs for this period to prevent duplicates
     const lockQuery = `
       SELECT id FROM payroll_runs
       WHERE month = $1 AND year = $2 AND company_id = $3
-      ${department_id ? 'AND department_id = $4' : 'AND department_id IS NULL'}
+      ${groupingId ? `AND ${groupingColumn} = $4` : `AND ${groupingColumn} IS NULL`}
       FOR UPDATE NOWAIT
     `;
-    const lockParams = department_id
-      ? [month, year, companyId, department_id]
+    const lockParams = groupingId
+      ? [month, year, companyId, groupingId]
       : [month, year, companyId];
 
     try {
@@ -503,19 +512,15 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       throw lockErr;
     }
 
-    // Get company settings
-    const settings = await getCompanySettings(companyId);
-    const { features, rates, period: periodConfig, statutory } = settings;
-
     // Check if run already exists
     let existingQuery = 'SELECT id FROM payroll_runs WHERE month = $1 AND year = $2 AND company_id = $3';
     let existingParams = [month, year, companyId];
 
-    if (department_id) {
-      existingQuery += ' AND department_id = $4';
-      existingParams.push(department_id);
+    if (groupingId) {
+      existingQuery += ` AND ${groupingColumn} = $4`;
+      existingParams.push(groupingId);
     } else {
-      existingQuery += ' AND department_id IS NULL';
+      existingQuery += ` AND ${groupingColumn} IS NULL`;
     }
 
     const existing = await client.query(existingQuery, existingParams);
@@ -531,15 +536,18 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     const period = getPayrollPeriod(month, year, periodConfig);
     const workingDays = rates.standard_work_days || getWorkingDaysInMonth(year, month);
 
-    // Create payroll run
+    // Create payroll run with appropriate grouping column
     const runResult = await client.query(`
       INSERT INTO payroll_runs (
-        month, year, status, notes, department_id, company_id,
+        month, year, status, notes, department_id, outlet_id, company_id,
         period_start_date, period_end_date, payment_due_date, period_label
-      ) VALUES ($1, $2, 'draft', $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, 'draft', $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `, [
-      month, year, notes, department_id || null, companyId,
+      month, year, notes,
+      isOutletBased ? null : (department_id || null),
+      isOutletBased ? (outlet_id || null) : null,
+      companyId,
       period.start.toISOString().split('T')[0],
       period.end.toISOString().split('T')[0],
       period.paymentDate.toISOString().split('T')[0],
@@ -565,7 +573,11 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     `;
     let employeeParams = [companyId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]];
 
-    if (department_id) {
+    // Filter by grouping (department or outlet)
+    if (isOutletBased && outlet_id) {
+      employeeQuery += ` AND e.outlet_id = $${employeeParams.length + 1}`;
+      employeeParams.push(outlet_id);
+    } else if (!isOutletBased && department_id) {
       employeeQuery += ` AND e.department_id = $${employeeParams.length + 1}`;
       employeeParams.push(department_id);
     }
