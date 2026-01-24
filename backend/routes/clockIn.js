@@ -89,7 +89,8 @@ router.get('/', authenticateAdmin, async (req, res) => {
 
     let query = `
       SELECT cr.*,
-             cr.total_work_hours as total_hours,
+             COALESCE(cr.total_work_hours, ROUND(cr.total_work_minutes / 60.0, 1)) as total_hours,
+             COALESCE(cr.ot_hours, ROUND(cr.ot_minutes / 60.0, 1)) as ot_hours,
              e.name as employee_name,
              e.employee_id as emp_code,
              d.name as department_name,

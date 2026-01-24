@@ -314,6 +314,8 @@ async function autoClockOutShift(record) {
        ${updateField} = $1,
        total_work_minutes = $2,
        ot_minutes = $3,
+       total_work_hours = ROUND($2 / 60.0, 1),
+       ot_hours = ROUND($3 / 60.0, 1),
        status = 'completed',
        notes = COALESCE(notes, '') || ' [Auto clock-out at cutoff time 01:30 AM]'
      WHERE id = $4
@@ -705,7 +707,8 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
            clock_out_1 = $1, photo_out_1 = $2, location_out_1 = $3, address_out_1 = $4,
            face_detected_out_1 = $5, face_confidence_out_1 = $6,
            total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9,
-           ot_approved = $10, status = 'session_ended'
+           ot_approved = $10, status = 'session_ended',
+           total_work_hours = ROUND($7 / 60.0, 1), ot_hours = ROUND($8 / 60.0, 1)
          WHERE employee_id = $11 AND work_date = $12
          RETURNING *`,
         [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0,
@@ -831,7 +834,8 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
          clock_out_2 = $1, photo_out_2 = $2, location_out_2 = $3, address_out_2 = $4,
          face_detected_out_2 = $5, face_confidence_out_2 = $6,
          total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9,
-         ot_approved = $12, status = 'completed'
+         ot_approved = $12, status = 'completed',
+         total_work_hours = ROUND($7 / 60.0, 1), ot_hours = ROUND($8 / 60.0, 1)
        WHERE employee_id = $10 AND work_date = $11
        RETURNING *`,
       [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, workDate, otAutoApproved ? true : null]
@@ -1062,7 +1066,9 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
        ot_minutes = $8,
        ot_flagged = $9,
        ot_approved = $12,
-       status = 'completed'
+       status = 'completed',
+       total_work_hours = ROUND($7 / 60.0, 1),
+       ot_hours = ROUND($8 / 60.0, 1)
      WHERE employee_id = $10 AND work_date = $11
      RETURNING *`,
     [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, today, otAutoApproved ? true : null]
