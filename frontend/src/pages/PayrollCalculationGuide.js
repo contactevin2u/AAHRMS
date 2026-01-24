@@ -126,9 +126,28 @@ const TAX_BRACKETS = [
 
 function PayrollCalculationGuide() {
   const [activeSection, setActiveSection] = useState('gross');
+  // Test Calculator state - Employee Info
+  const [testCompany, setTestCompany] = useState('aa_alive');
+  const [testDepartment, setTestDepartment] = useState('office');
+  const [testAge, setTestAge] = useState(30);
+  const [testMaritalStatus, setTestMaritalStatus] = useState('single');
+  const [testSpouseWorking, setTestSpouseWorking] = useState(false);
+  const [testChildrenCount, setTestChildrenCount] = useState(0);
+
+  // Test Calculator state - Earnings
   const [testSalary, setTestSalary] = useState(3000);
-  const [testOTHours, setTestOTHours] = useState(10);
+  const [testAllowance, setTestAllowance] = useState(0);
+  const [testOTHours, setTestOTHours] = useState(0);
+  const [testPHDays, setTestPHDays] = useState(0);
+  const [testCommission, setTestCommission] = useState(0);
+  const [testBonus, setTestBonus] = useState(0);
+  const [testOutstation, setTestOutstation] = useState(0);
+  const [testClaims, setTestClaims] = useState(0);
+
+  // Test Calculator state - Deductions
   const [testUnpaidDays, setTestUnpaidDays] = useState(0);
+  const [testAdvance, setTestAdvance] = useState(0);
+  const [testOtherDeductions, setTestOtherDeductions] = useState(0);
 
   // AI Assistant state
   const [messages, setMessages] = useState([]);
@@ -239,12 +258,45 @@ function PayrollCalculationGuide() {
     return { employee: bracket.ee, employer: bracket.er };
   };
 
-  // Calculate OT (exact same as backend)
-  const calculateOT = (basicSalary, otHours, workingDays = 22) => {
-    if (!otHours || otHours <= 0) return 0;
+  // Calculate OT based on company and department
+  const calculateOT = (basicSalary, otHours, company, department, workingDays = 22, workingHours = 7.5) => {
+    if (!otHours || otHours <= 0) return { amount: 0, multiplier: 0 };
+
+    // AA Alive: Only Driver & Packing Room have OT at 1.0x
+    // Mimix: All departments have OT at 1.5x
+    let multiplier = 0;
+    if (company === 'mimix') {
+      multiplier = 1.5;
+    } else if (company === 'aa_alive' && (department === 'driver' || department === 'packing')) {
+      multiplier = 1.0;
+    }
+
+    if (multiplier === 0) return { amount: 0, multiplier: 0 };
+
     const dailyRate = basicSalary / workingDays;
-    const hourlyRate = dailyRate / 8;
-    return Math.round(hourlyRate * otHours * 1.0 * 100) / 100;
+    const hourlyRate = dailyRate / workingHours;
+    const amount = Math.round(hourlyRate * otHours * multiplier * 100) / 100;
+    return { amount, multiplier, hourlyRate };
+  };
+
+  // Calculate PH Pay
+  const calculatePHPay = (basicSalary, phDays, company, department, workingDays = 22) => {
+    if (!phDays || phDays <= 0) return { amount: 0, multiplier: 0 };
+
+    // AA Alive: Only Driver & Packing Room work on PH at 2.0x
+    // Mimix: All departments at 2.0x
+    let multiplier = 0;
+    if (company === 'mimix') {
+      multiplier = 2.0;
+    } else if (company === 'aa_alive' && (department === 'driver' || department === 'packing')) {
+      multiplier = 2.0;
+    }
+
+    if (multiplier === 0) return { amount: 0, multiplier: 0 };
+
+    const dailyRate = basicSalary / workingDays;
+    const amount = Math.round(dailyRate * phDays * multiplier * 100) / 100;
+    return { amount, multiplier, dailyRate };
   };
 
   // Calculate unpaid leave deduction
@@ -254,13 +306,78 @@ function PayrollCalculationGuide() {
     return Math.round(dailyRate * unpaidDays * 100) / 100;
   };
 
+  // Calculate PCB (Monthly Tax Deduction)
+  const calculatePCB = (statutoryBase, age, maritalStatus, spouseWorking, childrenCount, monthlyEPF) => {
+    if (age < 18) return 0;
+
+    // Annual projection
+    const annualGross = statutoryBase * 12;
+
+    // Calculate reliefs
+    let reliefs = 9000; // Individual relief
+    if (maritalStatus === 'married' && !spouseWorking) {
+      reliefs += 4000; // Spouse relief
+    }
+    reliefs += childrenCount * 2000; // Children relief
+    reliefs += Math.min(monthlyEPF * 12, 4000); // EPF relief (max 4000/year)
+
+    // Chargeable income
+    const chargeableIncome = Math.max(0, annualGross - reliefs);
+
+    if (chargeableIncome <= 5000) return 0;
+
+    // Find tax bracket
+    const bracket = TAX_BRACKETS.find(b => chargeableIncome >= b.min && chargeableIncome <= b.max);
+    if (!bracket) return 0;
+
+    // Calculate annual tax
+    const taxableAboveM = chargeableIncome - bracket.M;
+    const B = (maritalStatus === 'married' && !spouseWorking) ? bracket.B2 : bracket.B1;
+    let annualTax = (taxableAboveM * bracket.R) + B;
+
+    // Tax cannot be negative
+    annualTax = Math.max(0, annualTax);
+
+    // Monthly PCB
+    const monthlyPCB = Math.ceil(annualTax / 12 * 20) / 20; // Round up to nearest 5 sen
+
+    return {
+      monthlyPCB,
+      annualGross,
+      reliefs,
+      chargeableIncome,
+      annualTax,
+      bracket: `${bracket.min.toLocaleString()} - ${bracket.max === Infinity ? '∞' : bracket.max.toLocaleString()}`,
+      rate: bracket.R * 100
+    };
+  };
+
   // Test calculations
-  const epf = calculateEPF(testSalary);
-  const socso = calculateSOCSO(testSalary);
-  const eis = calculateEIS(testSalary);
-  const otAmount = calculateOT(testSalary, testOTHours);
+  const otResult = calculateOT(testSalary, testOTHours, testCompany, testDepartment);
+  const phResult = calculatePHPay(testSalary, testPHDays, testCompany, testDepartment);
   const unpaidDeduction = calculateUnpaidDeduction(testSalary, testUnpaidDays);
-  const totalDeductions = epf.employee + socso.employee + eis.employee;
+
+  // Statutory base = Basic + Commission + Bonus (OT, Allowance, Claims NOT included)
+  const statutoryBase = testSalary + testCommission + testBonus;
+
+  const epf = calculateEPF(statutoryBase, testAge);
+  const socso = calculateSOCSO(statutoryBase);
+  const eis = calculateEIS(statutoryBase, testAge);
+  const pcb = calculatePCB(statutoryBase, testAge, testMaritalStatus, testSpouseWorking, testChildrenCount, epf.employee);
+
+  // Gross = Basic + Allowance + OT + PH + Commission + Bonus + Outstation + Claims - Unpaid
+  const grossSalary = testSalary + testAllowance + otResult.amount + phResult.amount + testCommission + testBonus + testOutstation + testClaims - unpaidDeduction;
+
+  // Total deductions
+  const totalStatutoryDeductions = epf.employee + socso.employee + eis.employee + (pcb.monthlyPCB || 0);
+  const totalOtherDeductions = testAdvance + testOtherDeductions;
+  const totalDeductions = totalStatutoryDeductions + totalOtherDeductions;
+
+  // Net pay
+  const netPay = grossSalary - totalDeductions;
+
+  // Employer cost
+  const employerCost = grossSalary + epf.employer + socso.employer + eis.employer;
 
   const sections = [
     { id: 'ai', label: 'AI Assistant' },
@@ -764,58 +881,193 @@ function PayrollCalculationGuide() {
             <p>Enter values to see live calculations (uses exact same formulas as backend)</p>
 
             <div className="calculator-inputs">
-              <div className="input-group">
-                <label>Basic Salary (RM)</label>
-                <input
-                  type="number"
-                  value={testSalary}
-                  onChange={(e) => setTestSalary(parseFloat(e.target.value) || 0)}
-                />
+              {/* Company & Employee Info */}
+              <div className="input-section">
+                <h4>Company & Employee Info</h4>
+                <div className="input-row">
+                  <div className="input-group">
+                    <label>Company</label>
+                    <select value={testCompany} onChange={(e) => setTestCompany(e.target.value)}>
+                      <option value="aa_alive">AA Alive</option>
+                      <option value="mimix">Mimix</option>
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <label>Department</label>
+                    <select value={testDepartment} onChange={(e) => setTestDepartment(e.target.value)}>
+                      <option value="office">Office / Admin</option>
+                      <option value="driver">Driver</option>
+                      <option value="packing">Packing Room</option>
+                      <option value="sales">Sales</option>
+                      <option value="crew">Crew (Mimix)</option>
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <label>Age</label>
+                    <input type="number" value={testAge} onChange={(e) => setTestAge(parseInt(e.target.value) || 30)} />
+                  </div>
+                </div>
+                <div className="input-row">
+                  <div className="input-group">
+                    <label>Marital Status</label>
+                    <select value={testMaritalStatus} onChange={(e) => setTestMaritalStatus(e.target.value)}>
+                      <option value="single">Single</option>
+                      <option value="married">Married</option>
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <label>Spouse Working?</label>
+                    <select value={testSpouseWorking} onChange={(e) => setTestSpouseWorking(e.target.value === 'true')} disabled={testMaritalStatus === 'single'}>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <label>Children</label>
+                    <input type="number" min="0" value={testChildrenCount} onChange={(e) => setTestChildrenCount(parseInt(e.target.value) || 0)} />
+                  </div>
+                </div>
               </div>
-              <div className="input-group">
-                <label>OT Hours</label>
-                <input
-                  type="number"
-                  value={testOTHours}
-                  onChange={(e) => setTestOTHours(parseFloat(e.target.value) || 0)}
-                />
+
+              {/* Earnings */}
+              <div className="input-section">
+                <h4>Earnings</h4>
+                <div className="input-row">
+                  <div className="input-group">
+                    <label>Basic Salary (RM)</label>
+                    <input type="number" value={testSalary} onChange={(e) => setTestSalary(parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <div className="input-group">
+                    <label>Allowance (RM)</label>
+                    <input type="number" value={testAllowance} onChange={(e) => setTestAllowance(parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <div className="input-group">
+                    <label>OT Hours</label>
+                    <input type="number" value={testOTHours} onChange={(e) => setTestOTHours(parseFloat(e.target.value) || 0)} />
+                  </div>
+                </div>
+                <div className="input-row">
+                  <div className="input-group">
+                    <label>PH Days Worked</label>
+                    <input type="number" value={testPHDays} onChange={(e) => setTestPHDays(parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <div className="input-group">
+                    <label>Commission (RM)</label>
+                    <input type="number" value={testCommission} onChange={(e) => setTestCommission(parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <div className="input-group">
+                    <label>Bonus (RM)</label>
+                    <input type="number" value={testBonus} onChange={(e) => setTestBonus(parseFloat(e.target.value) || 0)} />
+                  </div>
+                </div>
+                <div className="input-row">
+                  <div className="input-group">
+                    <label>Outstation (RM)</label>
+                    <input type="number" value={testOutstation} onChange={(e) => setTestOutstation(parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <div className="input-group">
+                    <label>Claims (RM)</label>
+                    <input type="number" value={testClaims} onChange={(e) => setTestClaims(parseFloat(e.target.value) || 0)} />
+                  </div>
+                </div>
               </div>
-              <div className="input-group">
-                <label>Unpaid Leave Days</label>
-                <input
-                  type="number"
-                  value={testUnpaidDays}
-                  onChange={(e) => setTestUnpaidDays(parseFloat(e.target.value) || 0)}
-                />
+
+              {/* Deductions */}
+              <div className="input-section">
+                <h4>Deductions</h4>
+                <div className="input-row">
+                  <div className="input-group">
+                    <label>Unpaid Leave Days</label>
+                    <input type="number" value={testUnpaidDays} onChange={(e) => setTestUnpaidDays(parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <div className="input-group">
+                    <label>Advance Deduction (RM)</label>
+                    <input type="number" value={testAdvance} onChange={(e) => setTestAdvance(parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <div className="input-group">
+                    <label>Other Deductions (RM)</label>
+                    <input type="number" value={testOtherDeductions} onChange={(e) => setTestOtherDeductions(parseFloat(e.target.value) || 0)} />
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="calculator-results">
               <h3>Results:</h3>
+
+              {/* Company Rules Info */}
+              <div className="rules-info">
+                <strong>{testCompany === 'mimix' ? 'Mimix' : 'AA Alive'} Rules:</strong>
+                {testCompany === 'aa_alive' && (testDepartment === 'driver' || testDepartment === 'packing') ? (
+                  <span> OT 1.0x, PH 2.0x (Driver/Packing Room)</span>
+                ) : testCompany === 'aa_alive' ? (
+                  <span className="no-ot"> No OT or PH calculation (Office/Admin)</span>
+                ) : (
+                  <span> OT 1.5x, PH 2.0x (All departments)</span>
+                )}
+              </div>
+
               <table className="results-table">
                 <tbody>
                   <tr className="section-header"><td colSpan="2">EARNINGS</td></tr>
-                  <tr><td>Basic Salary</td><td>RM {testSalary.toFixed(2)}</td></tr>
-                  <tr><td>OT Amount ({testOTHours} hrs @ 1.0x)</td><td>RM {otAmount.toFixed(2)}</td></tr>
-                  <tr><td>Unpaid Deduction ({testUnpaidDays} days)</td><td className="deduction">- RM {unpaidDeduction.toFixed(2)}</td></tr>
-                  <tr className="total"><td>Gross Salary</td><td>RM {(testSalary + otAmount - unpaidDeduction).toFixed(2)}</td></tr>
+                  {testSalary > 0 && <tr><td>Basic Salary</td><td>RM {testSalary.toFixed(2)}</td></tr>}
+                  {testAllowance > 0 && <tr><td>Allowance</td><td>RM {testAllowance.toFixed(2)}</td></tr>}
+                  {otResult.amount > 0 && <tr><td>OT Amount ({testOTHours} hrs @ {otResult.multiplier}x)</td><td>RM {otResult.amount.toFixed(2)}</td></tr>}
+                  {phResult.amount > 0 && <tr><td>PH Pay ({testPHDays} days @ {phResult.multiplier}x)</td><td>RM {phResult.amount.toFixed(2)}</td></tr>}
+                  {testCommission > 0 && <tr><td>Commission</td><td>RM {testCommission.toFixed(2)}</td></tr>}
+                  {testBonus > 0 && <tr><td>Bonus</td><td>RM {testBonus.toFixed(2)}</td></tr>}
+                  {testOutstation > 0 && <tr><td>Outstation</td><td>RM {testOutstation.toFixed(2)}</td></tr>}
+                  {testClaims > 0 && <tr><td>Claims</td><td>RM {testClaims.toFixed(2)}</td></tr>}
+                  {unpaidDeduction > 0 && <tr><td>Unpaid Leave ({testUnpaidDays} days)</td><td className="deduction">- RM {unpaidDeduction.toFixed(2)}</td></tr>}
+                  <tr className="total"><td>Gross Salary</td><td>RM {grossSalary.toFixed(2)}</td></tr>
 
-                  <tr className="section-header"><td colSpan="2">STATUTORY DEDUCTIONS (from Basic only)</td></tr>
-                  <tr><td>EPF Employee (11%)</td><td>RM {epf.employee.toFixed(2)}</td></tr>
-                  <tr><td>SOCSO Employee</td><td>RM {socso.employee.toFixed(2)}</td></tr>
-                  <tr><td>EIS Employee</td><td>RM {eis.employee.toFixed(2)}</td></tr>
+                  <tr className="section-header"><td colSpan="2">STATUTORY BASE (for EPF/SOCSO/EIS/PCB)</td></tr>
+                  <tr className="info-row"><td colSpan="2">Basic + Commission + Bonus = RM {statutoryBase.toFixed(2)}</td></tr>
+
+                  <tr className="section-header"><td colSpan="2">STATUTORY DEDUCTIONS (Employee)</td></tr>
+                  {epf.employee > 0 && <tr><td>EPF ({testAge > 60 ? '0%' : '11%'})</td><td>RM {epf.employee.toFixed(2)}</td></tr>}
+                  {socso.employee > 0 && <tr><td>SOCSO</td><td>RM {socso.employee.toFixed(2)}</td></tr>}
+                  {eis.employee > 0 && <tr><td>EIS {testAge >= 57 ? '(N/A - Age 57+)' : ''}</td><td>RM {eis.employee.toFixed(2)}</td></tr>}
+                  <tr><td>PCB (Income Tax)</td><td>RM {(pcb.monthlyPCB || 0).toFixed(2)}</td></tr>
+                  <tr className="subtotal"><td>Statutory Subtotal</td><td>RM {totalStatutoryDeductions.toFixed(2)}</td></tr>
+
+                  {(testAdvance > 0 || testOtherDeductions > 0) && (
+                    <>
+                      <tr className="section-header"><td colSpan="2">OTHER DEDUCTIONS</td></tr>
+                      {testAdvance > 0 && <tr><td>Advance Deduction</td><td>RM {testAdvance.toFixed(2)}</td></tr>}
+                      {testOtherDeductions > 0 && <tr><td>Other Deductions</td><td>RM {testOtherDeductions.toFixed(2)}</td></tr>}
+                    </>
+                  )}
+
                   <tr className="total"><td>Total Deductions</td><td>RM {totalDeductions.toFixed(2)}</td></tr>
 
                   <tr className="section-header"><td colSpan="2">NET PAY</td></tr>
-                  <tr className="net-pay"><td>Net Pay</td><td>RM {(testSalary + otAmount - unpaidDeduction - totalDeductions).toFixed(2)}</td></tr>
+                  <tr className="net-pay"><td>Net Pay</td><td>RM {netPay.toFixed(2)}</td></tr>
 
-                  <tr className="section-header"><td colSpan="2">EMPLOYER COST</td></tr>
-                  <tr><td>EPF Employer ({testSalary <= 5000 ? '13%' : '12%'})</td><td>RM {epf.employer.toFixed(2)}</td></tr>
-                  <tr><td>SOCSO Employer</td><td>RM {socso.employer.toFixed(2)}</td></tr>
-                  <tr><td>EIS Employer</td><td>RM {eis.employer.toFixed(2)}</td></tr>
-                  <tr className="total"><td>Total Employer Cost</td><td>RM {(testSalary + otAmount - unpaidDeduction + epf.employer + socso.employer + eis.employer).toFixed(2)}</td></tr>
+                  <tr className="section-header"><td colSpan="2">EMPLOYER CONTRIBUTIONS</td></tr>
+                  {epf.employer > 0 && <tr><td>EPF Employer ({statutoryBase <= 5000 ? '13%' : '12%'})</td><td>RM {epf.employer.toFixed(2)}</td></tr>}
+                  {socso.employer > 0 && <tr><td>SOCSO Employer</td><td>RM {socso.employer.toFixed(2)}</td></tr>}
+                  {eis.employer > 0 && <tr><td>EIS Employer</td><td>RM {eis.employer.toFixed(2)}</td></tr>}
+                  <tr className="total"><td>Total Employer Cost</td><td>RM {employerCost.toFixed(2)}</td></tr>
                 </tbody>
               </table>
+
+              {/* PCB Details */}
+              {pcb && (
+                <div className="pcb-details">
+                  <h4>PCB Calculation Details</h4>
+                  <table className="pcb-table">
+                    <tbody>
+                      <tr><td>Annual Gross (projected)</td><td>RM {pcb.annualGross?.toLocaleString()}</td></tr>
+                      <tr><td>Total Reliefs</td><td>RM {pcb.reliefs?.toLocaleString()}</td></tr>
+                      <tr><td>Chargeable Income</td><td>RM {pcb.chargeableIncome?.toLocaleString()}</td></tr>
+                      <tr><td>Tax Bracket</td><td>{pcb.bracket} ({pcb.rate}%)</td></tr>
+                      <tr><td>Annual Tax</td><td>RM {pcb.annualTax?.toFixed(2)}</td></tr>
+                      <tr className="total"><td>Monthly PCB</td><td>RM {(pcb.monthlyPCB || 0).toFixed(2)}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
