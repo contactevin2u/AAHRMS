@@ -98,6 +98,25 @@ function PublicHolidays() {
     }
   };
 
+  const handleRemoveDuplicates = async () => {
+    if (!window.confirm('This will remove duplicate holidays (keeping the first entry for each date). Continue?')) {
+      return;
+    }
+
+    try {
+      const res = await publicHolidaysApi.removeDuplicates(selectedCompany);
+      if (res.data.removed > 0) {
+        alert(`Removed ${res.data.removed} duplicate holidays.`);
+        fetchHolidays();
+        fetchYearSummary();
+      } else {
+        alert('No duplicates found.');
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to remove duplicates');
+    }
+  };
+
   const handleToggleExtraPay = async (id) => {
     try {
       await publicHolidaysApi.toggleExtraPay(id);
@@ -267,6 +286,9 @@ function PublicHolidays() {
             </button>
             <button onClick={() => handleBulkExtraPay(false)} className="bulk-btn disable">
               Disable Extra Pay for All
+            </button>
+            <button onClick={handleRemoveDuplicates} className="bulk-btn warning">
+              Remove Duplicates
             </button>
           </div>
         )}

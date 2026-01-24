@@ -268,4 +268,88 @@ router.post('/import-malaysia', asyncHandler(async (req, res) => {
   });
 }));
 
+/**
+ * Find and remove duplicate holidays
+ * DELETE /api/public-holidays/remove-duplicates
+ */
+router.delete('/remove-duplicates', asyncHandler(async (req, res) => {
+  const { company_id } = req.query;
+
+  // Find duplicates (same company_id and date)
+  let findQuery = `
+    SELECT company_id, date, COUNT(*) as count, array_agg(id ORDER BY id) as ids
+    FROM public_holidays
+  `;
+  const params = [];
+
+  if (company_id) {
+    params.push(company_id);
+    findQuery += ` WHERE company_id = $1`;
+  }
+
+  findQuery += `
+    GROUP BY company_id, date
+    HAVING COUNT(*) > 1
+  `;
+
+  const duplicates = await pool.query(findQuery, params);
+
+  if (duplicates.rows.length === 0) {
+    return res.json({ message: 'No duplicates found', removed: 0 });
+  }
+
+  // Remove duplicates (keep the first one, delete the rest)
+  let removed = 0;
+  for (const dup of duplicates.rows) {
+    const idsToDelete = dup.ids.slice(1); // Keep first, delete rest
+    if (idsToDelete.length > 0) {
+      await pool.query('DELETE FROM public_holidays WHERE id = ANY($1)', [idsToDelete]);
+      removed += idsToDelete.length;
+    }
+  }
+
+  res.json({
+    message: `Removed ${removed} duplicate holidays`,
+    removed,
+    duplicatesFound: duplicates.rows.length
+  });
+}));
+
+/**
+ * Get duplicate holidays for review
+ * GET /api/public-holidays/duplicates
+ */
+router.get('/duplicates', asyncHandler(async (req, res) => {
+  const { company_id } = req.query;
+
+  let query = `
+    SELECT ph.*, c.name as company_name
+    FROM public_holidays ph
+    LEFT JOIN companies c ON ph.company_id = c.id
+    WHERE (ph.company_id, ph.date) IN (
+      SELECT company_id, date
+      FROM public_holidays
+  `;
+  const params = [];
+
+  if (company_id) {
+    params.push(company_id);
+    query += ` WHERE company_id = $1`;
+  }
+
+  query += `
+      GROUP BY company_id, date
+      HAVING COUNT(*) > 1
+    )
+    ORDER BY ph.company_id, ph.date, ph.id
+  `;
+
+  const result = await pool.query(query, params);
+
+  res.json({
+    count: result.rows.length,
+    duplicates: result.rows
+  });
+}));
+
 module.exports = router;

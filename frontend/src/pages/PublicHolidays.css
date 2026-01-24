@@ -188,6 +188,15 @@
   background: #fecaca;
 }
 
+.bulk-btn.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.bulk-btn.warning:hover {
+  background: #fde68a;
+}
+
 /* Table */
 .holidays-table {
   background: white;

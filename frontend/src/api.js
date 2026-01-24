@@ -144,6 +144,7 @@ export const payrollV2Api = {
   aiAnalyze: (data) => api.post('/payroll/ai/analyze', data),
   aiApply: (data) => api.post('/payroll/ai/apply', data),
   aiCompare: (data) => api.post('/payroll/ai/compare', data),
+  aiPreviewCalculation: (data) => api.post('/payroll/ai/preview-calculation', data),
 };
 
 // Leave Management
@@ -465,6 +466,8 @@ export const publicHolidaysApi = {
   toggleExtraPay: (id) => api.patch(`/public-holidays/${id}/toggle-extra-pay`),
   bulkExtraPay: (holidayIds, extraPay) => api.patch('/public-holidays/bulk-extra-pay', { holiday_ids: holidayIds, extra_pay: extraPay }),
   importMalaysia: (companyId, year) => api.post('/public-holidays/import-malaysia', { company_id: companyId, year }),
+  getDuplicates: (companyId) => api.get('/public-holidays/duplicates', { params: { company_id: companyId } }),
+  removeDuplicates: (companyId) => api.delete('/public-holidays/remove-duplicates', { params: { company_id: companyId } }),
 };
 
 // Company Management
