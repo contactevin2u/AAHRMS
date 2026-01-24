@@ -482,4 +482,278 @@ router.post('/compare', authenticateAdmin, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/payroll/ai/settings-assistant
+ * AI assistant for understanding and changing payroll calculation rules
+ */
+router.post('/settings-assistant', authenticateAdmin, async (req, res) => {
+  try {
+    const { message, conversation_history = [] } = req.body;
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    // Get current company payroll settings
+    const companyResult = await pool.query(
+      'SELECT name, payroll_settings, grouping_type FROM companies WHERE id = $1',
+      [companyId]
+    );
+
+    if (companyResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const company = companyResult.rows[0];
+    const currentSettings = company.payroll_settings || {};
+
+    // Default settings structure
+    const defaultSettings = {
+      features: {
+        auto_ot_from_clockin: true,
+        auto_ph_pay: true,
+        auto_claims_linking: true,
+        unpaid_leave_deduction: true,
+        salary_carry_forward: true,
+        flexible_commissions: true,
+        flexible_allowances: true,
+        indoor_sales_logic: false,
+        ytd_pcb_calculation: true,
+        require_approval: false
+      },
+      rates: {
+        ot_multiplier: 1.0,
+        ph_multiplier: 1.0,
+        indoor_sales_basic: 4000,
+        indoor_sales_commission_rate: 6,
+        standard_work_hours: 8,
+        standard_work_days: 22
+      },
+      statutory: {
+        epf_enabled: true,
+        socso_enabled: true,
+        eis_enabled: true,
+        pcb_enabled: true,
+        statutory_on_ot: false,
+        statutory_on_ph_pay: false,
+        statutory_on_allowance: false,
+        statutory_on_incentive: false
+      }
+    };
+
+    // Merge with defaults
+    const mergedSettings = {
+      features: { ...defaultSettings.features, ...currentSettings.features },
+      rates: { ...defaultSettings.rates, ...currentSettings.rates },
+      statutory: { ...defaultSettings.statutory, ...currentSettings.statutory }
+    };
+
+    // Build conversation for AI
+    const systemPrompt = `You are an AI Payroll Settings Assistant for "${company.name}" (a Malaysian company).
+Your job is to help HR understand and configure payroll calculation rules.
+
+CURRENT PAYROLL SETTINGS:
+${JSON.stringify(mergedSettings, null, 2)}
+
+SETTING EXPLANATIONS:
+- features.auto_ot_from_clockin: Automatically calculate OT from clock-in records
+- features.auto_ph_pay: Automatically calculate public holiday extra pay
+- features.unpaid_leave_deduction: Deduct unpaid leave from salary
+- features.ytd_pcb_calculation: Use year-to-date PCB calculation
+- rates.ot_multiplier: OT pay multiplier (1.0 = normal rate, 1.5 = 1.5x)
+- rates.ph_multiplier: Public holiday pay multiplier (1.0 = extra 1x, 2.0 = extra 2x)
+- rates.standard_work_hours: Standard work hours per day (default: 8)
+- rates.standard_work_days: Standard work days per month (default: 22)
+- statutory.epf_enabled: Enable EPF deductions
+- statutory.socso_enabled: Enable SOCSO deductions
+- statutory.eis_enabled: Enable EIS deductions
+- statutory.pcb_enabled: Enable PCB (tax) deductions
+- statutory.statutory_on_ot: Include OT in EPF/SOCSO/EIS calculation
+- statutory.statutory_on_ph_pay: Include PH pay in EPF/SOCSO/EIS calculation
+- statutory.statutory_on_allowance: Include allowances in EPF/SOCSO/EIS calculation
+- statutory.statutory_on_incentive: Include incentives in EPF/SOCSO/EIS calculation
+
+MALAYSIAN PAYROLL RULES:
+- EPF: Employee 11%, Employer 13% (≤RM5000) or 12% (>RM5000), rounded to nearest RM
+- SOCSO: Bracket-based, max RM5000 wage ceiling
+- EIS: Bracket-based, max RM5000 wage ceiling, not applicable age ≥57
+- PCB: Progressive tax brackets with reliefs
+
+RESPONSE FORMAT:
+Always respond in JSON format:
+{
+  "reply": "Your conversational response explaining things",
+  "changes": null or {
+    "path.to.setting": newValue,
+    "another.setting": newValue
+  },
+  "needs_confirmation": true/false,
+  "confirmation_message": "Are you sure you want to..." (if needs_confirmation)
+}
+
+If user asks to change something, set needs_confirmation=true and explain the impact.
+If user confirms (says yes/ok/confirm/proceed), apply the changes.
+Be helpful, explain calculations, and warn about impacts of changes.`;
+
+    // Build messages array
+    const messages = [];
+
+    // Add conversation history
+    for (const msg of conversation_history) {
+      messages.push({
+        role: msg.role,
+        content: msg.content
+      });
+    }
+
+    // Add current message
+    messages.push({
+      role: 'user',
+      content: message
+    });
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      system: systemPrompt,
+      messages: messages
+    });
+
+    // Parse AI response
+    let aiResponse;
+    try {
+      const responseText = response.content[0].text;
+      const jsonMatch = responseText.match(/```json\n?([\s\S]*?)\n?```/) ||
+                        responseText.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : responseText;
+      aiResponse = JSON.parse(jsonStr);
+    } catch (e) {
+      // If not JSON, treat as plain text reply
+      aiResponse = {
+        reply: response.content[0].text,
+        changes: null,
+        needs_confirmation: false
+      };
+    }
+
+    // If changes are confirmed and provided, apply them
+    let appliedChanges = null;
+    if (aiResponse.changes && !aiResponse.needs_confirmation) {
+      const updatedSettings = JSON.parse(JSON.stringify(mergedSettings));
+
+      for (const [path, value] of Object.entries(aiResponse.changes)) {
+        const parts = path.split('.');
+        let obj = updatedSettings;
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (!obj[parts[i]]) obj[parts[i]] = {};
+          obj = obj[parts[i]];
+        }
+        obj[parts[parts.length - 1]] = value;
+      }
+
+      // Save to database
+      await pool.query(
+        'UPDATE companies SET payroll_settings = $1, updated_at = NOW() WHERE id = $2',
+        [updatedSettings, companyId]
+      );
+
+      appliedChanges = aiResponse.changes;
+      aiResponse.reply += '\n\n✅ Changes have been applied successfully.';
+    }
+
+    res.json({
+      reply: aiResponse.reply,
+      changes: aiResponse.changes,
+      applied: appliedChanges !== null,
+      applied_changes: appliedChanges,
+      needs_confirmation: aiResponse.needs_confirmation || false,
+      confirmation_message: aiResponse.confirmation_message,
+      current_settings: appliedChanges ?
+        (await pool.query('SELECT payroll_settings FROM companies WHERE id = $1', [companyId])).rows[0].payroll_settings :
+        mergedSettings
+    });
+
+  } catch (error) {
+    console.error('Settings assistant error:', error);
+    res.status(500).json({ error: 'AI assistant failed: ' + error.message });
+  }
+});
+
+/**
+ * GET /api/payroll/ai/settings
+ * Get current payroll settings for the company
+ */
+router.get('/settings', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    const result = await pool.query(
+      'SELECT name, payroll_settings FROM companies WHERE id = $1',
+      [companyId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const defaultSettings = {
+      features: {
+        auto_ot_from_clockin: true,
+        auto_ph_pay: true,
+        auto_claims_linking: true,
+        unpaid_leave_deduction: true,
+        salary_carry_forward: true,
+        flexible_commissions: true,
+        flexible_allowances: true,
+        indoor_sales_logic: false,
+        ytd_pcb_calculation: true,
+        require_approval: false
+      },
+      rates: {
+        ot_multiplier: 1.0,
+        ph_multiplier: 1.0,
+        indoor_sales_basic: 4000,
+        indoor_sales_commission_rate: 6,
+        standard_work_hours: 8,
+        standard_work_days: 22
+      },
+      statutory: {
+        epf_enabled: true,
+        socso_enabled: true,
+        eis_enabled: true,
+        pcb_enabled: true,
+        statutory_on_ot: false,
+        statutory_on_ph_pay: false,
+        statutory_on_allowance: false,
+        statutory_on_incentive: false
+      }
+    };
+
+    const currentSettings = result.rows[0].payroll_settings || {};
+    const mergedSettings = {
+      features: { ...defaultSettings.features, ...currentSettings.features },
+      rates: { ...defaultSettings.rates, ...currentSettings.rates },
+      statutory: { ...defaultSettings.statutory, ...currentSettings.statutory }
+    };
+
+    res.json({
+      company_name: result.rows[0].name,
+      settings: mergedSettings
+    });
+
+  } catch (error) {
+    console.error('Get settings error:', error);
+    res.status(500).json({ error: 'Failed to get settings: ' + error.message });
+  }
+});
+
 module.exports = router;

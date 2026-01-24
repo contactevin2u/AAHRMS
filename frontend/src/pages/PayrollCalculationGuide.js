@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
+import { payrollAIApi } from '../api';
 import './PayrollCalculationGuide.css';
 
 // SOCSO Contribution Table (exact copy from backend)
@@ -129,6 +130,79 @@ function PayrollCalculationGuide() {
   const [testOTHours, setTestOTHours] = useState(10);
   const [testUnpaidDays, setTestUnpaidDays] = useState(0);
 
+  // AI Assistant state
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentSettings, setCurrentSettings] = useState(null);
+  const chatEndRef = useRef(null);
+
+  // Load current settings on mount
+  useEffect(() => {
+    if (activeSection === 'ai') {
+      loadSettings();
+    }
+  }, [activeSection]);
+
+  // Scroll to bottom of chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const loadSettings = async () => {
+    try {
+      const res = await payrollAIApi.getSettings();
+      setCurrentSettings(res.data.settings);
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return;
+
+    const userMessage = inputMessage.trim();
+    setInputMessage('');
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setIsLoading(true);
+
+    try {
+      const conversationHistory = messages.map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+
+      const res = await payrollAIApi.chat(userMessage, conversationHistory);
+
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: res.data.reply,
+        changes: res.data.changes,
+        applied: res.data.applied,
+        needsConfirmation: res.data.needs_confirmation
+      }]);
+
+      if (res.data.applied && res.data.current_settings) {
+        setCurrentSettings(res.data.current_settings);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        error: true
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
   // Calculate EPF (exact same as backend)
   const calculateEPF = (grossSalary, age = 30) => {
     let employeeRate, employerRate;
@@ -189,6 +263,7 @@ function PayrollCalculationGuide() {
   const totalDeductions = epf.employee + socso.employee + eis.employee;
 
   const sections = [
+    { id: 'ai', label: 'AI Assistant' },
     { id: 'gross', label: 'Gross Salary' },
     { id: 'statutory', label: 'Statutory Base' },
     { id: 'epf', label: 'EPF (KWSP)' },
@@ -221,6 +296,103 @@ function PayrollCalculationGuide() {
       </div>
 
       <div className="calc-guide-content">
+        {/* AI ASSISTANT */}
+        {activeSection === 'ai' && (
+          <div className="calc-section ai-section">
+            <h2>AI Payroll Assistant</h2>
+            <p className="ai-description">
+              Ask questions about payroll calculations or request changes to settings.
+              The AI will explain and can apply changes directly to your payroll configuration.
+            </p>
+
+            {/* Current Settings Display */}
+            {currentSettings && (
+              <div className="current-settings">
+                <h3>Current Settings</h3>
+                <div className="settings-grid">
+                  <div className="settings-group">
+                    <h4>Statutory Contributions</h4>
+                    <ul>
+                      <li>EPF: {currentSettings.statutory?.epf_enabled ? 'Enabled' : 'Disabled'}</li>
+                      <li>SOCSO: {currentSettings.statutory?.socso_enabled ? 'Enabled' : 'Disabled'}</li>
+                      <li>EIS: {currentSettings.statutory?.eis_enabled ? 'Enabled' : 'Disabled'}</li>
+                      <li>PCB: {currentSettings.statutory?.pcb_enabled ? 'Enabled' : 'Disabled'}</li>
+                    </ul>
+                  </div>
+                  <div className="settings-group">
+                    <h4>Statutory Base Includes</h4>
+                    <ul>
+                      <li>OT: {currentSettings.statutory?.statutory_on_ot ? 'Yes' : 'No'}</li>
+                      <li>PH Pay: {currentSettings.statutory?.statutory_on_ph_pay ? 'Yes' : 'No'}</li>
+                      <li>Allowances: {currentSettings.statutory?.statutory_on_allowance ? 'Yes' : 'No'}</li>
+                      <li>Incentives: {currentSettings.statutory?.statutory_on_incentive ? 'Yes' : 'No'}</li>
+                    </ul>
+                  </div>
+                  <div className="settings-group">
+                    <h4>Rates</h4>
+                    <ul>
+                      <li>OT Multiplier: {currentSettings.rates?.ot_multiplier}x</li>
+                      <li>PH Multiplier: {currentSettings.rates?.ph_multiplier}x</li>
+                      <li>Work Hours/Day: {currentSettings.rates?.standard_work_hours}</li>
+                      <li>Work Days/Month: {currentSettings.rates?.standard_work_days}</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Chat Interface */}
+            <div className="ai-chat">
+              <div className="chat-messages">
+                {messages.length === 0 && (
+                  <div className="chat-welcome">
+                    <p>Hello! I can help you with:</p>
+                    <ul>
+                      <li>Understanding payroll calculations</li>
+                      <li>Changing statutory contribution settings</li>
+                      <li>Adjusting OT and PH pay rates</li>
+                      <li>Configuring what's included in EPF/SOCSO/EIS</li>
+                    </ul>
+                    <p>Try asking: "Include PH pay in EPF calculation" or "What is the current OT multiplier?"</p>
+                  </div>
+                )}
+                {messages.map((msg, idx) => (
+                  <div key={idx} className={`chat-message ${msg.role}`}>
+                    <div className="message-content">
+                      {msg.content}
+                      {msg.applied && (
+                        <span className="applied-badge">Changes Applied</span>
+                      )}
+                      {msg.needsConfirmation && (
+                        <span className="confirm-badge">Awaiting Confirmation</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="chat-message assistant">
+                    <div className="message-content typing">Thinking...</div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="chat-input">
+                <textarea
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Ask about payroll calculations or request changes..."
+                  rows="2"
+                  disabled={isLoading}
+                />
+                <button onClick={sendMessage} disabled={isLoading || !inputMessage.trim()}>
+                  {isLoading ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* GROSS SALARY */}
         {activeSection === 'gross' && (
           <div className="calc-section">

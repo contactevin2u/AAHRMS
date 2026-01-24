@@ -446,6 +446,15 @@ export const commissionApi = {
   getIndoorSalesDepartments: () => api.get('/commission/departments'),
 };
 
+// Payroll AI Assistant
+export const payrollAIApi = {
+  getSettings: () => api.get('/payroll/ai/settings'),
+  chat: (message, conversationHistory = []) => api.post('/payroll/ai/settings-assistant', {
+    message,
+    conversation_history: conversationHistory
+  }),
+};
+
 // Public Holidays Management
 export const publicHolidaysApi = {
   getAll: (params) => api.get('/public-holidays', { params }),
