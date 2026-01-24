@@ -1,21 +1,23 @@
 /**
  * Public Holiday Notifier Job
  *
- * Sends notifications to employees who don't have work scheduled on public holidays.
- * Employees with a schedule on that day (need to work) will NOT receive the notification.
+ * Sends notifications to employees whose outlet/department is NOT working on public holidays.
+ * If an outlet/department has ANY schedules on that day, all employees in that outlet/department
+ * will NOT receive the notification (they may need to work).
  */
 
 const pool = require('../db');
 
 /**
- * Send public holiday notifications to employees without schedules
+ * Send public holiday notifications to employees in outlets/departments that are closed
  * @param {number} daysAhead - How many days ahead to check for holidays (default: 1)
  */
 async function sendPublicHolidayNotifications(daysAhead = 1) {
   const results = {
     holidaysProcessed: 0,
     notificationsSent: 0,
-    employeesSkipped: 0, // Employees who have schedules (need to work)
+    outletsWorking: 0, // Outlets/departments that have schedules (working)
+    outletsClosed: 0,  // Outlets/departments that are closed
     errors: []
   };
 
@@ -30,7 +32,7 @@ async function sendPublicHolidayNotifications(daysAhead = 1) {
 
     // Get all public holidays for the target date across all companies
     const holidaysResult = await pool.query(`
-      SELECT ph.id, ph.company_id, ph.name, ph.date, c.name as company_name
+      SELECT ph.id, ph.company_id, ph.name, ph.date, c.name as company_name, c.grouping_type
       FROM public_holidays ph
       JOIN companies c ON ph.company_id = c.id
       WHERE ph.date = $1
@@ -45,75 +47,158 @@ async function sendPublicHolidayNotifications(daysAhead = 1) {
       results.holidaysProcessed++;
       console.log(`[PublicHolidayNotifier] Processing holiday: ${holiday.name} for ${holiday.company_name}`);
 
-      // Get all active employees for this company
-      const employeesResult = await pool.query(`
-        SELECT e.id, e.name, e.outlet_id
-        FROM employees e
-        WHERE e.company_id = $1
-          AND e.status = 'active'
-      `, [holiday.company_id]);
+      // Format the date nicely
+      const holidayDate = new Date(holiday.date);
+      const formattedDate = holidayDate.toLocaleDateString('en-MY', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
 
-      for (const employee of employeesResult.rows) {
-        // Check if employee has a schedule on this date (means they need to work)
-        const scheduleResult = await pool.query(`
-          SELECT id FROM schedules
-          WHERE employee_id = $1
-            AND schedule_date = $2
-            AND status IN ('scheduled', 'completed')
-        `, [employee.id, holiday.date]);
+      if (holiday.grouping_type === 'outlet') {
+        // Outlet-based company (e.g., Mimix)
+        // Check each outlet to see if it has schedules on this day
+        const outletsResult = await pool.query(`
+          SELECT id, name FROM outlets WHERE company_id = $1
+        `, [holiday.company_id]);
 
-        if (scheduleResult.rows.length > 0) {
-          // Employee has schedule - they need to work, skip notification
-          results.employeesSkipped++;
-          continue;
+        for (const outlet of outletsResult.rows) {
+          // Check if this outlet has ANY schedules on the holiday
+          const outletSchedules = await pool.query(`
+            SELECT COUNT(*) as count FROM schedules
+            WHERE outlet_id = $1
+              AND schedule_date = $2
+              AND status IN ('scheduled', 'completed')
+          `, [outlet.id, holiday.date]);
+
+          const hasSchedules = parseInt(outletSchedules.rows[0].count) > 0;
+
+          if (hasSchedules) {
+            // Outlet is working - don't notify employees in this outlet
+            results.outletsWorking++;
+            console.log(`[PublicHolidayNotifier] Outlet ${outlet.name} is working on ${holiday.name} - skipping notifications`);
+            continue;
+          }
+
+          // Outlet is closed - notify all employees in this outlet
+          results.outletsClosed++;
+          console.log(`[PublicHolidayNotifier] Outlet ${outlet.name} is closed on ${holiday.name} - sending notifications`);
+
+          const employeesResult = await pool.query(`
+            SELECT id, name FROM employees
+            WHERE outlet_id = $1 AND status = 'active'
+          `, [outlet.id]);
+
+          for (const employee of employeesResult.rows) {
+            await sendHolidayNotification(employee.id, holiday, formattedDate, results);
+          }
+        }
+      } else {
+        // Department-based company (e.g., AA Alive)
+        // Check each department to see if it has schedules on this day
+        const deptsResult = await pool.query(`
+          SELECT id, name FROM departments WHERE company_id = $1
+        `, [holiday.company_id]);
+
+        for (const dept of deptsResult.rows) {
+          // Check if this department has ANY schedules on the holiday
+          const deptSchedules = await pool.query(`
+            SELECT COUNT(*) as count FROM schedules s
+            JOIN employees e ON s.employee_id = e.id
+            WHERE e.department_id = $1
+              AND s.schedule_date = $2
+              AND s.status IN ('scheduled', 'completed')
+          `, [dept.id, holiday.date]);
+
+          const hasSchedules = parseInt(deptSchedules.rows[0].count) > 0;
+
+          if (hasSchedules) {
+            // Department is working - don't notify employees in this department
+            results.outletsWorking++;
+            console.log(`[PublicHolidayNotifier] Department ${dept.name} is working on ${holiday.name} - skipping notifications`);
+            continue;
+          }
+
+          // Department is closed - notify all employees in this department
+          results.outletsClosed++;
+          console.log(`[PublicHolidayNotifier] Department ${dept.name} is closed on ${holiday.name} - sending notifications`);
+
+          const employeesResult = await pool.query(`
+            SELECT id, name FROM employees
+            WHERE department_id = $1 AND status = 'active'
+          `, [dept.id]);
+
+          for (const employee of employeesResult.rows) {
+            await sendHolidayNotification(employee.id, holiday, formattedDate, results);
+          }
         }
 
-        // Check if notification already sent for this holiday
-        const existingNotif = await pool.query(`
-          SELECT id FROM notifications
-          WHERE employee_id = $1
-            AND reference_type = 'public_holiday'
-            AND reference_id = $2
-        `, [employee.id, holiday.id]);
+        // Also handle employees without department (if any)
+        const noDeptEmployees = await pool.query(`
+          SELECT id, name FROM employees
+          WHERE company_id = $1 AND department_id IS NULL AND status = 'active'
+        `, [holiday.company_id]);
 
-        if (existingNotif.rows.length > 0) {
-          // Notification already sent
-          continue;
+        for (const employee of noDeptEmployees.rows) {
+          // Check if employee has individual schedule
+          const empSchedule = await pool.query(`
+            SELECT COUNT(*) as count FROM schedules
+            WHERE employee_id = $1 AND schedule_date = $2 AND status IN ('scheduled', 'completed')
+          `, [employee.id, holiday.date]);
+
+          if (parseInt(empSchedule.rows[0].count) === 0) {
+            await sendHolidayNotification(employee.id, holiday, formattedDate, results);
+          }
         }
-
-        // Format the date nicely
-        const holidayDate = new Date(holiday.date);
-        const formattedDate = holidayDate.toLocaleDateString('en-MY', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric'
-        });
-
-        // Send notification
-        await pool.query(`
-          INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `, [
-          employee.id,
-          'public_holiday',
-          `Public Holiday: ${holiday.name}`,
-          `No work on ${formattedDate}. Enjoy your holiday!`,
-          'public_holiday',
-          holiday.id
-        ]);
-
-        results.notificationsSent++;
       }
     }
 
-    console.log(`[PublicHolidayNotifier] Completed: ${results.notificationsSent} notifications sent, ${results.employeesSkipped} employees skipped (working)`);
+    console.log(`[PublicHolidayNotifier] Completed: ${results.notificationsSent} notifications sent`);
+    console.log(`[PublicHolidayNotifier] Outlets/Departments working: ${results.outletsWorking}, closed: ${results.outletsClosed}`);
     return results;
 
   } catch (error) {
     console.error('[PublicHolidayNotifier] Error:', error);
     results.errors.push(error.message);
     return results;
+  }
+}
+
+/**
+ * Helper function to send notification to an employee
+ */
+async function sendHolidayNotification(employeeId, holiday, formattedDate, results) {
+  try {
+    // Check if notification already sent for this holiday
+    const existingNotif = await pool.query(`
+      SELECT id FROM notifications
+      WHERE employee_id = $1
+        AND reference_type = 'public_holiday'
+        AND reference_id = $2
+    `, [employeeId, holiday.id]);
+
+    if (existingNotif.rows.length > 0) {
+      // Notification already sent
+      return;
+    }
+
+    // Send notification
+    await pool.query(`
+      INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [
+      employeeId,
+      'public_holiday',
+      `Public Holiday: ${holiday.name}`,
+      `No work on ${formattedDate}. Enjoy your holiday!`,
+      'public_holiday',
+      holiday.id
+    ]);
+
+    results.notificationsSent++;
+  } catch (error) {
+    console.error(`[PublicHolidayNotifier] Error sending notification to employee ${employeeId}:`, error);
   }
 }
 
