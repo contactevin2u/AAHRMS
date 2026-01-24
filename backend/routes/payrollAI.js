@@ -475,6 +475,29 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Log the AI payroll changes
+    const successfulChanges = results.filter(r => r.success);
+    if (successfulChanges.length > 0) {
+      const changeCategories = [...new Set(successfulChanges.map(c => c.field))];
+      const summary = successfulChanges.length === 1
+        ? `Changed ${successfulChanges[0].field} for ${successfulChanges[0].employee_name}`
+        : `Changed ${changeCategories.join(', ')} for ${successfulChanges.length} employees`;
+
+      await pool.query(`
+        INSERT INTO ai_change_logs (company_id, change_type, category, summary, changes, affected_employees, payroll_run_id, changed_by, changed_by_name)
+        VALUES ($1, 'payroll', $2, $3, $4, $5, $6, $7, $8)
+      `, [
+        companyId,
+        changeCategories.join(', '),
+        summary,
+        JSON.stringify(successfulChanges),
+        successfulChanges.length,
+        run_id,
+        req.adminId,
+        req.adminName || 'Admin'
+      ]);
+    }
+
     // Get updated run and items for display
     const updatedRun = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [run_id]);
 
@@ -990,6 +1013,20 @@ Be helpful, explain calculations, and warn about impacts of changes.`;
         [updatedSettings, companyId]
       );
 
+      // Log the change
+      const changeCategories = Object.keys(aiResponse.changes).map(k => k.split('.')[0]).filter((v, i, a) => a.indexOf(v) === i);
+      await pool.query(`
+        INSERT INTO ai_change_logs (company_id, change_type, category, summary, changes, changed_by, changed_by_name)
+        VALUES ($1, 'settings', $2, $3, $4, $5, $6)
+      `, [
+        companyId,
+        changeCategories.join(', '),
+        aiResponse.reply.split('\n')[0].substring(0, 200), // First line as summary
+        aiResponse.changes,
+        req.adminId,
+        req.adminName || 'Admin'
+      ]);
+
       appliedChanges = aiResponse.changes;
       aiResponse.reply += '\n\n✅ Changes have been applied successfully.';
     }
@@ -1081,6 +1118,92 @@ router.get('/settings', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Get settings error:', error);
     res.status(500).json({ error: 'Failed to get settings: ' + error.message });
+  }
+});
+
+/**
+ * GET /api/payroll/ai/change-logs
+ * Get AI change logs for the company
+ */
+router.get('/change-logs', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    const { type, limit = 50, offset = 0 } = req.query;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    let query = `
+      SELECT acl.*, pr.month as payroll_month, pr.year as payroll_year
+      FROM ai_change_logs acl
+      LEFT JOIN payroll_runs pr ON acl.payroll_run_id = pr.id
+      WHERE acl.company_id = $1
+    `;
+    const params = [companyId];
+
+    if (type) {
+      query += ` AND acl.change_type = $${params.length + 1}`;
+      params.push(type);
+    }
+
+    query += ` ORDER BY acl.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    const result = await pool.query(query, params);
+
+    // Get total count
+    let countQuery = 'SELECT COUNT(*) FROM ai_change_logs WHERE company_id = $1';
+    const countParams = [companyId];
+    if (type) {
+      countQuery += ' AND change_type = $2';
+      countParams.push(type);
+    }
+    const countResult = await pool.query(countQuery, countParams);
+
+    res.json({
+      logs: result.rows,
+      total: parseInt(countResult.rows[0].count),
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (error) {
+    console.error('Get change logs error:', error);
+    res.status(500).json({ error: 'Failed to get change logs: ' + error.message });
+  }
+});
+
+/**
+ * GET /api/payroll/ai/change-logs/:id
+ * Get a specific AI change log entry
+ */
+router.get('/change-logs/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    const { id } = req.params;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    const result = await pool.query(`
+      SELECT acl.*, pr.month as payroll_month, pr.year as payroll_year, c.name as company_name
+      FROM ai_change_logs acl
+      LEFT JOIN payroll_runs pr ON acl.payroll_run_id = pr.id
+      LEFT JOIN companies c ON acl.company_id = c.id
+      WHERE acl.id = $1 AND acl.company_id = $2
+    `, [id, companyId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Change log not found' });
+    }
+
+    res.json(result.rows[0]);
+
+  } catch (error) {
+    console.error('Get change log error:', error);
+    res.status(500).json({ error: 'Failed to get change log: ' + error.message });
   }
 });
 

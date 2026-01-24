@@ -9,6 +9,7 @@ import EmployeeAdd from './pages/Employees/EmployeeAdd';
 import Payroll from './pages/Payroll';
 import PayrollUnified from './pages/PayrollUnified';
 import PayrollCalculationGuide from './pages/PayrollCalculationGuide';
+import AIChangeLogs from './pages/AIChangeLogs';
 import SalaryEntry from './pages/SalaryEntry';
 import Payslip from './pages/Payslip';
 import Departments from './pages/Departments';
@@ -207,6 +208,14 @@ function App() {
           element={
             <ProtectedRoute>
               <PayrollCalculationGuide />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/ai-change-logs"
+          element={
+            <ProtectedRoute>
+              <AIChangeLogs />
             </ProtectedRoute>
           }
         />

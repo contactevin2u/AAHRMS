@@ -72,7 +72,7 @@ function Layout({ children }) {
     const path = location.pathname;
     if (path.includes('/employees') || path.includes('/leave') || path.includes('/claims') || path.includes('/attendance') || path.includes('/schedules')) {
       setExpandedSection('people');
-    } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales') || path.includes('/payroll-guide')) {
+    } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales') || path.includes('/payroll-guide') || path.includes('/ai-change-logs')) {
       setExpandedSection('payroll');
     } else if (path.includes('/resignations') || path.includes('/letters') || path.includes('/departments') || path.includes('/feedback') || path.includes('/benefits') || path.includes('/public-holidays')) {
       setExpandedSection('hr');
@@ -238,6 +238,9 @@ function Layout({ children }) {
                 </NavLink>
                 <NavLink to="/admin/payroll-guide" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                   Calculation Guide
+                </NavLink>
+                <NavLink to="/admin/ai-change-logs" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  AI Change History
                 </NavLink>
                 {!usesOutlets() && (
                   <NavLink to="/admin/sales-entry" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
