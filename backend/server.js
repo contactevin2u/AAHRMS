@@ -34,6 +34,7 @@ const positionsRoutes = require('./routes/positions');
 const commissionRoutes = require('./routes/commission');  // Indoor Sales commissions
 const advancesRoutes = require('./routes/advances');  // Salary Advances
 const payrollAIRoutes = require('./routes/payrollAI');  // AI Payroll Assistant
+const publicHolidaysRoutes = require('./routes/publicHolidays');  // Public Holidays Management
 
 // Scheduled jobs
 const { initScheduler, triggerAutoClockOut } = require('./jobs/scheduler');
@@ -85,6 +86,7 @@ app.use('/api/positions', positionsRoutes);  // Job Positions
 app.use('/api/commission', commissionRoutes);  // Indoor Sales commissions
 app.use('/api/advances', advancesRoutes);  // Salary Advances
 app.use('/api/payroll/ai', payrollAIRoutes);  // AI Payroll Assistant
+app.use('/api/public-holidays', publicHolidaysRoutes);  // Public Holidays Management
 
 // Health check
 app.get('/api/health', (req, res) => {

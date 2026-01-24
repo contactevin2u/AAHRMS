@@ -74,7 +74,7 @@ function Layout({ children }) {
       setExpandedSection('people');
     } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales') || path.includes('/payroll-guide')) {
       setExpandedSection('payroll');
-    } else if (path.includes('/resignations') || path.includes('/letters') || path.includes('/departments') || path.includes('/feedback') || path.includes('/benefits')) {
+    } else if (path.includes('/resignations') || path.includes('/letters') || path.includes('/departments') || path.includes('/feedback') || path.includes('/benefits') || path.includes('/public-holidays')) {
       setExpandedSection('hr');
     } else if (path.includes('/users') || path.includes('/roles') || path.includes('/companies') || path.includes('/settings') || path.includes('/password-status')) {
       setExpandedSection('system');
@@ -262,6 +262,9 @@ function Layout({ children }) {
                 </NavLink>
                 <NavLink to="/admin/resignations" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                   Resignations
+                </NavLink>
+                <NavLink to="/admin/public-holidays" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Public Holidays
                 </NavLink>
                 {!usesOutlets() && (
                   <NavLink to="/admin/departments" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>

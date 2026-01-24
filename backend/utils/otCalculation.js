@@ -49,7 +49,7 @@ async function getOTRules(companyId, departmentId = null) {
 }
 
 /**
- * Get public holidays for a company in a specific month
+ * Get public holidays for a company in a specific month (only those with extra_pay enabled)
  */
 async function getPublicHolidays(companyId, month, year) {
   const result = await pool.query(`
@@ -57,6 +57,7 @@ async function getPublicHolidays(companyId, month, year) {
     WHERE company_id = $1
       AND EXTRACT(MONTH FROM date) = $2
       AND EXTRACT(YEAR FROM date) = $3
+      AND extra_pay = true
   `, [companyId, month, year]);
 
   return result.rows.map(r => r.date.toISOString().split('T')[0]);
@@ -67,15 +68,21 @@ async function getPublicHolidays(companyId, month, year) {
  * @param {boolean} onlyApprovedOT - If true, only count OT from records where ot_approved = true
  */
 async function getClockRecords(employeeId, startDate, endDate, onlyApprovedOT = true) {
+  // The table uses work_date + clock_in_1/clock_out_1 format
+  // OT is pre-calculated and stored in ot_minutes column
   const result = await pool.query(`
     SELECT *,
+      (work_date + clock_in_1) as clock_in_time,
+      (work_date + clock_out_1) as clock_out_time,
+      COALESCE(ot_minutes, 0) / 60.0 as pre_calculated_ot_hours,
       CASE WHEN ot_approved = true THEN true ELSE false END as is_ot_approved
     FROM clock_in_records
     WHERE employee_id = $1
-      AND clock_in_time >= $2
-      AND clock_in_time <= $3
-      AND status IN ('clocked_out', 'approved', 'completed', 'session_ended')
-    ORDER BY clock_in_time
+      AND work_date >= $2::date
+      AND work_date <= $3::date
+      AND clock_in_1 IS NOT NULL
+      AND clock_out_1 IS NOT NULL
+    ORDER BY work_date
   `, [employeeId, startDate, endDate]);
 
   // If onlyApprovedOT is true, mark records so OT won't be counted for unapproved
@@ -227,46 +234,52 @@ async function calculateOTFromClockIn(employeeId, companyId, departmentId, perio
       ot_counted: false  // Whether OT was counted for payroll
     };
 
-    // Calculate OT if worked more than threshold (7.5 hours excluding break)
-    if (workedHours > rules.ot_threshold_hours) {
+    // Use pre-calculated OT from ot_minutes field if available
+    // Otherwise calculate from worked hours vs threshold
+    let otHours = 0;
+    if (record.pre_calculated_ot_hours && record.pre_calculated_ot_hours > 0) {
+      // Use pre-calculated OT from database (ot_minutes / 60)
+      otHours = parseFloat(record.pre_calculated_ot_hours) || 0;
+      dailyBreakdown.ot_hours = otHours;
+      dailyBreakdown.raw_ot_hours = otHours;
+      dailyBreakdown.ot_source = 'pre_calculated';
+    } else if (workedHours > rules.ot_threshold_hours) {
+      // Calculate OT from worked hours
       const rawOtHours = workedHours - rules.ot_threshold_hours;
 
       // Apply OT rounding: 0.5hr increments, min 1hr, round down
-      // e.g., 0.5hr OT = 0 (below min), 1hr 15min = 1hr, 1hr 45min = 1.5hr
       const minOtHours = rules.min_ot_hours || 1.0;
-      const otHours = roundOTHours(rawOtHours, minOtHours);
+      otHours = roundOTHours(rawOtHours, minOtHours);
 
       dailyBreakdown.ot_hours = otHours;
-      dailyBreakdown.raw_ot_hours = Math.round(rawOtHours * 100) / 100; // For reference
+      dailyBreakdown.raw_ot_hours = Math.round(rawOtHours * 100) / 100;
+      dailyBreakdown.ot_source = 'calculated';
+    }
 
-      // Only count OT for payroll if approved (record.count_ot flag) AND has valid OT hours
-      const shouldCountOT = record.count_ot === true && otHours > 0;
-      dailyBreakdown.ot_counted = shouldCountOT;
+    // Only count OT for payroll if approved (record.count_ot flag) AND has valid OT hours
+    const shouldCountOT = record.count_ot === true && otHours > 0;
+    dailyBreakdown.ot_counted = shouldCountOT;
 
-      // Only assign OT type if there are valid OT hours (after min threshold check)
-      if (otHours > 0) {
-        if (isPublicHoliday) {
-          if (rules.ot_ph_after_hours_multiplier) {
-            // Mimix logic: PH work within normal hours = 2.0x, after hours = 3.0x
-            // For simplicity, we consider all OT hours as "after normal hours"
-            if (shouldCountOT) otPhAfterHours += otHours;
-            dailyBreakdown.ot_type = 'ph_after_hours';
-            dailyBreakdown.ot_multiplier = parseFloat(rules.ot_ph_after_hours_multiplier);
-          } else {
-            // All PH OT at 3.0x
-            if (shouldCountOT) otPhHours += otHours;
-            dailyBreakdown.ot_type = 'ph';
-            dailyBreakdown.ot_multiplier = parseFloat(rules.ot_ph_multiplier);
-          }
-        } else if (isWeekend) {
-          if (shouldCountOT) otWeekendHours += otHours;
-          dailyBreakdown.ot_type = 'weekend';
-          dailyBreakdown.ot_multiplier = parseFloat(rules.ot_weekend_multiplier || rules.ot_normal_multiplier);
+    // Assign OT type if there are valid OT hours
+    if (otHours > 0) {
+      if (isPublicHoliday) {
+        if (rules.ot_ph_after_hours_multiplier) {
+          if (shouldCountOT) otPhAfterHours += otHours;
+          dailyBreakdown.ot_type = 'ph_after_hours';
+          dailyBreakdown.ot_multiplier = parseFloat(rules.ot_ph_after_hours_multiplier);
         } else {
-          if (shouldCountOT) otNormalHours += otHours;
-          dailyBreakdown.ot_type = 'normal';
-          dailyBreakdown.ot_multiplier = parseFloat(rules.ot_normal_multiplier);
+          if (shouldCountOT) otPhHours += otHours;
+          dailyBreakdown.ot_type = 'ph';
+          dailyBreakdown.ot_multiplier = parseFloat(rules.ot_ph_multiplier);
         }
+      } else if (isWeekend) {
+        if (shouldCountOT) otWeekendHours += otHours;
+        dailyBreakdown.ot_type = 'weekend';
+        dailyBreakdown.ot_multiplier = parseFloat(rules.ot_weekend_multiplier || rules.ot_normal_multiplier);
+      } else {
+        if (shouldCountOT) otNormalHours += otHours;
+        dailyBreakdown.ot_type = 'normal';
+        dailyBreakdown.ot_multiplier = parseFloat(rules.ot_normal_multiplier);
       }
     }
 

@@ -446,6 +446,18 @@ export const commissionApi = {
   getIndoorSalesDepartments: () => api.get('/commission/departments'),
 };
 
+// Public Holidays Management
+export const publicHolidaysApi = {
+  getAll: (params) => api.get('/public-holidays', { params }),
+  getByYear: (companyId) => api.get('/public-holidays/by-year', { params: { company_id: companyId } }),
+  create: (data) => api.post('/public-holidays', data),
+  update: (id, data) => api.put(`/public-holidays/${id}`, data),
+  delete: (id) => api.delete(`/public-holidays/${id}`),
+  toggleExtraPay: (id) => api.patch(`/public-holidays/${id}/toggle-extra-pay`),
+  bulkExtraPay: (holidayIds, extraPay) => api.patch('/public-holidays/bulk-extra-pay', { holiday_ids: holidayIds, extra_pay: extraPay }),
+  importMalaysia: (companyId, year) => api.post('/public-holidays/import-malaysia', { company_id: companyId, year }),
+};
+
 // Company Management
 export const companiesApi = {
   getAll: () => api.get('/companies'),

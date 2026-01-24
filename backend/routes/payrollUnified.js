@@ -137,11 +137,12 @@ async function calculatePartTimeHours(employeeId, periodStart, periodEnd, compan
       AND cr.status = 'completed'
   `, [employeeId, periodStart, periodEnd]);
 
-  // Get public holidays for the period
+  // Get public holidays for the period (only those with extra_pay enabled)
   const phResult = await pool.query(`
     SELECT date FROM public_holidays
     WHERE company_id = $1
       AND date BETWEEN $2 AND $3
+      AND extra_pay = true
   `, [companyId, periodStart, periodEnd]);
 
   const phDates = new Set(phResult.rows.map(r => r.date.toISOString().split('T')[0]));

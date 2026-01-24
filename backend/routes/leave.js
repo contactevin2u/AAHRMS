@@ -481,16 +481,17 @@ router.get('/requests/pending-count', authenticateAdmin, async (req, res) => {
 router.post('/requests', authenticateAdmin, async (req, res) => {
   try {
     const { employee_id, leave_type_id, start_date, end_date, reason } = req.body;
+    const adminCompanyId = req.admin.company_id;
 
     // Calculate total days (excluding weekends)
     const start = new Date(start_date);
     const end = new Date(end_date);
     let totalDays = 0;
 
-    // Get public holidays in date range
+    // Get public holidays in date range (for the admin's company)
     const holidays = await pool.query(
-      'SELECT date FROM public_holidays WHERE date BETWEEN $1 AND $2',
-      [start_date, end_date]
+      'SELECT date FROM public_holidays WHERE date BETWEEN $1 AND $2 AND (company_id = $3 OR company_id IS NULL)',
+      [start_date, end_date, adminCompanyId]
     );
     const holidayDates = holidays.rows.map(h => h.date.toISOString().split('T')[0]);
 

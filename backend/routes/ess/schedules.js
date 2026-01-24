@@ -108,6 +108,7 @@ router.get('/today', authenticateEmployee, asyncHandler(async (req, res) => {
 // Get public holidays for a month
 router.get('/public-holidays', authenticateEmployee, asyncHandler(async (req, res) => {
   const { year, month } = req.query;
+  const companyId = req.employee.company_id;
 
   if (!year || !month) {
     return res.status(400).json({ error: 'Year and month are required' });
@@ -117,18 +118,22 @@ router.get('/public-holidays', authenticateEmployee, asyncHandler(async (req, re
   const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
   const result = await pool.query(
-    `SELECT id, name, date
+    `SELECT id, name, date, extra_pay
      FROM public_holidays
      WHERE date BETWEEN $1 AND $2
+       AND (company_id = $3 OR company_id IS NULL)
      ORDER BY date`,
-    [startDate, endDate]
+    [startDate, endDate, companyId]
   );
 
-  // Format as a map for easy lookup
+  // Format as a map for easy lookup (include extra_pay info)
   const holidays = {};
   result.rows.forEach(h => {
     const dateKey = h.date.toISOString().split('T')[0];
-    holidays[dateKey] = h.name;
+    holidays[dateKey] = {
+      name: h.name,
+      extra_pay: h.extra_pay
+    };
   });
 
   res.json(holidays);

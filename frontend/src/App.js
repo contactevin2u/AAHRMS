@@ -34,6 +34,7 @@ import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, 
 import Schedules from './pages/Schedules';
 import IndoorSalesSchedule from './pages/IndoorSalesSchedule';
 import IndoorSalesCommission from './pages/IndoorSalesCommission';
+import PublicHolidays from './pages/PublicHolidays';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -309,6 +310,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Analytics />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/public-holidays"
+          element={
+            <ProtectedRoute>
+              <PublicHolidays />
             </ProtectedRoute>
           }
         />
