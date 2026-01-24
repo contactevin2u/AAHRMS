@@ -387,6 +387,23 @@ router.post('/scheduler/run-probation-reminders', authenticateAdmin, async (req,
   }
 });
 
+// Run public holiday notifier manually
+router.post('/scheduler/run-holiday-notifier', authenticateAdmin, async (req, res) => {
+  try {
+    if (req.admin.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Only super admin can trigger scheduler' });
+    }
+
+    const { triggerPublicHolidayNotifier } = require('../jobs/scheduler');
+    const daysAhead = parseInt(req.body.days_ahead) || 1;
+    const result = await triggerPublicHolidayNotifier(daysAhead);
+    res.json(result);
+  } catch (error) {
+    console.error('Error running holiday notifier:', error);
+    res.status(500).json({ error: 'Failed to run holiday notifier' });
+  }
+});
+
 // Get task history
 router.get('/scheduler/history', authenticateAdmin, async (req, res) => {
   try {

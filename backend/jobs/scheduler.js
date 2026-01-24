@@ -6,6 +6,7 @@
 
 const cron = require('node-cron');
 const { runAutoClockOut } = require('./autoClockOut');
+const { runPublicHolidayNotifier } = require('./publicHolidayNotifier');
 
 /**
  * Initialize all scheduled jobs
@@ -30,9 +31,27 @@ function initScheduler() {
 
   console.log('[Scheduler] Auto clock-out job scheduled for 00:05 daily (MYT)');
 
+  // Public Holiday Notifier Job - Runs at 9:00 AM daily
+  // Notifies employees (without schedules) about tomorrow's public holiday
+  const publicHolidayJob = cron.schedule('0 9 * * *', async () => {
+    console.log('[Scheduler] Running public holiday notifier at', new Date().toISOString());
+    try {
+      const results = await runPublicHolidayNotifier();
+      console.log('[Scheduler] Public holiday notifier completed:', results);
+    } catch (error) {
+      console.error('[Scheduler] Public holiday notifier failed:', error);
+    }
+  }, {
+    scheduled: true,
+    timezone: 'Asia/Kuala_Lumpur'
+  });
+
+  console.log('[Scheduler] Public holiday notifier scheduled for 09:00 daily (MYT)');
+
   // Return jobs for potential manual control
   return {
-    autoClockOutJob
+    autoClockOutJob,
+    publicHolidayJob
   };
 }
 
@@ -57,7 +76,30 @@ async function triggerAutoClockOut() {
   }
 }
 
+/**
+ * Run public holiday notifier manually (for testing or admin trigger)
+ * @param {number} daysAhead - Days ahead to check (default: 1 = tomorrow)
+ */
+async function triggerPublicHolidayNotifier(daysAhead = 1) {
+  console.log('[Scheduler] Manually triggering public holiday notifier for', daysAhead, 'day(s) ahead');
+  try {
+    const { sendPublicHolidayNotifications } = require('./publicHolidayNotifier');
+    const results = await sendPublicHolidayNotifications(daysAhead);
+    return {
+      success: true,
+      ...results
+    };
+  } catch (error) {
+    console.error('[Scheduler] Manual public holiday notifier failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 module.exports = {
   initScheduler,
-  triggerAutoClockOut
+  triggerAutoClockOut,
+  triggerPublicHolidayNotifier
 };
