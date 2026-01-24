@@ -89,6 +89,10 @@ function ESSLayout({ children }) {
     (employeeInfo?.position === 'Manager' || employeeInfo?.employee_role === 'manager');
   const showTeamFeatures = isSupOrMgr || isIndoorSalesManager;
 
+  // Check if employee is manager level (for Team Overview - manager only, not supervisor)
+  const role = employeeInfo?.employee_role;
+  const isManagerLevel = ['manager', 'admin', 'director'].includes(role);
+
   // Get company logo based on company
   const getCompanyLogo = () => {
     const companyId = employeeInfo?.company_id;
@@ -163,8 +167,8 @@ function ESSLayout({ children }) {
           <span className="nav-label">Home</span>
         </NavLink>
 
-        {/* Team Overview for Mimix Managers */}
-        {isMimix && showTeamFeatures && (
+        {/* Team Overview for Mimix Managers only (not supervisors) */}
+        {isMimix && isManagerLevel && (
           <NavLink
             to="/ess/manager-overview"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}

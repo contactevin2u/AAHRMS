@@ -49,6 +49,48 @@ function ESSProtectedRoute({ children }) {
   return token ? children : <Navigate to="/ess/login" replace />;
 }
 
+// ESS Supervisor Protected Route - for supervisor/manager pages (team schedule, OT approval)
+function ESSSupervisorProtectedRoute({ children }) {
+  const token = localStorage.getItem('employeeToken');
+  if (!token) {
+    return <Navigate to="/ess/login" replace />;
+  }
+
+  const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
+  const role = employeeInfo?.employee_role;
+  const isMimix = parseInt(employeeInfo?.company_id) === 3;
+
+  // Allow supervisor, manager, admin, director roles for Mimix company
+  const hasAccess = isMimix && ['supervisor', 'manager', 'admin', 'director'].includes(role);
+
+  if (!hasAccess) {
+    return <Navigate to="/ess/dashboard" replace />;
+  }
+
+  return children;
+}
+
+// ESS Manager Protected Route - for manager only pages (team overview)
+function ESSManagerProtectedRoute({ children }) {
+  const token = localStorage.getItem('employeeToken');
+  if (!token) {
+    return <Navigate to="/ess/login" replace />;
+  }
+
+  const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
+  const role = employeeInfo?.employee_role;
+  const isMimix = parseInt(employeeInfo?.company_id) === 3;
+
+  // Only allow manager, admin, director roles for Mimix company
+  const hasAccess = isMimix && ['manager', 'admin', 'director'].includes(role);
+
+  if (!hasAccess) {
+    return <Navigate to="/ess/dashboard" replace />;
+  }
+
+  return children;
+}
+
 function App() {
   return (
     <div className="App">
@@ -401,25 +443,26 @@ function App() {
         <Route
           path="/ess/team-schedule"
           element={
-            <ESSProtectedRoute>
+            <ESSSupervisorProtectedRoute>
               <ESSTeamSchedule />
-            </ESSProtectedRoute>
+            </ESSSupervisorProtectedRoute>
           }
         />
         <Route
           path="/ess/ot-approval"
           element={
-            <ESSProtectedRoute>
+            <ESSSupervisorProtectedRoute>
               <ESSOTApproval />
-            </ESSProtectedRoute>
+            </ESSSupervisorProtectedRoute>
           }
         />
+        {/* Manager Overview - requires manager role (not supervisor) */}
         <Route
           path="/ess/manager-overview"
           element={
-            <ESSProtectedRoute>
+            <ESSManagerProtectedRoute>
               <ESSManagerOverview />
-            </ESSProtectedRoute>
+            </ESSManagerProtectedRoute>
           }
         />
 
