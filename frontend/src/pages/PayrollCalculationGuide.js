@@ -126,8 +126,14 @@ const TAX_BRACKETS = [
 
 function PayrollCalculationGuide() {
   const [activeSection, setActiveSection] = useState('gross');
+
+  // Get admin's company from localStorage
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isMimix = adminInfo.company_id === 3;
+  const isAAAlive = adminInfo.company_id === 1 || adminInfo.company_id === 2;
+
   // Test Calculator state - Employee Info
-  const [testCompany, setTestCompany] = useState('aa_alive');
+  const [testCompany, setTestCompany] = useState(isMimix ? 'mimix' : 'aa_alive');
   const [testDepartment, setTestDepartment] = useState('office');
   const [testAge, setTestAge] = useState(30);
   const [testMaritalStatus, setTestMaritalStatus] = useState('single');
@@ -887,21 +893,25 @@ function PayrollCalculationGuide() {
                 <div className="input-row">
                   <div className="input-group">
                     <label>Company</label>
-                    <select value={testCompany} onChange={(e) => setTestCompany(e.target.value)}>
-                      <option value="aa_alive">AA Alive</option>
-                      <option value="mimix">Mimix</option>
+                    <select value={testCompany} onChange={(e) => setTestCompany(e.target.value)} disabled>
+                      {isMimix ? (
+                        <option value="mimix">Mimix</option>
+                      ) : (
+                        <option value="aa_alive">AA Alive</option>
+                      )}
                     </select>
                   </div>
-                  <div className="input-group">
-                    <label>Department</label>
-                    <select value={testDepartment} onChange={(e) => setTestDepartment(e.target.value)}>
-                      <option value="office">Office / Admin</option>
-                      <option value="driver">Driver</option>
-                      <option value="packing">Packing Room</option>
-                      <option value="sales">Sales</option>
-                      <option value="crew">Crew (Mimix)</option>
-                    </select>
-                  </div>
+                  {!isMimix && (
+                    <div className="input-group">
+                      <label>Department</label>
+                      <select value={testDepartment} onChange={(e) => setTestDepartment(e.target.value)}>
+                        <option value="office">Office / Admin</option>
+                        <option value="driver">Driver</option>
+                        <option value="packing">Packing Room</option>
+                        <option value="sales">Sales</option>
+                      </select>
+                    </div>
+                  )}
                   <div className="input-group">
                     <label>Age</label>
                     <input type="number" value={testAge} onChange={(e) => setTestAge(parseInt(e.target.value) || 30)} />
@@ -997,13 +1007,13 @@ function PayrollCalculationGuide() {
 
               {/* Company Rules Info */}
               <div className="rules-info">
-                <strong>{testCompany === 'mimix' ? 'Mimix' : 'AA Alive'} Rules:</strong>
-                {testCompany === 'aa_alive' && (testDepartment === 'driver' || testDepartment === 'packing') ? (
-                  <span> OT 1.0x, PH 2.0x (Driver/Packing Room)</span>
-                ) : testCompany === 'aa_alive' ? (
-                  <span className="no-ot"> No OT or PH calculation (Office/Admin)</span>
+                <strong>{isMimix ? 'Mimix' : 'AA Alive'} Rules:</strong>
+                {isMimix ? (
+                  <span> OT 1.5x, PH 2.0x, PH After Hours 3.0x (All staff, requires OT approval)</span>
+                ) : (testDepartment === 'driver' || testDepartment === 'packing') ? (
+                  <span> OT 1.0x, PH 2.0x (Driver/Packing Room only)</span>
                 ) : (
-                  <span> OT 1.5x, PH 2.0x (All departments)</span>
+                  <span className="no-ot"> No OT or PH calculation (Office/Admin/Sales)</span>
                 )}
               </div>
 
