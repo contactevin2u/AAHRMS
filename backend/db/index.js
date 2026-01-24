@@ -869,6 +869,19 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='outlet_id') THEN
           ALTER TABLE payroll_runs ADD COLUMN outlet_id INTEGER REFERENCES outlets(id);
         END IF;
+        -- Add period tracking columns
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='period_start_date') THEN
+          ALTER TABLE payroll_runs ADD COLUMN period_start_date DATE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='period_end_date') THEN
+          ALTER TABLE payroll_runs ADD COLUMN period_end_date DATE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='payment_due_date') THEN
+          ALTER TABLE payroll_runs ADD COLUMN payment_due_date DATE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_runs' AND column_name='period_label') THEN
+          ALTER TABLE payroll_runs ADD COLUMN period_label VARCHAR(100);
+        END IF;
         -- Drop old unique constraint and add new one with department_id
         IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_runs_month_year_key') THEN
           ALTER TABLE payroll_runs DROP CONSTRAINT payroll_runs_month_year_key;
