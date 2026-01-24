@@ -876,6 +876,7 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
         socso_employee: parseFloat(item.socso_employee) || 0,
         eis_employee: parseFloat(item.eis_employee) || 0,
         pcb: parseFloat(item.pcb) || 0,
+        advance_deduction: parseFloat(item.advance_deduction) || 0,
         other_deductions: parseFloat(item.other_deductions) || 0
       },
       employer_contributions: {

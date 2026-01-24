@@ -103,26 +103,64 @@ function ESSPayslips() {
                 {/* Earnings */}
                 <div style={{ marginBottom: '20px' }}>
                   <h4 style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px', textTransform: 'uppercase' }}>Earnings</h4>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span>Basic Salary</span>
-                    <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.basic_salary)}</span>
-                  </div>
-                  {selectedPayslip.allowance > 0 && (
+                  {selectedPayslip.basic_salary > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Basic Salary</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.basic_salary)}</span>
+                    </div>
+                  )}
+                  {(selectedPayslip.allowance > 0 || selectedPayslip.fixed_allowance > 0) && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
                       <span>Allowance</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.allowance)}</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.allowance || selectedPayslip.fixed_allowance)}</span>
                     </div>
                   )}
                   {selectedPayslip.ot_amount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Overtime</span>
+                      <span>Overtime {selectedPayslip.ot_hours > 0 && `(${selectedPayslip.ot_hours} hrs)`}</span>
                       <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.ot_amount)}</span>
                     </div>
                   )}
-                  {selectedPayslip.commission > 0 && (
+                  {selectedPayslip.ph_pay > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Public Holiday Pay</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.ph_pay)}</span>
+                    </div>
+                  )}
+                  {(selectedPayslip.commission > 0 || selectedPayslip.commission_amount > 0) && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
                       <span>Commission</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.commission)}</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.commission || selectedPayslip.commission_amount)}</span>
+                    </div>
+                  )}
+                  {selectedPayslip.trade_commission_amount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Upsell Commission</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.trade_commission_amount)}</span>
+                    </div>
+                  )}
+                  {selectedPayslip.incentive_amount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Incentive</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.incentive_amount)}</span>
+                    </div>
+                  )}
+                  {selectedPayslip.outstation_amount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Outstation Allowance</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.outstation_amount)}</span>
+                    </div>
+                  )}
+                  {selectedPayslip.claims_amount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Claims</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.claims_amount)}</span>
+                    </div>
+                  )}
+                  {selectedPayslip.bonus > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Bonus</span>
+                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.bonus)}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', color: '#059669', fontWeight: '600' }}>
@@ -158,16 +196,59 @@ function ESSPayslips() {
                       <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.pcb)}</span>
                     </div>
                   )}
+                  {selectedPayslip.unpaid_leave_deduction > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Unpaid Leave</span>
+                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.unpaid_leave_deduction)}</span>
+                    </div>
+                  )}
+                  {selectedPayslip.advance_deduction > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Advance Deduction</span>
+                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.advance_deduction)}</span>
+                    </div>
+                  )}
+                  {selectedPayslip.other_deductions > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span>Other Deductions</span>
+                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.other_deductions)}</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', color: '#dc2626', fontWeight: '600' }}>
                     <span>Total Deductions</span>
                     <span>-{formatCurrency(selectedPayslip.total_deductions)}</span>
                   </div>
                 </div>
 
+                {/* Employer Contributions - only show if any exists */}
+                {(selectedPayslip.epf_employer > 0 || selectedPayslip.socso_employer > 0 || selectedPayslip.eis_employer > 0) && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <h4 style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px', textTransform: 'uppercase' }}>Employer Contributions (Reference)</h4>
+                    {selectedPayslip.epf_employer > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                        <span>EPF (Employer)</span>
+                        <span style={{ fontWeight: '600', color: '#64748b' }}>{formatCurrency(selectedPayslip.epf_employer)}</span>
+                      </div>
+                    )}
+                    {selectedPayslip.socso_employer > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                        <span>SOCSO (Employer)</span>
+                        <span style={{ fontWeight: '600', color: '#64748b' }}>{formatCurrency(selectedPayslip.socso_employer)}</span>
+                      </div>
+                    )}
+                    {selectedPayslip.eis_employer > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                        <span>EIS (Employer)</span>
+                        <span style={{ fontWeight: '600', color: '#64748b' }}>{formatCurrency(selectedPayslip.eis_employer)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Net Pay */}
                 <div style={{ background: 'linear-gradient(135deg, #1976d2, #1565c0)', borderRadius: '12px', padding: '16px', color: 'white', textAlign: 'center' }}>
                   <div style={{ fontSize: '14px', opacity: 0.9 }}>Net Pay</div>
-                  <div style={{ fontSize: '28px', fontWeight: '700' }}>{formatCurrency(selectedPayslip.net_salary)}</div>
+                  <div style={{ fontSize: '28px', fontWeight: '700' }}>{formatCurrency(selectedPayslip.net_salary || selectedPayslip.net_pay)}</div>
                 </div>
               </div>
             </div>

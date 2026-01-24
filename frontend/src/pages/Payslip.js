@@ -175,16 +175,40 @@ function Payslip() {
                       <td className="amount">{formatCurrency(payslip.earnings.basic_salary)}</td>
                     </tr>
                   )}
-                  {payslip.earnings.allowance > 0 && (
+                  {(payslip.earnings.allowance > 0 || payslip.earnings.fixed_allowance > 0) && (
                     <tr>
                       <td>Allowance</td>
-                      <td className="amount">{formatCurrency(payslip.earnings.allowance)}</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.allowance || payslip.earnings.fixed_allowance)}</td>
                     </tr>
                   )}
-                  {payslip.earnings.commission > 0 && (
+                  {(payslip.earnings.ot_pay > 0 || payslip.earnings.ot_amount > 0) && (
+                    <tr>
+                      <td>Overtime Pay {payslip.earnings.ot_hours > 0 && `(${payslip.earnings.ot_hours} hrs)`}</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.ot_pay || payslip.earnings.ot_amount)}</td>
+                    </tr>
+                  )}
+                  {payslip.earnings.ph_pay > 0 && (
+                    <tr>
+                      <td>Public Holiday Pay {payslip.earnings.ph_days_worked > 0 && `(${payslip.earnings.ph_days_worked} days)`}</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.ph_pay)}</td>
+                    </tr>
+                  )}
+                  {(payslip.earnings.commission > 0 || payslip.earnings.commission_amount > 0) && (
                     <tr>
                       <td>Commission</td>
-                      <td className="amount">{formatCurrency(payslip.earnings.commission)}</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.commission || payslip.earnings.commission_amount)}</td>
+                    </tr>
+                  )}
+                  {payslip.earnings.trade_commission_amount > 0 && (
+                    <tr>
+                      <td>Upsell Commission</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.trade_commission_amount)}</td>
+                    </tr>
+                  )}
+                  {payslip.earnings.incentive_amount > 0 && (
+                    <tr>
+                      <td>Incentive</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.incentive_amount)}</td>
                     </tr>
                   )}
                   {payslip.earnings.trip_pay > 0 && (
@@ -193,16 +217,16 @@ function Payslip() {
                       <td className="amount">{formatCurrency(payslip.earnings.trip_pay)}</td>
                     </tr>
                   )}
-                  {payslip.earnings.ot_pay > 0 && (
-                    <tr>
-                      <td>Overtime Pay</td>
-                      <td className="amount">{formatCurrency(payslip.earnings.ot_pay)}</td>
-                    </tr>
-                  )}
-                  {payslip.earnings.outstation_pay > 0 && (
+                  {(payslip.earnings.outstation_pay > 0 || payslip.earnings.outstation_amount > 0) && (
                     <tr>
                       <td>Outstation Allowance</td>
-                      <td className="amount">{formatCurrency(payslip.earnings.outstation_pay)}</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.outstation_pay || payslip.earnings.outstation_amount)}</td>
+                    </tr>
+                  )}
+                  {payslip.earnings.claims_amount > 0 && (
+                    <tr>
+                      <td>Claims</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.claims_amount)}</td>
                     </tr>
                   )}
                   {payslip.earnings.bonus > 0 && (
@@ -227,7 +251,7 @@ function Payslip() {
                 <tbody>
                   {payslip.deductions.epf_employee > 0 && (
                     <tr>
-                      <td>EPF (Employee 11%)</td>
+                      <td>EPF (Employee)</td>
                       <td className="amount">{formatCurrency(payslip.deductions.epf_employee)}</td>
                     </tr>
                   )}
@@ -239,7 +263,7 @@ function Payslip() {
                   )}
                   {payslip.deductions.eis_employee > 0 && (
                     <tr>
-                      <td>EIS (Employee 0.2%)</td>
+                      <td>EIS (Employee)</td>
                       <td className="amount">{formatCurrency(payslip.deductions.eis_employee)}</td>
                     </tr>
                   )}
@@ -247,6 +271,18 @@ function Payslip() {
                     <tr>
                       <td>PCB (Income Tax)</td>
                       <td className="amount">{formatCurrency(payslip.deductions.pcb)}</td>
+                    </tr>
+                  )}
+                  {payslip.deductions.unpaid_leave_deduction > 0 && (
+                    <tr>
+                      <td>Unpaid Leave {payslip.deductions.unpaid_leave_days > 0 && `(${payslip.deductions.unpaid_leave_days} days)`}</td>
+                      <td className="amount">{formatCurrency(payslip.deductions.unpaid_leave_deduction)}</td>
+                    </tr>
+                  )}
+                  {payslip.deductions.advance_deduction > 0 && (
+                    <tr>
+                      <td>Advance Deduction</td>
+                      <td className="amount">{formatCurrency(payslip.deductions.advance_deduction)}</td>
                     </tr>
                   )}
                   {payslip.deductions.other_deductions > 0 && (
@@ -266,24 +302,34 @@ function Payslip() {
             </div>
           </div>
 
-          {/* Employer Contributions */}
-          <div className="employer-section">
-            <h3>Employer Contributions (For Reference)</h3>
-            <div className="employer-grid">
-              <div className="contribution-item">
-                <span>EPF (Employer):</span>
-                <span>{formatCurrency(payslip.employer_contributions.epf_employer)}</span>
-              </div>
-              <div className="contribution-item">
-                <span>SOCSO (Employer):</span>
-                <span>{formatCurrency(payslip.employer_contributions.socso_employer)}</span>
-              </div>
-              <div className="contribution-item">
-                <span>EIS (Employer):</span>
-                <span>{formatCurrency(payslip.employer_contributions.eis_employer)}</span>
+          {/* Employer Contributions - only show if any contribution exists */}
+          {(payslip.employer_contributions.epf_employer > 0 ||
+            payslip.employer_contributions.socso_employer > 0 ||
+            payslip.employer_contributions.eis_employer > 0) && (
+            <div className="employer-section">
+              <h3>Employer Contributions (For Reference)</h3>
+              <div className="employer-grid">
+                {payslip.employer_contributions.epf_employer > 0 && (
+                  <div className="contribution-item">
+                    <span>EPF (Employer):</span>
+                    <span>{formatCurrency(payslip.employer_contributions.epf_employer)}</span>
+                  </div>
+                )}
+                {payslip.employer_contributions.socso_employer > 0 && (
+                  <div className="contribution-item">
+                    <span>SOCSO (Employer):</span>
+                    <span>{formatCurrency(payslip.employer_contributions.socso_employer)}</span>
+                  </div>
+                )}
+                {payslip.employer_contributions.eis_employer > 0 && (
+                  <div className="contribution-item">
+                    <span>EIS (Employer):</span>
+                    <span>{formatCurrency(payslip.employer_contributions.eis_employer)}</span>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          )}
 
           {/* Net Pay */}
           <div className="net-pay-section">
