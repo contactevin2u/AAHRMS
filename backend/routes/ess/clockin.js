@@ -685,10 +685,12 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     if (isAAAliveCompany(company_id)) {
       // AA Alive: This is session end, calculate work time and OT
       const empWorkTypeResult = await pool.query(
-        'SELECT work_type FROM employees WHERE id = $1',
+        'SELECT work_type, employment_type FROM employees WHERE id = $1',
         [employeeId]
       );
       const workType = empWorkTypeResult.rows[0]?.work_type || 'full_time';
+      const employmentType = empWorkTypeResult.rows[0]?.employment_type || 'confirmed';
+      const isPartTime = workType === 'part_time' || employmentType === 'part_time';
 
       // Calculate work time for this session
       const updatedRecord = {
@@ -697,8 +699,8 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       };
       const { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
 
-      // OT flagging (only for full-time)
-      const otFlagged = workType === 'full_time' && otMinutes > 0;
+      // OT flagging (only for full-time, part-time employees have no OT)
+      const otFlagged = !isPartTime && otMinutes > 0;
       // AA Alive: auto-approve OT
       const otAutoApproved = otFlagged;
 
@@ -795,12 +797,14 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       throw new ValidationError('You must start a second session (clock in again) before clocking out. If you only worked one session, your day is already complete.');
     }
 
-    // Get employee work_type for hours calculation
+    // Get employee work_type and employment_type for hours calculation
     const empWorkTypeResult = await pool.query(
-      'SELECT work_type FROM employees WHERE id = $1',
+      'SELECT work_type, employment_type FROM employees WHERE id = $1',
       [employeeId]
     );
     const workType = empWorkTypeResult.rows[0]?.work_type || 'full_time';
+    const employmentType = empWorkTypeResult.rows[0]?.employment_type || 'confirmed';
+    const isPartTime = workType === 'part_time' || employmentType === 'part_time';
 
     // Upload photo to Cloudinary
     const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_2');
@@ -814,15 +818,16 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
 
     // Apply work type rules for normal clock-out
     // Full Time: Calculate actual hours, OT after 8.5 hrs (510 minutes)
-    // Part Time: Calculate actual hours, no OT flagging (but keep calculated hours)
+    // Part Time: Calculate actual hours, no OT flagging - salary based on working hours only
     let otFlagged = false;
 
-    if (workType === 'full_time') {
+    if (!isPartTime) {
       // Full Time: OT after 8.5 hours
       otFlagged = otMinutes > 0;
     } else {
-      // Part Time: No OT flagging, just count actual hours
+      // Part Time: No OT flagging, no OT approval needed - just count actual hours for salary
       otFlagged = false;
+      otMinutes = 0; // Part-time has no OT
     }
 
     // AA Alive: auto-approve OT (no approval needed)
@@ -1026,13 +1031,15 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError('You have already clocked out for the day');
   }
 
-  // Get company_id and work_type for Cloudinary folder and hours calculation
+  // Get company_id, work_type, and employment_type for Cloudinary folder and hours calculation
   const empResult = await pool.query(
-    'SELECT company_id, work_type FROM employees WHERE id = $1',
+    'SELECT company_id, work_type, employment_type FROM employees WHERE id = $1',
     [employeeId]
   );
   const company_id = empResult.rows[0]?.company_id || 0;
   const workType = empResult.rows[0]?.work_type || 'full_time';
+  const employmentType = empResult.rows[0]?.employment_type || 'confirmed';
+  const isPartTime = workType === 'part_time' || employmentType === 'part_time';
 
   const locationStr = `${latitude},${longitude}`;
 
@@ -1044,11 +1051,12 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
     ...existingRecord.rows[0],
     clock_out_2: currentTime
   };
-  const { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
+  let { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
 
   // Apply work type rules for normal clock-out
-  // Full Time: OT after 8.5 hrs, Part Time: No OT flagging
-  const otFlagged = workType === 'full_time' && otMinutes > 0;
+  // Full Time: OT after 8.5 hrs, Part Time: No OT flagging - salary based on working hours only
+  const otFlagged = !isPartTime && otMinutes > 0;
+  if (isPartTime) otMinutes = 0; // Part-time has no OT
 
   // AA Alive: auto-approve OT (no approval needed)
   // Mimix: OT requires supervisor approval
@@ -1249,6 +1257,7 @@ router.get('/pending-ot', authenticateEmployee, asyncHandler(async (req, res) =>
        AND cir.ot_approved IS NULL
        AND cir.ot_minutes >= 60
        AND COALESCE(e.work_type, 'full_time') != 'part_time'
+      AND COALESCE(e.employment_type, 'confirmed') != 'part_time'
      ORDER BY cir.work_date DESC`,
     [outletIds]
   );
@@ -1452,7 +1461,8 @@ router.get('/pending-ot-count', authenticateEmployee, asyncHandler(async (req, r
        AND cir.ot_flagged = TRUE
        AND cir.ot_approved IS NULL
        AND cir.ot_minutes >= 60
-       AND COALESCE(e.work_type, 'full_time') != 'part_time'`,
+       AND COALESCE(e.work_type, 'full_time') != 'part_time'
+      AND COALESCE(e.employment_type, 'confirmed') != 'part_time'`,
     [outletIds]
   );
 
