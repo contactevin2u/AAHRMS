@@ -120,27 +120,63 @@ async function getCompanySettings(companyId) {
  * Part-time hourly rate (RM)
  */
 const PART_TIME_HOURLY_RATE = 8.72;
+const PART_TIME_PH_MULTIPLIER = 2.0; // Public holiday rate is 2x
 
 /**
  * Get total work hours for part-time employee from clock-in records
- * Returns: { totalMinutes, totalHours, grossSalary }
+ * Separates normal hours and PH hours for different rates
+ * Returns: { totalMinutes, totalHours, normalHours, phHours, grossSalary, normalPay, phPay }
  */
-async function calculatePartTimeHours(employeeId, periodStart, periodEnd) {
+async function calculatePartTimeHours(employeeId, periodStart, periodEnd, companyId) {
+  // Get all clock-in records for the period
   const result = await pool.query(`
-    SELECT COALESCE(SUM(total_work_minutes), 0) as total_minutes
-    FROM clock_in_records
-    WHERE employee_id = $1
-      AND work_date BETWEEN $2 AND $3
-      AND status = 'completed'
+    SELECT cr.work_date, COALESCE(cr.total_work_minutes, 0) as total_minutes
+    FROM clock_in_records cr
+    WHERE cr.employee_id = $1
+      AND cr.work_date BETWEEN $2 AND $3
+      AND cr.status = 'completed'
   `, [employeeId, periodStart, periodEnd]);
 
-  const totalMinutes = parseFloat(result.rows[0]?.total_minutes || 0);
+  // Get public holidays for the period
+  const phResult = await pool.query(`
+    SELECT date FROM public_holidays
+    WHERE company_id = $1
+      AND date BETWEEN $2 AND $3
+  `, [companyId, periodStart, periodEnd]);
+
+  const phDates = new Set(phResult.rows.map(r => r.date.toISOString().split('T')[0]));
+
+  let normalMinutes = 0;
+  let phMinutes = 0;
+
+  for (const record of result.rows) {
+    const dateStr = record.work_date.toISOString().split('T')[0];
+    const minutes = parseFloat(record.total_minutes) || 0;
+
+    if (phDates.has(dateStr)) {
+      phMinutes += minutes;
+    } else {
+      normalMinutes += minutes;
+    }
+  }
+
+  const totalMinutes = normalMinutes + phMinutes;
   const totalHours = totalMinutes / 60;
-  const grossSalary = Math.round(totalHours * PART_TIME_HOURLY_RATE * 100) / 100;
+  const normalHours = normalMinutes / 60;
+  const phHours = phMinutes / 60;
+
+  // Calculate pay: normal rate for normal days, 2x rate for PH
+  const normalPay = Math.round(normalHours * PART_TIME_HOURLY_RATE * 100) / 100;
+  const phPay = Math.round(phHours * PART_TIME_HOURLY_RATE * PART_TIME_PH_MULTIPLIER * 100) / 100;
+  const grossSalary = Math.round((normalPay + phPay) * 100) / 100;
 
   return {
     totalMinutes,
     totalHours: Math.round(totalHours * 100) / 100,
+    normalHours: Math.round(normalHours * 100) / 100,
+    phHours: Math.round(phHours * 100) / 100,
+    normalPay,
+    phPay,
     grossSalary
   };
 }
@@ -759,14 +795,17 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       let basicSalary = prevPayroll?.basic_salary || parseFloat(emp.basic_salary) || 0;
       let fixedAllowance = prevPayroll?.fixed_allowance || parseFloat(emp.fixed_allowance) || 0;
 
-      // Part-time employee: salary = total work hours × RM 8.72
+      // Part-time employee: salary = total work hours × RM 8.72 (2x on public holidays)
       // Part-time employees don't get fixed salary, allowances, or leave
+      // Check both work_type and employment_type for part-time status
       let partTimeData = null;
-      if (emp.work_type === 'part_time') {
+      const isPartTime = emp.work_type === 'part_time' || emp.employment_type === 'part_time';
+      if (isPartTime) {
         partTimeData = await calculatePartTimeHours(
           emp.id,
           period.start.toISOString().split('T')[0],
-          period.end.toISOString().split('T')[0]
+          period.end.toISOString().split('T')[0],
+          companyId
         );
         basicSalary = partTimeData.grossSalary;
         fixedAllowance = 0; // Part-time no fixed allowance
@@ -777,7 +816,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       let flexAllowance = allowancesMap[emp.id] || 0;
 
       // Part-time employees don't get flexible allowances
-      if (emp.work_type === 'part_time') {
+      if (isPartTime) {
         flexAllowance = 0;
       }
 
@@ -803,7 +842,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       // OT calculation (skip for part-time - they're paid by actual hours worked)
       let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
 
-      if (features.auto_ot_from_clockin && emp.work_type !== 'part_time') {
+      if (features.auto_ot_from_clockin && !isPartTime) {
         try {
           const otResult = await calculateOTFromClockIn(
             emp.id, companyId, emp.department_id,
@@ -818,8 +857,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // PH pay (skip for part-time - they're paid by actual hours worked)
-      if (features.auto_ph_pay && emp.work_type !== 'part_time') {
+      // PH pay for full-time (skip for part-time - they get 2x hourly rate on PH already)
+      if (features.auto_ph_pay && !isPartTime) {
         try {
           phDaysWorked = await calculatePHDaysWorked(
             emp.id, companyId,
@@ -842,7 +881,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       let unpaidDays = 0;
       let scheduleBasedPay = null;
 
-      if (emp.work_type !== 'part_time') {
+      if (!isPartTime) {
         // For outlet-based companies (Mimix), use schedule-based pay calculation
         if (settings.groupingType === 'outlet') {
           try {
