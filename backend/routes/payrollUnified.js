@@ -774,7 +774,10 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error creating all-outlets payroll:', error);
-    res.status(500).json({ error: 'Failed to create payroll runs for all outlets' });
+    res.status(500).json({
+      error: 'Failed to create payroll runs for all outlets',
+      details: error.message
+    });
   } finally {
     client.release();
   }
