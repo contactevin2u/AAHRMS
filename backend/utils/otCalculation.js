@@ -65,24 +65,30 @@ async function getPublicHolidays(companyId, month, year) {
 
 /**
  * Get clock-in records for an employee in a specific period
+ * IMPORTANT: Only returns records for days with a schedule
+ * No schedule = no OT calculation (considered absent)
  * @param {boolean} onlyApprovedOT - If true, only count OT from records where ot_approved = true
  */
 async function getClockRecords(employeeId, startDate, endDate, onlyApprovedOT = true) {
   // The table uses work_date + clock_in_1/clock_out_1 format
   // OT is pre-calculated and stored in ot_minutes column
+  // Only include records where employee has a schedule (no schedule = no pay/OT)
   const result = await pool.query(`
-    SELECT *,
-      (work_date + clock_in_1) as clock_in_time,
-      (work_date + clock_out_1) as clock_out_time,
-      COALESCE(ot_minutes, 0) / 60.0 as pre_calculated_ot_hours,
-      CASE WHEN ot_approved = true THEN true ELSE false END as is_ot_approved
-    FROM clock_in_records
-    WHERE employee_id = $1
-      AND work_date >= $2::date
-      AND work_date <= $3::date
-      AND clock_in_1 IS NOT NULL
-      AND clock_out_1 IS NOT NULL
-    ORDER BY work_date
+    SELECT cr.*,
+      (cr.work_date + cr.clock_in_1) as clock_in_time,
+      (cr.work_date + cr.clock_out_1) as clock_out_time,
+      COALESCE(cr.ot_minutes, 0) / 60.0 as pre_calculated_ot_hours,
+      CASE WHEN cr.ot_approved = true THEN true ELSE false END as is_ot_approved
+    FROM clock_in_records cr
+    INNER JOIN schedules s ON cr.employee_id = s.employee_id
+      AND cr.work_date = s.schedule_date
+      AND s.status IN ('scheduled', 'completed')
+    WHERE cr.employee_id = $1
+      AND cr.work_date >= $2::date
+      AND cr.work_date <= $3::date
+      AND cr.clock_in_1 IS NOT NULL
+      AND cr.clock_out_1 IS NOT NULL
+    ORDER BY cr.work_date
   `, [employeeId, startDate, endDate]);
 
   // If onlyApprovedOT is true, mark records so OT won't be counted for unapproved

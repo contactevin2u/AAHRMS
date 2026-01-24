@@ -126,13 +126,19 @@ const PART_TIME_PH_MULTIPLIER = 2.0; // Public holiday rate is 2x
 /**
  * Get total work hours for part-time employee from clock-in records
  * Separates normal hours and PH hours for different rates
+ * IMPORTANT: Only counts hours from days where employee has a schedule
+ * No schedule = no pay (even if they clocked in)
  * Returns: { totalMinutes, totalHours, normalHours, phHours, grossSalary, normalPay, phPay }
  */
 async function calculatePartTimeHours(employeeId, periodStart, periodEnd, companyId) {
-  // Get all clock-in records for the period
+  // Get clock-in records ONLY for days with a schedule
+  // No schedule = no pay (considered absent even if clocked in)
   const result = await pool.query(`
     SELECT cr.work_date, COALESCE(cr.total_work_minutes, 0) as total_minutes
     FROM clock_in_records cr
+    INNER JOIN schedules s ON cr.employee_id = s.employee_id
+      AND cr.work_date = s.schedule_date
+      AND s.status IN ('scheduled', 'completed')
     WHERE cr.employee_id = $1
       AND cr.work_date BETWEEN $2 AND $3
       AND cr.status = 'completed'
