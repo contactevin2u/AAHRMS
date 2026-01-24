@@ -32,7 +32,7 @@ function initScheduler() {
   console.log('[Scheduler] Auto clock-out job scheduled for 00:05 daily (MYT)');
 
   // Public Holiday Notifier Job - Runs at 9:00 AM daily
-  // Notifies employees (without schedules) about tomorrow's public holiday
+  // Notifies employees 3 days before public holidays (excludes Mimix)
   const publicHolidayJob = cron.schedule('0 9 * * *', async () => {
     console.log('[Scheduler] Running public holiday notifier at', new Date().toISOString());
     try {
