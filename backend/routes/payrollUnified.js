@@ -74,6 +74,7 @@ const DEFAULT_PAYROLL_SETTINGS = {
     eis_enabled: true,
     pcb_enabled: true,
     statutory_on_ot: false,
+    statutory_on_ph_pay: false,
     statutory_on_allowance: false,
     statutory_on_incentive: false
   }
@@ -927,6 +928,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       // Statutory base calculation
       let statutoryBase = basicSalary + commissionAmount;
       if (statutory.statutory_on_ot) statutoryBase += otAmount;
+      if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
       if (statutory.statutory_on_allowance) statutoryBase += totalAllowances;
 
       // Get YTD data for PCB
@@ -1100,6 +1102,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     // Statutory base
     let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
     if (statutory.statutory_on_ot) statutoryBase += otAmount;
+    if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
     if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
     if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
 
@@ -1246,6 +1249,7 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     // Statutory base
     let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
     if (statutory.statutory_on_ot) statutoryBase += otAmount;
+    if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
     if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
     if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
 
@@ -1403,6 +1407,7 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
 
         let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
         if (statutory.statutory_on_ot) statutoryBase += otAmount;
+        if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
         if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
         if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
 

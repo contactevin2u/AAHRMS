@@ -261,7 +261,7 @@ function PayrollCalculationGuide() {
                   <tr>
                     <td><strong>PH Pay</strong></td>
                     <td>Public holiday extra pay</td>
-                    <td className="no">NO</td>
+                    <td className="configurable">Configurable (default: NO)</td>
                   </tr>
                   <tr>
                     <td><strong>Commission</strong></td>
@@ -304,6 +304,7 @@ function PayrollCalculationGuide() {
               <code>
                 Statutory Base = Basic Salary + Commission + Bonus<br/>
                 &nbsp;&nbsp;+ OT Amount (if statutory_on_ot = true)<br/>
+                &nbsp;&nbsp;+ PH Pay (if statutory_on_ph_pay = true)<br/>
                 &nbsp;&nbsp;+ Allowances (if statutory_on_allowance = true)<br/>
                 &nbsp;&nbsp;+ Incentive (if statutory_on_incentive = true)
               </code>
@@ -312,9 +313,9 @@ function PayrollCalculationGuide() {
             <div className="info-box warning">
               <h3>Important Rules:</h3>
               <ul>
-                <li><strong>OT and Allowances</strong> are NOT subject to statutory by default</li>
+                <li><strong>OT, PH Pay, and Allowances</strong> are NOT subject to statutory by default</li>
                 <li><strong>Commission and Bonus</strong> are ALWAYS subject to statutory</li>
-                <li><strong>Claims and PH Pay</strong> are NEVER subject to statutory</li>
+                <li><strong>Claims</strong> are NEVER subject to statutory (reimbursements)</li>
                 <li>Settings can be changed in Payroll Settings page</li>
               </ul>
             </div>
