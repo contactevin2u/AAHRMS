@@ -15,6 +15,8 @@ function PayrollUnified() {
   const [selectedRun, setSelectedRun] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAllOutletsModal, setShowAllOutletsModal] = useState(false);
+  const [creatingAllOutlets, setCreatingAllOutlets] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [departments, setDepartments] = useState([]);
@@ -165,6 +167,37 @@ function PayrollUnified() {
       }
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to create payroll run');
+    }
+  };
+
+  const handleCreateAllOutlets = async (e) => {
+    e.preventDefault();
+    setCreatingAllOutlets(true);
+    try {
+      const res = await payrollV2Api.createAllOutlets({
+        month: createForm.month,
+        year: createForm.year
+      });
+      setShowAllOutletsModal(false);
+      fetchRuns();
+
+      let message = `Created ${res.data.totals.runs_created} payroll runs for ${res.data.totals.total_employees} employees.\n`;
+      message += `\nOutlets created:\n`;
+      res.data.created_runs.forEach(run => {
+        message += `- ${run.outlet_name}: ${run.employee_count} employees (${formatAmount(run.total_net)})\n`;
+      });
+      if (res.data.skipped_outlets.length > 0) {
+        message += `\nSkipped:\n`;
+        res.data.skipped_outlets.forEach(skip => {
+          message += `- ${skip.outlet_name}: ${skip.reason}\n`;
+        });
+      }
+      message += `\nTotal Net: ${formatAmount(res.data.totals.grand_total_net)}`;
+      alert(message);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to create payroll runs');
+    } finally {
+      setCreatingAllOutlets(false);
     }
   };
 
@@ -621,9 +654,16 @@ function PayrollUnified() {
             <p>Manage monthly payroll and statutory contributions</p>
           </div>
           {mainTab === 'payroll' && (
-            <button onClick={() => setShowCreateModal(true)} className="add-btn">
-              + New Payroll Run
-            </button>
+            <div className="header-actions">
+              {isMimix && (
+                <button onClick={() => setShowAllOutletsModal(true)} className="add-btn outline">
+                  Generate All Outlets
+                </button>
+              )}
+              <button onClick={() => setShowCreateModal(true)} className="add-btn">
+                + New Payroll Run
+              </button>
+            </div>
           )}
         </header>
 
@@ -654,7 +694,9 @@ function PayrollUnified() {
                       onClick={() => fetchRunDetails(run.id)}>
                       <div className="run-period">
                         {getMonthName(run.month)} {run.year}
-                        {run.department_name && <span className="run-dept"> - {run.department_name}</span>}
+                        {(run.outlet_name || run.department_name) && (
+                          <span className="run-dept"> - {run.outlet_name || run.department_name}</span>
+                        )}
                       </div>
                       <div className="run-meta">
                         {getStatusBadge(run.status)}
@@ -673,7 +715,9 @@ function PayrollUnified() {
                   <div className="details-header">
                     <div>
                       <h2>{getMonthName(selectedRun.month)} {selectedRun.year}
-                        {selectedRun.department_name && <span className="dept-tag"> - {selectedRun.department_name}</span>}
+                        {(selectedRun.outlet_name || selectedRun.department_name) && (
+                          <span className="dept-tag"> - {selectedRun.outlet_name || selectedRun.department_name}</span>
+                        )}
                       </h2>
                       {getStatusBadge(selectedRun.status)}
                     </div>
@@ -1126,6 +1170,51 @@ function PayrollUnified() {
                 <div className="modal-actions">
                   <button type="button" onClick={() => setShowItemModal(false)} className="cancel-btn">Cancel</button>
                   <button type="submit" className="save-btn">Update</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Generate All Outlets Modal (Mimix) */}
+        {showAllOutletsModal && (
+          <div className="modal-overlay" onClick={() => setShowAllOutletsModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Generate All Outlets Payroll</h2>
+              <p className="modal-description">
+                This will create separate payroll runs for each outlet.
+                Each outlet will have its own payroll with separate contributions.
+              </p>
+              <form onSubmit={handleCreateAllOutlets}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Month</label>
+                    <select value={createForm.month} onChange={(e) => setCreateForm({ ...createForm, month: parseInt(e.target.value) })}>
+                      {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{new Date(2000, i, 1).toLocaleString('en', { month: 'long' })}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Year</label>
+                    <select value={createForm.year} onChange={(e) => setCreateForm({ ...createForm, year: parseInt(e.target.value) })}>
+                      {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="outlets-info">
+                  <strong>Outlets to generate:</strong>
+                  <ul>
+                    {outlets.map(outlet => (
+                      <li key={outlet.id}>{outlet.name}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="modal-actions">
+                  <button type="button" onClick={() => setShowAllOutletsModal(false)} className="cancel-btn" disabled={creatingAllOutlets}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="save-btn" disabled={creatingAllOutlets}>
+                    {creatingAllOutlets ? 'Generating...' : 'Generate All'}
+                  </button>
                 </div>
               </form>
             </div>

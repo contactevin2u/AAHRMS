@@ -127,6 +127,7 @@ export const payrollV2Api = {
   getRuns: (params) => api.get('/payroll/runs', { params }),
   getRun: (id) => api.get(`/payroll/runs/${id}`),
   createRun: (data) => api.post('/payroll/runs', data),
+  createAllOutlets: (data) => api.post('/payroll/runs/all-outlets', data),
   deleteRun: (id) => api.delete(`/payroll/runs/${id}`),
   finalizeRun: (id) => api.post(`/payroll/runs/${id}/finalize`),
   getBankFile: (id) => api.get(`/payroll/runs/${id}/bank-file`, { responseType: 'blob' }),
@@ -454,6 +455,8 @@ export const payrollAIApi = {
     message,
     conversation_history: conversationHistory
   }),
+  getChangeLogs: (params) => api.get('/payroll/ai/change-logs', { params }),
+  getChangeLog: (id) => api.get(`/payroll/ai/change-logs/${id}`),
 };
 
 // Public Holidays Management

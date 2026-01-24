@@ -411,10 +411,12 @@ router.get('/runs', authenticateAdmin, async (req, res) => {
     let query = `
       SELECT pr.*,
              d.name as department_name,
+             o.name as outlet_name,
              (SELECT COUNT(*) FROM payroll_items WHERE payroll_run_id = pr.id) as item_count,
              au.name as approved_by_name
       FROM payroll_runs pr
       LEFT JOIN departments d ON pr.department_id = d.id
+      LEFT JOIN outlets o ON pr.outlet_id = o.id
       LEFT JOIN admin_users au ON pr.approved_by = au.id
       WHERE pr.company_id = $1
     `;
@@ -439,7 +441,7 @@ router.get('/runs', authenticateAdmin, async (req, res) => {
       params.push(department_id);
     }
 
-    query += ' ORDER BY pr.year DESC, pr.month DESC, d.name NULLS FIRST';
+    query += ' ORDER BY pr.year DESC, pr.month DESC, COALESCE(d.name, o.name) NULLS FIRST';
 
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -462,9 +464,10 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
     }
 
     const runResult = await pool.query(`
-      SELECT pr.*, d.name as department_name
+      SELECT pr.*, d.name as department_name, o.name as outlet_name
       FROM payroll_runs pr
       LEFT JOIN departments d ON pr.department_id = d.id
+      LEFT JOIN outlets o ON pr.outlet_id = o.id
       WHERE pr.id = $1
     `, [id]);
 
@@ -483,12 +486,14 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
              e.name as employee_name,
              e.bank_name,
              e.bank_account_no,
-             d.name as department_name
+             d.name as department_name,
+             eo.name as outlet_name
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets eo ON e.outlet_id = eo.id
       WHERE pi.payroll_run_id = $1
-      ORDER BY e.name
+      ORDER BY eo.name NULLS FIRST, e.name
     `, [id]);
 
     res.json({
@@ -2009,6 +2014,334 @@ router.get('/ot-summary/:year/:month', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error fetching OT summary:', error);
     res.status(500).json({ error: 'Failed to fetch OT summary' });
+  }
+});
+
+// =============================================================================
+// GENERATE ALL OUTLETS (MIMIX)
+// =============================================================================
+
+/**
+ * POST /api/payroll/runs/all-outlets
+ * Create separate payroll runs for each outlet at once
+ * This is only for outlet-based companies (Mimix)
+ */
+router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { month, year, notes } = req.body;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    if (!month || !year) {
+      return res.status(400).json({ error: 'Month and year are required' });
+    }
+
+    // Get company settings to verify it's outlet-based
+    const settings = await getCompanySettings(companyId);
+    if (settings.groupingType !== 'outlet') {
+      return res.status(400).json({
+        error: 'This endpoint is only for outlet-based companies (Mimix)'
+      });
+    }
+
+    // Get all active outlets for this company
+    const outletsResult = await pool.query(`
+      SELECT id, name FROM outlets
+      WHERE company_id = $1 AND status = 'active'
+      ORDER BY name
+    `, [companyId]);
+
+    const outlets = outletsResult.rows;
+    if (outlets.length === 0) {
+      return res.status(400).json({ error: 'No active outlets found for this company' });
+    }
+
+    // Check which outlets already have payroll runs
+    const existingResult = await pool.query(`
+      SELECT outlet_id FROM payroll_runs
+      WHERE month = $1 AND year = $2 AND company_id = $3 AND outlet_id IS NOT NULL
+    `, [month, year, companyId]);
+
+    const existingOutletIds = new Set(existingResult.rows.map(r => r.outlet_id));
+    const outletsToCreate = outlets.filter(o => !existingOutletIds.has(o.id));
+
+    if (outletsToCreate.length === 0) {
+      return res.status(400).json({
+        error: 'Payroll runs already exist for all outlets',
+        existing_outlets: outlets.map(o => o.name)
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const createdRuns = [];
+    const skippedOutlets = [];
+
+    for (const outlet of outletsToCreate) {
+      try {
+        // Create individual payroll run for this outlet
+        const { features, rates, period: periodConfig } = settings;
+        const period = getPayrollPeriod(month, year, periodConfig);
+
+        // Create payroll run for this outlet
+        const runResult = await client.query(`
+          INSERT INTO payroll_runs (
+            month, year, status, notes, department_id, outlet_id, company_id,
+            period_start_date, period_end_date, payment_due_date, period_label
+          ) VALUES ($1, $2, 'draft', $3, NULL, $4, $5, $6, $7, $8, $9)
+          RETURNING *
+        `, [
+          month, year,
+          notes ? `${outlet.name} - ${notes}` : outlet.name,
+          outlet.id,
+          companyId,
+          period.start.toISOString().split('T')[0],
+          period.end.toISOString().split('T')[0],
+          period.paymentDate.toISOString().split('T')[0],
+          period.label
+        ]);
+
+        const runId = runResult.rows[0].id;
+
+        // Get employees for this outlet
+        const employees = await client.query(`
+          SELECT e.*,
+                 e.default_basic_salary as basic_salary,
+                 e.default_allowance as fixed_allowance,
+                 d.name as department_name,
+                 d.payroll_structure_code
+          FROM employees e
+          LEFT JOIN departments d ON e.department_id = d.id
+          WHERE e.company_id = $1
+            AND e.outlet_id = $2
+            AND (
+              e.status = 'active'
+              OR (e.status = 'resigned' AND e.resign_date BETWEEN $3 AND $4)
+            )
+        `, [companyId, outlet.id, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
+
+        if (employees.rows.length === 0) {
+          skippedOutlets.push({ outlet_name: outlet.name, reason: 'No employees' });
+          continue;
+        }
+
+        // Get previous month data for carry-forward
+        const prevMonth = month === 1 ? 12 : month - 1;
+        const prevYear = month === 1 ? year - 1 : year;
+        let prevPayrollMap = {};
+
+        if (features.salary_carry_forward) {
+          const prevResult = await client.query(`
+            SELECT pi.employee_id, pi.basic_salary, pi.fixed_allowance, pi.net_pay
+            FROM payroll_items pi
+            JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+            WHERE pr.month = $1 AND pr.year = $2 AND pr.company_id = $3
+          `, [prevMonth, prevYear, companyId]);
+
+          prevResult.rows.forEach(row => {
+            prevPayrollMap[row.employee_id] = row;
+          });
+        }
+
+        // Get flexible commissions
+        let commissionsMap = {};
+        if (features.flexible_commissions) {
+          const commResult = await client.query(`
+            SELECT ec.employee_id, SUM(ec.amount) as total
+            FROM employee_commissions ec
+            JOIN commission_types ct ON ec.commission_type_id = ct.id
+            WHERE ec.is_active = TRUE AND ct.is_active = TRUE
+            GROUP BY ec.employee_id
+          `);
+          commResult.rows.forEach(r => {
+            commissionsMap[r.employee_id] = parseFloat(r.total) || 0;
+          });
+        }
+
+        // Get flexible allowances
+        let allowancesMap = {};
+        if (features.flexible_allowances) {
+          const allowResult = await client.query(`
+            SELECT ea.employee_id, SUM(ea.amount) as total
+            FROM employee_allowances ea
+            JOIN allowance_types at ON ea.allowance_type_id = at.id
+            WHERE ea.is_active = TRUE AND at.is_active = TRUE
+            GROUP BY ea.employee_id
+          `);
+          allowResult.rows.forEach(r => {
+            allowancesMap[r.employee_id] = parseFloat(r.total) || 0;
+          });
+        }
+
+        // Get claims for this month
+        let claimsMap = {};
+        if (features.auto_claims_linking) {
+          const claimsResult = await client.query(`
+            SELECT employee_id, SUM(amount) as total_claims
+            FROM claims
+            WHERE status = 'approved'
+              AND linked_payroll_item_id IS NULL
+              AND claim_date BETWEEN $1 AND $2
+            GROUP BY employee_id
+          `, [period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
+
+          claimsResult.rows.forEach(r => {
+            claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0;
+          });
+        }
+
+        let totalGross = 0;
+        let totalDeductions = 0;
+        let totalNet = 0;
+        let totalEmployerCost = 0;
+        let employeeCount = 0;
+
+        const workingDays = rates.standard_work_days || 22;
+
+        // Process each employee for this outlet
+        for (const emp of employees.rows) {
+          // Skip part-time employees - they are processed separately
+          if (emp.employee_type === 'part_time') {
+            continue;
+          }
+
+          const prevSalary = prevPayrollMap[emp.id];
+          let basicSalary = prevSalary ? parseFloat(prevSalary.basic_salary) : (parseFloat(emp.basic_salary) || 0);
+          const fixedAllowance = prevSalary ? parseFloat(prevSalary.fixed_allowance) : (parseFloat(emp.fixed_allowance) || 0);
+
+          const flexCommissions = commissionsMap[emp.id] || 0;
+          const flexAllowances = allowancesMap[emp.id] || 0;
+          const claimsAmount = claimsMap[emp.id] || 0;
+
+          // Calculate OT if enabled
+          let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
+          if (features.auto_ot_from_clockin) {
+            try {
+              const otResult = await calculateOTFromClockIn(
+                emp.id, companyId, emp.department_id,
+                period.start.toISOString().split('T')[0],
+                period.end.toISOString().split('T')[0],
+                basicSalary
+              );
+              otHours = otResult.total_ot_hours || 0;
+              otAmount = otResult.total_ot_amount || 0;
+            } catch (e) {
+              console.error(`OT calc error for ${emp.name}:`, e.message);
+            }
+          }
+
+          if (features.auto_ph_pay) {
+            try {
+              phDaysWorked = await calculatePHDaysWorked(
+                emp.id, companyId,
+                period.start.toISOString().split('T')[0],
+                period.end.toISOString().split('T')[0]
+              );
+              if (phDaysWorked > 0 && basicSalary > 0) {
+                const dailyRate = basicSalary / workingDays;
+                phPay = phDaysWorked * dailyRate * rates.ph_multiplier;
+              }
+            } catch (e) {
+              console.error(`PH calc error for ${emp.name}:`, e.message);
+            }
+          }
+
+          const totalAllowances = fixedAllowance + flexAllowances;
+          const grossSalary = basicSalary + totalAllowances + otAmount + phPay + flexCommissions + claimsAmount;
+
+          // Statutory base = basic + commission + bonus (no bonus at creation)
+          const statutoryBase = basicSalary + flexCommissions;
+          const statutory = calculateAllStatutory(statutoryBase, emp, month, null);
+
+          const totalDeductionsForEmp = (
+            statutory.epf.employee +
+            statutory.socso.employee +
+            statutory.eis.employee +
+            statutory.pcb
+          );
+
+          const netPay = grossSalary - totalDeductionsForEmp;
+          const employerCost = grossSalary + statutory.epf.employer + statutory.socso.employer + statutory.eis.employer;
+
+          // Insert payroll item
+          await client.query(`
+            INSERT INTO payroll_items (
+              payroll_run_id, employee_id,
+              basic_salary, fixed_allowance, commission_amount, claims_amount,
+              ot_hours, ot_amount, ph_days_worked, ph_pay,
+              gross_salary,
+              epf_employee, epf_employer,
+              socso_employee, socso_employer,
+              eis_employee, eis_employer,
+              pcb,
+              total_deductions, net_pay, employer_total_cost
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+          `, [
+            runId, emp.id,
+            basicSalary, totalAllowances, flexCommissions, claimsAmount,
+            otHours, otAmount, phDaysWorked, phPay,
+            grossSalary,
+            statutory.epf.employee, statutory.epf.employer,
+            statutory.socso.employee, statutory.socso.employer,
+            statutory.eis.employee, statutory.eis.employer,
+            statutory.pcb,
+            totalDeductionsForEmp, netPay, employerCost
+          ]);
+
+          totalGross += grossSalary;
+          totalDeductions += totalDeductionsForEmp;
+          totalNet += netPay;
+          totalEmployerCost += employerCost;
+          employeeCount++;
+        }
+
+        // Update run totals
+        await client.query(`
+          UPDATE payroll_runs SET
+            total_gross = $1, total_deductions = $2, total_net = $3,
+            total_employer_cost = $4, employee_count = $5
+          WHERE id = $6
+        `, [totalGross, totalDeductions, totalNet, totalEmployerCost, employeeCount, runId]);
+
+        createdRuns.push({
+          run_id: runId,
+          outlet_id: outlet.id,
+          outlet_name: outlet.name,
+          employee_count: employeeCount,
+          total_net: totalNet
+        });
+      } catch (outletError) {
+        console.error(`Error creating payroll for outlet ${outlet.name}:`, outletError.message);
+        skippedOutlets.push({ outlet_name: outlet.name, reason: outletError.message });
+      }
+    }
+
+    await client.query('COMMIT');
+
+    // Calculate totals across all runs
+    const grandTotalNet = createdRuns.reduce((sum, r) => sum + r.total_net, 0);
+    const grandTotalEmployees = createdRuns.reduce((sum, r) => sum + r.employee_count, 0);
+
+    res.status(201).json({
+      message: `Created ${createdRuns.length} payroll runs for ${grandTotalEmployees} employees`,
+      created_runs: createdRuns,
+      skipped_outlets: skippedOutlets,
+      totals: {
+        runs_created: createdRuns.length,
+        total_employees: grandTotalEmployees,
+        grand_total_net: grandTotalNet
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating all-outlets payroll:', error);
+    res.status(500).json({ error: 'Failed to create payroll runs for all outlets' });
+  } finally {
+    client.release();
   }
 });
 
