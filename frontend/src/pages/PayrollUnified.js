@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { payrollV2Api, departmentApi, payrollApi, outletsApi, contributionsApi } from '../api';
 import Layout from '../components/Layout';
 import './PayrollV2.css';
@@ -34,6 +34,7 @@ function PayrollUnified() {
   const [aiConversation, setAiConversation] = useState([]);
   const [aiMode, setAiMode] = useState('initial');
   const [aiFeedback, setAiFeedback] = useState('');
+  const aiChatRef = useRef(null);
 
   // Create form
   const [createForm, setCreateForm] = useState({
@@ -226,14 +227,31 @@ function PayrollUnified() {
   };
 
   const handleAIApply = async () => {
-    if (!aiAnalysis?.changes?.length) return;
+    if (!aiAnalysis?.changes?.length && !aiAnalysis?.preview?.length) return;
+
+    // Build changes from preview if available (may have been edited)
+    const changesToApply = (aiAnalysis.preview || aiAnalysis.changes).map(change => ({
+      item_id: change.item_id,
+      employee_name: change.employee_name,
+      field: change.field,
+      current_value: change.current_value,
+      new_value: change.new_value,
+      reason: change.reason
+    }));
+
     setAiLoading(true);
     try {
-      await payrollV2Api.aiApply({ run_id: selectedRun.id, changes: aiAnalysis.changes });
+      const result = await payrollV2Api.aiApply({ run_id: selectedRun.id, changes: changesToApply });
       fetchRunDetails(selectedRun.id);
       fetchRuns();
+
+      // Build success message
+      const successCount = result.data.results?.filter(r => r.success).length || changesToApply.length;
+      const totalNet = result.data.updated_totals?.net || 0;
+
       setAiConversation([...aiConversation, {
-        role: 'system', content: `✅ Changes applied! ${aiAnalysis.changes.length} item(s) updated.`
+        role: 'assistant',
+        content: `✅ Successfully applied ${successCount} change(s)!\n\nNew total net pay: RM ${totalNet.toLocaleString('en-MY', { minimumFractionDigits: 2 })}`
       }]);
       setAiAnalysis(null);
       setAiMode('initial');
@@ -275,6 +293,87 @@ function PayrollUnified() {
     setAiMode('initial');
     setAiFeedback('');
   };
+
+  // Edit a change value before applying
+  const handleEditChange = (idx, newValue) => {
+    if (!aiAnalysis || !aiAnalysis.preview) return;
+    const updatedPreview = [...aiAnalysis.preview];
+    const change = updatedPreview[idx];
+    const diff = newValue - change.current_value;
+
+    // Update the change
+    updatedPreview[idx] = {
+      ...change,
+      new_value: newValue,
+      gross_difference: diff,
+      net_difference: Math.round(diff * 0.8 * 100) / 100, // Estimate ~20% for statutory
+      estimated_new_gross: change.current_gross + diff,
+      estimated_new_net: change.current_net + (diff * 0.8)
+    };
+
+    // Recalculate totals
+    const totalGrossIncrease = updatedPreview.reduce((sum, p) => sum + (p.gross_difference || 0), 0);
+    const totalNetIncrease = updatedPreview.reduce((sum, p) => sum + (p.net_difference || 0), 0);
+
+    setAiAnalysis({
+      ...aiAnalysis,
+      preview: updatedPreview,
+      changes: updatedPreview.map(p => ({
+        item_id: p.item_id,
+        employee_name: p.employee_name,
+        field: p.field,
+        current_value: p.current_value,
+        new_value: p.new_value,
+        reason: p.reason
+      })),
+      impact: {
+        ...aiAnalysis.impact,
+        total_gross_increase: Math.round(totalGrossIncrease * 100) / 100,
+        total_net_increase: Math.round(totalNetIncrease * 100) / 100
+      }
+    });
+  };
+
+  // Remove a change from the preview
+  const handleRemoveChange = (idx) => {
+    if (!aiAnalysis || !aiAnalysis.preview) return;
+    const updatedPreview = aiAnalysis.preview.filter((_, i) => i !== idx);
+
+    if (updatedPreview.length === 0) {
+      resetAIAssistant();
+      return;
+    }
+
+    // Recalculate totals
+    const totalGrossIncrease = updatedPreview.reduce((sum, p) => sum + (p.gross_difference || 0), 0);
+    const totalNetIncrease = updatedPreview.reduce((sum, p) => sum + (p.net_difference || 0), 0);
+
+    setAiAnalysis({
+      ...aiAnalysis,
+      preview: updatedPreview,
+      changes: updatedPreview.map(p => ({
+        item_id: p.item_id,
+        employee_name: p.employee_name,
+        field: p.field,
+        current_value: p.current_value,
+        new_value: p.new_value,
+        reason: p.reason
+      })),
+      impact: {
+        ...aiAnalysis.impact,
+        total_gross_increase: Math.round(totalGrossIncrease * 100) / 100,
+        total_net_increase: Math.round(totalNetIncrease * 100) / 100,
+        affected_employees: updatedPreview.length
+      }
+    });
+  };
+
+  // Scroll chat to bottom when messages change
+  useEffect(() => {
+    if (aiChatRef.current) {
+      aiChatRef.current.scrollTop = aiChatRef.current.scrollHeight;
+    }
+  }, [aiConversation, aiLoading]);
 
   const handleFinalizeRun = async (id) => {
     if (window.confirm('Finalize this payroll run? This cannot be undone.')) {
@@ -605,30 +704,185 @@ function PayrollUnified() {
                     )}
                   </div>
 
-                  {/* AI Assistant Panel - Simplified */}
+                  {/* AI Assistant Panel - Enhanced with Chat, Editable Changes & Confirmation */}
                   {showAIAssistant && selectedRun.status === 'draft' && (
-                    <div className="ai-assistant-panel">
-                      <div className="ai-header"><h3>🤖 AI Payroll Assistant</h3></div>
-                      <div className="ai-actions-row">
-                        <button onClick={handleAICompare} className="ai-compare-btn" disabled={aiLoading}>📊 Compare</button>
+                    <div className="ai-assistant-panel enhanced">
+                      <div className="ai-header">
+                        <h3>🤖 AI Payroll Assistant</h3>
+                        <button onClick={resetAIAssistant} className="ai-close-btn">×</button>
                       </div>
-                      <div className="ai-input-section">
-                        <textarea value={aiInstruction} onChange={(e) => setAiInstruction(e.target.value)}
-                          placeholder="e.g., Add RM200 bonus for all employees" rows={3} disabled={aiLoading} />
-                        <button onClick={handleAIAnalyze} className="ai-analyze-btn" disabled={aiLoading || !aiInstruction.trim()}>
-                          {aiLoading ? '...' : '✨ Analyze'}
-                        </button>
+
+                      {/* Chat Messages */}
+                      <div className="ai-chat-messages" ref={aiChatRef}>
+                        {aiConversation.length === 0 && (
+                          <div className="ai-welcome">
+                            <p>I can help you make payroll changes. Try:</p>
+                            <ul>
+                              <li>"Ali increase RM200 basic salary"</li>
+                              <li>"Everyone get RM400 bonus this month"</li>
+                              <li>"All employees bonus RM500, prorate if less than 1 year"</li>
+                              <li>"Driver department add RM100 allowance"</li>
+                            </ul>
+                          </div>
+                        )}
+                        {aiConversation.map((msg, idx) => (
+                          <div key={idx} className={`ai-message ${msg.role}`}>
+                            <div className="ai-message-content">
+                              {msg.role === 'user' ? msg.content : (
+                                msg.content || (msg.analysis && msg.analysis.summary)
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {aiLoading && (
+                          <div className="ai-message assistant">
+                            <div className="ai-message-content typing">Analyzing...</div>
+                          </div>
+                        )}
                       </div>
+
+                      {/* Editable Changes Preview */}
                       {aiAnalysis && aiMode === 'reviewing' && aiAnalysis.understood && aiAnalysis.preview?.length > 0 && (
-                        <div className="ai-preview">
-                          <h4>Proposed Changes</h4>
-                          <div className="ai-decision">
-                            <button onClick={handleAIApply} className="ai-agree-btn" disabled={aiLoading}>✅ Apply</button>
-                            <button onClick={handleAIDisagree} className="ai-disagree-btn">❌ Disagree</button>
-                            <button onClick={resetAIAssistant} className="ai-reset-btn">🔄 Reset</button>
+                        <div className="ai-changes-preview">
+                          <div className="ai-changes-header">
+                            <h4>📝 Proposed Changes ({aiAnalysis.preview.length} employees)</h4>
+                            {aiAnalysis.impact && (
+                              <div className="ai-impact-summary">
+                                <span>Total Increase: <strong>{formatAmount(aiAnalysis.impact.total_gross_increase || 0)}</strong></span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="ai-changes-table-wrapper">
+                            <table className="ai-changes-table">
+                              <thead>
+                                <tr>
+                                  <th>Employee</th>
+                                  <th>Field</th>
+                                  <th>Current</th>
+                                  <th>New Value</th>
+                                  <th>Reason</th>
+                                  <th>Net Change</th>
+                                  <th></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {aiAnalysis.preview.map((change, idx) => (
+                                  <tr key={idx}>
+                                    <td>
+                                      <strong>{change.employee_name}</strong>
+                                      {change.years_employed !== null && (
+                                        <small className="tenure-info">
+                                          {change.years_employed < 1
+                                            ? `(${change.months_employed} months)`
+                                            : `(${change.years_employed} years)`}
+                                        </small>
+                                      )}
+                                    </td>
+                                    <td className="field-name">{change.field.replace(/_/g, ' ')}</td>
+                                    <td className="amount">{formatAmount(change.current_value)}</td>
+                                    <td className="amount editable">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={change.new_value}
+                                        onChange={(e) => handleEditChange(idx, parseFloat(e.target.value) || 0)}
+                                        className="change-input"
+                                      />
+                                    </td>
+                                    <td className="reason">{change.reason}</td>
+                                    <td className={`net-change ${change.net_difference >= 0 ? 'positive' : 'negative'}`}>
+                                      {change.net_difference >= 0 ? '+' : ''}{formatAmount(change.net_difference)}
+                                    </td>
+                                    <td>
+                                      <button onClick={() => handleRemoveChange(idx)} className="remove-change-btn">×</button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Confirmation Buttons */}
+                          <div className="ai-confirmation">
+                            <p className="confirm-message">Review the changes above. You can edit values before applying.</p>
+                            <div className="ai-decision">
+                              <button onClick={handleAIApply} className="ai-confirm-btn" disabled={aiLoading}>
+                                ✅ Confirm & Apply Changes
+                              </button>
+                              <button onClick={handleAIDisagree} className="ai-modify-btn">
+                                ✏️ Request Modification
+                              </button>
+                              <button onClick={resetAIAssistant} className="ai-cancel-btn">
+                                ❌ Cancel
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
+
+                      {/* Feedback Mode for Modifications */}
+                      {aiMode === 'feedback' && (
+                        <div className="ai-feedback-section">
+                          <p>What would you like to change?</p>
+                          <textarea
+                            value={aiFeedback}
+                            onChange={(e) => setAiFeedback(e.target.value)}
+                            placeholder="e.g., Ali should get RM300 instead of RM200..."
+                            rows={2}
+                          />
+                          <div className="ai-feedback-actions">
+                            <button onClick={handleAIFeedback} className="ai-submit-feedback" disabled={!aiFeedback.trim() || aiLoading}>
+                              Submit
+                            </button>
+                            <button onClick={() => setAiMode('reviewing')} className="ai-back-btn">
+                              Back
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Compare Results */}
+                      {aiComparison && (
+                        <div className="ai-comparison">
+                          <h4>📊 Comparison with {aiComparison.previous_period}</h4>
+                          <div className="comparison-summary">
+                            <span>Current: {formatAmount(aiComparison.summary.current_total_net)}</span>
+                            <span>Previous: {formatAmount(aiComparison.summary.previous_total_net)}</span>
+                            <span className={aiComparison.summary.difference >= 0 ? 'positive' : 'negative'}>
+                              Difference: {aiComparison.summary.difference >= 0 ? '+' : ''}{formatAmount(aiComparison.summary.difference)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Input Section */}
+                      <div className="ai-input-section">
+                        <div className="ai-quick-actions">
+                          <button onClick={handleAICompare} className="ai-quick-btn" disabled={aiLoading}>📊 Compare</button>
+                        </div>
+                        <div className="ai-input-row">
+                          <textarea
+                            value={aiInstruction}
+                            onChange={(e) => setAiInstruction(e.target.value)}
+                            placeholder="Describe the changes you want to make..."
+                            rows={2}
+                            disabled={aiLoading}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey && aiInstruction.trim()) {
+                                e.preventDefault();
+                                handleAIAnalyze();
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={handleAIAnalyze}
+                            className="ai-send-btn"
+                            disabled={aiLoading || !aiInstruction.trim()}
+                          >
+                            {aiLoading ? '...' : '➤'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 

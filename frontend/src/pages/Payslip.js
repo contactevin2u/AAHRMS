@@ -24,6 +24,16 @@ function Payslip() {
   const fetchPayslip = async () => {
     try {
       setLoading(true);
+      // Try new payroll items API first (includes claims, OT details, etc.)
+      try {
+        const res = await payrollApi.getItemPayslip(id);
+        setPayslip(res.data);
+        return;
+      } catch (err) {
+        // If new API fails, fall back to old API
+        console.log('Falling back to old payslip API');
+      }
+      // Old API fallback
       const res = await payrollApi.getPayslip(id);
       setPayslip(res.data);
     } catch (error) {

@@ -18,10 +18,11 @@ const anthropic = new Anthropic({
 /**
  * POST /api/payroll/ai/analyze
  * Analyze HR's natural language request and show proposed changes
+ * Enhanced: Supports individual changes, bulk changes with conditions (proration), and editable preview
  */
 router.post('/analyze', authenticateAdmin, async (req, res) => {
   try {
-    const { run_id, instruction } = req.body;
+    const { run_id, instruction, conversation = [] } = req.body;
     const companyId = req.companyId;
 
     if (!companyId) {
@@ -50,10 +51,10 @@ router.post('/analyze', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Cannot modify finalized payroll' });
     }
 
-    // Get current items
+    // Get current items WITH join_date for proration calculation
     const itemsResult = await pool.query(`
       SELECT pi.*, e.name as employee_name, e.employee_id as emp_code,
-             d.name as department_name
+             e.join_date, e.position, d.name as department_name
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
@@ -62,6 +63,9 @@ router.post('/analyze', authenticateAdmin, async (req, res) => {
     `, [run_id]);
 
     const currentItems = itemsResult.rows;
+
+    // Calculate employment months for each employee (for proration)
+    const payrollDate = new Date(run.year, run.month - 1, 1);
 
     // Get previous month payroll for comparison
     let prevMonth = run.month - 1;
@@ -85,15 +89,30 @@ router.post('/analyze', authenticateAdmin, async (req, res) => {
       prevPayrollMap[p.employee_id] = p;
     });
 
-    // Build context for AI
+    // Build context for AI with employment duration for proration
     const payrollContext = currentItems.map(item => {
       const prev = prevPayrollMap[item.employee_id];
+      const joinDate = item.join_date ? new Date(item.join_date) : null;
+      let monthsEmployed = null;
+      let yearsEmployed = null;
+
+      if (joinDate) {
+        const diffMs = payrollDate - joinDate;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        monthsEmployed = Math.floor(diffDays / 30.44); // Average days per month
+        yearsEmployed = Math.round((monthsEmployed / 12) * 10) / 10; // One decimal
+      }
+
       return {
         id: item.id,
         employee_id: item.employee_id,
         name: item.employee_name,
         emp_code: item.emp_code,
         department: item.department_name,
+        position: item.position,
+        join_date: joinDate ? joinDate.toISOString().split('T')[0] : null,
+        months_employed: monthsEmployed,
+        years_employed: yearsEmployed,
         current: {
           basic_salary: parseFloat(item.basic_salary) || 0,
           fixed_allowance: parseFloat(item.fixed_allowance) || 0,
@@ -122,10 +141,22 @@ Your job is to interpret HR's instructions about payroll changes and return stru
 
 IMPORTANT RULES:
 1. All amounts are in Malaysian Ringgit (RM)
-2. When HR mentions an employee, match by name (partial match OK) or employee code
-3. Return changes as an array of modifications to apply
-4. If instruction is unclear, ask for clarification in the "clarification" field
-5. Always explain the impact of changes
+2. Match employees by name (partial match OK), employee code, department, or "all/everyone"
+3. Support proration for bonuses/incentives:
+   - "prorate if less than 1 year" = multiply by (months_employed / 12)
+   - Use months_employed and years_employed from context
+4. Support conditional logic:
+   - "if less than X months/years" - check against months_employed/years_employed
+   - "department X" - filter by department
+   - "everyone/all employees" - apply to all
+5. For basic salary changes, show new_value as the TOTAL (not the increment)
+6. For bonus/incentive, new_value is the amount to ADD (it goes to bonus field)
+7. Always show the calculation for prorated amounts
+
+PRORATION FORMULA:
+- Full bonus = base_amount
+- Prorated bonus = base_amount × (months_employed / 12)
+- Round to 2 decimal places
 
 Return ONLY valid JSON in this format:
 {
@@ -139,7 +170,8 @@ Return ONLY valid JSON in this format:
       "field": "basic_salary|bonus|fixed_allowance|commission_amount|other_deductions",
       "current_value": 2000,
       "new_value": 2200,
-      "reason": "Salary increment"
+      "reason": "Salary increment +RM200",
+      "calculation": "Optional calculation explanation for proration"
     }
   ],
   "impact": {
@@ -157,14 +189,20 @@ ${JSON.stringify(payrollContext, null, 2)}
 
 HR Instruction: "${instruction}"
 
-Analyze this instruction and return the JSON response with proposed changes.`;
+Analyze this instruction and return the JSON response with proposed changes.
+For proration, use the months_employed field to calculate proportional amounts.`;
+
+    // Build messages with conversation history
+    const messages = [];
+    for (const msg of conversation) {
+      messages.push({ role: msg.role, content: msg.content });
+    }
+    messages.push({ role: 'user', content: userMessage });
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      messages: [
-        { role: 'user', content: userMessage }
-      ],
+      max_tokens: 4000,
+      messages: messages,
       system: systemPrompt
     });
 
@@ -185,35 +223,66 @@ Analyze this instruction and return the JSON response with proposed changes.`;
       });
     }
 
-    // If AI understood, calculate detailed impact
+    // If AI understood, calculate detailed impact with full breakdown
     if (aiResponse.understood && aiResponse.changes && aiResponse.changes.length > 0) {
-      // Calculate preview of changes
+      // Calculate preview of changes with full calculation breakdown
       const preview = aiResponse.changes.map(change => {
         const item = currentItems.find(i => i.id === change.item_id);
         if (!item) return null;
 
         const currentNet = parseFloat(item.net_pay) || 0;
-        const diff = change.new_value - change.current_value;
+        const currentGross = parseFloat(item.gross_salary) || 0;
+        const currentValue = parseFloat(change.current_value) || 0;
+        const newValue = parseFloat(change.new_value) || 0;
+        const diff = newValue - currentValue;
 
-        // Estimate new net (simplified - actual would recalculate statutory)
+        // Calculate estimated new gross and net
+        let estimatedNewGross = currentGross;
         let estimatedNewNet = currentNet;
+
         if (['basic_salary', 'bonus', 'commission_amount', 'fixed_allowance', 'incentive_amount'].includes(change.field)) {
-          // These add to pay (minus ~20% for statutory deductions estimate)
+          // These add to gross (and net minus statutory ~20%)
+          estimatedNewGross = currentGross + diff;
           estimatedNewNet = currentNet + (diff * 0.8);
         } else if (change.field === 'other_deductions') {
-          // Deductions subtract from pay
+          // Deductions reduce net but not gross
           estimatedNewNet = currentNet - diff;
         }
 
+        // Get join date and employment duration
+        const joinDate = item.join_date ? new Date(item.join_date).toISOString().split('T')[0] : null;
+        const ctx = payrollContext.find(p => p.id === item.id);
+
         return {
           ...change,
+          employee_id: item.employee_id,
+          department: item.department_name,
+          position: item.position,
+          join_date: joinDate,
+          months_employed: ctx?.months_employed,
+          years_employed: ctx?.years_employed,
+          current_gross: currentGross,
           current_net: currentNet,
+          estimated_new_gross: Math.round(estimatedNewGross * 100) / 100,
           estimated_new_net: Math.round(estimatedNewNet * 100) / 100,
-          difference: Math.round((estimatedNewNet - currentNet) * 100) / 100
+          gross_difference: Math.round((estimatedNewGross - currentGross) * 100) / 100,
+          net_difference: Math.round((estimatedNewNet - currentNet) * 100) / 100,
+          editable: true // Flag that this change can be edited
         };
       }).filter(Boolean);
 
       aiResponse.preview = preview;
+
+      // Calculate totals
+      const totalGrossIncrease = preview.reduce((sum, p) => sum + (p.gross_difference || 0), 0);
+      const totalNetIncrease = preview.reduce((sum, p) => sum + (p.net_difference || 0), 0);
+
+      aiResponse.impact = {
+        ...aiResponse.impact,
+        total_gross_increase: Math.round(totalGrossIncrease * 100) / 100,
+        total_net_increase: Math.round(totalNetIncrease * 100) / 100,
+        affected_employees: preview.length
+      };
     }
 
     res.json({
@@ -224,7 +293,8 @@ Analyze this instruction and return the JSON response with proposed changes.`;
         gross: run.total_gross,
         net: run.total_net,
         employee_count: currentItems.length
-      }
+      },
+      needs_confirmation: true // Always require confirmation for changes
     });
 
   } catch (error) {
@@ -236,6 +306,7 @@ Analyze this instruction and return the JSON response with proposed changes.`;
 /**
  * POST /api/payroll/ai/apply
  * Apply the AI-suggested changes after HR approval
+ * Enhanced: Full recalculation of statutory deductions, better result tracking
  */
 router.post('/apply', authenticateAdmin, async (req, res) => {
   const client = await pool.connect();
@@ -262,15 +333,37 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Payroll run not found' });
     }
 
-    if (runResult.rows[0].status === 'finalized') {
+    const run = runResult.rows[0];
+
+    if (run.status === 'finalized') {
       return res.status(400).json({ error: 'Cannot modify finalized payroll' });
     }
+
+    // Get company settings for statutory calculation
+    const settingsResult = await client.query(
+      'SELECT payroll_settings FROM companies WHERE id = $1',
+      [companyId]
+    );
+    const companySettings = settingsResult.rows[0]?.payroll_settings || {};
+    const statutory = {
+      epf_enabled: true,
+      socso_enabled: true,
+      eis_enabled: true,
+      pcb_enabled: true,
+      statutory_on_ot: false,
+      statutory_on_ph_pay: false,
+      statutory_on_allowance: false,
+      statutory_on_incentive: false,
+      ...companySettings.statutory
+    };
 
     await client.query('BEGIN');
 
     const results = [];
+    const appliedChanges = [];
+
     for (const change of changes) {
-      const { item_id, field, new_value } = change;
+      const { item_id, field, new_value, employee_name } = change;
 
       // Validate field is allowed
       const allowedFields = ['basic_salary', 'fixed_allowance', 'bonus', 'commission_amount',
@@ -278,7 +371,7 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
                             'trade_commission_amount', 'outstation_amount'];
 
       if (!allowedFields.includes(field)) {
-        results.push({ item_id, success: false, error: `Field ${field} not allowed` });
+        results.push({ item_id, employee_name, success: false, error: `Field ${field} not allowed` });
         continue;
       }
 
@@ -288,19 +381,23 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
           `UPDATE payroll_items SET ${field} = $1, updated_at = NOW() WHERE id = $2`,
           [new_value, item_id]
         );
-        results.push({ item_id, success: true, field, new_value });
+        results.push({ item_id, employee_name, success: true, field, new_value });
+        appliedChanges.push({ item_id, field, new_value });
       } catch (e) {
-        results.push({ item_id, success: false, error: e.message });
+        results.push({ item_id, employee_name, success: false, error: e.message });
       }
     }
 
-    // Recalculate all items to update statutory and totals
-    const itemIds = changes.map(c => c.item_id);
+    // Recalculate all modified items with full statutory recalculation
+    const itemIds = [...new Set(changes.map(c => c.item_id))];
+
     for (const itemId of itemIds) {
-      // Get item data
+      // Get item data with employee info for statutory calculation
       const itemData = await client.query(`
-        SELECT pi.*, e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count
+        SELECT pi.*, pr.month, pr.year,
+               e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count
         FROM payroll_items pi
+        JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
         JOIN employees e ON pi.employee_id = e.id
         WHERE pi.id = $1
       `, [itemId]);
@@ -309,7 +406,7 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
 
       const item = itemData.rows[0];
 
-      // Recalculate gross and net
+      // Get all earnings
       const basicSalary = parseFloat(item.basic_salary) || 0;
       const fixedAllowance = parseFloat(item.fixed_allowance) || 0;
       const otAmount = parseFloat(item.ot_amount) || 0;
@@ -324,19 +421,45 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
       const advanceDeduction = parseFloat(item.advance_deduction) || 0;
       const otherDeductions = parseFloat(item.other_deductions) || 0;
 
+      // Calculate gross salary
       const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
                           commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction;
 
-      // Keep existing statutory for now (would need full recalculation)
-      const totalDeductions = unpaidDeduction + parseFloat(item.epf_employee || 0) +
-                              parseFloat(item.socso_employee || 0) + parseFloat(item.eis_employee || 0) +
-                              parseFloat(item.pcb || 0) + advanceDeduction + otherDeductions;
+      // Calculate statutory base
+      let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
+      if (statutory.statutory_on_ot) statutoryBase += otAmount;
+      if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
+      if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
+      if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
+
+      // Recalculate statutory deductions
+      const { calculateAllStatutory } = require('../utils/statutory');
+      const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, null);
+
+      const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
+      const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
+      const socsoEmployee = statutory.socso_enabled ? statutoryResult.socso.employee : 0;
+      const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
+      const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
+      const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
+      const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+
+      const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
       const netPay = grossSalary + unpaidDeduction - totalDeductions;
+      const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       await client.query(`
-        UPDATE payroll_items SET gross_salary = $1, net_pay = $2, updated_at = NOW()
-        WHERE id = $3
-      `, [grossSalary, netPay, itemId]);
+        UPDATE payroll_items SET
+          gross_salary = $1, statutory_base = $2,
+          epf_employee = $3, epf_employer = $4,
+          socso_employee = $5, socso_employer = $6,
+          eis_employee = $7, eis_employer = $8,
+          pcb = $9,
+          total_deductions = $10, net_pay = $11, employer_total_cost = $12,
+          updated_at = NOW()
+        WHERE id = $13
+      `, [grossSalary, statutoryBase, epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
+          eisEmployee, eisEmployer, pcb, totalDeductions, netPay, employerCost, itemId]);
     }
 
     // Update run totals
@@ -345,22 +468,47 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
         total_gross = (SELECT COALESCE(SUM(gross_salary), 0) FROM payroll_items WHERE payroll_run_id = $1),
         total_net = (SELECT COALESCE(SUM(net_pay), 0) FROM payroll_items WHERE payroll_run_id = $1),
         total_deductions = (SELECT COALESCE(SUM(total_deductions), 0) FROM payroll_items WHERE payroll_run_id = $1),
+        total_employer_cost = (SELECT COALESCE(SUM(employer_total_cost), 0) FROM payroll_items WHERE payroll_run_id = $1),
         updated_at = NOW()
       WHERE id = $1
     `, [run_id]);
 
     await client.query('COMMIT');
 
-    // Get updated run
+    // Get updated run and items for display
     const updatedRun = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [run_id]);
+
+    // Get updated items that were changed
+    const updatedItems = await pool.query(`
+      SELECT pi.*, e.name as employee_name
+      FROM payroll_items pi
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pi.id = ANY($1)
+    `, [itemIds]);
 
     res.json({
       success: true,
       message: `Applied ${results.filter(r => r.success).length} of ${changes.length} changes`,
       results,
+      applied_changes: appliedChanges,
+      updated_items: updatedItems.rows.map(item => ({
+        id: item.id,
+        employee_name: item.employee_name,
+        basic_salary: parseFloat(item.basic_salary) || 0,
+        bonus: parseFloat(item.bonus) || 0,
+        gross_salary: parseFloat(item.gross_salary) || 0,
+        epf_employee: parseFloat(item.epf_employee) || 0,
+        socso_employee: parseFloat(item.socso_employee) || 0,
+        eis_employee: parseFloat(item.eis_employee) || 0,
+        pcb: parseFloat(item.pcb) || 0,
+        total_deductions: parseFloat(item.total_deductions) || 0,
+        net_pay: parseFloat(item.net_pay) || 0
+      })),
       updated_totals: {
-        gross: updatedRun.rows[0].total_gross,
-        net: updatedRun.rows[0].total_net
+        gross: parseFloat(updatedRun.rows[0].total_gross) || 0,
+        net: parseFloat(updatedRun.rows[0].total_net) || 0,
+        deductions: parseFloat(updatedRun.rows[0].total_deductions) || 0,
+        employer_cost: parseFloat(updatedRun.rows[0].total_employer_cost) || 0
       }
     });
 
@@ -370,6 +518,186 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
     res.status(500).json({ error: 'Failed to apply changes: ' + error.message });
   } finally {
     client.release();
+  }
+});
+
+/**
+ * POST /api/payroll/ai/preview-calculation
+ * Preview calculation breakdown for a proposed change (without applying)
+ */
+router.post('/preview-calculation', authenticateAdmin, async (req, res) => {
+  try {
+    const { item_id, field, new_value } = req.body;
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    if (!item_id || !field || new_value === undefined) {
+      return res.status(400).json({ error: 'item_id, field, and new_value are required' });
+    }
+
+    // Get current item
+    const itemResult = await pool.query(`
+      SELECT pi.*, pr.month, pr.year, pr.company_id, pr.status,
+             e.name as employee_name, e.ic_number, e.date_of_birth,
+             e.marital_status, e.spouse_working, e.children_count
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pi.id = $1
+    `, [item_id]);
+
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll item not found' });
+    }
+
+    const item = itemResult.rows[0];
+
+    if (item.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get company settings
+    const settingsResult = await pool.query(
+      'SELECT payroll_settings FROM companies WHERE id = $1',
+      [companyId]
+    );
+    const companySettings = settingsResult.rows[0]?.payroll_settings || {};
+    const statutory = {
+      epf_enabled: true,
+      socso_enabled: true,
+      eis_enabled: true,
+      pcb_enabled: true,
+      statutory_on_ot: false,
+      statutory_on_ph_pay: false,
+      statutory_on_allowance: false,
+      statutory_on_incentive: false,
+      ...companySettings.statutory
+    };
+
+    // Create a copy with the proposed change
+    const proposed = { ...item };
+    proposed[field] = new_value;
+
+    // Calculate current values
+    const currentBasic = parseFloat(item.basic_salary) || 0;
+    const currentAllowance = parseFloat(item.fixed_allowance) || 0;
+    const currentOT = parseFloat(item.ot_amount) || 0;
+    const currentPH = parseFloat(item.ph_pay) || 0;
+    const currentIncentive = parseFloat(item.incentive_amount) || 0;
+    const currentCommission = parseFloat(item.commission_amount) || 0;
+    const currentTradeComm = parseFloat(item.trade_commission_amount) || 0;
+    const currentOutstation = parseFloat(item.outstation_amount) || 0;
+    const currentBonus = parseFloat(item.bonus) || 0;
+    const currentClaims = parseFloat(item.claims_amount) || 0;
+    const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
+    const advanceDeduction = parseFloat(item.advance_deduction) || 0;
+    const otherDeductions = parseFloat(item.other_deductions) || 0;
+
+    // Calculate proposed values
+    const proposedBasic = parseFloat(proposed.basic_salary) || 0;
+    const proposedAllowance = parseFloat(proposed.fixed_allowance) || 0;
+    const proposedOT = parseFloat(proposed.ot_amount) || 0;
+    const proposedPH = parseFloat(proposed.ph_pay) || 0;
+    const proposedIncentive = parseFloat(proposed.incentive_amount) || 0;
+    const proposedCommission = parseFloat(proposed.commission_amount) || 0;
+    const proposedTradeComm = parseFloat(proposed.trade_commission_amount) || 0;
+    const proposedOutstation = parseFloat(proposed.outstation_amount) || 0;
+    const proposedBonus = parseFloat(proposed.bonus) || 0;
+    const proposedClaims = parseFloat(proposed.claims_amount) || 0;
+    const proposedOther = parseFloat(proposed.other_deductions) || 0;
+
+    // Calculate gross
+    const currentGross = currentBasic + currentAllowance + currentOT + currentPH + currentIncentive +
+                         currentCommission + currentTradeComm + currentOutstation + currentBonus + currentClaims - unpaidDeduction;
+
+    const proposedGross = proposedBasic + proposedAllowance + proposedOT + proposedPH + proposedIncentive +
+                          proposedCommission + proposedTradeComm + proposedOutstation + proposedBonus + proposedClaims - unpaidDeduction;
+
+    // Calculate statutory base
+    let currentStatBase = currentBasic + currentCommission + currentTradeComm + currentBonus;
+    let proposedStatBase = proposedBasic + proposedCommission + proposedTradeComm + proposedBonus;
+
+    if (statutory.statutory_on_ot) {
+      currentStatBase += currentOT;
+      proposedStatBase += proposedOT;
+    }
+    if (statutory.statutory_on_ph_pay) {
+      currentStatBase += currentPH;
+      proposedStatBase += proposedPH;
+    }
+    if (statutory.statutory_on_allowance) {
+      currentStatBase += currentAllowance;
+      proposedStatBase += proposedAllowance;
+    }
+    if (statutory.statutory_on_incentive) {
+      currentStatBase += currentIncentive;
+      proposedStatBase += proposedIncentive;
+    }
+
+    // Calculate statutory deductions
+    const { calculateAllStatutory } = require('../utils/statutory');
+    const currentStat = calculateAllStatutory(currentStatBase, item, item.month, null);
+    const proposedStat = calculateAllStatutory(proposedStatBase, item, item.month, null);
+
+    const currentEPF = statutory.epf_enabled ? currentStat.epf.employee : 0;
+    const proposedEPF = statutory.epf_enabled ? proposedStat.epf.employee : 0;
+    const currentSOCSO = statutory.socso_enabled ? currentStat.socso.employee : 0;
+    const proposedSOCSO = statutory.socso_enabled ? proposedStat.socso.employee : 0;
+    const currentEIS = statutory.eis_enabled ? currentStat.eis.employee : 0;
+    const proposedEIS = statutory.eis_enabled ? proposedStat.eis.employee : 0;
+    const currentPCB = statutory.pcb_enabled ? currentStat.pcb : 0;
+    const proposedPCB = statutory.pcb_enabled ? proposedStat.pcb : 0;
+
+    const currentTotalDed = unpaidDeduction + currentEPF + currentSOCSO + currentEIS + currentPCB + advanceDeduction + otherDeductions;
+    const proposedTotalDed = unpaidDeduction + proposedEPF + proposedSOCSO + proposedEIS + proposedPCB + advanceDeduction + proposedOther;
+
+    const currentNet = currentGross + unpaidDeduction - currentTotalDed;
+    const proposedNet = proposedGross + unpaidDeduction - proposedTotalDed;
+
+    res.json({
+      employee_name: item.employee_name,
+      field,
+      current_value: parseFloat(item[field]) || 0,
+      new_value: parseFloat(new_value) || 0,
+      calculation: {
+        current: {
+          gross_salary: Math.round(currentGross * 100) / 100,
+          statutory_base: Math.round(currentStatBase * 100) / 100,
+          epf: Math.round(currentEPF * 100) / 100,
+          socso: Math.round(currentSOCSO * 100) / 100,
+          eis: Math.round(currentEIS * 100) / 100,
+          pcb: Math.round(currentPCB * 100) / 100,
+          total_deductions: Math.round(currentTotalDed * 100) / 100,
+          net_pay: Math.round(currentNet * 100) / 100
+        },
+        proposed: {
+          gross_salary: Math.round(proposedGross * 100) / 100,
+          statutory_base: Math.round(proposedStatBase * 100) / 100,
+          epf: Math.round(proposedEPF * 100) / 100,
+          socso: Math.round(proposedSOCSO * 100) / 100,
+          eis: Math.round(proposedEIS * 100) / 100,
+          pcb: Math.round(proposedPCB * 100) / 100,
+          total_deductions: Math.round(proposedTotalDed * 100) / 100,
+          net_pay: Math.round(proposedNet * 100) / 100
+        },
+        difference: {
+          gross_salary: Math.round((proposedGross - currentGross) * 100) / 100,
+          epf: Math.round((proposedEPF - currentEPF) * 100) / 100,
+          socso: Math.round((proposedSOCSO - currentSOCSO) * 100) / 100,
+          eis: Math.round((proposedEIS - currentEIS) * 100) / 100,
+          pcb: Math.round((proposedPCB - currentPCB) * 100) / 100,
+          total_deductions: Math.round((proposedTotalDed - currentTotalDed) * 100) / 100,
+          net_pay: Math.round((proposedNet - currentNet) * 100) / 100
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Preview calculation error:', error);
+    res.status(500).json({ error: 'Failed to preview calculation: ' + error.message });
   }
 });
 
