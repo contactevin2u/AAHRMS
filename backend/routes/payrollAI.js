@@ -84,113 +84,41 @@ router.post('/analyze', authenticateAdmin, async (req, res) => {
         AND (pr.department_id = $4 OR ($4 IS NULL AND pr.department_id IS NULL))
     `, [companyId, prevMonth, prevYear, run.department_id]);
 
-    const prevPayrollMap = {};
-    prevRunResult.rows.forEach(p => {
-      prevPayrollMap[p.employee_id] = p;
-    });
-
-    // Build context for AI with employment duration for proration
+    // Build simplified context for AI (faster processing)
     const payrollContext = currentItems.map(item => {
-      const prev = prevPayrollMap[item.employee_id];
       const joinDate = item.join_date ? new Date(item.join_date) : null;
       let monthsEmployed = null;
-      let yearsEmployed = null;
 
       if (joinDate) {
         const diffMs = payrollDate - joinDate;
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        monthsEmployed = Math.floor(diffDays / 30.44); // Average days per month
-        yearsEmployed = Math.round((monthsEmployed / 12) * 10) / 10; // One decimal
+        monthsEmployed = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30.44));
       }
 
       return {
         id: item.id,
-        employee_id: item.employee_id,
         name: item.employee_name,
-        emp_code: item.emp_code,
-        department: item.department_name,
-        position: item.position,
-        join_date: joinDate ? joinDate.toISOString().split('T')[0] : null,
-        months_employed: monthsEmployed,
-        years_employed: yearsEmployed,
-        current: {
-          basic_salary: parseFloat(item.basic_salary) || 0,
-          fixed_allowance: parseFloat(item.fixed_allowance) || 0,
-          ot_hours: parseFloat(item.ot_hours) || 0,
-          ot_amount: parseFloat(item.ot_amount) || 0,
-          commission_amount: parseFloat(item.commission_amount) || 0,
-          bonus: parseFloat(item.bonus) || 0,
-          claims_amount: parseFloat(item.claims_amount) || 0,
-          gross_salary: parseFloat(item.gross_salary) || 0,
-          epf_employee: parseFloat(item.epf_employee) || 0,
-          socso_employee: parseFloat(item.socso_employee) || 0,
-          eis_employee: parseFloat(item.eis_employee) || 0,
-          pcb: parseFloat(item.pcb) || 0,
-          net_pay: parseFloat(item.net_pay) || 0
-        },
-        previous: prev ? {
-          basic_salary: parseFloat(prev.basic_salary) || 0,
-          net_pay: parseFloat(prev.net_pay) || 0
-        } : null
+        dept: item.department_name,
+        months: monthsEmployed,
+        basic: parseFloat(item.basic_salary) || 0,
+        allowance: parseFloat(item.fixed_allowance) || 0,
+        bonus: parseFloat(item.bonus) || 0,
+        commission: parseFloat(item.commission_amount) || 0,
+        gross: parseFloat(item.gross_salary) || 0,
+        net: parseFloat(item.net_pay) || 0
       };
     });
 
-    // Call Claude AI to analyze the instruction
-    const systemPrompt = `You are an AI Payroll Assistant for a Malaysian HRMS system.
-Your job is to interpret HR's instructions about payroll changes and return structured JSON.
+    // Call Claude AI to analyze the instruction (simplified prompt for speed)
+    const systemPrompt = `Payroll AI. Return JSON only.
+Fields: id, name, dept, months (employment), basic, allowance, bonus, commission, gross, net.
+Editable: basic_salary, fixed_allowance, bonus, commission_amount, incentive_amount, other_deductions.
+Proration: bonus × (months/12) if <12 months.
 
-IMPORTANT RULES:
-1. All amounts are in Malaysian Ringgit (RM)
-2. Match employees by name (partial match OK), employee code, department, or "all/everyone"
-3. Support proration for bonuses/incentives:
-   - "prorate if less than 1 year" = multiply by (months_employed / 12)
-   - Use months_employed and years_employed from context
-4. Support conditional logic:
-   - "if less than X months/years" - check against months_employed/years_employed
-   - "department X" - filter by department
-   - "everyone/all employees" - apply to all
-5. For basic salary changes, show new_value as the TOTAL (not the increment)
-6. For bonus/incentive, new_value is the amount to ADD (it goes to bonus field)
-7. Always show the calculation for prorated amounts
+JSON format:
+{"understood":true,"summary":"...","changes":[{"item_id":1,"employee_name":"X","field":"bonus","current_value":0,"new_value":400,"reason":"..."}],"impact":{"total_additional_cost":0,"affected_employees":0}}`;
 
-PRORATION FORMULA:
-- Full bonus = base_amount
-- Prorated bonus = base_amount × (months_employed / 12)
-- Round to 2 decimal places
-
-Return ONLY valid JSON in this format:
-{
-  "understood": true/false,
-  "clarification": "question if unclear, null if understood",
-  "summary": "Brief summary of what will be done",
-  "changes": [
-    {
-      "item_id": 123,
-      "employee_name": "Name",
-      "field": "basic_salary|bonus|fixed_allowance|commission_amount|other_deductions",
-      "current_value": 2000,
-      "new_value": 2200,
-      "reason": "Salary increment +RM200",
-      "calculation": "Optional calculation explanation for proration"
-    }
-  ],
-  "impact": {
-    "total_additional_cost": 500,
-    "affected_employees": 3,
-    "note": "Any important notes"
-  }
-}
-
-Available fields to modify: basic_salary, fixed_allowance, bonus, commission_amount, incentive_amount, other_deductions, deduction_remarks`;
-
-    const userMessage = `Current payroll for ${run.month}/${run.year}${run.department_name ? ` (${run.department_name})` : ''}:
-
-${JSON.stringify(payrollContext, null, 2)}
-
-HR Instruction: "${instruction}"
-
-Analyze this instruction and return the JSON response with proposed changes.
-For proration, use the months_employed field to calculate proportional amounts.`;
+    const userMessage = `Payroll ${run.month}/${run.year}: ${JSON.stringify(payrollContext)}
+Instruction: "${instruction}"`;
 
     // Build messages with conversation history
     const messages = [];
@@ -200,8 +128,8 @@ For proration, use the months_employed field to calculate proportional amounts.`
     messages.push({ role: 'user', content: userMessage });
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4000,
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 1500,
       messages: messages,
       system: systemPrompt
     });
@@ -904,52 +832,15 @@ router.post('/settings-assistant', authenticateAdmin, async (req, res) => {
       statutory: { ...defaultSettings.statutory, ...currentSettings.statutory }
     };
 
-    // Build conversation for AI
-    const systemPrompt = `You are an AI Payroll Settings Assistant for "${company.name}" (a Malaysian company).
-Your job is to help HR understand and configure payroll calculation rules.
+    // Build conversation for AI (simplified for speed)
+    const systemPrompt = `Payroll Settings AI for ${company.name}. Return JSON only.
 
-CURRENT PAYROLL SETTINGS:
-${JSON.stringify(mergedSettings, null, 2)}
+Current: ${JSON.stringify(mergedSettings)}
 
-SETTING EXPLANATIONS:
-- features.auto_ot_from_clockin: Automatically calculate OT from clock-in records
-- features.auto_ph_pay: Automatically calculate public holiday extra pay
-- features.unpaid_leave_deduction: Deduct unpaid leave from salary
-- features.ytd_pcb_calculation: Use year-to-date PCB calculation
-- rates.ot_multiplier: OT pay multiplier (1.0 = normal rate, 1.5 = 1.5x)
-- rates.ph_multiplier: Public holiday pay multiplier (1.0 = extra 1x, 2.0 = extra 2x)
-- rates.standard_work_hours: Standard work hours per day (default: 8)
-- rates.standard_work_days: Standard work days per month (default: 22)
-- statutory.epf_enabled: Enable EPF deductions
-- statutory.socso_enabled: Enable SOCSO deductions
-- statutory.eis_enabled: Enable EIS deductions
-- statutory.pcb_enabled: Enable PCB (tax) deductions
-- statutory.statutory_on_ot: Include OT in EPF/SOCSO/EIS calculation
-- statutory.statutory_on_ph_pay: Include PH pay in EPF/SOCSO/EIS calculation
-- statutory.statutory_on_allowance: Include allowances in EPF/SOCSO/EIS calculation
-- statutory.statutory_on_incentive: Include incentives in EPF/SOCSO/EIS calculation
+Settings: features(auto_ot_from_clockin,auto_ph_pay,unpaid_leave_deduction), rates(ot_multiplier,ph_multiplier,standard_work_hours), statutory(epf_enabled,socso_enabled,eis_enabled,pcb_enabled,statutory_on_ot,statutory_on_ph_pay,statutory_on_allowance)
 
-MALAYSIAN PAYROLL RULES:
-- EPF: Employee 11%, Employer 13% (≤RM5000) or 12% (>RM5000), rounded to nearest RM
-- SOCSO: Bracket-based, max RM5000 wage ceiling
-- EIS: Bracket-based, max RM5000 wage ceiling, not applicable age ≥57
-- PCB: Progressive tax brackets with reliefs
-
-RESPONSE FORMAT:
-Always respond in JSON format:
-{
-  "reply": "Your conversational response explaining things",
-  "changes": null or {
-    "path.to.setting": newValue,
-    "another.setting": newValue
-  },
-  "needs_confirmation": true/false,
-  "confirmation_message": "Are you sure you want to..." (if needs_confirmation)
-}
-
-If user asks to change something, set needs_confirmation=true and explain the impact.
-If user confirms (says yes/ok/confirm/proceed), apply the changes.
-Be helpful, explain calculations, and warn about impacts of changes.`;
+JSON: {"reply":"explanation","changes":{"path.to.setting":value},"needs_confirmation":true/false}
+If changing, set needs_confirmation=true. If user says yes/ok/confirm, apply changes.`;
 
     // Build messages array
     const messages = [];
@@ -969,8 +860,8 @@ Be helpful, explain calculations, and warn about impacts of changes.`;
     });
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 1000,
       system: systemPrompt,
       messages: messages
     });
