@@ -93,7 +93,7 @@ router.post('/login', asyncHandler(async (req, res) => {
   // Verify password
   const isValidPassword = await bcrypt.compare(password, employee.password_hash);
   if (!isValidPassword) {
-    throw new AuthenticationError('Invalid credentials');
+    throw new AuthenticationError('Password is incorrect');
   }
 
   // Update last login
@@ -271,7 +271,7 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
   // Verify IC/Passport number (compare without dashes/spaces, case-insensitive)
   const storedIC = (employee.ic_number || '').replace(/[-\s]/g, '').toUpperCase();
   if (storedIC !== cleanIC) {
-    throw new AuthenticationError('Invalid IC/Passport number');
+    throw new AuthenticationError('IC/Passport number is incorrect');
   }
 
   // Check if ESS is enabled for this employee
@@ -350,7 +350,11 @@ router.post('/login-name', asyncHandler(async (req, res) => {
   // Clean ID number - remove dashes and spaces, uppercase for passport
   const cleanIC = ic_number.replace(/[-\s]/g, '').toUpperCase();
 
-  // Find employee by name (case-insensitive) and verify IC, including company info
+  // Normalize name for comparison - remove spaces, dashes, dots, and convert to uppercase
+  const normalizedInputName = name.replace(/[\s\-\.]/g, '').toUpperCase();
+
+  // Find employee by normalized name (ignore spaces, caps, dashes)
+  // Using REPLACE to remove spaces from stored name for comparison
   const result = await pool.query(
     `SELECT e.id, e.employee_id, e.name, e.email, e.username, e.ic_number, e.status, e.ess_enabled,
             e.department_id, e.outlet_id, e.company_id, e.must_change_password,
@@ -361,12 +365,13 @@ router.post('/login-name', asyncHandler(async (req, res) => {
      FROM employees e
      LEFT JOIN companies c ON e.company_id = c.id
      LEFT JOIN outlets o ON e.outlet_id = o.id
-     WHERE LOWER(TRIM(e.name)) = LOWER(TRIM($1)) AND e.status = 'active'`,
-    [name]
+     WHERE UPPER(REPLACE(REPLACE(REPLACE(e.name, ' ', ''), '-', ''), '.', '')) = $1
+       AND e.status = 'active'`,
+    [normalizedInputName]
   );
 
   if (result.rows.length === 0) {
-    throw new AuthenticationError('Invalid name or IC/Passport number');
+    throw new AuthenticationError('Name not found. Please check spelling.');
   }
 
   const employee = result.rows[0];
@@ -374,7 +379,7 @@ router.post('/login-name', asyncHandler(async (req, res) => {
   // Verify IC/Passport number (compare without dashes/spaces, case-insensitive)
   const storedIC = (employee.ic_number || '').replace(/[-\s]/g, '').toUpperCase();
   if (storedIC !== cleanIC) {
-    throw new AuthenticationError('Invalid name or IC/Passport number');
+    throw new AuthenticationError('IC/Passport number is incorrect');
   }
 
   // Check if ESS is enabled for this employee
