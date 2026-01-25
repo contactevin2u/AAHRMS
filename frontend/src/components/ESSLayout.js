@@ -57,9 +57,10 @@ function ESSLayout({ children }) {
       console.error('Logout error:', e);
     }
 
-    // Clear local storage
+    // Clear local storage including saved credentials for auto-login
     localStorage.removeItem('employeeToken');
     localStorage.removeItem('employeeInfo');
+    localStorage.removeItem('essSavedCredentials');
     navigate('/ess/login');
   };
 
