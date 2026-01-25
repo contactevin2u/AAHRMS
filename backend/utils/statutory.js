@@ -283,19 +283,31 @@ const calculateEIS = (grossSalary, age = 30) => {
 // Z = Accumulated zakat paid
 // X = Accumulated PCB paid
 
-// Tax brackets for 2024/2025 - LHDN official rates
-// B values include tax rebate: RM400 for Category 1/3, RM800 for Category 2
+// Tax brackets for YA 2024/2025 - LHDN official rates (updated per Budget 2024)
+// B values = Cumulative tax at M - Rebate (RM400 for Category 1/3, RM800 for Category 2)
+//
+// YA 2024 Tax Rates:
+// 0 - 5,000: 0%
+// 5,001 - 20,000: 1% (tax = 150)
+// 20,001 - 35,000: 3% (tax = 450, cumulative = 600)
+// 35,001 - 50,000: 8% (tax = 1,200, cumulative = 1,800)
+// 50,001 - 70,000: 13% (tax = 2,600, cumulative = 4,400)
+// 70,001 - 100,000: 21% (tax = 6,300, cumulative = 10,700)
+// 100,001 - 400,000: 24% (tax = 72,000, cumulative = 82,700)
+// 400,001 - 600,000: 25% (tax = 50,000, cumulative = 132,700)
+// 600,001 - 2,000,000: 26% (tax = 364,000, cumulative = 496,700)
+// Above 2,000,000: 28%
 const TAX_BRACKETS_LHDN = [
   { min: 0, max: 5000, M: 0, R: 0, B1: 0, B2: 0 },
   { min: 5001, max: 20000, M: 5000, R: 0.01, B1: -400, B2: -800 },
   { min: 20001, max: 35000, M: 20000, R: 0.03, B1: -250, B2: -650 },
-  { min: 35001, max: 50000, M: 35000, R: 0.06, B1: 200, B2: -200 },
-  { min: 50001, max: 70000, M: 50000, R: 0.11, B1: 1100, B2: 700 },
-  { min: 70001, max: 100000, M: 70000, R: 0.19, B1: 3300, B2: 2900 },
-  { min: 100001, max: 400000, M: 100000, R: 0.25, B1: 9000, B2: 8600 },
-  { min: 400001, max: 600000, M: 400000, R: 0.26, B1: 84000, B2: 83600 },
-  { min: 600001, max: 2000000, M: 600000, R: 0.28, B1: 136000, B2: 135600 },
-  { min: 2000001, max: Infinity, M: 2000000, R: 0.30, B1: 528000, B2: 527600 }
+  { min: 35001, max: 50000, M: 35000, R: 0.08, B1: 200, B2: -200 },
+  { min: 50001, max: 70000, M: 50000, R: 0.13, B1: 1400, B2: 1000 },
+  { min: 70001, max: 100000, M: 70000, R: 0.21, B1: 4000, B2: 3600 },
+  { min: 100001, max: 400000, M: 100000, R: 0.24, B1: 10300, B2: 9900 },
+  { min: 400001, max: 600000, M: 400000, R: 0.25, B1: 82300, B2: 81900 },
+  { min: 600001, max: 2000000, M: 600000, R: 0.26, B1: 132300, B2: 131900 },
+  { min: 2000001, max: Infinity, M: 2000000, R: 0.28, B1: 496300, B2: 495900 }
 ];
 
 // Keep old name for backward compatibility
