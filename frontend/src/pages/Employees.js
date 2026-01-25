@@ -951,7 +951,7 @@ function Employees() {
               className={`group-toggle-btn ${groupByEnabled ? 'active' : ''}`}
               title={groupByEnabled ? 'Disable grouping' : 'Enable grouping'}
             >
-              {groupByEnabled ? `Group by ${isMimix ? 'Outlet' : 'Dept'} ON` : `Group by ${isMimix ? 'Outlet' : 'Dept'} OFF`}
+              {groupByEnabled ? 'Grouped' : 'Flat'}
             </button>
             <button onClick={downloadTemplate} className="template-btn">
               Download Template
@@ -1073,7 +1073,6 @@ function Employees() {
                     <div className="group-header-left">
                       <span className="collapse-icon">{expandedGroups[groupKey] ? '▼' : '▶'}</span>
                       <span className="group-name">{group.group_name}</span>
-                      <span className="group-count">({group.employees.length} staff)</span>
                     </div>
                     <div className="group-header-right">
                       {group.managers.length > 0 && (
@@ -1082,6 +1081,7 @@ function Employees() {
                       {group.supervisors.length > 0 && (
                         <span className="role-badge supervisor">SV: {group.supervisors.map(s => s.name).join(', ')}</span>
                       )}
+                      <span className="group-count">({group.employees.length} employees)</span>
                     </div>
                   </div>
                   {expandedGroups[groupKey] && (
@@ -1406,7 +1406,6 @@ function Employees() {
                   <div className="group-header-left">
                     <span className="collapse-icon">{expandedGroups[groupKey] ? '▼' : '▶'}</span>
                     <span className="group-name">{group.group_name}</span>
-                    <span className="group-count">({group.employees.length} staff)</span>
                   </div>
                   <div className="group-header-right">
                     {group.managers.length > 0 && (
@@ -1415,6 +1414,7 @@ function Employees() {
                     {group.supervisors.length > 0 && (
                       <span className="role-badge supervisor">SV: {group.supervisors.map(s => s.name).join(', ')}</span>
                     )}
+                    <span className="group-count">({group.employees.length} employees)</span>
                   </div>
                 </div>
                 {expandedGroups[groupKey] && (
