@@ -932,27 +932,6 @@ function Employees() {
               accept=".xlsx,.xls,.csv"
               style={{ display: 'none' }}
             />
-            <div className="view-toggle">
-              <button
-                onClick={() => setViewMode('simple')}
-                className={`toggle-btn ${viewMode === 'simple' ? 'active' : ''}`}
-              >
-                Simple
-              </button>
-              <button
-                onClick={() => setViewMode('detailed')}
-                className={`toggle-btn ${viewMode === 'detailed' ? 'active' : ''}`}
-              >
-                Detailed
-              </button>
-            </div>
-            <button
-              onClick={() => setGroupByEnabled(!groupByEnabled)}
-              className={`group-toggle-btn ${groupByEnabled ? 'active' : ''}`}
-              title={groupByEnabled ? 'Disable grouping' : 'Enable grouping'}
-            >
-              {groupByEnabled ? 'Grouped' : 'Flat'}
-            </button>
             <button onClick={downloadTemplate} className="template-btn">
               Download Template
             </button>
@@ -992,12 +971,6 @@ function Employees() {
         )}
 
         <div className="filters-row">
-          <input
-            type="text"
-            placeholder="🔍 Search name or ID..."
-            value={filter.search}
-            onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-          />
           {isMimix ? (
             <select
               value={filter.outlet_id}
@@ -1036,6 +1009,33 @@ function Employees() {
             <option value="confirmed">Confirmed</option>
             <option value="contract">Contract</option>
           </select>
+          <input
+            type="text"
+            placeholder="Search by name or ID..."
+            value={filter.search}
+            onChange={(e) => setFilter({ ...filter, search: e.target.value })}
+            className="search-input"
+          />
+          <button
+            onClick={() => setGroupByEnabled(!groupByEnabled)}
+            className={`group-toggle-btn ${groupByEnabled ? 'active' : ''}`}
+          >
+            {groupByEnabled ? 'Grouped' : 'Flat'}
+          </button>
+          <div className="view-toggle">
+            <button
+              onClick={() => setViewMode('simple')}
+              className={`toggle-btn ${viewMode === 'simple' ? 'active' : ''}`}
+            >
+              Simple
+            </button>
+            <button
+              onClick={() => setViewMode('detailed')}
+              className={`toggle-btn ${viewMode === 'detailed' ? 'active' : ''}`}
+            >
+              Detailed
+            </button>
+          </div>
         </div>
 
         {/* Bulk Action Bar */}

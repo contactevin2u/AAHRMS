@@ -107,8 +107,12 @@
 }
 
 .filters-row input {
-  flex: 1;
   min-width: 200px;
+}
+
+.filters-row .search-input {
+  flex: 1;
+  max-width: 300px;
 }
 
 .filters-row select {
@@ -1427,15 +1431,16 @@ tr:hover {
    ===================================================== */
 
 .group-toggle-btn {
-  background: #f1f5f9;
+  background: #f8fafc;
   color: #64748b;
   border: 1px solid #e2e8f0;
-  padding: 8px 16px;
+  padding: 10px 16px;
   border-radius: 8px;
   font-weight: 500;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .group-toggle-btn:hover {
