@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import OfflineBanner from './OfflineBanner';
 import { isSupervisorOrManager, isMimixCompany, getRoleDisplayName } from '../utils/permissions';
+import { useLanguage } from '../contexts/LanguageContext';
 import './ESSLayout.css';
 
 function ESSLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { language, toggleLanguage, t } = useLanguage();
   const [employeeInfo, setEmployeeInfo] = useState(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
@@ -134,6 +136,13 @@ function ESSLayout({ children }) {
           <span className="company-name">{employeeInfo?.company_name || 'Employee Portal'}</span>
         </div>
         <div className="header-right">
+          <button
+            className="language-toggle-btn"
+            onClick={toggleLanguage}
+            title={language === 'en' ? 'Switch to Bahasa Malaysia' : 'Switch to English'}
+          >
+            {t('language.toggle')}
+          </button>
           <NavLink to="/ess/notifications" className="header-icon-btn">
             <span className="notification-icon">&#x1F514;</span>
             {unreadNotifications > 0 && (
@@ -143,7 +152,7 @@ function ESSLayout({ children }) {
           <NavLink to="/ess/profile" className="profile-link">
             <div className="user-avatar-small">{getInitials(employeeInfo?.name)}</div>
           </NavLink>
-          <button className="logout-btn" onClick={handleLogout} title="Logout">
+          <button className="logout-btn" onClick={handleLogout} title={t('nav.logout')}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
               <polyline points="16 17 21 12 16 7"></polyline>
@@ -165,7 +174,7 @@ function ESSLayout({ children }) {
           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
         >
           <span className="nav-icon">&#x1F3E0;</span>
-          <span className="nav-label">Home</span>
+          <span className="nav-label">{t('nav.home')}</span>
         </NavLink>
 
         {/* Team Overview for Mimix Managers only (not supervisors) */}
@@ -175,7 +184,7 @@ function ESSLayout({ children }) {
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
             <span className="nav-icon">&#x1F465;</span>
-            <span className="nav-label">Team</span>
+            <span className="nav-label">{t('nav.manager')}</span>
           </NavLink>
         )}
 
@@ -185,7 +194,7 @@ function ESSLayout({ children }) {
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
             <span className="nav-icon">&#x23F0;</span>
-            <span className="nav-label">Clock In</span>
+            <span className="nav-label">{t('nav.clockIn')}</span>
           </NavLink>
         )}
 
@@ -195,7 +204,7 @@ function ESSLayout({ children }) {
             className={({ isActive }) => `nav-item ${isActive || location.pathname.includes('/ess/calendar') || location.pathname.includes('/ess/team-schedule') ? 'active' : ''}`}
           >
             <span className="nav-icon">&#x1F5D3;</span>
-            <span className="nav-label">Schedule</span>
+            <span className="nav-label">{t('nav.schedule')}</span>
           </NavLink>
         )}
 
@@ -204,7 +213,7 @@ function ESSLayout({ children }) {
           className={({ isActive }) => `nav-item ${isActive || location.pathname.includes('/ess/leave') || location.pathname.includes('/ess/claims') || location.pathname.includes('/ess/ot-approval') ? 'active' : ''}`}
         >
           <span className="nav-icon">&#x1F4CB;</span>
-          <span className="nav-label">Requests</span>
+          <span className="nav-label">{t('nav.requests')}</span>
         </NavLink>
 
         <NavLink
@@ -212,7 +221,7 @@ function ESSLayout({ children }) {
           className={({ isActive }) => `nav-item ${isActive || location.pathname.includes('/ess/payslips') ? 'active' : ''}`}
         >
           <span className="nav-icon">&#x1F464;</span>
-          <span className="nav-label">Profile</span>
+          <span className="nav-label">{t('nav.profile')}</span>
         </NavLink>
       </nav>
     </div>

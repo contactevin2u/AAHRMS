@@ -35,6 +35,7 @@ const commissionRoutes = require('./routes/commission');  // Indoor Sales commis
 const advancesRoutes = require('./routes/advances');  // Salary Advances
 const payrollAIRoutes = require('./routes/payrollAI');  // AI Payroll Assistant
 const publicHolidaysRoutes = require('./routes/publicHolidays');  // Public Holidays Management
+const eaFormsRoutes = require('./routes/ea-forms');  // EA Forms (Borang EA)
 
 // Scheduled jobs
 const { initScheduler, triggerAutoClockOut } = require('./jobs/scheduler');
@@ -87,6 +88,7 @@ app.use('/api/commission', commissionRoutes);  // Indoor Sales commissions
 app.use('/api/advances', advancesRoutes);  // Salary Advances
 app.use('/api/payroll/ai', payrollAIRoutes);  // AI Payroll Assistant
 app.use('/api/public-holidays', publicHolidaysRoutes);  // Public Holidays Management
+app.use('/api/ea-forms', eaFormsRoutes);  // EA Forms (Borang EA)
 
 // Health check
 app.get('/api/health', (req, res) => {

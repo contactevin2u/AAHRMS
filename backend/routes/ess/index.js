@@ -23,6 +23,7 @@ const schedulesRoutes = require('./schedules');
 // Shift swap disabled - employees must work assigned shifts only
 // const shiftSwapRoutes = require('./shiftSwap');
 const managerOverviewRoutes = require('./managerOverview');
+const otApprovalRoutes = require('./otApproval');
 
 // Mount sub-routes
 // Auth routes (login, password reset, etc.) - no prefix needed
@@ -63,5 +64,8 @@ router.use('/schedules', schedulesRoutes);
 
 // Manager Overview routes (managers only)
 router.use('/manager-overview', managerOverviewRoutes);
+
+// OT Batch Approval routes (supervisors/managers only)
+router.use('/ot-approvals', otApprovalRoutes);
 
 module.exports = router;

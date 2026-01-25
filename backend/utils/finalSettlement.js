@@ -14,6 +14,68 @@ const pool = require('../db');
 const { calculateAllStatutory, calculateAgeFromIC } = require('./statutory');
 
 /**
+ * Working Days Calculation Helpers
+ * Used for accurate prorate salary calculations
+ */
+
+/**
+ * Get the number of working days in a given month
+ * Excludes weekends (Saturday and Sunday)
+ * @param {number} year - Full year (e.g., 2025)
+ * @param {number} month - Month (1-12)
+ * @returns {number} Number of working days
+ */
+function getWorkingDaysInMonth(year, month) {
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDay = new Date(year, month, 0);
+  let workingDays = 0;
+
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const dayOfWeek = d.getDay();
+    // 0 = Sunday, 6 = Saturday
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      workingDays++;
+    }
+  }
+
+  return workingDays;
+}
+
+/**
+ * Get the number of working days between two dates (inclusive)
+ * Excludes weekends (Saturday and Sunday)
+ * @param {Date|string} startDate - Start date
+ * @param {Date|string} endDate - End date
+ * @returns {number} Number of working days
+ */
+function getWorkingDaysBetween(startDate, endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  let workingDays = 0;
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dayOfWeek = d.getDay();
+    // 0 = Sunday, 6 = Saturday
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      workingDays++;
+    }
+  }
+
+  return workingDays;
+}
+
+/**
+ * Get working days from the 1st of the month to a specific date
+ * @param {Date|string} date - The end date
+ * @returns {number} Number of working days from 1st to the given date
+ */
+function getWorkingDaysUpToDate(date) {
+  const d = new Date(date);
+  const firstOfMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+  return getWorkingDaysBetween(firstOfMonth, d);
+}
+
+/**
  * Get company settlement settings
  */
 async function getCompanySettlementSettings(companyId) {
@@ -86,8 +148,11 @@ async function calculateFinalSettlement(resignationId) {
     // ========================================
     const lastMonth = lastWorkingDay.getMonth() + 1;
     const lastYear = lastWorkingDay.getFullYear();
-    const daysInMonth = new Date(lastYear, lastMonth, 0).getDate();
-    const daysWorked = lastWorkingDay.getDate();
+
+    // Calculate working days (Mon-Fri only) - not calendar days
+    // This fixes the 40% overpayment risk when using calendar days
+    const workingDaysInMonth = getWorkingDaysInMonth(lastYear, lastMonth);
+    const workingDaysWorked = getWorkingDaysUpToDate(lastWorkingDay);
 
     // Check if already paid for this month
     const existingPayroll = await client.query(`
@@ -100,10 +165,10 @@ async function calculateFinalSettlement(resignationId) {
     let salaryDaysWorked = 0;
 
     if (existingPayroll.rows.length === 0) {
-      // Not yet paid, calculate prorated salary based on working days
-      // Assuming working days are Mon-Fri, count actual working days
-      salaryDaysWorked = daysWorked;
-      proratedSalary = Math.round((basicSalary / daysInMonth) * daysWorked * 100) / 100;
+      // Not yet paid, calculate prorated salary based on WORKING days (not calendar days)
+      // Formula: proratedSalary = (basicSalary / workingDaysInMonth) * actualWorkingDaysWorked
+      salaryDaysWorked = workingDaysWorked;
+      proratedSalary = Math.round((basicSalary / workingDaysInMonth) * workingDaysWorked * 100) / 100;
     }
 
     // ========================================
@@ -242,11 +307,12 @@ async function calculateFinalSettlement(resignationId) {
 
     const breakdown = {
       prorated_salary: {
-        days_worked: salaryDaysWorked,
-        days_in_month: daysInMonth,
+        working_days_worked: salaryDaysWorked,
+        working_days_in_month: workingDaysInMonth,
         daily_rate: Math.round(dailyRate * 100) / 100,
         amount: proratedSalary,
-        already_paid: existingPayroll.rows.length > 0
+        already_paid: existingPayroll.rows.length > 0,
+        calculation_method: 'working_days' // Indicates Mon-Fri only, excludes weekends
       },
       leave_encashment: {
         total_days: totalLeaveEncashDays,
@@ -347,5 +413,9 @@ async function saveFinalSettlement(resignationId, settlement) {
 module.exports = {
   getCompanySettlementSettings,
   calculateFinalSettlement,
-  saveFinalSettlement
+  saveFinalSettlement,
+  // Working days helpers (exported for testing and reuse)
+  getWorkingDaysInMonth,
+  getWorkingDaysBetween,
+  getWorkingDaysUpToDate
 };

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { LanguageProvider } from './contexts/LanguageContext';
 import AnonymousFeedback from './pages/AnonymousFeedback';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
@@ -45,10 +46,18 @@ function ProtectedRoute({ children }) {
 
 // Legacy EmployeeProtectedRoute removed - use ESSProtectedRoute instead
 
-// ESS Protected Route (unified)
+// ESS Protected Route (unified) - includes language provider
 function ESSProtectedRoute({ children }) {
   const token = localStorage.getItem('employeeToken');
-  return token ? children : <Navigate to="/ess/login" replace />;
+  if (!token) {
+    return <Navigate to="/ess/login" replace />;
+  }
+  return <LanguageProvider>{children}</LanguageProvider>;
+}
+
+// ESS Public Route (login page) - includes language provider
+function ESSPublicRoute({ children }) {
+  return <LanguageProvider>{children}</LanguageProvider>;
 }
 
 // ESS Supervisor Protected Route - for supervisor/manager pages (team schedule, OT approval)
@@ -346,7 +355,7 @@ function App() {
         <Route path="/staff/clockin" element={<Navigate to="/ess/attendance" replace />} />
 
         {/* Unified ESS PWA Routes */}
-        <Route path="/ess/login" element={<ESSLogin />} />
+        <Route path="/ess/login" element={<ESSPublicRoute><ESSLogin /></ESSPublicRoute>} />
         <Route
           path="/ess/change-password"
           element={

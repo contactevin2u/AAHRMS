@@ -1,8 +1,26 @@
+/**
+ * =============================================================================
+ * DEPRECATED: This file is deprecated as of January 2026
+ * =============================================================================
+ *
+ * This is the legacy V1 payroll system. Please use payrollUnified.js instead.
+ *
+ * Migration guide:
+ * - GET /api/payroll -> Use payrollUnified.js: GET /api/payroll/runs/:id/items
+ * - POST /api/payroll/generate -> Use payrollUnified.js: POST /api/payroll/runs
+ * - PUT /api/payroll/:id -> Use payrollUnified.js: PUT /api/payroll/items/:id
+ *
+ * This file will be removed in a future release.
+ * =============================================================================
+ */
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { calculateAllStatutory } = require('../utils/statutory');
+
+console.warn('[DEPRECATION WARNING] payroll.js routes are deprecated. Please migrate to payrollUnified.js');
 
 // Get payroll for a month
 router.get('/', authenticateAdmin, async (req, res) => {

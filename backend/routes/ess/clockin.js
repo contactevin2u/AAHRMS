@@ -64,6 +64,7 @@ const {
   canApproveBasedOnHierarchy
 } = require('../../middleware/essPermissions');
 const { checkWrongShift } = require('../../utils/attendanceDeduction');
+const { getOTApprovalSetting } = require('../../utils/otCalculation');
 
 // Standard work time: 7.5 hours = 450 minutes (excluding 1 hour break)
 // Total shift = 8.5 hours (7.5 work + 1 hour break)
@@ -711,8 +712,9 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
 
       // OT flagging (only for full-time, part-time employees have no OT)
       const otFlagged = !isPartTime && otMinutes > 0;
-      // AA Alive: auto-approve OT
-      const otAutoApproved = otFlagged;
+      // Auto-approve OT if company doesn't require approval (configurable)
+      const otRequiresApproval = await getOTApprovalSetting(company_id);
+      const otAutoApproved = otFlagged && !otRequiresApproval;
 
       // Calculate hours in JavaScript to avoid PostgreSQL type inference issues
       const totalWorkHours = Math.round(totalMinutes / 6) / 10;  // Round to 1 decimal
@@ -850,9 +852,9 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       otMinutes = 0; // Part-time has no OT
     }
 
-    // AA Alive: auto-approve OT (no approval needed)
-    // Mimix: OT requires supervisor approval
-    const otAutoApproved = otFlagged && isAAAliveCompany(company_id);
+    // Auto-approve OT if company doesn't require approval (configurable per company)
+    const otRequiresApprovalForClockout = await getOTApprovalSetting(company_id);
+    const otAutoApproved = otFlagged && !otRequiresApprovalForClockout;
 
     // Calculate hours in JavaScript to avoid PostgreSQL type inference issues
     const totalWorkHours = Math.round(totalMinutes / 6) / 10;  // Round to 1 decimal
@@ -882,8 +884,8 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       throw dbErr;
     }
 
-    // If OT flagged for Mimix company, create notification for supervisor
-    if (otFlagged && isMimixCompany(company_id)) {
+    // If OT flagged and company requires approval, create notification for supervisor
+    if (otFlagged && otRequiresApprovalForClockout) {
       // Find supervisor for this outlet
       const supervisorResult = await pool.query(
         `SELECT id FROM employees
@@ -1094,9 +1096,9 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
   const otFlagged = !isPartTime && otMinutes > 0;
   if (isPartTime) otMinutes = 0; // Part-time has no OT
 
-  // AA Alive: auto-approve OT (no approval needed)
-  // Mimix: OT requires supervisor approval
-  const otAutoApproved = otFlagged && isAAAliveCompany(company_id);
+  // Auto-approve OT if company doesn't require approval (configurable per company)
+  const otRequiresApprovalLegacy = await getOTApprovalSetting(company_id);
+  const otAutoApproved = otFlagged && !otRequiresApprovalLegacy;
 
   // Calculate hours in JavaScript to avoid PostgreSQL type inference issues
   const totalWorkHours = Math.round(totalMinutes / 6) / 10;  // Round to 1 decimal

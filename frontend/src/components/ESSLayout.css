@@ -76,6 +76,33 @@
   transform: scale(0.95);
 }
 
+/* Language Toggle Button */
+.language-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 1.5px solid #3b82f6;
+  border-radius: 6px;
+  background: white;
+  color: #3b82f6;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.language-toggle-btn:hover {
+  background: #3b82f6;
+  color: white;
+}
+
+.language-toggle-btn:active {
+  transform: scale(0.95);
+}
+
 .header-icon-btn {
   position: relative;
   display: flex;

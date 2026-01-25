@@ -1452,6 +1452,226 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 });
 
 /**
+ * POST /api/payroll/preview
+ * Preview/simulate payroll calculation without creating a run
+ *
+ * Supports "what-if" scenarios:
+ * - ?salary_change[employee_id]=new_salary - Preview with salary changes
+ *
+ * Returns calculated values without any database writes.
+ */
+router.post('/preview', authenticateAdmin, async (req, res) => {
+  try {
+    const { month, year, department_id, outlet_id, employee_ids, salary_changes } = req.body;
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    if (!month || !year) {
+      return res.status(400).json({ error: 'Month and year are required' });
+    }
+
+    // Get company settings
+    const settings = await getCompanySettings(companyId);
+    const { features, rates, period: periodConfig, statutory } = settings;
+    const isOutletBased = settings.groupingType === 'outlet';
+
+    // Get period dates
+    const period = getPayrollPeriod(month, year, periodConfig);
+    const workingDays = rates.standard_work_days || getWorkingDaysInMonth(year, month);
+
+    // Build employee query
+    let employeeQuery = `
+      SELECT e.*,
+             e.default_basic_salary as basic_salary,
+             e.default_allowance as fixed_allowance,
+             d.name as department_name,
+             d.payroll_structure_code
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE e.company_id = $1
+        AND e.status = 'active'
+    `;
+    let employeeParams = [companyId];
+
+    if (isOutletBased && outlet_id) {
+      employeeQuery += ` AND e.outlet_id = $${employeeParams.length + 1}`;
+      employeeParams.push(outlet_id);
+    } else if (!isOutletBased && department_id) {
+      employeeQuery += ` AND e.department_id = $${employeeParams.length + 1}`;
+      employeeParams.push(department_id);
+    }
+
+    if (employee_ids && employee_ids.length > 0) {
+      employeeQuery += ` AND e.id = ANY($${employeeParams.length + 1})`;
+      employeeParams.push(employee_ids);
+    }
+
+    const employees = await pool.query(employeeQuery, employeeParams);
+
+    // Get previous month data for variance
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+
+    let prevPayrollMap = {};
+    const prevResult = await pool.query(`
+      SELECT pi.employee_id, pi.net_pay
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.month = $1 AND pr.year = $2 AND pr.company_id = $3
+    `, [prevMonth, prevYear, companyId]);
+
+    prevResult.rows.forEach(row => {
+      prevPayrollMap[row.employee_id] = row;
+    });
+
+    // Calculate preview for each employee
+    const previewItems = [];
+    let totalGross = 0, totalNet = 0, totalDeductions = 0;
+
+    for (const emp of employees.rows) {
+      // Apply salary changes if provided (for what-if scenarios)
+      let basicSalary = parseFloat(emp.basic_salary) || 0;
+      let fixedAllowance = parseFloat(emp.fixed_allowance) || 0;
+
+      if (salary_changes && salary_changes[emp.id]) {
+        const changes = salary_changes[emp.id];
+        if (changes.basic_salary !== undefined) {
+          basicSalary = parseFloat(changes.basic_salary) || 0;
+        }
+        if (changes.fixed_allowance !== undefined) {
+          fixedAllowance = parseFloat(changes.fixed_allowance) || 0;
+        }
+      }
+
+      const totalAllowances = fixedAllowance;
+
+      // Calculate OT if enabled
+      let otHours = 0, otAmount = 0;
+      if (features.auto_ot_from_clockin && basicSalary > 0) {
+        try {
+          const otResult = await calculateOTFromClockIn(
+            emp.id, companyId, emp.department_id,
+            period.start.toISOString().split('T')[0],
+            period.end.toISOString().split('T')[0],
+            basicSalary
+          );
+          otHours = otResult.total_ot_hours || 0;
+          otAmount = otResult.total_ot_amount || 0;
+        } catch (e) {
+          console.warn(`OT calculation failed for employee ${emp.id}:`, e.message);
+        }
+      }
+
+      // Calculate PH pay if enabled
+      let phDaysWorked = 0, phPay = 0;
+      if (features.auto_ph_pay && basicSalary > 0) {
+        try {
+          phDaysWorked = await calculatePHDaysWorked(
+            emp.id, companyId,
+            period.start.toISOString().split('T')[0],
+            period.end.toISOString().split('T')[0]
+          );
+          const dailyRate = basicSalary / workingDays;
+          phPay = Math.round(phDaysWorked * dailyRate * 100) / 100;
+        } catch (e) {
+          console.warn(`PH calculation failed for employee ${emp.id}:`, e.message);
+        }
+      }
+
+      // Calculate statutory base
+      let statutoryBase = basicSalary + otAmount;
+      if (statutory.statutory_on_allowance) {
+        statutoryBase += totalAllowances;
+      }
+
+      // Gross salary
+      const grossSalary = basicSalary + totalAllowances + otAmount + phPay;
+
+      // Calculate statutory deductions
+      const statutoryResult = calculateAllStatutory(statutoryBase, emp, month);
+
+      const epfEmployee = statutory.epf_enabled ? (statutoryResult.epf?.employee || 0) : 0;
+      const epfEmployer = statutory.epf_enabled ? (statutoryResult.epf?.employer || 0) : 0;
+      const socsoEmployee = statutory.socso_enabled ? (statutoryResult.socso?.employee || 0) : 0;
+      const socsoEmployer = statutory.socso_enabled ? (statutoryResult.socso?.employer || 0) : 0;
+      const eisEmployee = statutory.eis_enabled ? (statutoryResult.eis?.employee || 0) : 0;
+      const eisEmployer = statutory.eis_enabled ? (statutoryResult.eis?.employer || 0) : 0;
+      const pcb = statutory.pcb_enabled ? (statutoryResult.pcb || 0) : 0;
+
+      const totalDeductionsEmp = epfEmployee + socsoEmployee + eisEmployee + pcb;
+      const netPay = grossSalary - totalDeductionsEmp;
+      const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
+
+      // Variance calculation
+      const prevMonthNet = prevPayrollMap[emp.id]?.net_pay || null;
+      let varianceAmount = null, variancePercent = null;
+      if (prevMonthNet !== null && prevMonthNet > 0) {
+        varianceAmount = netPay - prevMonthNet;
+        variancePercent = (varianceAmount / prevMonthNet) * 100;
+      }
+
+      previewItems.push({
+        employee_id: emp.id,
+        employee_name: emp.name,
+        employee_code: emp.employee_id,
+        department_name: emp.department_name,
+        basic_salary: basicSalary,
+        fixed_allowance: fixedAllowance,
+        ot_hours: otHours,
+        ot_amount: otAmount,
+        ph_days_worked: phDaysWorked,
+        ph_pay: phPay,
+        gross_salary: grossSalary,
+        epf_employee: epfEmployee,
+        epf_employer: epfEmployer,
+        socso_employee: socsoEmployee,
+        socso_employer: socsoEmployer,
+        eis_employee: eisEmployee,
+        eis_employer: eisEmployer,
+        pcb: pcb,
+        total_deductions: totalDeductionsEmp,
+        net_pay: netPay,
+        employer_total_cost: employerCost,
+        prev_month_net: prevMonthNet,
+        variance_amount: varianceAmount,
+        variance_percent: variancePercent,
+        salary_changed: salary_changes && salary_changes[emp.id] ? true : false
+      });
+
+      totalGross += grossSalary;
+      totalNet += netPay;
+      totalDeductions += totalDeductionsEmp;
+    }
+
+    res.json({
+      preview: true,
+      period: {
+        month,
+        year,
+        start: period.start.toISOString().split('T')[0],
+        end: period.end.toISOString().split('T')[0],
+        label: period.label
+      },
+      items: previewItems,
+      summary: {
+        employee_count: previewItems.length,
+        total_gross: Math.round(totalGross * 100) / 100,
+        total_net: Math.round(totalNet * 100) / 100,
+        total_deductions: Math.round(totalDeductions * 100) / 100
+      },
+      note: 'This is a preview only. No data has been saved to the database.'
+    });
+
+  } catch (error) {
+    console.error('Error generating payroll preview:', error);
+    res.status(500).json({ error: 'Failed to generate payroll preview: ' + error.message });
+  }
+});
+
+/**
  * PUT /api/payroll/items/:id
  * Update a payroll item (manual adjustments)
  */
@@ -2237,12 +2457,25 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
 
 /**
  * GET /api/payroll/runs/:id/bank-file
- * Generate bank payment file (CSV)
+ * Generate bank payment file in various formats
+ *
+ * Query params:
+ * - format: maybank, cimb, publicbank, rhb, csv (default: csv)
+ * - payment_date: YYYYMMDD (optional, defaults to run payment date)
+ *
+ * Supported formats:
+ * - maybank: Maybank IBG format
+ * - cimb: CIMB BizChannel CSV
+ * - publicbank: Public Bank format
+ * - rhb: RHB Corporate CSV
+ * - csv: Generic CSV (default)
  */
 router.get('/runs/:id/bank-file', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const { format = 'csv', payment_date } = req.query;
     const companyId = req.companyId;
+
     if (!companyId) {
       return res.status(403).json({ error: 'Company context required' });
     }
@@ -2259,29 +2492,31 @@ router.get('/runs/:id/bank-file', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Access denied: payroll run belongs to another company' });
     }
 
-    const result = await pool.query(`
-      SELECT
-        e.name as employee_name,
-        e.bank_name,
-        e.bank_account_no,
-        pi.net_pay
-      FROM payroll_items pi
-      JOIN employees e ON pi.employee_id = e.id
-      WHERE pi.payroll_run_id = $1 AND pi.net_pay > 0
-      ORDER BY e.name
-    `, [id]);
+    // Use the bank file export utility
+    const { generateBankFile, getAvailableFormats } = require('../utils/bankFileExport');
 
-    let csv = 'Bank Name,Account Number,Employee Name,Net Pay\n';
-    result.rows.forEach(row => {
-      csv += `"${row.bank_name || ''}","${row.bank_account_no || ''}","${row.employee_name}",${row.net_pay}\n`;
-    });
+    // List available formats if requested
+    if (format === 'list') {
+      return res.json({ formats: getAvailableFormats() });
+    }
 
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=bank_payment_${id}.csv`);
-    res.send(csv);
+    const options = {};
+    if (payment_date) {
+      options.paymentDate = payment_date;
+    }
+
+    const result = await generateBankFile(parseInt(id), format, options);
+
+    // Set appropriate content type
+    const contentType = result.extension === 'csv' ? 'text/csv' : 'text/plain';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.send(result.content);
+
   } catch (error) {
     console.error('Error generating bank file:', error);
-    res.status(500).json({ error: 'Failed to generate bank file' });
+    res.status(500).json({ error: 'Failed to generate bank file: ' + error.message });
   }
 });
 

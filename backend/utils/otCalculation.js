@@ -12,6 +12,34 @@
 const pool = require('../db');
 
 /**
+ * Check if company requires OT approval
+ * Reads from companies.payroll_settings.features.ot_requires_approval
+ * @param {number} companyId - Company ID
+ * @returns {Promise<boolean>} Whether OT requires approval
+ */
+async function getOTApprovalSetting(companyId) {
+  try {
+    const result = await pool.query(
+      'SELECT payroll_settings FROM companies WHERE id = $1',
+      [companyId]
+    );
+
+    if (result.rows.length === 0) {
+      return false; // Default: no approval required
+    }
+
+    const payrollSettings = result.rows[0].payroll_settings || {};
+    const features = payrollSettings.features || {};
+
+    // Return the setting, default to false if not set
+    return features.ot_requires_approval === true;
+  } catch (error) {
+    console.error('Error getting OT approval setting:', error);
+    return false; // Default to no approval on error
+  }
+}
+
+/**
  * Get OT rules for a company/department
  * Falls back to company default if no department-specific rule exists
  */
@@ -171,9 +199,9 @@ async function calculateOTFromClockIn(employeeId, companyId, departmentId, perio
   const endDate = new Date(periodEnd);
   endDate.setHours(23, 59, 59, 999);
 
-  // AA Alive (company 1, 2): No OT approval needed - all OT counts automatically
-  // Mimix (company 3): OT requires approval before it counts for payroll
-  const otRequiresApproval = companyId === 3;
+  // OT approval requirement is now configurable per company
+  // Reads from companies.payroll_settings.features.ot_requires_approval
+  const otRequiresApproval = await getOTApprovalSetting(companyId);
   const clockRecords = await getClockRecords(employeeId, startDate, endDate, otRequiresApproval);
 
   // Get public holidays
@@ -418,6 +446,7 @@ async function calculatePHDaysWorked(employeeId, companyId, periodStart, periodE
 
 module.exports = {
   getOTRules,
+  getOTApprovalSetting,
   getPublicHolidays,
   calculateOTFromClockIn,
   calculateMonthlyOT,

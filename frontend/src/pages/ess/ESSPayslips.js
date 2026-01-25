@@ -1,16 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ESSLayout from '../../components/ESSLayout';
 import { essApi } from '../../api';
+import { useLanguage } from '../../contexts/LanguageContext';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import './ESSPayslips.css';
 
 function ESSPayslips() {
+  const { t, language } = useLanguage();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [payslips, setPayslips] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPayslip, setSelectedPayslip] = useState(null);
+  const [selectedPayslipId, setSelectedPayslipId] = useState(null);
+  const [payslipDetail, setPayslipDetail] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const printRef = useRef();
+
+  // Check if company uses outlets (Mimix = company_id 3)
+  const isMimix = employeeInfo.company_id === 3;
 
   useEffect(() => {
     fetchPayslips();
   }, []);
+
+  useEffect(() => {
+    if (selectedPayslipId) {
+      fetchPayslipDetail(selectedPayslipId);
+    }
+  }, [selectedPayslipId]);
 
   const fetchPayslips = async () => {
     try {
@@ -24,17 +42,360 @@ function ESSPayslips() {
     }
   };
 
+  const fetchPayslipDetail = async (id) => {
+    try {
+      setLoadingDetail(true);
+      const response = await essApi.getPayslip(id);
+      setPayslipDetail(response.data);
+    } catch (error) {
+      console.error('Error fetching payslip detail:', error);
+      setPayslipDetail(null);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-MY', { style: 'currency', currency: 'MYR' }).format(amount || 0);
+    return `RM ${parseFloat(amount || 0).toFixed(2)}`;
   };
 
   const formatMonth = (month, year) => {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    return `${months[month - 1]} ${year}`;
+    const monthKeys = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    return `${t(`months.${monthKeys[month - 1]}`)} ${year}`;
+  };
+
+  // Get month name for payslip period (used in PDF filename)
+  const getMonthName = (month) => {
+    const monthKeys = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    return t(`months.${monthKeys[month - 1]}`);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownload = async () => {
+    const element = printRef.current;
+    if (!element || !payslipDetail) return;
+
+    setDownloading(true);
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+      const fileName = `Payslip_${payslipDetail.employee.code}_${payslipDetail.period.month_name}_${payslipDetail.period.year}.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to download payslip. Please try printing instead.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleBack = () => {
+    setSelectedPayslipId(null);
+    setPayslipDetail(null);
   };
 
   const latestPayslip = payslips[0];
 
+  // If viewing a specific payslip, show the full payslip view
+  if (selectedPayslipId && payslipDetail) {
+    return (
+      <ESSLayout>
+        <div className="ess-payslip-page">
+          <div className="ess-payslip-actions no-print">
+            <button onClick={handleBack} className="ess-back-btn">
+              ← Back to Payslips
+            </button>
+            <button onClick={handleDownload} className="ess-download-btn" disabled={downloading}>
+              {downloading ? 'Generating...' : 'Download PDF'}
+            </button>
+            <button onClick={handlePrint} className="ess-print-btn">
+              Print
+            </button>
+          </div>
+
+          <div className="ess-payslip-container" ref={printRef}>
+            {/* Letterhead */}
+            <div className="ess-letterhead">
+              <div className="ess-letterhead-logo">
+                <img src="/logo.png" alt="Company Logo" />
+              </div>
+              <div className="ess-letterhead-info">
+                <h1>{payslipDetail.company.name || 'AA Alive Sdn. Bhd.'}</h1>
+                <p className="ess-company-reg">Company No.: 1204108-D</p>
+                <p className="ess-company-address">
+                  {payslipDetail.company.address || '1, Jalan Perusahaan Amari, Kawasan Industri Batu Caves,'}<br />
+                  {payslipDetail.company.address ? '' : '68100 Batu Caves, Selangor'}
+                </p>
+              </div>
+            </div>
+
+            <div className="ess-letter-divider"></div>
+
+            {/* Payslip Title */}
+            <div className="ess-payslip-header">
+              <div className="ess-payslip-title">
+                <h2>PAYSLIP</h2>
+                <p>{payslipDetail.period.month_name} {payslipDetail.period.year}</p>
+              </div>
+            </div>
+
+            {/* Employee Info */}
+            <div className="ess-employee-section">
+              <div className="ess-info-grid">
+                <div className="ess-info-row">
+                  <span className="ess-label">Employee ID:</span>
+                  <span className="ess-value">{payslipDetail.employee.code}</span>
+                </div>
+                <div className="ess-info-row">
+                  <span className="ess-label">Name:</span>
+                  <span className="ess-value">{payslipDetail.employee.name}</span>
+                </div>
+                <div className="ess-info-row">
+                  <span className="ess-label">IC Number:</span>
+                  <span className="ess-value">{payslipDetail.employee.ic_number || '-'}</span>
+                </div>
+                <div className="ess-info-row">
+                  <span className="ess-label">{isMimix ? 'Outlet' : 'Department'}:</span>
+                  <span className="ess-value">{isMimix ? payslipDetail.employee.outlet_name : payslipDetail.employee.department || '-'}</span>
+                </div>
+                <div className="ess-info-row">
+                  <span className="ess-label">Position:</span>
+                  <span className="ess-value">{payslipDetail.employee.position || '-'}</span>
+                </div>
+                <div className="ess-info-row">
+                  <span className="ess-label">EPF No:</span>
+                  <span className="ess-value">{payslipDetail.employee.epf_number || '-'}</span>
+                </div>
+                <div className="ess-info-row">
+                  <span className="ess-label">SOCSO No:</span>
+                  <span className="ess-value">{payslipDetail.employee.socso_number || '-'}</span>
+                </div>
+                <div className="ess-info-row">
+                  <span className="ess-label">Tax No:</span>
+                  <span className="ess-value">{payslipDetail.employee.tax_number || '-'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Earnings and Deductions */}
+            <div className="ess-payslip-body">
+              <div className="ess-earnings-section">
+                <h3>Earnings</h3>
+                <table>
+                  <tbody>
+                    {payslipDetail.earnings.basic_salary > 0 && (
+                      <tr>
+                        <td>Basic Salary</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.basic_salary)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.earnings.fixed_allowance > 0 && (
+                      <tr>
+                        <td>Fixed Allowance</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.fixed_allowance)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.earnings.ot_amount > 0 && (
+                      <tr>
+                        <td>Overtime Pay {payslipDetail.earnings.ot_hours > 0 && `(${payslipDetail.earnings.ot_hours} hrs)`}</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.ot_amount)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.earnings.ph_pay > 0 && (
+                      <tr>
+                        <td>Public Holiday Pay {payslipDetail.earnings.ph_days_worked > 0 && `(${payslipDetail.earnings.ph_days_worked} days)`}</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.ph_pay)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.earnings.commission_amount > 0 && (
+                      <tr>
+                        <td>Commission</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.commission_amount)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.earnings.trade_commission_amount > 0 && (
+                      <tr>
+                        <td>Upsell Commission</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.trade_commission_amount)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.earnings.incentive_amount > 0 && (
+                      <tr>
+                        <td>Incentive</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.incentive_amount)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.earnings.outstation_amount > 0 && (
+                      <tr>
+                        <td>Outstation Allowance</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.outstation_amount)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.earnings.claims_amount > 0 && (
+                      <tr>
+                        <td>Claims</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.claims_amount)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.earnings.bonus > 0 && (
+                      <tr>
+                        <td>Bonus</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.bonus)}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="ess-total-row">
+                      <td><strong>Gross Salary</strong></td>
+                      <td className="ess-amount"><strong>{formatCurrency(payslipDetail.totals.gross_salary)}</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              <div className="ess-deductions-section">
+                <h3>Deductions</h3>
+                <table>
+                  <tbody>
+                    {payslipDetail.deductions.epf_employee > 0 && (
+                      <tr>
+                        <td>EPF (Employee)</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.epf_employee)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.deductions.socso_employee > 0 && (
+                      <tr>
+                        <td>SOCSO (Employee)</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.socso_employee)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.deductions.eis_employee > 0 && (
+                      <tr>
+                        <td>EIS (Employee)</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.eis_employee)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.deductions.pcb > 0 && (
+                      <tr>
+                        <td>PCB (Income Tax)</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.pcb)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.deductions.unpaid_leave_deduction > 0 && (
+                      <tr>
+                        <td>Unpaid Leave {payslipDetail.deductions.unpaid_leave_days > 0 && `(${payslipDetail.deductions.unpaid_leave_days} days)`}</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.unpaid_leave_deduction)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.deductions.advance_deduction > 0 && (
+                      <tr>
+                        <td>Advance Deduction</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.advance_deduction)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.deductions.other_deductions > 0 && (
+                      <tr>
+                        <td>Other Deductions</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.other_deductions)}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="ess-total-row">
+                      <td><strong>Total Deductions</strong></td>
+                      <td className="ess-amount"><strong>{formatCurrency(payslipDetail.totals.total_deductions)}</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Employer Contributions - only show if any contribution exists */}
+            {(payslipDetail.employer_contributions.epf_employer > 0 ||
+              payslipDetail.employer_contributions.socso_employer > 0 ||
+              payslipDetail.employer_contributions.eis_employer > 0) && (
+              <div className="ess-employer-section">
+                <h3>Employer Contributions (For Reference)</h3>
+                <div className="ess-employer-grid">
+                  {payslipDetail.employer_contributions.epf_employer > 0 && (
+                    <div className="ess-contribution-item">
+                      <span>EPF (Employer):</span>
+                      <span>{formatCurrency(payslipDetail.employer_contributions.epf_employer)}</span>
+                    </div>
+                  )}
+                  {payslipDetail.employer_contributions.socso_employer > 0 && (
+                    <div className="ess-contribution-item">
+                      <span>SOCSO (Employer):</span>
+                      <span>{formatCurrency(payslipDetail.employer_contributions.socso_employer)}</span>
+                    </div>
+                  )}
+                  {payslipDetail.employer_contributions.eis_employer > 0 && (
+                    <div className="ess-contribution-item">
+                      <span>EIS (Employer):</span>
+                      <span>{formatCurrency(payslipDetail.employer_contributions.eis_employer)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Net Pay */}
+            <div className="ess-net-pay-section">
+              <div className="ess-net-pay">
+                <span>NET PAY</span>
+                <span className="ess-net-amount">{formatCurrency(payslipDetail.totals.net_pay)}</span>
+              </div>
+            </div>
+
+            {/* Bank Info */}
+            {payslipDetail.employee.bank_name && (
+              <div className="ess-bank-section">
+                <h3>Payment Details</h3>
+                <p>
+                  Bank: {payslipDetail.employee.bank_name}<br />
+                  Account No: {payslipDetail.employee.bank_account_no}
+                </p>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="ess-payslip-footer">
+              <p>This is a computer-generated payslip. No signature required.</p>
+              <p>Generated on: {new Date().toLocaleDateString('en-MY')}</p>
+            </div>
+          </div>
+        </div>
+      </ESSLayout>
+    );
+  }
+
+  // Loading state for payslip detail
+  if (selectedPayslipId && loadingDetail) {
+    return (
+      <ESSLayout>
+        <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+          Loading payslip...
+        </div>
+      </ESSLayout>
+    );
+  }
+
+  // Main payslips list view
   return (
     <ESSLayout>
       <div style={{ paddingBottom: '80px' }}>
@@ -55,7 +416,7 @@ function ESSPayslips() {
             {/* Latest Payslip Summary */}
             <div style={{ background: 'linear-gradient(135deg, #1976d2, #1565c0)', borderRadius: '16px', padding: '20px', color: 'white', marginBottom: '24px' }}>
               <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '4px' }}>Latest Net Pay</div>
-              <div style={{ fontSize: '32px', fontWeight: '700' }}>{formatCurrency(latestPayslip?.net_salary)}</div>
+              <div style={{ fontSize: '32px', fontWeight: '700' }}>RM {parseFloat(latestPayslip?.net_salary || latestPayslip?.net_pay || 0).toFixed(2)}</div>
               <div style={{ fontSize: '13px', opacity: 0.8, marginTop: '4px' }}>{formatMonth(latestPayslip?.month, latestPayslip?.year)}</div>
             </div>
 
@@ -65,7 +426,7 @@ function ESSPayslips() {
               {payslips.map(payslip => (
                 <div
                   key={payslip.id}
-                  onClick={() => setSelectedPayslip(payslip)}
+                  onClick={() => setSelectedPayslipId(payslip.id)}
                   style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', cursor: 'pointer' }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -83,176 +444,15 @@ function ESSPayslips() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', color: '#64748b' }}>Net Pay</span>
-                    <span style={{ fontSize: '18px', fontWeight: '700', color: '#1976d2' }}>{formatCurrency(payslip.net_salary)}</span>
+                    <span style={{ fontSize: '18px', fontWeight: '700', color: '#1976d2' }}>RM {parseFloat(payslip.net_salary || payslip.net_pay || 0).toFixed(2)}</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span>Tap to view full payslip →</span>
                   </div>
                 </div>
               ))}
             </div>
           </>
-        )}
-
-        {/* Payslip Detail Modal */}
-        {selectedPayslip && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000 }} onClick={() => setSelectedPayslip(null)}>
-            <div style={{ background: 'white', width: '100%', maxWidth: '500px', borderRadius: '20px 20px 0 0', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
-                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>{formatMonth(selectedPayslip.month, selectedPayslip.year)}</h2>
-                <button onClick={() => setSelectedPayslip(null)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#64748b' }}>&times;</button>
-              </div>
-              <div style={{ padding: '20px' }}>
-                {/* Earnings */}
-                <div style={{ marginBottom: '20px' }}>
-                  <h4 style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px', textTransform: 'uppercase' }}>Earnings</h4>
-                  {selectedPayslip.basic_salary > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Basic Salary</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.basic_salary)}</span>
-                    </div>
-                  )}
-                  {(selectedPayslip.allowance > 0 || selectedPayslip.fixed_allowance > 0) && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Allowance</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.allowance || selectedPayslip.fixed_allowance)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.ot_amount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Overtime {selectedPayslip.ot_hours > 0 && `(${selectedPayslip.ot_hours} hrs)`}</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.ot_amount)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.ph_pay > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Public Holiday Pay</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.ph_pay)}</span>
-                    </div>
-                  )}
-                  {(selectedPayslip.commission > 0 || selectedPayslip.commission_amount > 0) && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Commission</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.commission || selectedPayslip.commission_amount)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.trade_commission_amount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Upsell Commission</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.trade_commission_amount)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.incentive_amount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Incentive</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.incentive_amount)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.outstation_amount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Outstation Allowance</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.outstation_amount)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.claims_amount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Claims</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.claims_amount)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.bonus > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Bonus</span>
-                      <span style={{ fontWeight: '600' }}>{formatCurrency(selectedPayslip.bonus)}</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', color: '#059669', fontWeight: '600' }}>
-                    <span>Gross Salary</span>
-                    <span>{formatCurrency(selectedPayslip.gross_salary)}</span>
-                  </div>
-                </div>
-
-                {/* Deductions */}
-                <div style={{ marginBottom: '20px' }}>
-                  <h4 style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px', textTransform: 'uppercase' }}>Deductions</h4>
-                  {selectedPayslip.epf_employee > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>EPF (Employee)</span>
-                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.epf_employee)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.socso_employee > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>SOCSO</span>
-                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.socso_employee)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.eis_employee > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>EIS</span>
-                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.eis_employee)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.pcb > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>PCB (Tax)</span>
-                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.pcb)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.unpaid_leave_deduction > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Unpaid Leave</span>
-                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.unpaid_leave_deduction)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.advance_deduction > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Advance Deduction</span>
-                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.advance_deduction)}</span>
-                    </div>
-                  )}
-                  {selectedPayslip.other_deductions > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span>Other Deductions</span>
-                      <span style={{ fontWeight: '600', color: '#dc2626' }}>-{formatCurrency(selectedPayslip.other_deductions)}</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', color: '#dc2626', fontWeight: '600' }}>
-                    <span>Total Deductions</span>
-                    <span>-{formatCurrency(selectedPayslip.total_deductions)}</span>
-                  </div>
-                </div>
-
-                {/* Employer Contributions - only show if any exists */}
-                {(selectedPayslip.epf_employer > 0 || selectedPayslip.socso_employer > 0 || selectedPayslip.eis_employer > 0) && (
-                  <div style={{ marginBottom: '20px' }}>
-                    <h4 style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px', textTransform: 'uppercase' }}>Employer Contributions (Reference)</h4>
-                    {selectedPayslip.epf_employer > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                        <span>EPF (Employer)</span>
-                        <span style={{ fontWeight: '600', color: '#64748b' }}>{formatCurrency(selectedPayslip.epf_employer)}</span>
-                      </div>
-                    )}
-                    {selectedPayslip.socso_employer > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                        <span>SOCSO (Employer)</span>
-                        <span style={{ fontWeight: '600', color: '#64748b' }}>{formatCurrency(selectedPayslip.socso_employer)}</span>
-                      </div>
-                    )}
-                    {selectedPayslip.eis_employer > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                        <span>EIS (Employer)</span>
-                        <span style={{ fontWeight: '600', color: '#64748b' }}>{formatCurrency(selectedPayslip.eis_employer)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Net Pay */}
-                <div style={{ background: 'linear-gradient(135deg, #1976d2, #1565c0)', borderRadius: '12px', padding: '16px', color: 'white', textAlign: 'center' }}>
-                  <div style={{ fontSize: '14px', opacity: 0.9 }}>Net Pay</div>
-                  <div style={{ fontSize: '28px', fontWeight: '700' }}>{formatCurrency(selectedPayslip.net_salary || selectedPayslip.net_pay)}</div>
-                </div>
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </ESSLayout>

@@ -1,3 +1,17 @@
+/**
+ * =============================================================================
+ * DEPRECATED: This file is deprecated as of January 2026
+ * =============================================================================
+ *
+ * This is the legacy V2 payroll system with payroll_runs architecture.
+ * Please use payrollUnified.js instead, which combines V1 + V2 features.
+ *
+ * All functionality from this file has been merged into payrollUnified.js.
+ * This file will be removed in a future release.
+ *
+ * =============================================================================
+ */
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
@@ -5,6 +19,8 @@ const { authenticateAdmin } = require('../middleware/auth');
 const { calculateAllStatutory, calculateOT, calculatePublicHolidayPay, getPublicHolidaysInMonth } = require('../utils/statutory');
 const { calculateOTFromClockIn, calculatePHDaysWorked } = require('../utils/otCalculation');
 const { calculatePeriodDeductions } = require('../utils/attendanceDeduction');
+
+console.warn('[DEPRECATION WARNING] payrollNew.js routes are deprecated. Please migrate to payrollUnified.js');
 
 // =====================================================
 // PAYROLL RUNS
