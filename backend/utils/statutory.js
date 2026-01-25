@@ -287,29 +287,37 @@ const calculateEIS = (grossSalary, age = 30) => {
 // Source: https://www.hasil.gov.my/en/individual/individual-life-cycle/income-declaration/tax-rate/
 // B values = Cumulative tax at M - Rebate (RM400 for Category 1/3, RM800 for Category 2)
 //
-// Chargeable Income | Rate | Cumulative Tax
+// Chargeable Income | Rate | Cumulative Tax (Base)
 // 0 - 5,000         | 0%   | 0
-// 5,001 - 20,000    | 1%   | 150
-// 20,001 - 35,000   | 3%   | 600
-// 35,001 - 50,000   | 6%   | 1,500
-// 50,001 - 70,000   | 11%  | 3,700
-// 70,001 - 100,000  | 19%  | 9,400
-// 100,001 - 400,000 | 25%  | 84,400
-// 400,001 - 600,000 | 26%  | 136,400
-// 600,001 - 2,000,000 | 28% | 528,400
-// Above 2,000,000   | 30%  | ...
+// 5,001 - 20,000    | 1%   | 0
+// 20,001 - 35,000   | 3%   | 150
+// 35,001 - 50,000   | 6%   | 600
+// 50,001 - 70,000   | 11%  | 1,500
+// 70,001 - 100,000  | 19%  | 3,700
+// 100,001 - 400,000 | 25%  | 9,400
+// 400,001 - 600,000 | 26%  | 84,400
+// 600,001 - 2,000,000 | 28% | 136,400
+// Above 2,000,000   | 30%  | 528,400
+//
+// REBATE: RM 400 (Category 1) or RM 800 (Category 2) ONLY if P <= RM 35,000
+// B = Base cumulative tax. Rebate is applied separately based on P.
 const TAX_BRACKETS_LHDN = [
-  { min: 0, max: 5000, M: 0, R: 0, B1: 0, B2: 0 },
-  { min: 5001, max: 20000, M: 5000, R: 0.01, B1: -400, B2: -800 },
-  { min: 20001, max: 35000, M: 20000, R: 0.03, B1: -250, B2: -650 },
-  { min: 35001, max: 50000, M: 35000, R: 0.06, B1: 200, B2: -200 },
-  { min: 50001, max: 70000, M: 50000, R: 0.11, B1: 1100, B2: 700 },
-  { min: 70001, max: 100000, M: 70000, R: 0.19, B1: 3300, B2: 2900 },
-  { min: 100001, max: 400000, M: 100000, R: 0.25, B1: 9000, B2: 8600 },
-  { min: 400001, max: 600000, M: 400000, R: 0.26, B1: 84000, B2: 83600 },
-  { min: 600001, max: 2000000, M: 600000, R: 0.28, B1: 136000, B2: 135600 },
-  { min: 2000001, max: Infinity, M: 2000000, R: 0.30, B1: 528000, B2: 527600 }
+  { min: 0, max: 5000, M: 0, R: 0, B: 0 },
+  { min: 5001, max: 20000, M: 5000, R: 0.01, B: 0 },
+  { min: 20001, max: 35000, M: 20000, R: 0.03, B: 150 },
+  { min: 35001, max: 50000, M: 35000, R: 0.06, B: 600 },
+  { min: 50001, max: 70000, M: 50000, R: 0.11, B: 1500 },
+  { min: 70001, max: 100000, M: 70000, R: 0.19, B: 3700 },
+  { min: 100001, max: 400000, M: 100000, R: 0.25, B: 9400 },
+  { min: 400001, max: 600000, M: 400000, R: 0.26, B: 84400 },
+  { min: 600001, max: 2000000, M: 600000, R: 0.28, B: 136400 },
+  { min: 2000001, max: Infinity, M: 2000000, R: 0.30, B: 528400 }
 ];
+
+// Rebate amounts (only apply if chargeable income P <= RM 35,000)
+const TAX_REBATE_THRESHOLD = 35000;
+const TAX_REBATE_CATEGORY1 = 400;  // Single, or Married spouse not claiming
+const TAX_REBATE_CATEGORY2 = 800;  // Married, spouse not working
 
 // Keep old name for backward compatibility
 const TAX_BRACKETS = TAX_BRACKETS_LHDN;
@@ -327,12 +335,14 @@ const getTaxBracket = (chargeableIncome) => {
 };
 
 /**
- * Calculate annual tax using LHDN formula: (P - M) × R + B
+ * Calculate annual tax using LHDN formula: (P - M) × R + B - rebate
+ * Rebate only applies if chargeable income <= RM 35,000
  */
 const calculateAnnualTax = (chargeableIncome, isCategory2 = false) => {
   const bracket = getTaxBracket(chargeableIncome);
-  const B = isCategory2 ? bracket.B2 : bracket.B1;
-  const tax = ((chargeableIncome - bracket.M) * bracket.R) + B;
+  const rebateAmount = isCategory2 ? TAX_REBATE_CATEGORY2 : TAX_REBATE_CATEGORY1;
+  const rebate = chargeableIncome <= TAX_REBATE_THRESHOLD ? rebateAmount : 0;
+  const tax = ((chargeableIncome - bracket.M) * bracket.R) + bracket.B - rebate;
   return Math.max(0, tax);
 };
 
@@ -445,9 +455,10 @@ const calculatePCBFull = (params) => {
   const totalDeductions = D + S + DU + SU + childRelief + ELP_LP1;
 
   // Determine tax category
-  // Category 1 & 3: Single OR Married with working spouse (RM400 rebate)
-  // Category 2: Married with non-working spouse (RM800 rebate)
+  // Category 1 & 3: Single OR Married with working spouse (RM400 rebate if P <= 35000)
+  // Category 2: Married with non-working spouse (RM800 rebate if P <= 35000)
   const isCategory2 = maritalStatus === 'married' && !spouseWorking;
+  const rebateAmount = isCategory2 ? TAX_REBATE_CATEGORY2 : TAX_REBATE_CATEGORY1;
 
   // =====================================================
   // STEP 1: Calculate Normal STD (when Yt = 0)
@@ -463,13 +474,17 @@ const calculatePCBFull = (params) => {
   const bracket_normal = getTaxBracket(P_normalAdjusted);
   const M = bracket_normal.M;
   const R = bracket_normal.R;
-  const B = isCategory2 ? bracket_normal.B2 : bracket_normal.B1;
+  const B = bracket_normal.B;  // Base tax without rebate
+
+  // Apply rebate ONLY if chargeable income <= RM 35,000
+  const rebate_normal = P_normalAdjusted <= TAX_REBATE_THRESHOLD ? rebateAmount : 0;
+  const B_adjusted = B - rebate_normal;
 
   const Z = accumulatedZakat;
   const X = accumulatedPCB;
 
-  // Normal STD = [(P - M) × R + B - (Z + X)] / (n + 1)
-  let normalSTD = ((P_normalAdjusted - M) * R + B - (Z + X)) / nPlus1;
+  // Normal STD = [(P - M) × R + B - rebate - (Z + X)] / (n + 1)
+  let normalSTD = ((P_normalAdjusted - M) * R + B_adjusted - (Z + X)) / nPlus1;
   normalSTD = Math.max(0, normalSTD);
 
   // =====================================================
@@ -491,9 +506,11 @@ const calculatePCBFull = (params) => {
     const bracket_additional = getTaxBracket(P_withAdditionalAdjusted);
     const M_add = bracket_additional.M;
     const R_add = bracket_additional.R;
-    const B_add = isCategory2 ? bracket_additional.B2 : bracket_additional.B1;
+    const B_add = bracket_additional.B;  // Base tax without rebate
 
-    const totalTax = (P_withAdditionalAdjusted - M_add) * R_add + B_add;
+    // Apply rebate ONLY if chargeable income <= RM 35,000
+    const rebate_add = P_withAdditionalAdjusted <= TAX_REBATE_THRESHOLD ? rebateAmount : 0;
+    const totalTax = (P_withAdditionalAdjusted - M_add) * R_add + B_add - rebate_add;
 
     // Additional STD = Total Tax - (Total STD for year + Z)
     additionalSTD = Math.max(0, totalTax - (totalSTDForYear + Z));
@@ -807,7 +824,7 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
 
   const totalEmployeeDeductions = epf.employee + socso.employee + eis.employee + pcb;
   const totalEmployerContributions = epf.employer + socso.employer + eis.employer;
-  const netSalary = grossSalary - totalEmployeeDeductions;
+  const netSalary = statutoryBase - totalEmployeeDeductions;
 
   return {
     epf,
@@ -817,7 +834,7 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
     pcbBreakdown, // Detailed PCB breakdown (if using full formula)
     totalEmployeeDeductions,
     totalEmployerContributions,
-    grossSalary,
+    grossSalary: statutoryBase,  // For backward compatibility
     netSalary
   };
 };
