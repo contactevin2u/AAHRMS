@@ -690,7 +690,13 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
 
           // Statutory base = basic + commission + bonus (no bonus at creation)
           const statutoryBase = basicSalary + flexCommissions;
-          const statutory = calculateAllStatutory(statutoryBase, emp, month, null);
+          // PCB Saraan Tambahan: Commission is treated as additional remuneration
+          const salaryBreakdown = {
+            basic: basicSalary,
+            commission: flexCommissions,
+            bonus: 0  // No bonus at payroll creation
+          };
+          const statutory = calculateAllStatutory(statutoryBase, emp, month, null, salaryBreakdown);
 
           const totalDeductionsForEmp = (
             statutory.epf.employee +
@@ -1280,8 +1286,14 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         ytdData = await getYTDData(emp.id, year, month);
       }
 
-      // Calculate statutory deductions
-      const statutoryResult = calculateAllStatutory(statutoryBase, emp, month, ytdData);
+      // Calculate statutory deductions with breakdown for proper PCB calculation
+      // PCB Saraan Tambahan: Commission is treated as additional remuneration
+      const salaryBreakdown = {
+        basic: basicSalary,
+        commission: commissionAmount,
+        bonus: 0  // No bonus at payroll creation - added via edits
+      };
+      const statutoryResult = calculateAllStatutory(statutoryBase, emp, month, ytdData, salaryBreakdown);
 
       // Apply statutory toggles
       const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
@@ -1455,8 +1467,14 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       ytdData = await getYTDData(item.employee_id, item.year, item.month);
     }
 
-    // Recalculate statutory
-    const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, ytdData);
+    // Recalculate statutory with breakdown for proper PCB calculation
+    // PCB Saraan Tambahan: Commission and bonus are treated as additional remuneration
+    const salaryBreakdown = {
+      basic: basicSalary,
+      commission: commissionAmount + tradeCommission,
+      bonus: bonus
+    };
+    const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, ytdData, salaryBreakdown);
 
     const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
     const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
@@ -1602,8 +1620,14 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
       ytdData = await getYTDData(item.emp_id, item.year, item.month);
     }
 
-    // Recalculate statutory
-    const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, ytdData);
+    // Recalculate statutory with breakdown for proper PCB calculation
+    // PCB Saraan Tambahan: Commission and bonus are treated as additional remuneration
+    const salaryBreakdown = {
+      basic: basicSalary,
+      commission: commissionAmount + tradeCommission,
+      bonus: bonus
+    };
+    const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, ytdData, salaryBreakdown);
 
     const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
     const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
@@ -1759,7 +1783,14 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
           ytdData = await getYTDData(i.emp_id, i.year, i.month);
         }
 
-        const statutoryResult = calculateAllStatutory(statutoryBase, i, i.month, ytdData);
+        // Calculate statutory with breakdown for proper PCB calculation
+        // PCB Saraan Tambahan: Commission and bonus are treated as additional remuneration
+        const salaryBreakdown = {
+          basic: basicSalary,
+          commission: commissionAmount + tradeCommission,
+          bonus: bonus
+        };
+        const statutoryResult = calculateAllStatutory(statutoryBase, i, i.month, ytdData, salaryBreakdown);
 
         const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
         const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
