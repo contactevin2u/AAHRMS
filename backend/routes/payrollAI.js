@@ -296,7 +296,7 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
       // Validate field is allowed
       const allowedFields = ['basic_salary', 'fixed_allowance', 'bonus', 'commission_amount',
                             'incentive_amount', 'other_deductions', 'deduction_remarks',
-                            'trade_commission_amount', 'outstation_amount'];
+                            'trade_commission_amount', 'outstation_amount', 'pcb'];
 
       if (!allowedFields.includes(field)) {
         results.push({ item_id, employee_name, success: false, error: `Field ${field} not allowed` });
@@ -318,6 +318,12 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
 
     // Recalculate all modified items with full statutory recalculation
     const itemIds = [...new Set(changes.map(c => c.item_id))];
+
+    // Track items with explicit PCB overrides (don't recalculate PCB for these)
+    const pcbOverrides = {};
+    changes.filter(c => c.field === 'pcb').forEach(c => {
+      pcbOverrides[c.item_id] = parseFloat(c.new_value) || 0;
+    });
 
     for (const itemId of itemIds) {
       // Get item data with employee info for statutory calculation
@@ -370,7 +376,11 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
       const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
       const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
       const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
-      const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+
+      // Use PCB override if explicitly set, otherwise use calculated
+      const pcb = pcbOverrides[itemId] !== undefined
+        ? pcbOverrides[itemId]
+        : (statutory.pcb_enabled ? statutoryResult.pcb : 0);
 
       const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
       const netPay = grossSalary + unpaidDeduction - totalDeductions;
