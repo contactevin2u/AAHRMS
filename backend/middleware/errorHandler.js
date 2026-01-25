@@ -51,8 +51,16 @@ class ConflictError extends AppError {
 }
 
 class DatabaseError extends AppError {
-  constructor(message = 'Database operation failed') {
+  constructor(message = 'Database operation failed', technicalMessage = null) {
     super(message, 500, 'DATABASE_ERROR');
+    this.technicalMessage = technicalMessage; // For logging only
+  }
+}
+
+class TechnicalError extends AppError {
+  constructor(message = 'Something went wrong. Please contact technician.', technicalMessage = null) {
+    super(message, 500, 'TECHNICAL_ERROR');
+    this.technicalMessage = technicalMessage; // For logging only
   }
 }
 
@@ -140,17 +148,17 @@ const handleDatabaseError = (err) => {
 
   // Connection errors
   if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
-    return new DatabaseError('Unable to connect to database');
+    return new TechnicalError('Unable to connect to server. Please contact technician.', err.message);
   }
 
   // Connection timeout
   if (err.code === 'ETIMEDOUT' || err.code === '57P01') {
-    return new DatabaseError('Database connection timeout');
+    return new TechnicalError('Server connection timeout. Please try again or contact technician.', err.message);
   }
 
-  // Default - include more detail in development
+  // Default - show user-friendly message, log technical details
   console.error('Unhandled PostgreSQL error code:', err.code, 'Message:', err.message);
-  return new DatabaseError(`Database error (${err.code}): ${err.message || 'operation failed'}`);
+  return new TechnicalError('Something went wrong. Please try again or contact technician.', `Database error (${err.code}): ${err.message}`);
 };
 
 // JWT Error Handler
@@ -189,12 +197,11 @@ const errorHandler = (err, req, res, next) => {
   let error = err;
 
   // Cloudinary errors (check for Cloudinary-specific properties)
-  if (err.http_code || (err.message && err.message.includes('cloudinary'))) {
-    // Keep Cloudinary errors as-is for better debugging
-    error = new AppError(
-      err.message || 'Photo upload failed',
-      err.http_code === 401 ? 401 : 500,
-      'CLOUDINARY_ERROR'
+  if (err.http_code || (err.message && err.message.toLowerCase().includes('cloudinary'))) {
+    console.error('Cloudinary error:', err.message);
+    error = new TechnicalError(
+      'Photo upload failed. Please try again or contact technician.',
+      err.message
     );
   }
   // PostgreSQL errors
@@ -218,10 +225,13 @@ const errorHandler = (err, req, res, next) => {
   // Format response
   const response = formatErrorResponse(error, isDevelopment);
 
-  // Don't expose internal error details in production
-  if (statusCode === 500 && !isDevelopment && !error.isOperational) {
-    response.error.message = 'An unexpected error occurred';
-    response.error.code = 'INTERNAL_ERROR';
+  // For 500 errors, always show user-friendly message
+  if (statusCode === 500) {
+    // If it's not already a user-friendly TechnicalError, make it one
+    if (!error.isOperational || error.errorCode === 'INTERNAL_ERROR') {
+      response.error.message = 'Something went wrong. Please try again or contact technician.';
+      response.error.code = 'TECHNICAL_ERROR';
+    }
   }
 
   res.status(statusCode).json(response);
@@ -265,6 +275,7 @@ module.exports = {
   NotFoundError,
   ConflictError,
   DatabaseError,
+  TechnicalError,
   RateLimitError,
 
   // Middleware
