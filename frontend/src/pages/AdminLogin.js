@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { authApi } from '../api';
 import './AdminLogin.css';
 
@@ -7,10 +7,19 @@ function AdminLogin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
+    // Check for inactivity logout message
+    if (location.state?.message) {
+      setInfoMessage(location.state.message);
+      // Clear the state so message doesn't persist on refresh
+      window.history.replaceState({}, document.title);
+    }
+
     // Redirect if already logged in
     const token = localStorage.getItem('adminToken');
     if (token) {
@@ -23,7 +32,7 @@ function AdminLogin() {
       setPassword('');
     }, 100);
     return () => clearTimeout(timer);
-  }, [navigate]);
+  }, [navigate, location.state]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -83,6 +92,7 @@ function AdminLogin() {
             />
           </div>
 
+          {infoMessage && <div className="info-message">{infoMessage}</div>}
           {error && <div className="error-message">{error}</div>}
 
           <button type="submit" className="login-btn" disabled={isLoading}>

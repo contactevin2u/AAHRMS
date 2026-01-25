@@ -3,6 +3,8 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { companiesApi } from '../api';
 import './Layout.css';
 
+const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
+
 function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -11,6 +13,7 @@ function Layout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+  const inactivityTimerRef = React.useRef(null);
 
   useEffect(() => {
     const storedInfo = localStorage.getItem('adminInfo');
@@ -27,6 +30,44 @@ function Layout({ children }) {
       }
     }
   }, []);
+
+  // Inactivity timeout - auto logout after 15 minutes of no activity
+  useEffect(() => {
+    const resetInactivityTimer = () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      inactivityTimerRef.current = setTimeout(() => {
+        // Auto logout due to inactivity
+        console.log('Auto logout due to inactivity');
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminInfo');
+        localStorage.removeItem('selectedCompanyId');
+        navigate('/', { state: { message: 'You have been logged out due to inactivity' } });
+      }, INACTIVITY_TIMEOUT);
+    };
+
+    // Events that indicate user activity
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+
+    // Set up event listeners
+    activityEvents.forEach(event => {
+      document.addEventListener(event, resetInactivityTimer, { passive: true });
+    });
+
+    // Start the initial timer
+    resetInactivityTimer();
+
+    // Cleanup
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      activityEvents.forEach(event => {
+        document.removeEventListener(event, resetInactivityTimer);
+      });
+    };
+  }, [navigate]);
 
   const fetchCompanies = async () => {
     try {
