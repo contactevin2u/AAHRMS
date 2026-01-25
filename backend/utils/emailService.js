@@ -12,7 +12,14 @@
  * - EMAIL_ENABLED (true/false to enable/disable)
  */
 
-const nodemailer = require('nodemailer');
+// Optional dependency - email features disabled if nodemailer not installed
+let nodemailer;
+try {
+  nodemailer = require('nodemailer');
+} catch (e) {
+  console.log('Note: nodemailer not installed - email features disabled');
+  nodemailer = null;
+}
 
 // Email configuration
 const config = {
@@ -29,7 +36,7 @@ const config = {
 let transporter = null;
 
 function getTransporter() {
-  if (!transporter && config.enabled && config.user && config.pass) {
+  if (!transporter && nodemailer && config.enabled && config.user && config.pass) {
     transporter = nodemailer.createTransport({
       host: config.host,
       port: config.port,
