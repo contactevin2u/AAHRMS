@@ -51,7 +51,9 @@ const DEFAULT_PAYROLL_SETTINGS = {
     flexible_allowances: true,
     indoor_sales_logic: false,
     ytd_pcb_calculation: true,
-    require_approval: false
+    require_approval: false,
+    variance_threshold: 5,      // Default 5% variance threshold for warnings
+    ot_requires_approval: false // Whether OT needs supervisor approval (Mimix = true)
   },
   rates: {
     ot_multiplier: 1.0,
@@ -1415,9 +1417,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         warnings.push(`${emp.name} has no basic salary set`);
       }
 
-      // Warning for large variance
-      if (variancePercent !== null && Math.abs(variancePercent) > 10) {
-        warnings.push(`${emp.name} has ${variancePercent > 0 ? '+' : ''}${variancePercent.toFixed(1)}% variance from last month`);
+      // Warning for large variance (configurable threshold, default 5%)
+      const varianceThreshold = features.variance_threshold ?? 5;
+      if (variancePercent !== null && Math.abs(variancePercent) > varianceThreshold) {
+        warnings.push(`${emp.name} has ${variancePercent > 0 ? '+' : ''}${variancePercent.toFixed(1)}% variance from last month (threshold: ${varianceThreshold}%)`);
       }
     }
 
@@ -1979,7 +1982,7 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
     // Only update if basic_salary in payroll differs from employee's current salary
     const payrollItems = await client.query(`
       SELECT pi.employee_id, pi.basic_salary as payroll_salary, pi.fixed_allowance as payroll_allowance,
-             e.basic_salary as current_salary, e.fixed_allowance as current_allowance
+             e.default_basic_salary as current_salary, e.fixed_allowance as current_allowance
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       WHERE pi.payroll_run_id = $1
@@ -1996,7 +1999,7 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
       if (payrollSalary !== currentSalary || payrollAllowance !== currentAllowance) {
         await client.query(`
           UPDATE employees SET
-            basic_salary = $1,
+            default_basic_salary = $1,
             fixed_allowance = $2,
             updated_at = NOW()
           WHERE id = $3
