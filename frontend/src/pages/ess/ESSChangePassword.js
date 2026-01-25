@@ -75,6 +75,28 @@ function ESSChangePassword() {
         localStorage.setItem('employeeInfo', JSON.stringify(response.data.employee));
       }
 
+      // Update saved credentials with new password (for auto-login)
+      const savedCredentials = localStorage.getItem('essSavedCredentials');
+      if (savedCredentials) {
+        try {
+          const creds = JSON.parse(savedCredentials);
+          if (creds.type === 'email') {
+            // Update with new username and password
+            const newUsername = (changeUsername && formData.newUsername)
+              ? formData.newUsername
+              : creds.login;
+            localStorage.setItem('essSavedCredentials', JSON.stringify({
+              type: 'email',
+              login: newUsername,
+              password: formData.newPassword
+            }));
+          }
+        } catch (e) {
+          // If error, just clear saved credentials
+          localStorage.removeItem('essSavedCredentials');
+        }
+      }
+
       // Navigate to dashboard on success
       const successMsg = isFirstLogin
         ? 'Account setup completed!'

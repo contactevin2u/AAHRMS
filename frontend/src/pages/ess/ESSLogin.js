@@ -17,19 +17,57 @@ function ESSLogin() {
   const [loading, setLoading] = useState(false);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [rememberMe, setRememberMe] = useState(true); // Default to remember
+  const [autoLogging, setAutoLogging] = useState(false);
 
-  // Check if already logged in
+  // Check if already logged in OR auto-login with saved credentials
   useEffect(() => {
     const token = localStorage.getItem('employeeToken');
     if (token) {
       navigate('/ess/dashboard');
+      return;
     }
 
-    // Clear any browser autofilled values
-    const timer = setTimeout(() => {
-      setFormData({ login: '', password: '', name: '', ic_number: '' });
-    }, 100);
-    return () => clearTimeout(timer);
+    // Try auto-login with saved credentials
+    const savedCredentials = localStorage.getItem('essSavedCredentials');
+    if (savedCredentials) {
+      try {
+        const creds = JSON.parse(savedCredentials);
+        setAutoLogging(true);
+
+        // Auto-login
+        const autoLogin = async () => {
+          try {
+            let response;
+            if (creds.type === 'email') {
+              response = await essApi.login(creds.login, creds.password);
+            } else {
+              response = await essApi.loginByName(creds.name, creds.ic_number);
+            }
+
+            const { token, employee, requiresPasswordChange } = response.data;
+            localStorage.setItem('employeeToken', token);
+            localStorage.setItem('employeeInfo', JSON.stringify(employee));
+
+            if (requiresPasswordChange) {
+              navigate('/ess/change-password', { state: { firstLogin: true } });
+            } else {
+              navigate('/ess/dashboard');
+            }
+          } catch (err) {
+            // If auto-login fails, clear saved credentials and show login form
+            console.log('Auto-login failed, showing login form');
+            localStorage.removeItem('essSavedCredentials');
+            setAutoLogging(false);
+          }
+        };
+
+        autoLogin();
+      } catch (e) {
+        localStorage.removeItem('essSavedCredentials');
+        setAutoLogging(false);
+      }
+    }
   }, [navigate]);
 
   // PWA Install prompt
@@ -84,6 +122,23 @@ function ESSLogin() {
       localStorage.setItem('employeeToken', token);
       localStorage.setItem('employeeInfo', JSON.stringify(employee));
 
+      // Save credentials for auto-login if remember me is checked
+      if (rememberMe) {
+        if (loginMethod === 'email') {
+          localStorage.setItem('essSavedCredentials', JSON.stringify({
+            type: 'email',
+            login: formData.login,
+            password: formData.password
+          }));
+        } else {
+          localStorage.setItem('essSavedCredentials', JSON.stringify({
+            type: 'ic',
+            name: formData.name,
+            ic_number: formData.ic_number
+          }));
+        }
+      }
+
       // If first login with IC as password, redirect to change password
       if (requiresPasswordChange) {
         navigate('/ess/change-password', { state: { firstLogin: true } });
@@ -100,6 +155,25 @@ function ESSLogin() {
   };
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  // Show loading while auto-logging in
+  if (autoLogging) {
+    return (
+      <div className="ess-login-page">
+        <div className="login-card">
+          <div className="login-header">
+            <img src="/logos/hr-default.png" alt="ESS" className="login-logo" />
+            <h1>Employee Portal</h1>
+            <p>Signing you in automatically...</p>
+          </div>
+          <div className="auto-login-loading">
+            <div className="spinner"></div>
+            <p>Please wait...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="ess-login-page">
@@ -261,6 +335,18 @@ function ESSLogin() {
               </div>
             </>
           )}
+
+          {/* Remember Me - Always checked by default */}
+          <div className="remember-me">
+            <label>
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span>Keep me signed in</span>
+            </label>
+          </div>
 
           <button type="submit" className="submit-btn" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign In'}
