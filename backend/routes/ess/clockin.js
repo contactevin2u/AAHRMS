@@ -308,19 +308,23 @@ async function autoClockOutShift(record) {
   // OT calculation (over 8.5 hours = 510 minutes)
   const otMinutes = Math.max(0, totalMinutes - 510);
 
+  // Calculate hours in JavaScript to avoid PostgreSQL type inference issues
+  const totalWorkHours = Math.round(totalMinutes / 6) / 10;  // Round to 1 decimal
+  const otHoursCalc = Math.round(otMinutes / 6) / 10;  // Round to 1 decimal
+
   // Update the record
   const result = await pool.query(
     `UPDATE clock_in_records SET
        ${updateField} = $1,
        total_work_minutes = $2,
        ot_minutes = $3,
-       total_work_hours = ROUND($2 / 60.0, 1),
-       ot_hours = ROUND($3 / 60.0, 1),
+       total_work_hours = $5,
+       ot_hours = $6,
        status = 'completed',
        notes = COALESCE(notes, '') || ' [Auto clock-out at cutoff time 01:30 AM]'
      WHERE id = $4
      RETURNING *`,
-    [cutoffTime, totalMinutes, otMinutes, record.id]
+    [cutoffTime, totalMinutes, otMinutes, record.id, totalWorkHours, otHoursCalc]
   );
 
   console.log(`Auto clock-out for employee shift ${record.id}: ${updateField} at ${cutoffTime}`);
@@ -680,7 +684,13 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     }
 
     // Upload photo to Cloudinary
-    const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_1');
+    let photoUrl;
+    try {
+      photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_1');
+    } catch (uploadErr) {
+      console.error('Clock-out photo upload failed:', uploadErr.message);
+      throw new ValidationError('Failed to upload clock-out photo. Please try again.');
+    }
 
     if (isAAAliveCompany(company_id)) {
       // AA Alive: This is session end, calculate work time and OT
@@ -704,17 +714,21 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       // AA Alive: auto-approve OT
       const otAutoApproved = otFlagged;
 
+      // Calculate hours in JavaScript to avoid PostgreSQL type inference issues
+      const totalWorkHours = Math.round(totalMinutes / 6) / 10;  // Round to 1 decimal
+      const otHoursCalc = Math.round(otMinutes / 6) / 10;  // Round to 1 decimal
+
       record = await pool.query(
         `UPDATE clock_in_records SET
            clock_out_1 = $1, photo_out_1 = $2, location_out_1 = $3, address_out_1 = $4,
            face_detected_out_1 = $5, face_confidence_out_1 = $6,
            total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9,
            ot_approved = $10, status = 'session_ended',
-           total_work_hours = ROUND($7 / 60.0, 1), ot_hours = ROUND($8 / 60.0, 1)
+           total_work_hours = $13, ot_hours = $14
          WHERE employee_id = $11 AND work_date = $12
          RETURNING *`,
         [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0,
-         totalMinutes, otMinutes, otFlagged, otAutoApproved ? true : null, employeeId, workDate]
+         totalMinutes, otMinutes, otFlagged, otAutoApproved ? true : null, employeeId, workDate, totalWorkHours, otHoursCalc]
       );
 
       let otMessage = otHours > 0 ? ` (OT: ${otHours}h)` : '';
@@ -807,7 +821,13 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     const isPartTime = workType === 'part_time' || employmentType === 'part_time';
 
     // Upload photo to Cloudinary
-    const photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_2');
+    let photoUrl;
+    try {
+      photoUrl = await uploadAttendance(photo_base64, company_id, employeeId, 'clock_out_2');
+    } catch (uploadErr) {
+      console.error('Clock-out photo upload failed:', uploadErr.message);
+      throw new ValidationError('Failed to upload clock-out photo. Please try again.');
+    }
 
     // Calculate work time
     const updatedRecord = {
@@ -834,17 +854,33 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     // Mimix: OT requires supervisor approval
     const otAutoApproved = otFlagged && isAAAliveCompany(company_id);
 
-    record = await pool.query(
-      `UPDATE clock_in_records SET
-         clock_out_2 = $1, photo_out_2 = $2, location_out_2 = $3, address_out_2 = $4,
-         face_detected_out_2 = $5, face_confidence_out_2 = $6,
-         total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9,
-         ot_approved = $12, status = 'completed',
-         total_work_hours = ROUND($7 / 60.0, 1), ot_hours = ROUND($8 / 60.0, 1)
-       WHERE employee_id = $10 AND work_date = $11
-       RETURNING *`,
-      [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, workDate, otAutoApproved ? true : null]
-    );
+    // Calculate hours in JavaScript to avoid PostgreSQL type inference issues
+    const totalWorkHours = Math.round(totalMinutes / 6) / 10;  // Round to 1 decimal
+    const otHoursCalc = Math.round(otMinutes / 6) / 10;  // Round to 1 decimal
+
+    try {
+      record = await pool.query(
+        `UPDATE clock_in_records SET
+           clock_out_2 = $1, photo_out_2 = $2, location_out_2 = $3, address_out_2 = $4,
+           face_detected_out_2 = $5, face_confidence_out_2 = $6,
+           total_work_minutes = $7, ot_minutes = $8, ot_flagged = $9,
+           ot_approved = $14, status = 'completed',
+           total_work_hours = $12, ot_hours = $13
+         WHERE employee_id = $10 AND work_date = $11
+         RETURNING *`,
+        [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, workDate, totalWorkHours, otHoursCalc, otAutoApproved ? true : null]
+      );
+    } catch (dbErr) {
+      console.error('Clock-out database update failed:', {
+        error: dbErr.message,
+        code: dbErr.code,
+        employeeId,
+        workDate,
+        totalMinutes,
+        otMinutes
+      });
+      throw dbErr;
+    }
 
     // If OT flagged for Mimix company, create notification for supervisor
     if (otFlagged && isMimixCompany(company_id)) {
@@ -1062,6 +1098,10 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
   // Mimix: OT requires supervisor approval
   const otAutoApproved = otFlagged && isAAAliveCompany(company_id);
 
+  // Calculate hours in JavaScript to avoid PostgreSQL type inference issues
+  const totalWorkHours = Math.round(totalMinutes / 6) / 10;  // Round to 1 decimal
+  const otHoursCalc = Math.round(otMinutes / 6) / 10;  // Round to 1 decimal
+
   const record = await pool.query(
     `UPDATE clock_in_records SET
        clock_out_2 = $1,
@@ -1073,13 +1113,13 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
        total_work_minutes = $7,
        ot_minutes = $8,
        ot_flagged = $9,
-       ot_approved = $12,
+       ot_approved = $14,
        status = 'completed',
-       total_work_hours = ROUND($7 / 60.0, 1),
-       ot_hours = ROUND($8 / 60.0, 1)
+       total_work_hours = $12,
+       ot_hours = $13
      WHERE employee_id = $10 AND work_date = $11
      RETURNING *`,
-    [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, today, otAutoApproved ? true : null]
+    [currentTime, photoUrl, locationStr, address || '', face_detected, face_confidence || 0, totalMinutes, otMinutes, otFlagged, employeeId, today, totalWorkHours, otHoursCalc, otAutoApproved ? true : null]
   );
 
   res.json({

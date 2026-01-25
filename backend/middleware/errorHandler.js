@@ -109,17 +109,33 @@ const handleDatabaseError = (err) => {
 
   // Not null violation
   if (err.code === '23502') {
-    return new ValidationError(`${err.column} is required`);
+    const column = err.column || 'A required field';
+    return new ValidationError(`${column} is required`);
   }
 
   // Check constraint violation
   if (err.code === '23514') {
-    return new ValidationError('Data validation failed');
+    return new ValidationError(`Data validation failed: ${err.constraint || 'constraint violation'}`);
   }
 
   // Invalid input syntax
   if (err.code === '22P02') {
-    return new ValidationError('Invalid data format');
+    return new ValidationError(`Invalid data format: ${err.message}`);
+  }
+
+  // Numeric value out of range
+  if (err.code === '22003') {
+    return new ValidationError('Numeric value out of range');
+  }
+
+  // String data too long
+  if (err.code === '22001') {
+    return new ValidationError('Text value too long for field');
+  }
+
+  // Invalid datetime format
+  if (err.code === '22007' || err.code === '22008') {
+    return new ValidationError('Invalid date/time format');
   }
 
   // Connection errors
@@ -127,7 +143,14 @@ const handleDatabaseError = (err) => {
     return new DatabaseError('Unable to connect to database');
   }
 
-  return new DatabaseError('Database operation failed');
+  // Connection timeout
+  if (err.code === 'ETIMEDOUT' || err.code === '57P01') {
+    return new DatabaseError('Database connection timeout');
+  }
+
+  // Default - include more detail in development
+  console.error('Unhandled PostgreSQL error code:', err.code, 'Message:', err.message);
+  return new DatabaseError(`Database error (${err.code}): ${err.message || 'operation failed'}`);
 };
 
 // JWT Error Handler
@@ -146,26 +169,40 @@ const handleJWTError = (err) => {
 
 // Main Error Handler Middleware
 const errorHandler = (err, req, res, next) => {
-  // Log the error
+  // Log the error with more detail
   console.error('Error:', {
     message: err.message,
     code: err.errorCode || err.code,
+    pgCode: err.code,
+    pgDetail: err.detail,
+    pgHint: err.hint,
+    pgColumn: err.column,
+    pgTable: err.table,
+    pgConstraint: err.constraint,
     path: req.path,
     method: req.method,
     timestamp: new Date().toISOString(),
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    stack: err.stack
   });
 
   // Handle specific error types
   let error = err;
 
+  // Cloudinary errors (check for Cloudinary-specific properties)
+  if (err.http_code || (err.message && err.message.includes('cloudinary'))) {
+    // Keep Cloudinary errors as-is for better debugging
+    error = new AppError(
+      err.message || 'Photo upload failed',
+      err.http_code === 401 ? 401 : 500,
+      'CLOUDINARY_ERROR'
+    );
+  }
   // PostgreSQL errors
-  if (err.code && typeof err.code === 'string' && err.code.match(/^[0-9A-Z]{5}$/)) {
+  else if (err.code && typeof err.code === 'string' && err.code.match(/^[0-9A-Z]{5}$/)) {
     error = handleDatabaseError(err);
   }
-
   // JWT errors
-  if (err.name && err.name.includes('Token') || err.name === 'JsonWebTokenError') {
+  else if (err.name && err.name.includes('Token') || err.name === 'JsonWebTokenError') {
     error = handleJWTError(err);
   }
 
