@@ -1540,7 +1540,12 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
     const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
     const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
-    const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+
+    // PCB: Allow manual override (for matching MyTax), otherwise use calculated value
+    // pcb_override can be provided to set exact PCB amount from MyTax
+    const pcb = updates.pcb_override !== undefined && updates.pcb_override !== null && updates.pcb_override !== ''
+      ? parseFloat(updates.pcb_override) || 0
+      : (statutory.pcb_enabled ? statutoryResult.pcb : 0);
 
     const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + otherDeductions;
     const netPay = grossSalary + unpaidDeduction - totalDeductions;
@@ -2274,6 +2279,189 @@ router.get('/runs/:id/bank-file', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error generating bank file:', error);
     res.status(500).json({ error: 'Failed to generate bank file' });
+  }
+});
+
+/**
+ * GET /api/payroll/runs/:id/salary-report
+ * Generate salary report with all employee details and bank info
+ * Returns CSV for draft, or data for PDF generation
+ */
+router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { format } = req.query; // 'csv' or 'json' (for PDF generation in frontend)
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Get run details
+    const runResult = await pool.query(
+      'SELECT * FROM payroll_runs WHERE id = $1',
+      [id]
+    );
+    if (runResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll run not found' });
+    }
+    const run = runResult.rows[0];
+
+    if (run.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get all payroll items with employee and bank details
+    const result = await pool.query(`
+      SELECT
+        e.employee_id as emp_code,
+        e.name as employee_name,
+        e.ic_number,
+        COALESCE(d.name, o.name) as department_outlet,
+        e.bank_name,
+        e.bank_account_no,
+        pi.basic_salary,
+        pi.fixed_allowance,
+        pi.ot_hours,
+        pi.ot_amount,
+        pi.ph_days_worked,
+        pi.ph_pay,
+        pi.commission_amount,
+        pi.trade_commission_amount,
+        pi.incentive_amount,
+        pi.outstation_amount,
+        pi.bonus,
+        pi.claims_amount,
+        pi.gross_salary,
+        pi.epf_employee,
+        pi.socso_employee,
+        pi.eis_employee,
+        pi.pcb,
+        pi.unpaid_leave_deduction,
+        pi.advance_deduction,
+        pi.other_deductions,
+        pi.total_deductions,
+        pi.net_pay,
+        pi.epf_employer,
+        pi.socso_employer,
+        pi.eis_employer,
+        pi.employer_total_cost
+      FROM payroll_items pi
+      JOIN employees e ON pi.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
+      WHERE pi.payroll_run_id = $1
+      ORDER BY e.name
+    `, [id]);
+
+    // Calculate totals
+    const totals = {
+      basic_salary: 0, fixed_allowance: 0, ot_amount: 0, ph_pay: 0,
+      commission_amount: 0, bonus: 0, gross_salary: 0,
+      epf_employee: 0, socso_employee: 0, eis_employee: 0, pcb: 0,
+      total_deductions: 0, net_pay: 0,
+      epf_employer: 0, socso_employer: 0, eis_employer: 0, employer_total_cost: 0
+    };
+
+    result.rows.forEach(row => {
+      totals.basic_salary += parseFloat(row.basic_salary) || 0;
+      totals.fixed_allowance += parseFloat(row.fixed_allowance) || 0;
+      totals.ot_amount += parseFloat(row.ot_amount) || 0;
+      totals.ph_pay += parseFloat(row.ph_pay) || 0;
+      totals.commission_amount += parseFloat(row.commission_amount) || 0;
+      totals.bonus += parseFloat(row.bonus) || 0;
+      totals.gross_salary += parseFloat(row.gross_salary) || 0;
+      totals.epf_employee += parseFloat(row.epf_employee) || 0;
+      totals.socso_employee += parseFloat(row.socso_employee) || 0;
+      totals.eis_employee += parseFloat(row.eis_employee) || 0;
+      totals.pcb += parseFloat(row.pcb) || 0;
+      totals.total_deductions += parseFloat(row.total_deductions) || 0;
+      totals.net_pay += parseFloat(row.net_pay) || 0;
+      totals.epf_employer += parseFloat(row.epf_employer) || 0;
+      totals.socso_employer += parseFloat(row.socso_employer) || 0;
+      totals.eis_employer += parseFloat(row.eis_employer) || 0;
+      totals.employer_total_cost += parseFloat(row.employer_total_cost) || 0;
+    });
+
+    // Return JSON for PDF generation or frontend display
+    if (format === 'json' || run.status === 'finalized') {
+      return res.json({
+        run: {
+          id: run.id,
+          month: run.month,
+          year: run.year,
+          status: run.status,
+          period_label: run.period_label,
+          finalized_at: run.finalized_at
+        },
+        employees: result.rows,
+        totals,
+        generated_at: new Date().toISOString()
+      });
+    }
+
+    // Generate CSV for draft payroll
+    const headers = [
+      'No', 'Emp Code', 'Name', 'IC Number', 'Dept/Outlet',
+      'Basic', 'Allowance', 'OT Hrs', 'OT Amt', 'PH Pay',
+      'Commission', 'Bonus', 'Gross',
+      'EPF', 'SOCSO', 'EIS', 'PCB', 'Other Ded', 'Total Ded', 'Net Pay',
+      'Bank', 'Account No'
+    ];
+
+    let csv = headers.join(',') + '\n';
+
+    result.rows.forEach((row, idx) => {
+      csv += [
+        idx + 1,
+        `"${row.emp_code || ''}"`,
+        `"${row.employee_name}"`,
+        `"${row.ic_number || ''}"`,
+        `"${row.department_outlet || ''}"`,
+        parseFloat(row.basic_salary || 0).toFixed(2),
+        parseFloat(row.fixed_allowance || 0).toFixed(2),
+        parseFloat(row.ot_hours || 0).toFixed(1),
+        parseFloat(row.ot_amount || 0).toFixed(2),
+        parseFloat(row.ph_pay || 0).toFixed(2),
+        parseFloat(row.commission_amount || 0).toFixed(2),
+        parseFloat(row.bonus || 0).toFixed(2),
+        parseFloat(row.gross_salary || 0).toFixed(2),
+        parseFloat(row.epf_employee || 0).toFixed(2),
+        parseFloat(row.socso_employee || 0).toFixed(2),
+        parseFloat(row.eis_employee || 0).toFixed(2),
+        parseFloat(row.pcb || 0).toFixed(2),
+        parseFloat(row.other_deductions || 0).toFixed(2),
+        parseFloat(row.total_deductions || 0).toFixed(2),
+        parseFloat(row.net_pay || 0).toFixed(2),
+        `"${row.bank_name || ''}"`,
+        `"${row.bank_account_no || ''}"`
+      ].join(',') + '\n';
+    });
+
+    // Add totals row
+    csv += [
+      '', '', 'TOTAL', '', '',
+      totals.basic_salary.toFixed(2),
+      totals.fixed_allowance.toFixed(2),
+      '', totals.ot_amount.toFixed(2), totals.ph_pay.toFixed(2),
+      totals.commission_amount.toFixed(2),
+      totals.bonus.toFixed(2),
+      totals.gross_salary.toFixed(2),
+      totals.epf_employee.toFixed(2),
+      totals.socso_employee.toFixed(2),
+      totals.eis_employee.toFixed(2),
+      totals.pcb.toFixed(2),
+      '',
+      totals.total_deductions.toFixed(2),
+      totals.net_pay.toFixed(2),
+      '', ''
+    ].join(',') + '\n';
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=salary_report_${run.period_label?.replace(/\s+/g, '_') || run.month + '_' + run.year}.csv`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error generating salary report:', error);
+    res.status(500).json({ error: 'Failed to generate salary report' });
   }
 });
 

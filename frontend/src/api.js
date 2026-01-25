@@ -131,6 +131,11 @@ export const payrollV2Api = {
   deleteRun: (id) => api.delete(`/payroll/runs/${id}`),
   finalizeRun: (id) => api.post(`/payroll/runs/${id}/finalize`),
   getBankFile: (id) => api.get(`/payroll/runs/${id}/bank-file`, { responseType: 'blob' }),
+  getSalaryReport: (id, format = 'csv') => api.get(`/payroll/runs/${id}/salary-report`, {
+    params: { format },
+    responseType: format === 'csv' ? 'blob' : 'json'
+  }),
+  getSalaryReportJson: (id) => api.get(`/payroll/runs/${id}/salary-report`, { params: { format: 'json' } }),
 
   // OT Summary (before running payroll)
   getOTSummary: (year, month, params) => api.get(`/payroll/ot-summary/${year}/${month}`, { params }),

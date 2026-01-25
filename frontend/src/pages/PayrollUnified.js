@@ -437,6 +437,119 @@ function PayrollUnified() {
     }
   };
 
+  const handleDownloadSalaryReport = async (id, format) => {
+    try {
+      if (format === 'csv') {
+        // Download CSV/Excel
+        const res = await payrollV2Api.getSalaryReport(id, 'csv');
+        const blob = new Blob([res.data], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `salary_report_${selectedRun?.period_label?.replace(/\s+/g, '_') || selectedRun?.month + '_' + selectedRun?.year}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        // Generate PDF using jsPDF
+        const res = await payrollV2Api.getSalaryReportJson(id);
+        const data = res.data;
+        const { jsPDF } = await import('jspdf');
+        await import('jspdf-autotable');
+
+        const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for more columns
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // Title
+        doc.setFontSize(16);
+        doc.text('SALARY REPORT', pageWidth / 2, 15, { align: 'center' });
+        doc.setFontSize(12);
+        doc.text(data.run.period_label || `${data.run.month}/${data.run.year}`, pageWidth / 2, 22, { align: 'center' });
+        doc.setFontSize(10);
+        doc.text(`Status: FINALIZED | Generated: ${new Date().toLocaleDateString('en-MY')}`, pageWidth / 2, 28, { align: 'center' });
+
+        // Table data
+        const tableData = data.employees.map((emp, idx) => [
+          idx + 1,
+          emp.emp_code || '',
+          emp.employee_name,
+          parseFloat(emp.basic_salary || 0).toFixed(2),
+          parseFloat(emp.fixed_allowance || 0).toFixed(2),
+          parseFloat(emp.ot_amount || 0).toFixed(2),
+          parseFloat(emp.commission_amount || 0).toFixed(2),
+          parseFloat(emp.bonus || 0).toFixed(2),
+          parseFloat(emp.gross_salary || 0).toFixed(2),
+          parseFloat(emp.epf_employee || 0).toFixed(2),
+          parseFloat(emp.socso_employee || 0).toFixed(2),
+          parseFloat(emp.eis_employee || 0).toFixed(2),
+          parseFloat(emp.pcb || 0).toFixed(2),
+          parseFloat(emp.total_deductions || 0).toFixed(2),
+          parseFloat(emp.net_pay || 0).toFixed(2),
+          emp.bank_name || '',
+          emp.bank_account_no || ''
+        ]);
+
+        // Add totals row
+        tableData.push([
+          '', '', 'TOTAL',
+          data.totals.basic_salary.toFixed(2),
+          data.totals.fixed_allowance.toFixed(2),
+          data.totals.ot_amount.toFixed(2),
+          data.totals.commission_amount.toFixed(2),
+          data.totals.bonus.toFixed(2),
+          data.totals.gross_salary.toFixed(2),
+          data.totals.epf_employee.toFixed(2),
+          data.totals.socso_employee.toFixed(2),
+          data.totals.eis_employee.toFixed(2),
+          data.totals.pcb.toFixed(2),
+          data.totals.total_deductions.toFixed(2),
+          data.totals.net_pay.toFixed(2),
+          '', ''
+        ]);
+
+        doc.autoTable({
+          startY: 35,
+          head: [['#', 'Code', 'Name', 'Basic', 'Allow', 'OT', 'Comm', 'Bonus', 'Gross', 'EPF', 'SOCSO', 'EIS', 'PCB', 'Ded', 'Net', 'Bank', 'Account']],
+          body: tableData,
+          styles: { fontSize: 7, cellPadding: 1 },
+          headStyles: { fillColor: [30, 41, 59], fontSize: 7 },
+          columnStyles: {
+            0: { cellWidth: 8 },
+            1: { cellWidth: 15 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 18, halign: 'right' },
+            4: { cellWidth: 15, halign: 'right' },
+            5: { cellWidth: 15, halign: 'right' },
+            6: { cellWidth: 15, halign: 'right' },
+            7: { cellWidth: 15, halign: 'right' },
+            8: { cellWidth: 18, halign: 'right' },
+            9: { cellWidth: 15, halign: 'right' },
+            10: { cellWidth: 15, halign: 'right' },
+            11: { cellWidth: 12, halign: 'right' },
+            12: { cellWidth: 15, halign: 'right' },
+            13: { cellWidth: 15, halign: 'right' },
+            14: { cellWidth: 18, halign: 'right' },
+            15: { cellWidth: 25 },
+            16: { cellWidth: 25 }
+          },
+          didParseCell: function(data) {
+            // Bold the totals row
+            if (data.row.index === tableData.length - 1) {
+              data.cell.styles.fontStyle = 'bold';
+              data.cell.styles.fillColor = [241, 245, 249];
+            }
+          }
+        });
+
+        doc.save(`salary_report_${data.run.period_label?.replace(/\s+/g, '_') || data.run.month + '_' + data.run.year}.pdf`);
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Failed to download: ' + (error.message || 'Unknown error'));
+    }
+  };
+
   const handleEditItem = (item) => {
     setEditingItem(item);
     setItemForm({
@@ -446,7 +559,8 @@ function PayrollUnified() {
       incentive_amount: item.incentive_amount || 0, commission_amount: item.commission_amount || 0,
       trade_commission_amount: item.trade_commission_amount || 0, outstation_amount: item.outstation_amount || 0,
       bonus: item.bonus || 0, other_deductions: item.other_deductions || 0,
-      deduction_remarks: item.deduction_remarks || '', notes: item.notes || ''
+      deduction_remarks: item.deduction_remarks || '', notes: item.notes || '',
+      pcb_override: ''  // Empty means use calculated value, set value to override
     });
     setShowItemModal(true);
     const statutoryBase = (parseFloat(item.basic_salary) || 0) + (parseFloat(item.commission_amount) || 0) +
@@ -724,13 +838,17 @@ function PayrollUnified() {
                     <div className="details-actions">
                       {selectedRun.status === 'draft' && (
                         <>
+                          <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'csv')} className="download-btn">Download Excel</button>
                           <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate OT</button>
                           <button onClick={() => handleFinalizeRun(selectedRun.id)} className="finalize-btn">Finalize</button>
                           <button onClick={() => handleDeleteRun(selectedRun.id)} className="delete-btn">Delete</button>
                         </>
                       )}
                       {selectedRun.status === 'finalized' && (
-                        <button onClick={() => handleDownloadBankFile(selectedRun.id)} className="download-btn">Download Bank File</button>
+                        <>
+                          <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'pdf')} className="download-btn">Download PDF</button>
+                          <button onClick={() => handleDownloadBankFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>Bank File</button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1160,6 +1278,17 @@ function PayrollUnified() {
                     <div className="form-group">
                       <label>Other Deductions</label>
                       <input type="number" step="0.01" value={itemForm.other_deductions} onChange={(e) => setItemForm({ ...itemForm, other_deductions: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="form-group">
+                      <label>PCB Override (MyTax)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.pcb_override}
+                        onChange={(e) => setItemForm({ ...itemForm, pcb_override: e.target.value })}
+                        placeholder={`Calculated: ${statutoryPreview?.pcb?.toFixed(2) || editingItem?.pcb || '0.00'}`}
+                      />
+                      <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated PCB. Enter value from MyTax to override.</small>
                     </div>
                   </div>
                   <div className="form-group">
