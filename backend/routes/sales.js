@@ -184,7 +184,7 @@ router.get('/indoor-sales/:year/:month', authenticateAdmin, async (req, res) => 
     });
   } catch (error) {
     console.error('Error fetching indoor sales employees:', error);
-    res.status(500).json({ error: 'Failed to fetch indoor sales data' });
+    res.status(500).json({ error: 'Failed to fetch indoor sales data', details: error.message });
   }
 });
 

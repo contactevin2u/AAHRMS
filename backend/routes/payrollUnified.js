@@ -337,6 +337,39 @@ async function updateRunTotals(runId) {
 }
 
 // =============================================================================
+// UTILITY ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/payroll/calculate-statutory
+ * Calculate statutory deductions preview for an employee
+ */
+router.post('/calculate-statutory', authenticateAdmin, async (req, res) => {
+  try {
+    const { employee_id, gross_salary } = req.body;
+
+    // Get employee data
+    const empResult = await pool.query(
+      `SELECT date_of_birth, ic_number, epf_contribution_type, marital_status, spouse_working, children_count
+       FROM employees WHERE id = $1`,
+      [employee_id]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const employee = empResult.rows[0];
+    const statutory = calculateAllStatutory(parseFloat(gross_salary || 0), employee);
+
+    res.json(statutory);
+  } catch (error) {
+    console.error('Error calculating statutory:', error);
+    res.status(500).json({ error: 'Failed to calculate statutory deductions', details: error.message });
+  }
+});
+
+// =============================================================================
 // PAYROLL SETTINGS ENDPOINTS
 // =============================================================================
 
@@ -1986,7 +2019,7 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error finalizing payroll run:', error);
-    res.status(500).json({ error: 'Failed to finalize payroll run' });
+    res.status(500).json({ error: 'Failed to finalize payroll run', details: error.message });
   } finally {
     client.release();
   }
