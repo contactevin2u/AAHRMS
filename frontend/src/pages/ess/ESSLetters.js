@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import './ESSLetters.css';
 
 function ESSLetters() {
