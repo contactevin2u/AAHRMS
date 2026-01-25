@@ -262,6 +262,66 @@
   color: #64748b;
 }
 
+/* MyTax Breakdown Section - Admin Reference */
+.mytax-section {
+  background: linear-gradient(135deg, #f8fafc 0%, #e8f4fd 100%);
+  border: 2px dashed #60a5fa;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 25px;
+}
+
+.mytax-section h3 {
+  color: #3b82f6;
+  font-size: 1rem;
+  margin: 0 0 8px 0;
+  font-weight: 700;
+}
+
+.mytax-note {
+  color: #64748b;
+  font-size: 0.85rem;
+  margin: 0 0 15px 0;
+  font-style: italic;
+}
+
+.mytax-grid {
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.mytax-category {
+  flex: 1;
+  min-width: 200px;
+}
+
+.mytax-category h4 {
+  font-size: 0.9rem;
+  color: #1e293b;
+  margin: 0 0 10px 0;
+  font-weight: 600;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.mytax-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: #1e293b;
+  padding: 6px 0;
+}
+
+.mytax-item span:first-child {
+  color: #64748b;
+}
+
+.mytax-item span:last-child {
+  font-weight: 600;
+  color: #0f172a;
+}
+
 .net-pay-section {
   background: #3b82f6;
   padding: 20px 30px;

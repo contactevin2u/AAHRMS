@@ -688,13 +688,16 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
           const totalAllowances = fixedAllowance + flexAllowances;
           const grossSalary = basicSalary + totalAllowances + otAmount + phPay + flexCommissions + claimsAmount;
 
-          // Statutory base = basic + commission + bonus (no bonus at creation)
+          // Statutory base = basic + commission (excludes allowance/OT unless configured)
           const statutoryBase = basicSalary + flexCommissions;
-          // PCB Saraan Tambahan: Commission is treated as additional remuneration
+          // PCB calculation needs full gross including allowance
           const salaryBreakdown = {
             basic: basicSalary,
+            allowance: totalAllowances,
             commission: flexCommissions,
-            bonus: 0  // No bonus at payroll creation
+            bonus: 0,  // No bonus at payroll creation
+            ot: otAmount,
+            pcbGross: grossSalary
           };
           const statutory = calculateAllStatutory(statutoryBase, emp, month, null, salaryBreakdown);
 
@@ -1287,11 +1290,15 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       }
 
       // Calculate statutory deductions with breakdown for proper PCB calculation
-      // PCB Saraan Tambahan: Commission is treated as additional remuneration
+      // EPF/SOCSO/EIS are on statutoryBase (basic + commission, optionally OT/allowance)
+      // PCB is on FULL gross (including allowance) per LHDN formula
       const salaryBreakdown = {
         basic: basicSalary,
+        allowance: totalAllowances,
         commission: commissionAmount,
-        bonus: 0  // No bonus at payroll creation - added via edits
+        bonus: 0,  // No bonus at payroll creation - added via edits
+        ot: otAmount,
+        pcbGross: grossSalary  // Full gross for PCB calculation
       };
       const statutoryResult = calculateAllStatutory(statutoryBase, emp, month, ytdData, salaryBreakdown);
 
@@ -1303,6 +1310,19 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
       const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
       const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+
+      // EPF breakdown for MyTax entry (Saraan Biasa vs Saraan Tambahan)
+      // EPF rate is 11% - split between normal salary and additional remuneration
+      // Saraan Biasa: basic salary + fixed allowance (regular monthly pay)
+      // Saraan Tambahan: commission + OT + bonus + incentive (variable/additional pay)
+      const normalSalary = basicSalary + totalAllowances;  // Regular monthly salary
+      const additionalSalary = commissionAmount + otAmount;  // Additional remuneration
+      const epfOnNormal = Math.round(normalSalary * 0.11);
+      const epfOnAdditional = Math.round(additionalSalary * 0.11);
+
+      // PCB breakdown from statutory calculation
+      const pcbNormal = statutoryResult.pcbBreakdown?.normalSTD || 0;
+      const pcbAdditional = statutoryResult.pcbBreakdown?.additionalSTD || 0;
 
       const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction;
       const netPay = grossSalary - totalDeductions + unpaidDeduction; // unpaidDeduction already subtracted from gross
@@ -1325,14 +1345,15 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           unpaid_leave_days, unpaid_leave_deduction, advance_deduction,
           gross_salary, statutory_base,
           epf_employee, epf_employer,
+          epf_on_normal, epf_on_additional,
           socso_employee, socso_employer,
           eis_employee, eis_employer,
-          pcb,
+          pcb, pcb_normal, pcb_additional,
           total_deductions, net_pay, employer_total_cost,
           sales_amount, salary_calculation_method,
           ytd_gross, ytd_epf, ytd_pcb,
           prev_month_net, variance_amount, variance_percent
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
       `, [
         runId, emp.id,
         basicSalary, totalAllowances, commissionAmount, claimsAmount,
@@ -1340,9 +1361,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         unpaidDays, unpaidDeduction, advanceDeduction,
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer,
+        epfOnNormal, epfOnAdditional,
         socsoEmployee, socsoEmployer,
         eisEmployee, eisEmployer,
-        pcb,
+        pcb, pcbNormal, pcbAdditional,
         totalDeductions, netPay, employerCost,
         salesAmount, salaryCalculationMethod,
         ytdData?.ytdGross || 0, ytdData?.ytdEPF || 0, ytdData?.ytdPCB || 0,
@@ -1468,11 +1490,14 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     }
 
     // Recalculate statutory with breakdown for proper PCB calculation
-    // PCB Saraan Tambahan: Commission and bonus are treated as additional remuneration
+    // EPF/SOCSO/EIS on statutoryBase, PCB on full gross
     const salaryBreakdown = {
       basic: basicSalary,
+      allowance: fixedAllowance + outstationAmount + incentiveAmount,  // All allowance-type items
       commission: commissionAmount + tradeCommission,
-      bonus: bonus
+      bonus: bonus,
+      ot: otAmount + phPay,  // OT and PH pay as additional
+      pcbGross: grossSalary
     };
     const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, ytdData, salaryBreakdown);
 
@@ -1621,11 +1646,14 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     }
 
     // Recalculate statutory with breakdown for proper PCB calculation
-    // PCB Saraan Tambahan: Commission and bonus are treated as additional remuneration
+    // EPF/SOCSO/EIS on statutoryBase, PCB on full gross
     const salaryBreakdown = {
       basic: basicSalary,
+      allowance: fixedAllowance + outstationAmount + incentiveAmount,
       commission: commissionAmount + tradeCommission,
-      bonus: bonus
+      bonus: bonus,
+      ot: otAmount + phPay,
+      pcbGross: grossSalary
     };
     const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, ytdData, salaryBreakdown);
 
@@ -1784,11 +1812,14 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         }
 
         // Calculate statutory with breakdown for proper PCB calculation
-        // PCB Saraan Tambahan: Commission and bonus are treated as additional remuneration
+        // EPF/SOCSO/EIS on statutoryBase, PCB on full gross
         const salaryBreakdown = {
           basic: basicSalary,
+          allowance: fixedAllowance + outstationAmount + incentiveAmount,
           commission: commissionAmount + tradeCommission,
-          bonus: bonus
+          bonus: bonus,
+          ot: otAmount + phPay,
+          pcbGross: grossSalary
         };
         const statutoryResult = calculateAllStatutory(statutoryBase, i, i.month, ytdData, salaryBreakdown);
 
@@ -2054,11 +2085,13 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
         e.position,
         e.join_date,
         d.name as department_name,
+        o.name as outlet_name,
         c.name as company_name
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       JOIN employees e ON pi.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
       LEFT JOIN companies c ON pr.company_id = c.id
       WHERE pi.id = $1
     `, [id]);
@@ -2093,6 +2126,7 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
         socso_number: item.socso_number,
         tax_number: item.tax_number,
         department: item.department_name,
+        outlet_name: item.outlet_name,
         position: item.position,
         join_date: item.join_date,
         bank_name: item.bank_name,
@@ -2101,6 +2135,7 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
       period: {
         month: item.month,
         year: item.year,
+        month_name: getMonthName(item.month),
         label: item.period_label || `${getMonthName(item.month)} ${item.year}`
       },
       earnings: {
@@ -2124,7 +2159,15 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
         socso_employee: parseFloat(item.socso_employee) || 0,
         eis_employee: parseFloat(item.eis_employee) || 0,
         pcb: parseFloat(item.pcb) || 0,
+        advance_deduction: parseFloat(item.advance_deduction) || 0,
         other_deductions: parseFloat(item.other_deductions) || 0
+      },
+      // EPF/PCB breakdown for MyTax entry (Saraan Biasa vs Saraan Tambahan)
+      mytax_breakdown: {
+        epf_on_normal: parseFloat(item.epf_on_normal) || 0,
+        epf_on_additional: parseFloat(item.epf_on_additional) || 0,
+        pcb_normal: parseFloat(item.pcb_normal) || 0,
+        pcb_additional: parseFloat(item.pcb_additional) || 0
       },
       employer_contributions: {
         epf_employer: parseFloat(item.epf_employer) || 0,

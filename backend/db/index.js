@@ -994,6 +994,20 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='variance_percent') THEN
           ALTER TABLE payroll_items ADD COLUMN variance_percent DECIMAL(6,2);
         END IF;
+        -- EPF breakdown for MyTax (Saraan Biasa vs Saraan Tambahan)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='epf_on_normal') THEN
+          ALTER TABLE payroll_items ADD COLUMN epf_on_normal DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='epf_on_additional') THEN
+          ALTER TABLE payroll_items ADD COLUMN epf_on_additional DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        -- PCB breakdown for MyTax
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='pcb_normal') THEN
+          ALTER TABLE payroll_items ADD COLUMN pcb_normal DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='pcb_additional') THEN
+          ALTER TABLE payroll_items ADD COLUMN pcb_additional DECIMAL(10,2) DEFAULT 0;
+        END IF;
       END $$;
 
       -- Resignations / Employment Status History

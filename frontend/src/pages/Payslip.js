@@ -341,11 +341,50 @@ function Payslip() {
             </div>
           )}
 
+          {/* MyTax Breakdown - Show EPF/PCB split for admin to fill in LHDN MyTax */}
+          {payslip.mytax_breakdown &&
+           (payslip.mytax_breakdown.epf_on_normal > 0 || payslip.mytax_breakdown.epf_on_additional > 0) && (
+            <div className="mytax-section no-print">
+              <h3>MyTax Entry Guide (Admin Reference)</h3>
+              <p className="mytax-note">Use these values when entering in LHDN MyTax / e-PCB:</p>
+              <div className="mytax-grid">
+                <div className="mytax-category">
+                  <h4>Saraan Biasa (Normal Salary)</h4>
+                  <div className="mytax-item">
+                    <span>EPF (K1):</span>
+                    <span>{formatCurrency(payslip.mytax_breakdown.epf_on_normal)}</span>
+                  </div>
+                  {payslip.mytax_breakdown.pcb_normal > 0 && (
+                    <div className="mytax-item">
+                      <span>PCB Bersih:</span>
+                      <span>{formatCurrency(payslip.mytax_breakdown.pcb_normal)}</span>
+                    </div>
+                  )}
+                </div>
+                {payslip.mytax_breakdown.epf_on_additional > 0 && (
+                  <div className="mytax-category">
+                    <h4>Saraan Tambahan (Additional)</h4>
+                    <div className="mytax-item">
+                      <span>EPF (Kt):</span>
+                      <span>{formatCurrency(payslip.mytax_breakdown.epf_on_additional)}</span>
+                    </div>
+                    {payslip.mytax_breakdown.pcb_additional > 0 && (
+                      <div className="mytax-item">
+                        <span>PCB Tambahan:</span>
+                        <span>{formatCurrency(payslip.mytax_breakdown.pcb_additional)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Net Pay */}
           <div className="net-pay-section">
             <div className="net-pay">
               <span>NET PAY</span>
-              <span className="net-amount">{formatCurrency(payslip.totals.net_salary)}</span>
+              <span className="net-amount">{formatCurrency(payslip.totals.net_pay || payslip.totals.net_salary)}</span>
             </div>
           </div>
 

@@ -373,7 +373,9 @@ const calculatePCBFull = (params) => {
     isDisabled = false,
     spouseDisabled = false,
     otherDeductions = 0,           // ELP + LP1
-    epfRate = 0.11
+    epfRate = 0.11,
+    actualEPFNormal = null,        // Actual EPF on normal salary (if different from calculated)
+    actualEPFAdditional = null     // Actual EPF on additional salary (if different from calculated)
   } = params;
 
   // EPF cap is RM4,000 per year for tax relief
@@ -391,21 +393,35 @@ const calculatePCBFull = (params) => {
   const K = accumulatedEPF;   // E(K)
 
   // K1 = EPF on current month normal remuneration (subject to cap)
-  const epfOnY1 = Math.round(Y1 * epfRate * 100) / 100;
+  // Use actual EPF if provided (for cases where EPF base differs from PCB base)
   const remainingEPFCap = Math.max(0, EPF_CAP - K);
-  const K1 = Math.min(epfOnY1, remainingEPFCap);
+  let K1;
+  if (actualEPFNormal !== null) {
+    K1 = Math.min(actualEPFNormal, remainingEPFCap);
+  } else {
+    const epfOnY1 = Math.round(Y1 * epfRate * 100) / 100;
+    K1 = Math.min(epfOnY1, remainingEPFCap);
+  }
 
   // Kt = EPF on additional remuneration (subject to cap)
-  const epfOnYt = Math.round(Yt * epfRate * 100) / 100;
   const remainingEPFCapAfterK1 = Math.max(0, EPF_CAP - K - K1);
-  const Kt = Math.min(epfOnYt, remainingEPFCapAfterK1);
+  let Kt;
+  if (actualEPFAdditional !== null) {
+    Kt = Math.min(actualEPFAdditional, remainingEPFCapAfterK1);
+  } else {
+    const epfOnYt = Math.round(Yt * epfRate * 100) / 100;
+    Kt = Math.min(epfOnYt, remainingEPFCapAfterK1);
+  }
 
   // Y2 = Estimated future monthly remuneration (assume same as Y1)
   const Y2 = Y1;
 
   // K2 = Estimated future EPF per month (subject to remaining cap)
   // K2 = min(EPF on Y2, (RM4000 - K - K1 - Kt) / n) or K1, whichever is lower
-  const epfOnY2 = Math.round(Y2 * epfRate * 100) / 100;
+  // If actualEPFNormal provided, use it as basis for K2 (same EPF pattern)
+  const epfOnY2 = actualEPFNormal !== null
+    ? actualEPFNormal
+    : Math.round(Y2 * epfRate * 100) / 100;
   const remainingEPFForFuture = Math.max(0, EPF_CAP - K - K1 - Kt);
   const K2 = n > 0 ? Math.min(epfOnY2, remainingEPFForFuture / n, K1) : 0;
 
@@ -674,16 +690,17 @@ const getEmployeeAge = (employee) => {
 /**
  * Calculate all statutory deductions using full LHDN formula
  *
- * IMPORTANT: Only basic, commission, and bonus are subject to statutory deductions
- * OT and allowance are NOT subject to EPF, SOCSO, EIS, PCB
+ * IMPORTANT: EPF/SOCSO/EIS are calculated on statutoryBase (typically basic + commission)
+ * PCB is calculated on full gross income (including allowances)
  *
- * @param {number} grossSalary - Total gross salary (basic + commission + bonus)
+ * @param {number} statutoryBase - Amount subject to EPF/SOCSO/EIS (basic + commission)
  * @param {Object} employee - Employee details
  * @param {number} month - Current month (1-12)
  * @param {Object} ytdData - Year-to-date data for accurate PCB
- * @param {Object} breakdown - Optional salary breakdown { basic, commission, bonus }
+ * @param {Object} breakdown - Salary breakdown { basic, commission, bonus, allowance, ot, pcbGross }
+ *                            - pcbGross: Full gross for PCB calculation (includes allowance)
  */
-const calculateAllStatutory = (grossSalary, employee = {}, month = null, ytdData = null, breakdown = null) => {
+const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdData = null, breakdown = null) => {
   // Determine if employee is Malaysian based on IC format
   const isMalaysian = isMalaysianIC(employee.ic_number);
 
@@ -694,30 +711,56 @@ const calculateAllStatutory = (grossSalary, employee = {}, month = null, ytdData
   const spouseWorking = employee.spouse_working || false;
   const childrenCount = employee.children_count || 0;
 
-  // Calculate statutory contributions
-  // EPF, SOCSO, EIS apply to all employees regardless of salary amount (even RM 0 salary)
-  const epf = calculateEPF(grossSalary, age, 'normal', isMalaysian);
-  const socso = calculateSOCSO(grossSalary, age);
-  const eis = calculateEIS(grossSalary, age);
+  // Calculate statutory contributions on statutoryBase (not full gross)
+  // EPF, SOCSO, EIS apply to statutoryBase (basic + commission, excludes allowance if configured)
+  const epf = calculateEPF(statutoryBase, age, 'normal', isMalaysian);
+  const socso = calculateSOCSO(statutoryBase, age);
+  const eis = calculateEIS(statutoryBase, age);
 
   // Calculate PCB using full LHDN formula
   let pcb;
   let pcbBreakdown = null;
 
-  // Determine normal vs additional remuneration
-  let normalRemuneration = grossSalary;
+  // Determine normal vs additional remuneration for PCB
+  // PCB Y1 should be FULL gross (including allowance), not just statutory base
+  // But EPF (K1) is calculated on statutory base only
+  let normalRemuneration = statutoryBase;
   let additionalRemuneration = 0;
+  let actualEPFNormal = null;  // Actual EPF on normal salary
+  let actualEPFAdditional = null;  // Actual EPF on additional salary
 
   if (breakdown) {
-    // If breakdown provided, separate normal salary from bonus/commission
-    normalRemuneration = breakdown.basic || 0;
-    additionalRemuneration = (breakdown.commission || 0) + (breakdown.bonus || 0);
+    // pcbGross = full gross including allowance for PCB calculation
+    // breakdown.basic = basic salary only (for EPF calculation base)
+    const pcbGross = breakdown.pcbGross || breakdown.basic || statutoryBase;
+    const basic = breakdown.basic || 0;
+    const allowance = breakdown.allowance || 0;
+    const commission = breakdown.commission || 0;
+    const bonus = breakdown.bonus || 0;
+    const ot = breakdown.ot || 0;
+
+    // Normal remuneration for PCB = basic + allowance (regular monthly pay)
+    normalRemuneration = basic + allowance;
+
+    // Additional remuneration = commission + bonus + OT (variable pay)
+    additionalRemuneration = commission + bonus + ot;
+
+    // Actual EPF amounts (EPF is only on statutory base, not on allowance if not configured)
+    // EPF on normal = EPF on basic only (if allowance is not in statutory base)
+    // This ensures K1 in PCB formula uses correct EPF amount
+    actualEPFNormal = Math.round(basic * 0.11);  // EPF on basic salary
+    actualEPFAdditional = Math.round(commission * 0.11);  // EPF on commission
   }
 
   const currentMonth = month || (new Date().getMonth() + 1);
 
+  // SOCSO contribution is deductible for PCB (ELP - Employment Life Protection)
+  // Annualized SOCSO capped at RM350/year
+  const annualSOCSO = Math.min(socso.employee * 12, 350);
+
   if (ytdData) {
     // Use full LHDN formula with YTD data
+    // Include SOCSO as part of other deductions (ELP)
     const pcbResult = calculatePCBFull({
       normalRemuneration,
       additionalRemuneration,
@@ -732,15 +775,17 @@ const calculateAllStatutory = (grossSalary, employee = {}, month = null, ytdData
       childrenCount,
       isDisabled: employee.is_disabled || false,
       spouseDisabled: employee.spouse_disabled || false,
-      otherDeductions: ytdData.otherDeductions || 0,
-      epfRate: 0.11
+      otherDeductions: (ytdData.otherDeductions || 0) + annualSOCSO,
+      epfRate: 0.11,
+      actualEPFNormal,
+      actualEPFAdditional
     });
 
     pcb = pcbResult.pcb;
     pcbBreakdown = pcbResult;
   } else {
     // Use simplified calculation (assumes January or standalone)
-    if (additionalRemuneration > 0) {
+    if (additionalRemuneration > 0 || breakdown) {
       const pcbResult = calculatePCBFull({
         normalRemuneration,
         additionalRemuneration,
@@ -748,12 +793,15 @@ const calculateAllStatutory = (grossSalary, employee = {}, month = null, ytdData
         maritalStatus,
         spouseWorking,
         childrenCount,
-        epfRate: 0.11
+        otherDeductions: annualSOCSO,
+        epfRate: 0.11,
+        actualEPFNormal,
+        actualEPFAdditional
       });
       pcb = pcbResult.pcb;
       pcbBreakdown = pcbResult;
     } else {
-      pcb = calculatePCBSimple(grossSalary, epf.employee, maritalStatus, spouseWorking, childrenCount);
+      pcb = calculatePCBSimple(statutoryBase, epf.employee, maritalStatus, spouseWorking, childrenCount);
     }
   }
 
