@@ -456,7 +456,7 @@ function PayrollUnified() {
         const res = await payrollV2Api.getSalaryReportJson(id);
         const data = res.data;
         const { jsPDF } = await import('jspdf');
-        await import('jspdf-autotable');
+        const autoTable = (await import('jspdf-autotable')).default;
 
         const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for more columns
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -508,7 +508,7 @@ function PayrollUnified() {
           '', ''
         ]);
 
-        doc.autoTable({
+        autoTable(doc, {
           startY: 35,
           head: [['#', 'Code', 'Name', 'Basic', 'Allow', 'OT', 'Comm', 'Bonus', 'Gross', 'EPF', 'SOCSO', 'EIS', 'PCB', 'Ded', 'Net', 'Bank', 'Account']],
           body: tableData,
