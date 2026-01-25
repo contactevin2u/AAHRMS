@@ -2202,7 +2202,7 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
     // Only update if basic_salary in payroll differs from employee's current salary
     const payrollItems = await client.query(`
       SELECT pi.employee_id, pi.basic_salary as payroll_salary, pi.fixed_allowance as payroll_allowance,
-             e.default_basic_salary as current_salary, e.fixed_allowance as current_allowance
+             e.default_basic_salary as current_salary, e.default_allowance as current_allowance
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       WHERE pi.payroll_run_id = $1
@@ -2220,7 +2220,7 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
         await client.query(`
           UPDATE employees SET
             default_basic_salary = $1,
-            fixed_allowance = $2,
+            default_allowance = $2,
             updated_at = NOW()
           WHERE id = $3
         `, [payrollSalary, payrollAllowance, item.employee_id]);
