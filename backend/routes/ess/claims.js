@@ -11,6 +11,7 @@ const { asyncHandler, ValidationError } = require('../../middleware/errorHandler
 const { uploadClaim } = require('../../utils/cloudinaryStorage');
 const { isSupervisorOrManager, canApproveForEmployee } = require('../../middleware/essPermissions');
 const { verifyReceipt, generateReceiptHash, extractReceiptData } = require('../../utils/receiptAI');
+const { getEmployeeMealAllowance } = require('../../utils/claimsAutomation');
 
 // Get claims history
 router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
@@ -170,16 +171,30 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     finalReceiptUrl = await uploadClaim(receiptData, companyId, req.employee.id, timestamp);
   }
 
-  // Determine claim status based on AI verification
-  // NOTE: Auto-approval is only enabled for AA Alive (company_id = 1)
+  // Determine claim status based on AI verification or outstation meal allowance
   let claimStatus = 'pending';
   let autoApproved = false;
   let approvedAt = null;
+  let autoApprovalReason = null;
 
-  if (companyId === 1 && verification && verification.canAutoApprove && !amount_mismatch_ignored) {
+  // Check for outstation meal allowance (RM20/day policy)
+  const upperCategory = (category || '').toUpperCase();
+  if (upperCategory === 'MEAL' || upperCategory === 'FOOD' || upperCategory === 'MAKAN') {
+    const mealAllowance = await getEmployeeMealAllowance(req.employee.id);
+    if (mealAllowance && parseFloat(amount) <= parseFloat(mealAllowance)) {
+      claimStatus = 'approved';
+      autoApproved = true;
+      approvedAt = new Date();
+      autoApprovalReason = `Outstation meal allowance: RM${amount} within RM${mealAllowance} limit`;
+    }
+  }
+
+  // If not already auto-approved by meal allowance, check AI verification (AA Alive only)
+  if (!autoApproved && companyId === 1 && verification && verification.canAutoApprove && !amount_mismatch_ignored) {
     claimStatus = 'approved';
     autoApproved = true;
     approvedAt = new Date();
+    autoApprovalReason = 'AI verification passed';
   }
 
   // Insert claim with AI data
@@ -187,9 +202,9 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     `INSERT INTO claims (
       employee_id, claim_date, category, description, amount, receipt_url, status,
       receipt_hash, ai_extracted_amount, ai_extracted_merchant, ai_extracted_date,
-      ai_confidence, amount_mismatch_ignored, auto_approved, approved_at
+      ai_confidence, amount_mismatch_ignored, auto_approved, approved_at, auto_approval_reason
     )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING *`,
     [
       req.employee.id,
@@ -206,7 +221,8 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
       verification?.aiData?.confidence || null,
       amount_mismatch_ignored || false,
       autoApproved,
-      approvedAt
+      approvedAt,
+      autoApprovalReason
     ]
   );
 
@@ -215,6 +231,7 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   res.status(201).json({
     ...claim,
     autoApproved,
+    autoApprovalReason,
     verificationResult: verification ? {
       amountMatch: verification.amountMatch,
       warnings: verification.warnings,

@@ -105,6 +105,17 @@ async function validateClaimCategory(employeeId, categoryCode) {
 }
 
 /**
+ * Check if employee has outstation meal allowance
+ */
+async function getEmployeeMealAllowance(employeeId) {
+  const result = await pool.query(
+    'SELECT outstation_meal_allowance FROM employees WHERE id = $1',
+    [employeeId]
+  );
+  return result.rows[0]?.outstation_meal_allowance || null;
+}
+
+/**
  * Check if a claim can be auto-approved
  *
  * @param {Object} claim - Claim details
@@ -113,6 +124,21 @@ async function validateClaimCategory(employeeId, categoryCode) {
  * @returns {Object} { canAutoApprove, reason }
  */
 async function canAutoApproveClaim(claim, claimType, automationConfig) {
+  const amount = parseFloat(claim.amount);
+  const category = (claim.category || '').toUpperCase();
+
+  // Special case: Check for outstation meal allowance (bypasses normal rules)
+  if (category === 'MEAL' || category === 'FOOD' || category === 'MAKAN') {
+    const mealAllowance = await getEmployeeMealAllowance(claim.employee_id);
+    if (mealAllowance && amount <= parseFloat(mealAllowance)) {
+      return {
+        canAutoApprove: true,
+        reason: `Outstation meal allowance: RM${amount} within RM${mealAllowance} limit`,
+        bypassedNormalRules: true
+      };
+    }
+  }
+
   // Check if auto-approval is enabled at company level
   if (!automationConfig.claims_auto_approve) {
     return { canAutoApprove: false, reason: 'Claims auto-approval disabled for company' };
@@ -433,5 +459,6 @@ module.exports = {
   rejectClaim,
   getPendingClaimsSummary,
   getMonthlyClaimTotal,
-  getYearlyClaimTotal
+  getYearlyClaimTotal,
+  getEmployeeMealAllowance
 };
