@@ -368,6 +368,17 @@ const calculateAnnualTax = (chargeableIncome, isCategory2 = false) => {
 };
 
 /**
+ * Truncate to 2 decimal places (LHDN method for intermediate calculations)
+ * LHDN uses truncation (floor), not rounding, for intermediate values
+ */
+const truncate2dp = (val) => Math.floor(val * 100) / 100;
+
+/**
+ * Round to 2 decimal places (standard rounding)
+ */
+const round2dp = (val) => Math.round(val * 100) / 100;
+
+/**
  * Full LHDN PCB Calculation
  *
  * @param {Object} params - PCB calculation parameters
@@ -425,36 +436,38 @@ const calculatePCBFull = (params) => {
 
   // K1 = EPF on current month normal remuneration (subject to cap)
   // Use actual EPF if provided (for cases where EPF base differs from PCB base)
+  // LHDN uses truncation to 2 decimal places for EPF relief values
   const remainingEPFCap = Math.max(0, EPF_CAP - K);
   let K1;
   if (actualEPFNormal !== null) {
-    K1 = Math.min(actualEPFNormal, remainingEPFCap);
+    K1 = truncate2dp(Math.min(actualEPFNormal, remainingEPFCap));
   } else {
-    const epfOnY1 = Math.round(Y1 * epfRate * 100) / 100;
-    K1 = Math.min(epfOnY1, remainingEPFCap);
+    const epfOnY1 = truncate2dp(Y1 * epfRate);
+    K1 = truncate2dp(Math.min(epfOnY1, remainingEPFCap));
   }
 
   // Kt = EPF on additional remuneration (subject to cap)
   const remainingEPFCapAfterK1 = Math.max(0, EPF_CAP - K - K1);
   let Kt;
   if (actualEPFAdditional !== null) {
-    Kt = Math.min(actualEPFAdditional, remainingEPFCapAfterK1);
+    Kt = truncate2dp(Math.min(actualEPFAdditional, remainingEPFCapAfterK1));
   } else {
-    const epfOnYt = Math.round(Yt * epfRate * 100) / 100;
-    Kt = Math.min(epfOnYt, remainingEPFCapAfterK1);
+    const epfOnYt = truncate2dp(Yt * epfRate);
+    Kt = truncate2dp(Math.min(epfOnYt, remainingEPFCapAfterK1));
   }
 
   // Y2 = Estimated future monthly remuneration (assume same as Y1)
   const Y2 = Y1;
 
   // K2 = Estimated future EPF per month (subject to remaining cap)
-  // K2 = min(EPF on Y2, (RM4000 - K - K1 - Kt) / n) or K1, whichever is lower
+  // LHDN Formula: K2 = min([4000 - (K + K1 + Kt)] / n, K1)
   // If actualEPFNormal provided, use it as basis for K2 (same EPF pattern)
   const epfOnY2 = actualEPFNormal !== null
     ? actualEPFNormal
-    : Math.round(Y2 * epfRate * 100) / 100;
+    : truncate2dp(Y2 * epfRate);
   const remainingEPFForFuture = Math.max(0, EPF_CAP - K - K1 - Kt);
-  const K2 = n > 0 ? Math.min(epfOnY2, remainingEPFForFuture / n, K1) : 0;
+  // K2 = min(remaining/n, K1) - use K1 as the cap, not epfOnY2
+  const K2 = n > 0 ? truncate2dp(Math.min(remainingEPFForFuture / n, K1)) : 0;
 
   // Total EPF for tax relief (EK)
   const EK = K + K1 + (K2 * n) + Kt;
@@ -487,7 +500,10 @@ const calculatePCBFull = (params) => {
 
   // P for normal calculation (without additional remuneration)
   // P = [E(Y-K) + (Y1-K1) + (Y2-K2)*n + (0-0)] - deductions
-  const P_normal = (EYminusK + (Y1 - K1) + ((Y2 - K2) * n)) - totalDeductions;
+  // LHDN truncates intermediate sums to 2 decimal places
+  const netCurrentMonth = truncate2dp(Y1 - K1);
+  const netFutureMonths = truncate2dp((Y2 - K2) * n);
+  const P_normal = truncate2dp(EYminusK + netCurrentMonth + netFutureMonths - totalDeductions);
 
   // Adjust P for EPF relief (EPF is already subtracted, but we need to ensure cap)
   const P_normalAdjusted = Math.max(0, P_normal);
@@ -505,7 +521,9 @@ const calculatePCBFull = (params) => {
   const X = accumulatedPCB;
 
   // Normal STD = [(P - M) × R + B - rebate - (Z + X)] / (n + 1)
-  let normalSTD = ((P_normalAdjusted - M) * R + B_adjusted - (Z + X)) / nPlus1;
+  // LHDN uses standard rounding for tax calculation, then truncates division result
+  const taxBeforeDivide = round2dp((P_normalAdjusted - M) * R + B_adjusted);
+  let normalSTD = truncate2dp((taxBeforeDivide - (Z + X)) / nPlus1);
   normalSTD = Math.max(0, normalSTD);
 
   // =====================================================
@@ -513,15 +531,17 @@ const calculatePCBFull = (params) => {
   // =====================================================
 
   let additionalSTD = 0;
+  let P_withAdditionalAdjusted = null;
 
   if (Yt > 0) {
     // Total STD for a year (if no additional remuneration)
-    const totalSTDForYear = X + (normalSTD * nPlus1);
+    const totalSTDForYear = truncate2dp(X + (normalSTD * nPlus1));
 
     // P with additional remuneration
     // P = [E(Y-K) + (Y1-K1) + (Y2-K2)*n + (Yt-Kt)] - deductions
-    const P_withAdditional = (EYminusK + (Y1 - K1) + ((Y2 - K2) * n) + (Yt - Kt)) - totalDeductions;
-    const P_withAdditionalAdjusted = Math.max(0, P_withAdditional);
+    const netAdditional = truncate2dp(Yt - Kt);
+    const P_withAdditional = truncate2dp(EYminusK + netCurrentMonth + netFutureMonths + netAdditional - totalDeductions);
+    P_withAdditionalAdjusted = Math.max(0, P_withAdditional);
 
     // Total Tax with additional remuneration
     const bracket_additional = getTaxBracket(P_withAdditionalAdjusted);
@@ -531,10 +551,12 @@ const calculatePCBFull = (params) => {
 
     // Apply rebate ONLY if chargeable income <= RM 35,000
     const rebate_add = P_withAdditionalAdjusted <= TAX_REBATE_THRESHOLD ? rebateAmount : 0;
-    const totalTax = (P_withAdditionalAdjusted - M_add) * R_add + B_add - rebate_add;
+    // LHDN uses standard rounding (round half up) for total tax calculation
+    const totalTax = round2dp((P_withAdditionalAdjusted - M_add) * R_add + B_add - rebate_add);
 
     // Additional STD = Total Tax - (Total STD for year + Z)
-    additionalSTD = Math.max(0, totalTax - (totalSTDForYear + Z));
+    // Use standard rounding for final additionalSTD
+    additionalSTD = round2dp(Math.max(0, totalTax - (totalSTDForYear + Z)));
   }
 
   // =====================================================
@@ -556,9 +578,9 @@ const calculatePCBFull = (params) => {
     pcb: currentMonthSTD,
 
     // Breakdown
-    normalSTD: Math.round(normalSTD * 100) / 100,
-    additionalSTD: Math.round(additionalSTD * 100) / 100,
-    netSTD: Math.round(netSTD * 100) / 100,
+    normalSTD: round2dp(normalSTD),
+    additionalSTD: round2dp(additionalSTD),
+    netSTD: round2dp(netSTD),
 
     // Input values used
     Y1,
@@ -571,8 +593,8 @@ const calculatePCBFull = (params) => {
     nPlus1,
 
     // Chargeable income
-    P_normal: Math.round(P_normalAdjusted * 100) / 100,
-    P_withAdditional: Yt > 0 ? Math.round((EYminusK + (Y1 - K1) + ((Y2 - K2) * n) + (Yt - Kt) - totalDeductions) * 100) / 100 : null,
+    P_normal: round2dp(P_normalAdjusted),
+    P_withAdditional: P_withAdditionalAdjusted,
 
     // Tax bracket used
     M,
