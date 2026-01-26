@@ -67,7 +67,9 @@ const calculateAgeFromIC = (icNumber) => {
 //
 // IMPORTANT: For wages UNDER RM20,000:
 // - Contributions are based on wage brackets (Third Schedule)
-// - Each RM20 bracket has a fixed contribution amount
+// - Bracket sizes vary by wage level:
+//   - Wages RM0 - RM5,000: RM20 brackets
+//   - Wages RM5,001 - RM20,000: RM100 brackets
 // - Calculated on the UPPER LIMIT of each bracket
 // - Must be in whole ringgit (no cents)
 //
@@ -91,14 +93,18 @@ const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', isMala
     employerRate = grossSalary <= 5000 ? 0.13 : 0.12; // 13% or 12%
   }
 
-  // EPF wage ceiling is RM20,000 for bracket-based calculation
+  // EPF wage for bracket-based calculation
   let epfWage = grossSalary;
 
   if (grossSalary < 20000) {
     // For wages under RM20,000: Use KWSP Third Schedule bracket method
-    // Round UP to nearest RM20 (upper limit of wage bracket)
-    // This matches the official KWSP contribution table
-    epfWage = Math.ceil(grossSalary / 20) * 20;
+    if (grossSalary <= 5000) {
+      // Wages RM0 - RM5,000: RM20 brackets
+      epfWage = Math.ceil(grossSalary / 20) * 20;
+    } else {
+      // Wages RM5,001 - RM20,000: RM100 brackets
+      epfWage = Math.ceil(grossSalary / 100) * 100;
+    }
   }
   // For wages >= RM20,000: Use actual wage (no ceiling for calculation)
 
