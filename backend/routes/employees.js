@@ -1770,10 +1770,11 @@ router.post('/quick-add', authenticateAdmin, async (req, res) => {
     }
 
     res.status(201).json({
-      message: `Employee ${name} created successfully. They can now login to ESS using Employee ID and IC Number.`,
+      message: `Employee ${name} created successfully. They can now login to ESS using ${id_type === 'passport' ? 'Name and Passport' : 'Employee ID and IC Number'}.`,
       employee: newEmployee,
       login_info: {
         employee_id: employee_id,
+        id_type: id_type,
         initial_password: cleanIC,
         login_url: '/ess/login'
       }

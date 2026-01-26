@@ -45,7 +45,7 @@ function Employees() {
 
   // Quick Add Modal state
   const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [quickAddForm, setQuickAddForm] = useState({ employee_id: '', name: '', ic_number: '', outlet_id: '' });
+  const [quickAddForm, setQuickAddForm] = useState({ employee_id: '', name: '', ic_number: '', id_type: 'ic', outlet_id: '' });
   const [quickAddLoading, setQuickAddLoading] = useState(false);
   const [quickAddResult, setQuickAddResult] = useState(null);
 
@@ -132,7 +132,7 @@ function Employees() {
   };
 
   const resetQuickAdd = () => {
-    setQuickAddForm({ employee_id: '', name: '', ic_number: '', outlet_id: '' });
+    setQuickAddForm({ employee_id: '', name: '', ic_number: '', id_type: 'ic', outlet_id: '' });
     setQuickAddResult(null);
   };
 
@@ -287,19 +287,62 @@ function Employees() {
                   </div>
 
                   <div className="form-group">
-                    <label>IC Number (MyKad) *</label>
+                    <label>{quickAddForm.id_type === 'ic' ? 'IC Number (MyKad)' : 'Passport Number'} *</label>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setQuickAddForm({...quickAddForm, id_type: 'ic', ic_number: ''})}
+                        style={{
+                          padding: '6px 16px',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '4px',
+                          background: quickAddForm.id_type === 'ic' ? '#3b82f6' : '#fff',
+                          color: quickAddForm.id_type === 'ic' ? '#fff' : '#64748b',
+                          cursor: 'pointer',
+                          fontSize: '13px'
+                        }}
+                      >
+                        IC (MyKad)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickAddForm({...quickAddForm, id_type: 'passport', ic_number: ''})}
+                        style={{
+                          padding: '6px 16px',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '4px',
+                          background: quickAddForm.id_type === 'passport' ? '#3b82f6' : '#fff',
+                          color: quickAddForm.id_type === 'passport' ? '#fff' : '#64748b',
+                          cursor: 'pointer',
+                          fontSize: '13px'
+                        }}
+                      >
+                        Passport
+                      </button>
+                    </div>
                     <input
                       type="text"
                       value={quickAddForm.ic_number}
                       onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9-]/g, '');
+                        let value = e.target.value;
+                        if (quickAddForm.id_type === 'ic') {
+                          // Only allow digits and dashes for IC
+                          value = value.replace(/[^0-9-]/g, '');
+                        } else {
+                          // Passport: allow alphanumeric, uppercase
+                          value = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                        }
                         setQuickAddForm({...quickAddForm, ic_number: value});
                       }}
-                      placeholder="e.g., 901234-12-5678"
-                      maxLength="14"
+                      placeholder={quickAddForm.id_type === 'ic' ? 'e.g., 901234-12-5678' : 'e.g., A12345678'}
+                      maxLength={quickAddForm.id_type === 'ic' ? 14 : 20}
                       required
                     />
-                    <span className="form-hint">IC will be used as initial password (without dashes)</span>
+                    <span className="form-hint">
+                      {quickAddForm.id_type === 'ic'
+                        ? 'IC will be used as initial password (without dashes)'
+                        : 'Passport number will be used as initial password'}
+                    </span>
                   </div>
 
                   {usesOutlets && (
@@ -342,7 +385,7 @@ function Employees() {
                       </div>
                       <div className="info-row">
                         <span className="label">Login Method</span>
-                        <span className="value">IC Number Tab</span>
+                        <span className="value">{quickAddResult.loginInfo.id_type === 'passport' ? 'Passport Tab' : 'IC Number Tab'}</span>
                       </div>
                       <div className="info-row">
                         <span className="label">Password</span>
