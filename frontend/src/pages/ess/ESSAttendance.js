@@ -4,6 +4,7 @@ import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { canViewTeamAttendance, canApproveOT } from '../../utils/permissions';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSAttendance.css';
 
 // Error Boundary to catch rendering errors
@@ -37,6 +38,7 @@ class ErrorBoundary extends Component {
 
 function ESSAttendanceContent() {
   const navigate = useNavigate();
+  const { t, language } = useLanguage();
   const isOnline = useOnlineStatus();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -487,11 +489,11 @@ function ESSAttendanceContent() {
   // Get action button label
   const getActionLabel = () => {
     switch (status?.next_action) {
-      case 'clock_in_1': return 'Clock In';
-      case 'clock_out_1': return 'Start Break';
-      case 'clock_in_2': return 'End Break';
-      case 'clock_out_2': return 'Clock Out';
-      default: return 'Clock In';
+      case 'clock_in_1': return t('attendance.clockIn');
+      case 'clock_out_1': return t('attendance.startBreak');
+      case 'clock_in_2': return t('attendance.endBreak');
+      case 'clock_out_2': return t('attendance.clockOut');
+      default: return t('attendance.clockIn');
     }
   };
 
@@ -499,17 +501,17 @@ function ESSAttendanceContent() {
   const getStatusMessage = () => {
     if (!status) return '';
     switch (status.status) {
-      case 'not_started': return 'Ready to start your day';
-      case 'working': return 'Currently working';
-      case 'on_break': return 'On break';
-      case 'completed': return 'Completed for today';
+      case 'not_started': return t('attendance.readyToStart');
+      case 'working': return t('attendance.currentlyWorking');
+      case 'on_break': return t('attendance.onBreak');
+      case 'completed': return t('attendance.completedToday');
       default: return '';
     }
   };
 
   const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-MY', {
+    return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -526,7 +528,7 @@ function ESSAttendanceContent() {
       <ESSLayout>
         <div className="ess-loading">
           <div className="spinner"></div>
-          <p>Loading...</p>
+          <p>{t('common.loading')}</p>
         </div>
       </ESSLayout>
     );
@@ -540,8 +542,8 @@ function ESSAttendanceContent() {
         {/* Page Header */}
         <div className="ess-page-header">
           <div className="header-content">
-            <h1>Attendance</h1>
-            <p>Clock in/out and view history</p>
+            <h1>{t('attendance.title')}</h1>
+            <p>{t('attendance.subtitle')}</p>
           </div>
         </div>
 
@@ -551,20 +553,20 @@ function ESSAttendanceContent() {
             className={`tab-btn ${activeTab === 'clockin' ? 'active' : ''}`}
             onClick={() => setActiveTab('clockin')}
           >
-            Clock In
+            {t('attendance.clockIn')}
           </button>
           <button
             className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
             onClick={() => setActiveTab('history')}
           >
-            History
+            {t('attendance.history')}
           </button>
           {showTeamTab && (
             <button
               className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
               onClick={() => setActiveTab('team')}
             >
-              Team
+              {t('attendance.team')}
               {pendingOT.length > 0 && (
                 <span className="tab-badge">{pendingOT.length}</span>
               )}
@@ -580,8 +582,8 @@ function ESSAttendanceContent() {
               <div className="offline-warning">
                 <span className="offline-icon">&#x26A0;&#xFE0F;</span>
                 <div>
-                  <strong>You're Offline</strong>
-                  <p>Clock-in requires an internet connection.</p>
+                  <strong>{t('attendance.youreOffline')}</strong>
+                  <p>{t('attendance.offlineMessage')}</p>
                 </div>
               </div>
             )}
@@ -589,10 +591,10 @@ function ESSAttendanceContent() {
             {/* Server Time */}
             <div className="time-display">
               <span className="time">
-                {serverTime.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                {serverTime.toLocaleTimeString(language === 'ms' ? 'ms-MY' : 'en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
               <span className="date">
-                {serverTime.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {serverTime.toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}
               </span>
             </div>
 
@@ -600,7 +602,7 @@ function ESSAttendanceContent() {
             {noScheduleToday && (
               <div className="schedule-info no-schedule-info">
                 <span className="schedule-icon">&#x1F4C5;</span>
-                <span>No shift scheduled today (attendance will be recorded)</span>
+                <span>{t('attendance.noShiftToday')}</span>
               </div>
             )}
 
@@ -608,7 +610,7 @@ function ESSAttendanceContent() {
             {scheduleStatus?.has_schedule && scheduleStatus?.schedule && (
               <div className="schedule-info">
                 <span className="schedule-icon">&#x1F4C5;</span>
-                <span>Today's shift: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}</span>
+                <span>{t('attendance.todayShift')}: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}</span>
               </div>
             )}
 
@@ -621,19 +623,19 @@ function ESSAttendanceContent() {
             {status?.record && (
               <div className="timeline">
                 <div className={`timeline-item ${status.record.clock_in_1 ? 'done' : ''}`}>
-                  <span className="time-label">Clock In</span>
+                  <span className="time-label">{t('attendance.clockIn')}</span>
                   <span className="time-value">{status.record.clock_in_1 || '--:--'}</span>
                 </div>
                 <div className={`timeline-item ${status.record.clock_out_1 ? 'done' : ''}`}>
-                  <span className="time-label">Break</span>
+                  <span className="time-label">{t('attendance.break')}</span>
                   <span className="time-value">{status.record.clock_out_1 || '--:--'}</span>
                 </div>
                 <div className={`timeline-item ${status.record.clock_in_2 ? 'done' : ''}`}>
-                  <span className="time-label">Return</span>
+                  <span className="time-label">{t('attendance.return')}</span>
                   <span className="time-value">{status.record.clock_in_2 || '--:--'}</span>
                 </div>
                 <div className={`timeline-item ${status.record.clock_out_2 ? 'done' : ''}`}>
-                  <span className="time-label">Clock Out</span>
+                  <span className="time-label">{t('attendance.clockOut')}</span>
                   <span className="time-value">{status.record.clock_out_2 || '--:--'}</span>
                 </div>
               </div>
@@ -642,10 +644,10 @@ function ESSAttendanceContent() {
             {/* Clock In Instructions */}
             {status?.status !== 'completed' && (
               <div className="clockin-instructions">
-                <div className="instructions-title">How to Clock In:</div>
+                <div className="instructions-title">{t('attendance.howToClockIn')}:</div>
                 <div className="instructions-steps">
-                  <div className="step">1. Tap camera to take selfie</div>
-                  <div className="step">2. Tap "{getActionLabel()}" button</div>
+                  <div className="step">1. {t('attendance.step1')}</div>
+                  <div className="step">2. {t('attendance.step2', { action: getActionLabel() })}</div>
                 </div>
               </div>
             )}
@@ -656,7 +658,7 @@ function ESSAttendanceContent() {
                 {!cameraActive && !cameraLoading && !capturedPhoto && (
                   <button className="start-camera-btn" onClick={startCamera} disabled={!isOnline}>
                     <span>&#x1F4F7;</span>
-                    Take Selfie
+                    {t('attendance.takeSelfie')}
                   </button>
                 )}
 
@@ -665,7 +667,7 @@ function ESSAttendanceContent() {
                     {cameraLoading && (
                       <div className="camera-loading">
                         <div className="spinner"></div>
-                        <p>Starting camera...</p>
+                        <p>{t('attendance.startingCamera')}</p>
                       </div>
                     )}
                     <video
@@ -681,7 +683,7 @@ function ESSAttendanceContent() {
                         <button className="capture-btn" onClick={capturePhoto}>
                           <span className="capture-inner"></span>
                         </button>
-                        <span className="capture-label">TAP TO CAPTURE</span>
+                        <span className="capture-label">{t('attendance.tapToCapture')}</span>
                       </div>
                     )}
                   </div>
@@ -695,10 +697,10 @@ function ESSAttendanceContent() {
                       onError={(e) => {
                         console.error('Image load error');
                         setCapturedPhoto(null);
-                        setError('Failed to load photo. Please try again.');
+                        setError(t('attendance.photoLoadError'));
                       }}
                     />
-                    <button className="retake-btn" onClick={retakePhoto}>Retake</button>
+                    <button className="retake-btn" onClick={retakePhoto}>{t('attendance.retake')}</button>
                   </div>
                 )}
               </div>
@@ -710,9 +712,9 @@ function ESSAttendanceContent() {
               {locationError ? (
                 <span className="location-error">{locationError}</span>
               ) : location ? (
-                <span className="location-text">{address || 'Location captured'}</span>
+                <span className="location-text">{address || t('attendance.locationCaptured')}</span>
               ) : (
-                <span className="location-loading">Getting location...</span>
+                <span className="location-loading">{t('attendance.gettingLocation')}</span>
               )}
             </div>
 
@@ -740,7 +742,7 @@ function ESSAttendanceContent() {
                 onClick={handleSubmit}
                 disabled={!isOnline || !capturedPhoto || !location || submitting}
               >
-                {submitting ? 'Submitting...' : getActionLabel()}
+                {submitting ? t('common.submitting') : getActionLabel()}
               </button>
             )}
 
@@ -748,13 +750,13 @@ function ESSAttendanceContent() {
             {status?.status === 'completed' && (
               <div className="completed-message">
                 <span className="check-icon">&#x2705;</span>
-                <p>You've completed your attendance for today.</p>
+                <p>{t('attendance.completedMessage')}</p>
                 {status.record && (
                   <p className="hours-worked">
-                    Total: <span style={(status.record.total_hours || 0) < 8 && (status.record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>
-                      {status.record.total_hours || 0} hours
+                    {t('attendance.total')}: <span style={(status.record.total_hours || 0) < 8 && (status.record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>
+                      {status.record.total_hours || 0} {t('time.hours')}
                     </span>
-                    {status.record.ot_hours > 0 && ` (OT: ${status.record.ot_hours}h)`}
+                    {status.record.ot_hours > 0 && ` (OT: ${status.record.ot_hours}${t('time.hrs')})`}
                   </p>
                 )}
               </div>
@@ -768,12 +770,12 @@ function ESSAttendanceContent() {
             {historyLoading ? (
               <div className="ess-loading">
                 <div className="spinner"></div>
-                <p>Loading history...</p>
+                <p>{t('attendance.loadingHistory')}</p>
               </div>
             ) : history.length === 0 ? (
               <div className="empty-state">
                 <span className="empty-icon">&#x1F4C5;</span>
-                <p>No attendance records this month</p>
+                <p>{t('attendance.noRecordsThisMonth')}</p>
               </div>
             ) : (
               <div className="history-list">
@@ -784,17 +786,17 @@ function ESSAttendanceContent() {
                     </div>
                     <div className="history-times">
                       <span className="time-item">
-                        <span className="label">In:</span> {formatTime(record.clock_in_1)}
+                        <span className="label">{t('attendance.in')}:</span> {formatTime(record.clock_in_1)}
                       </span>
                       <span className="time-item">
-                        <span className="label">Out:</span> {formatTime(record.clock_out_2)}
+                        <span className="label">{t('attendance.out')}:</span> {formatTime(record.clock_out_2)}
                       </span>
                     </div>
                     <div className="history-hours">
-                      <span className="total" style={(record.total_hours || 0) < 8 && (record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>{record.total_hours || 0}h</span>
+                      <span className="total" style={(record.total_hours || 0) < 8 && (record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>{record.total_hours || 0}{t('time.hrs')}</span>
                       {record.ot_hours > 0 && (
                         <span className={`ot ${record.ot_approved === true ? 'approved' : record.ot_approved === false ? 'rejected' : 'pending'}`}>
-                          +{record.ot_hours}h OT
+                          +{record.ot_hours}{t('time.hrs')} OT
                         </span>
                       )}
                     </div>
@@ -821,14 +823,14 @@ function ESSAttendanceContent() {
             {teamLoading ? (
               <div className="ess-loading">
                 <div className="spinner"></div>
-                <p>Loading team data...</p>
+                <p>{t('attendance.loadingTeamData')}</p>
               </div>
             ) : (
               <>
                 {/* Pending OT Approvals */}
                 {canApprove && pendingOT.length > 0 && (
                   <div className="pending-ot-section">
-                    <h3>Pending OT Approvals</h3>
+                    <h3>{t('attendance.pendingOTApprovals')}</h3>
                     <div className="ot-list">
                       {pendingOT.map((record) => (
                         <div key={record.id} className="ot-card">
@@ -837,8 +839,8 @@ function ESSAttendanceContent() {
                             <span className="ot-date">{formatDate(record.work_date)}</span>
                           </div>
                           <div className="ot-details">
-                            <span className="ot-hours">{record.ot_hours}h overtime</span>
-                            <span className="total-hours" style={(record.total_hours || 0) < 8 && (record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>Total: {record.total_hours}h</span>
+                            <span className="ot-hours">{record.ot_hours}{t('time.hrs')} {t('attendance.overtime')}</span>
+                            <span className="total-hours" style={(record.total_hours || 0) < 8 && (record.total_hours || 0) > 0 ? { color: '#dc2626', fontWeight: 'bold' } : {}}>{t('attendance.total')}: {record.total_hours}{t('time.hrs')}</span>
                           </div>
                           <div className="ot-actions">
                             <button
@@ -846,14 +848,14 @@ function ESSAttendanceContent() {
                               onClick={() => handleApproveOT(record.id)}
                               disabled={submitting}
                             >
-                              Approve
+                              {t('ot.approve')}
                             </button>
                             <button
                               className="reject-btn"
                               onClick={() => openRejectModal(record)}
                               disabled={submitting}
                             >
-                              Reject
+                              {t('ot.reject')}
                             </button>
                           </div>
                         </div>
@@ -864,11 +866,11 @@ function ESSAttendanceContent() {
 
                 {/* Team Attendance List */}
                 <div className="team-attendance-section">
-                  <h3>Team Attendance - {formatDate(teamDate)}</h3>
+                  <h3>{t('attendance.teamAttendance')} - {formatDate(teamDate)}</h3>
                   {teamAttendance.length === 0 ? (
                     <div className="empty-state">
                       <span className="empty-icon">&#x1F465;</span>
-                      <p>No attendance records for this date</p>
+                      <p>{t('attendance.noRecordsForDate')}</p>
                     </div>
                   ) : (
                     <div className="team-list">
@@ -909,21 +911,21 @@ function ESSAttendanceContent() {
           <div className="ess-modal-overlay" onClick={() => setShowRejectModal(false)}>
             <div className="ess-modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
-                <h2>Reject Overtime</h2>
+                <h2>{t('ot.rejectOvertime')}</h2>
                 <button className="close-btn" onClick={() => setShowRejectModal(false)}>&#x2715;</button>
               </div>
               <div className="modal-body">
                 <p className="reject-info">
-                  Rejecting overtime for <strong>{selectedOT.employee_name}</strong>
+                  {t('ot.rejectingOTFor')} <strong>{selectedOT.employee_name}</strong>
                   <br />
-                  {formatDate(selectedOT.work_date)} - {selectedOT.ot_hours} hours OT
+                  {formatDate(selectedOT.work_date)} - {selectedOT.ot_hours} {t('time.hours')} OT
                 </p>
                 <div className="form-group">
-                  <label>Rejection Reason *</label>
+                  <label>{t('ot.rejectionReason')} *</label>
                   <textarea
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="Enter reason for rejection"
+                    placeholder={t('ot.enterReason')}
                     rows="3"
                     required
                   />
@@ -931,7 +933,7 @@ function ESSAttendanceContent() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="cancel-btn" onClick={() => setShowRejectModal(false)}>
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
@@ -939,7 +941,7 @@ function ESSAttendanceContent() {
                   onClick={handleRejectOT}
                   disabled={submitting || !rejectReason.trim()}
                 >
-                  {submitting ? 'Rejecting...' : 'Reject'}
+                  {submitting ? t('ot.rejecting') : t('ot.reject')}
                 </button>
               </div>
             </div>

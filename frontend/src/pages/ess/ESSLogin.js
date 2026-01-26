@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { essApi } from '../../api';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSLogin.css';
 
 function ESSLogin() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [loginMethod, setLoginMethod] = useState('email'); // 'email' or 'ic'
   const [formData, setFormData] = useState({
     login: '',
@@ -163,12 +165,12 @@ function ESSLogin() {
         <div className="login-card">
           <div className="login-header">
             <img src="/logos/hr-default.png" alt="ESS" className="login-logo" />
-            <h1>Employee Portal</h1>
-            <p>Signing you in automatically...</p>
+            <h1>{t('login.title')}</h1>
+            <p>{t('login.autoSigningIn')}</p>
           </div>
           <div className="auto-login-loading">
             <div className="spinner"></div>
-            <p>Please wait...</p>
+            <p>{t('common.pleaseWait')}</p>
           </div>
         </div>
       </div>
@@ -181,8 +183,8 @@ function ESSLogin() {
         {/* Logo */}
         <div className="login-header">
           <img src="/logos/hr-default.png" alt="ESS" className="login-logo" />
-          <h1>Employee Portal</h1>
-          <p>Sign in to access your dashboard</p>
+          <h1>{t('login.title')}</h1>
+          <p>{t('login.subtitle')}</p>
         </div>
 
         {/* Login Method Tabs */}
@@ -191,13 +193,13 @@ function ESSLogin() {
             className={`tab ${loginMethod === 'email' ? 'active' : ''}`}
             onClick={() => setLoginMethod('email')}
           >
-            Email / Password
+            {t('login.tabs.email')}
           </button>
           <button
             className={`tab ${loginMethod === 'ic' ? 'active' : ''}`}
             onClick={() => setLoginMethod('ic')}
           >
-            IC / Passport
+            {t('login.tabs.ic')}
           </button>
         </div>
 
@@ -213,25 +215,25 @@ function ESSLogin() {
           {loginMethod === 'email' ? (
             <>
               <div className="form-group">
-                <label>Username or Employee ID</label>
+                <label>{t('login.usernameLabel')}</label>
                 <input
                   type="text"
                   name="login_field"
                   value={formData.login}
                   onChange={(e) => setFormData({ ...formData, login: e.target.value })}
-                  placeholder="Enter username or employee ID"
+                  placeholder={t('login.usernamePlaceholder')}
                   required
                   autoComplete="off"
                 />
               </div>
               <div className="form-group">
-                <label>Password</label>
+                <label>{t('login.passwordLabel')}</label>
                 <input
                   type="password"
                   name="password_field"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="Enter password"
+                  placeholder={t('login.passwordPlaceholder')}
                   required
                   autoComplete="new-password"
                 />
@@ -239,27 +241,27 @@ function ESSLogin() {
               <div className="login-hint">
                 <span className="hint-icon">💡</span>
                 <div className="hint-text">
-                  <strong>First time login?</strong>
-                  <p>Your password is your IC/Passport number without dashes or spaces</p>
+                  <strong>{t('login.firstTimeTitle')}</strong>
+                  <p>{t('login.firstTimeHint')}</p>
                 </div>
               </div>
             </>
           ) : (
             <>
               <div className="form-group">
-                <label>Full Name</label>
+                <label>{t('login.fullNameLabel')}</label>
                 <input
                   type="text"
                   name="name_field"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Enter your full name"
+                  placeholder={t('login.fullNamePlaceholder')}
                   required
                   autoComplete="off"
                 />
               </div>
               <div className="form-group">
-                <label>{idType === 'ic' ? 'IC Number (MyKad)' : 'Passport Number'}</label>
+                <label>{idType === 'ic' ? t('login.icLabel') : t('login.passportLabel')}</label>
                 {/* ID Type Toggle */}
                 <div className="id-type-toggle" style={{ marginBottom: '8px' }}>
                   <button
@@ -330,7 +332,7 @@ function ESSLogin() {
                   maxLength={idType === 'ic' ? 14 : 20}
                 />
                 <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                  {idType === 'ic' ? 'Format: YYMMDD-SS-NNNN' : 'Enter passport number as shown on document'}
+                  {idType === 'ic' ? t('login.icFormat') : t('login.passportFormat')}
                 </small>
               </div>
             </>
@@ -344,28 +346,28 @@ function ESSLogin() {
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
               />
-              <span>Keep me signed in</span>
+              <span>{t('login.rememberMe')}</span>
             </label>
           </div>
 
           <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? t('login.signingIn') : t('login.signIn')}
           </button>
         </form>
 
         {/* Forgot Password Link */}
         {loginMethod === 'email' && (
           <div className="forgot-link">
-            <a href="/ess/forgot-password">Forgot password?</a>
+            <a href="/ess/forgot-password">{t('login.forgotPassword')}</a>
           </div>
         )}
 
         {/* Install Prompt */}
         {showInstallPrompt && !isIOS && (
           <div className="install-prompt">
-            <p>Install the app for quick access</p>
+            <p>{t('login.installPrompt')}</p>
             <button onClick={handleInstall} className="install-btn">
-              Install App
+              {t('login.installApp')}
             </button>
           </div>
         )}
@@ -374,9 +376,7 @@ function ESSLogin() {
         {isIOS && (
           <div className="ios-install-hint">
             <p>
-              <strong>Install on iPhone:</strong> Tap
-              <span className="share-icon"> &#x2B06;&#xFE0E; </span>
-              then "Add to Home Screen"
+              <strong>{t('login.iosInstallTitle')}</strong> {t('login.iosInstallHint')}
             </p>
           </div>
         )}
@@ -384,7 +384,7 @@ function ESSLogin() {
 
       {/* Footer */}
       <div className="login-footer">
-        <p>Powered by HRMS</p>
+        <p>{t('login.poweredBy')}</p>
       </div>
     </div>
   );

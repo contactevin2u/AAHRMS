@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { essApi } from '../../api';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSLogin.css';
 
 function ESSChangePassword() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   const isFirstLogin = location.state?.firstLogin || false;
 
   // Get current employee info
@@ -126,11 +128,11 @@ function ESSChangePassword() {
           <div className="password-icon">
             <span role="img" aria-label="lock">🔐</span>
           </div>
-          <h1>{isFirstLogin ? 'Setup Your Account' : 'Account Settings'}</h1>
+          <h1>{isFirstLogin ? t('changePassword.titleFirstLogin') : t('changePassword.title')}</h1>
           <p>
             {isFirstLogin
-              ? 'Choose your username and password. Your current password is your IC number.'
-              : 'Change your username or password. You can update one or both.'
+              ? t('changePassword.subtitleFirstLogin')
+              : t('changePassword.subtitle')
             }
           </p>
         </div>
@@ -235,11 +237,11 @@ function ESSChangePassword() {
           </div>
 
           <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? 'Saving...' : (isFirstLogin ? 'Setup Account' : 'Save Changes')}
+            {loading ? t('common.saving') : (isFirstLogin ? t('changePassword.setupAccount') : t('changePassword.saveChanges'))}
           </button>
 
           <button type="button" className="skip-btn" onClick={handleSkip}>
-            {isFirstLogin ? 'Skip for Now' : 'Cancel'}
+            {isFirstLogin ? t('changePassword.skipForNow') : t('common.cancel')}
           </button>
         </form>
 

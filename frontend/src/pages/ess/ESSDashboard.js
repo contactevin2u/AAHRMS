@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import { isSupervisorOrManager, canApproveOT, canViewTeamLeave, canApproveShiftSwap, canApproveClaims } from '../../utils/permissions';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSDashboard.css';
 
 function ESSDashboard() {
+  const { t, language } = useLanguage();
   const [employeeInfo, setEmployeeInfo] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [profileStatus, setProfileStatus] = useState(null);
@@ -108,9 +110,9 @@ function ESSDashboard() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return t('dashboard.greeting.morning');
+    if (hour < 17) return t('dashboard.greeting.afternoon');
+    return t('dashboard.greeting.evening');
   };
 
   if (loading) {
@@ -118,7 +120,7 @@ function ESSDashboard() {
       <ESSLayout>
         <div className="ess-loading">
           <div className="spinner"></div>
-          <p>Loading...</p>
+          <p>{t('common.loading')}</p>
         </div>
       </ESSLayout>
     );
@@ -129,8 +131,8 @@ function ESSDashboard() {
       <div className="ess-dashboard">
         {/* Welcome Section */}
         <div className="welcome-section">
-          <h1>{getGreeting()}, {employeeInfo?.name?.split(' ')[0] || 'there'}!</h1>
-          <p>{new Date().toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+          <h1>{getGreeting()}, {employeeInfo?.name?.split(' ')[0] || t('dashboard.there')}!</h1>
+          <p>{new Date().toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         </div>
 
         {/* Resignation Countdown Banner */}
@@ -138,11 +140,11 @@ function ESSDashboard() {
           <div className={`resignation-banner ${resignationInfo.days_remaining <= 7 ? 'urgent' : ''}`}>
             <div className="resignation-icon">&#x1F4E4;</div>
             <div className="resignation-content">
-              <h3>Resignation Notice</h3>
+              <h3>{t('dashboard.resignation.title')}</h3>
               <p>
-                Your last working day is{' '}
+                {t('dashboard.resignation.lastWorkingDay')}{' '}
                 <strong>
-                  {new Date(resignationInfo.last_working_day).toLocaleDateString('en-MY', {
+                  {new Date(resignationInfo.last_working_day).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', {
                     weekday: 'long',
                     day: 'numeric',
                     month: 'long',
@@ -154,12 +156,12 @@ function ESSDashboard() {
                 {resignationInfo.days_remaining > 0 ? (
                   <>
                     <span className="countdown-number">{resignationInfo.days_remaining}</span>
-                    <span className="countdown-label">day{resignationInfo.days_remaining !== 1 ? 's' : ''} remaining</span>
+                    <span className="countdown-label">{t('dashboard.resignation.daysRemaining', { count: resignationInfo.days_remaining })}</span>
                   </>
                 ) : resignationInfo.days_remaining === 0 ? (
-                  <span className="countdown-today">Today is your last day!</span>
+                  <span className="countdown-today">{t('dashboard.resignation.lastDayToday')}</span>
                 ) : (
-                  <span className="countdown-past">Last working day has passed</span>
+                  <span className="countdown-past">{t('dashboard.resignation.hasPassed')}</span>
                 )}
               </div>
             </div>
@@ -171,15 +173,15 @@ function ESSDashboard() {
           <Link to="/ess/profile" className="profile-reminder-card">
             <div className="reminder-icon">!</div>
             <div className="reminder-content">
-              <h3>Complete Your Profile</h3>
+              <h3>{t('dashboard.completeProfile.title')}</h3>
               <p>
-                {profileStatus.completed_count} of {profileStatus.total_required} required fields completed
+                {t('dashboard.completeProfile.fieldsCompleted', { completed: profileStatus.completed_count, total: profileStatus.total_required })}
               </p>
               {profileStatus.days_remaining !== null && profileStatus.days_remaining > 0 && (
-                <span className="reminder-deadline">{profileStatus.days_remaining} days remaining</span>
+                <span className="reminder-deadline">{t('dashboard.completeProfile.daysRemaining', { days: profileStatus.days_remaining })}</span>
               )}
               {profileStatus.days_remaining !== null && profileStatus.days_remaining <= 0 && (
-                <span className="reminder-deadline overdue">Overdue - Please complete now</span>
+                <span className="reminder-deadline overdue">{t('dashboard.completeProfile.overdue')}</span>
               )}
             </div>
             <div className="reminder-progress">
@@ -195,20 +197,20 @@ function ESSDashboard() {
         {/* Pending Approvals Section for Supervisors/Managers */}
         {showApprovalSection && (
           <div className="pending-approvals-section">
-            <h2>Pending Approvals</h2>
+            <h2>{t('dashboard.pendingApprovals.title')}</h2>
             <div className="approvals-grid">
               {pendingApprovals.leave > 0 && (
                 <Link to="/ess/requests?tab=leave-approval" className="approval-card leave">
                   <div className="approval-badge">{pendingApprovals.leave}</div>
                   <div className="approval-icon">&#x1F4C5;</div>
-                  <span className="approval-label">Leave Requests</span>
+                  <span className="approval-label">{t('dashboard.pendingApprovals.leave')}</span>
                 </Link>
               )}
               {pendingApprovals.ot > 0 && (
                 <Link to="/ess/requests?tab=ot" className="approval-card ot">
                   <div className="approval-badge">{pendingApprovals.ot}</div>
                   <div className="approval-icon">&#x23F0;</div>
-                  <span className="approval-label">OT Approvals</span>
+                  <span className="approval-label">{t('dashboard.pendingApprovals.ot')}</span>
                 </Link>
               )}
               {/* Shift swap disabled - employees must work assigned shifts only */}
@@ -216,14 +218,14 @@ function ESSDashboard() {
                 <Link to="/ess/calendar" className="approval-card swap">
                   <div className="approval-badge">{pendingApprovals.swap}</div>
                   <div className="approval-icon">&#x1F504;</div>
-                  <span className="approval-label">Shift Swaps</span>
+                  <span className="approval-label">{t('dashboard.pendingApprovals.swap')}</span>
                 </Link>
               )} */}
               {pendingApprovals.claims > 0 && (
                 <Link to="/ess/requests?tab=claims-approval" className="approval-card claims">
                   <div className="approval-badge">{pendingApprovals.claims}</div>
                   <div className="approval-icon">&#x1F4B3;</div>
-                  <span className="approval-label">Claims</span>
+                  <span className="approval-label">{t('dashboard.pendingApprovals.claims')}</span>
                 </Link>
               )}
             </div>
@@ -235,39 +237,39 @@ function ESSDashboard() {
           {(features.clockIn || employeeInfo?.clock_in_required) && (
             <Link to="/ess/attendance" className="action-card clock-in">
               <span className="action-icon">&#x23F0;</span>
-              <span className="action-label">Attendance</span>
+              <span className="action-label">{t('dashboard.quickActions.attendance')}</span>
             </Link>
           )}
           {features.leave && (
             <Link to="/ess/leave" className="action-card">
               <span className="action-icon">&#x1F4C5;</span>
-              <span className="action-label">Leave</span>
+              <span className="action-label">{t('dashboard.quickActions.leave')}</span>
             </Link>
           )}
           {features.claims && (
             <Link to="/ess/claims" className="action-card">
               <span className="action-icon">&#x1F4DD;</span>
-              <span className="action-label">Claims</span>
+              <span className="action-label">{t('dashboard.quickActions.claims')}</span>
             </Link>
           )}
           {features.payslips && (
             <Link to="/ess/payslips" className="action-card">
               <span className="action-icon">&#x1F4B5;</span>
-              <span className="action-label">Payslips</span>
+              <span className="action-label">{t('dashboard.quickActions.payslips')}</span>
             </Link>
           )}
         </div>
 
         {/* Stats Cards */}
         <div className="stats-section">
-          <h2>Your Summary</h2>
+          <h2>{t('dashboard.summary.title')}</h2>
           <div className="stats-grid">
             {features.leave && dashboardData?.leave && (
               <div className="stat-card">
                 <div className="stat-icon">&#x1F3D6;&#xFE0F;</div>
                 <div className="stat-content">
                   <span className="stat-value">{dashboardData.leave.balance || 0}</span>
-                  <span className="stat-label">Leave Balance</span>
+                  <span className="stat-label">{t('dashboard.summary.leaveBalance')}</span>
                 </div>
               </div>
             )}
@@ -276,7 +278,7 @@ function ESSDashboard() {
                 <div className="stat-icon">&#x1F4B3;</div>
                 <div className="stat-content">
                   <span className="stat-value">{dashboardData.claims.pending || 0}</span>
-                  <span className="stat-label">Pending Claims</span>
+                  <span className="stat-label">{t('dashboard.summary.pendingClaims')}</span>
                 </div>
               </div>
             )}
@@ -285,7 +287,7 @@ function ESSDashboard() {
                 <div className="stat-icon">&#x1F514;</div>
                 <div className="stat-content">
                   <span className="stat-value">{dashboardData.notifications.unread || 0}</span>
-                  <span className="stat-label">Notifications</span>
+                  <span className="stat-label">{t('dashboard.summary.notifications')}</span>
                 </div>
               </div>
             )}
@@ -294,7 +296,7 @@ function ESSDashboard() {
                 <div className="stat-icon">&#x2705;</div>
                 <div className="stat-content">
                   <span className="stat-value">{dashboardData.attendance.daysWorked || 0}</span>
-                  <span className="stat-label">Days This Month</span>
+                  <span className="stat-label">{t('dashboard.summary.daysThisMonth')}</span>
                 </div>
               </div>
             )}
@@ -304,7 +306,7 @@ function ESSDashboard() {
         {/* Recent Activity */}
         {dashboardData?.recentActivity && dashboardData.recentActivity.length > 0 && (
           <div className="activity-section">
-            <h2>Recent Activity</h2>
+            <h2>{t('dashboard.recentActivity.title')}</h2>
             <div className="activity-list">
               {dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
                 <div key={index} className="activity-item">
@@ -330,7 +332,7 @@ function ESSDashboard() {
         {/* Company Announcements */}
         {dashboardData?.announcements && dashboardData.announcements.length > 0 && (
           <div className="announcements-section">
-            <h2>Announcements</h2>
+            <h2>{t('dashboard.announcements.title')}</h2>
             {dashboardData.announcements.slice(0, 3).map((announcement, index) => (
               <div key={index} className="announcement-card">
                 <h3>{announcement.title}</h3>

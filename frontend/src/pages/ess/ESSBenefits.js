@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSBenefits.css';
 
 function ESSBenefits() {
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [benefits, setBenefits] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -37,7 +39,7 @@ function ESSBenefits() {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-MY', {
+    return new Intl.NumberFormat(language === 'ms' ? 'ms-MY' : 'en-MY', {
       style: 'currency',
       currency: 'MYR'
     }).format(amount || 0);
@@ -45,7 +47,7 @@ function ESSBenefits() {
 
   const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-MY', {
+    return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', {
       day: 'numeric',
       month: 'short',
       year: 'numeric'
@@ -72,7 +74,7 @@ function ESSBenefits() {
       <ESSLayout>
         <div className="ess-loading">
           <div className="spinner"></div>
-          <p>Loading...</p>
+          <p>{t('common.loading')}</p>
         </div>
       </ESSLayout>
     );
@@ -81,8 +83,8 @@ function ESSBenefits() {
   return (
     <ESSLayout>
       <div className="ess-benefits">
-        <h1>Benefits In Kind</h1>
-        <p className="subtitle">Your assigned company benefits</p>
+        <h1>{t('benefits.benefitsInKind')}</h1>
+        <p className="subtitle">{t('benefits.subtitle')}</p>
 
         {error && (
           <div className="error-message">{error}</div>
@@ -93,21 +95,21 @@ function ESSBenefits() {
           <div className="summary-card">
             <div className="summary-row">
               <div className="summary-item">
-                <span className="summary-label">Active Benefits</span>
+                <span className="summary-label">{t('benefits.activeBenefits')}</span>
                 <span className="summary-value">{summary.total_active}</span>
               </div>
               <div className="summary-item">
-                <span className="summary-label">Annual Value</span>
+                <span className="summary-label">{t('benefits.annualValue')}</span>
                 <span className="summary-value">{formatCurrency(summary.annual_value)}</span>
               </div>
             </div>
             <div className="summary-row">
               <div className="summary-item">
-                <span className="summary-label">Monthly Value</span>
+                <span className="summary-label">{t('benefits.monthlyValue')}</span>
                 <span className="summary-value">{formatCurrency(summary.monthly_value)}</span>
               </div>
               <div className="summary-item">
-                <span className="summary-label">Taxable Value</span>
+                <span className="summary-label">{t('benefits.taxableValue')}</span>
                 <span className="summary-value">{formatCurrency(summary.taxable_annual)}</span>
               </div>
             </div>
@@ -118,7 +120,7 @@ function ESSBenefits() {
         {benefits.length === 0 ? (
           <div className="empty-state">
             <span className="empty-icon">&#x1F381;</span>
-            <p>No benefits assigned</p>
+            <p>{t('benefits.noBenefits')}</p>
           </div>
         ) : (
           <div className="benefits-list">
@@ -134,7 +136,7 @@ function ESSBenefits() {
                     <span className="benefit-type">{benefit.type_name || benefit.benefit_type}</span>
                   </div>
                   {benefit.taxable && (
-                    <span className="taxable-badge">Taxable</span>
+                    <span className="taxable-badge">{t('benefits.taxable')}</span>
                   )}
                 </div>
 
@@ -144,26 +146,26 @@ function ESSBenefits() {
 
                 <div className="benefit-details">
                   <div className="detail-row">
-                    <span className="detail-label">Annual Value</span>
+                    <span className="detail-label">{t('benefits.annualValue')}</span>
                     <span className="detail-value">{formatCurrency(benefit.annual_value)}</span>
                   </div>
                   <div className="detail-row">
-                    <span className="detail-label">Monthly Value</span>
+                    <span className="detail-label">{t('benefits.monthlyValue')}</span>
                     <span className="detail-value">{formatCurrency(benefit.monthly_value)}</span>
                   </div>
                   <div className="detail-row">
-                    <span className="detail-label">Assigned Date</span>
+                    <span className="detail-label">{t('benefits.assignedDate')}</span>
                     <span className="detail-value">{formatDate(benefit.assigned_date)}</span>
                   </div>
                   {benefit.serial_number && (
                     <div className="detail-row">
-                      <span className="detail-label">Serial No.</span>
+                      <span className="detail-label">{t('benefits.serialNo')}</span>
                       <span className="detail-value">{benefit.serial_number}</span>
                     </div>
                   )}
                   {benefit.asset_tag && (
                     <div className="detail-row">
-                      <span className="detail-label">Asset Tag</span>
+                      <span className="detail-label">{t('benefits.assetTag')}</span>
                       <span className="detail-value">{benefit.asset_tag}</span>
                     </div>
                   )}
@@ -176,7 +178,7 @@ function ESSBenefits() {
         {/* Info Note */}
         <div className="info-note">
           <span className="info-icon">&#x2139;&#xFE0F;</span>
-          <p>Benefits in Kind (BIK) are non-cash benefits provided by your employer. Taxable benefits are included in your EA form.</p>
+          <p>{t('benefits.infoNote')}</p>
         </div>
       </div>
     </ESSLayout>

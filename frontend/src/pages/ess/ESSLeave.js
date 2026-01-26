@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import ESSLayout from '../../components/ESSLayout';
 import { essApi } from '../../api';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSLeave.css';
 
 function ESSLeave({ embedded = false }) {
+  const { t, language } = useLanguage();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [activeTab, setActiveTab] = useState('apply');
   const [leaveBalances, setLeaveBalances] = useState([]);
@@ -71,7 +73,7 @@ function ESSLeave({ embedded = false }) {
   };
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const getStatusBadge = (status) => {
@@ -115,20 +117,20 @@ function ESSLeave({ embedded = false }) {
   const content = (
       <div className="ess-leave">
         <div className="ess-page-header">
-          <h1>Leave</h1>
-          <p>Apply and manage your leave</p>
+          <h1>{t('leave.title')}</h1>
+          <p>{t('leave.subtitle')}</p>
         </div>
 
         {/* Tabs */}
         <div className="ess-tabs">
           <button className={`tab-btn ${activeTab === 'apply' ? 'active' : ''}`} onClick={() => setActiveTab('apply')}>
-            Apply
+            {t('leave.apply')}
           </button>
           <button className={`tab-btn ${activeTab === 'balance' ? 'active' : ''}`} onClick={() => setActiveTab('balance')}>
-            Balance
+            {t('leave.balance')}
           </button>
           <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
-            History
+            {t('leave.history')}
           </button>
         </div>
 
@@ -136,16 +138,16 @@ function ESSLeave({ embedded = false }) {
         {activeTab === 'apply' && (
           <div className="leave-apply-section">
             <button className="apply-btn" onClick={() => setShowApplyModal(true)}>
-              + Apply Leave
+              + {t('leave.applyLeave')}
             </button>
 
-            <h3 style={{ marginTop: '24px', marginBottom: '12px' }}>Recent Applications</h3>
+            <h3 style={{ marginTop: '24px', marginBottom: '12px' }}>{t('leave.recentApplications')}</h3>
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
+              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>{t('common.loading')}</div>
             ) : applications.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px' }}>
                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-                <div style={{ color: '#64748b' }}>No leave applications yet</div>
+                <div style={{ color: '#64748b' }}>{t('leave.noApplications')}</div>
               </div>
             ) : (
               <div className="applications-list">
@@ -170,7 +172,7 @@ function ESSLeave({ embedded = false }) {
         {activeTab === 'balance' && (
           <div className="leave-balance-section">
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
+              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>{t('common.loading')}</div>
             ) : (
               displayBalances.filter(balance => balance.is_paid !== false).map((balance, idx) => {
                 const entitled = parseFloat(balance.entitled_days || balance.entitled || balance.balance) || 0;
@@ -181,15 +183,15 @@ function ESSLeave({ embedded = false }) {
                     <div className="balance-type">{balance.leave_type_name || balance.leave_type || balance.name}</div>
                     <div className="balance-info">
                       <div className="balance-item">
-                        <span className="label">Entitled</span>
+                        <span className="label">{t('leave.entitled')}</span>
                         <span className="value">{entitled}</span>
                       </div>
                       <div className="balance-item">
-                        <span className="label">Used</span>
+                        <span className="label">{t('leave.used')}</span>
                         <span className="value">{used}</span>
                       </div>
                       <div className="balance-item highlight">
-                        <span className="label">Available</span>
+                        <span className="label">{t('leave.available')}</span>
                         <span className="value">{available}</span>
                       </div>
                     </div>
@@ -204,11 +206,11 @@ function ESSLeave({ embedded = false }) {
         {activeTab === 'history' && (
           <div className="leave-history-section">
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
+              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>{t('common.loading')}</div>
             ) : applications.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px' }}>
                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-                <div style={{ color: '#64748b' }}>No leave history</div>
+                <div style={{ color: '#64748b' }}>{t('leave.noLeaveHistory')}</div>
               </div>
             ) : (
               <div className="history-list">
@@ -232,22 +234,22 @@ function ESSLeave({ embedded = false }) {
           <div className="modal-overlay" onClick={() => setShowApplyModal(false)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <h2>Apply Leave</h2>
+                <h2>{t('leave.applyLeave')}</h2>
                 <button className="close-btn" onClick={() => setShowApplyModal(false)}>&times;</button>
               </div>
               <form onSubmit={handleApply}>
                 <div className="modal-body">
                   <div className="form-group">
-                    <label>Leave Type *</label>
+                    <label>{t('leave.leaveType')} *</label>
                     <select value={applyForm.leave_type_id} onChange={e => setApplyForm({...applyForm, leave_type_id: e.target.value})} required>
-                      <option value="">Select leave type</option>
+                      <option value="">{t('leave.selectLeaveType')}</option>
                       {leaveTypes.filter(lt => lt.eligible !== false).map((lt) => {
                         const balance = getBalanceForType(lt.id);
                         const availableDays = balance ? parseFloat(balance.available) || 0 : parseFloat(lt.entitled_days_for_service || lt.default_days_per_year) || 0;
                         const isUnpaid = lt.is_paid === false;
                         return (
                           <option key={lt.id} value={lt.id}>
-                            {lt.name}{isUnpaid ? '' : ` (${availableDays} available)`}
+                            {lt.name}{isUnpaid ? '' : ` (${availableDays} ${t('leave.available')})`}
                           </option>
                         );
                       })}
@@ -255,23 +257,23 @@ function ESSLeave({ embedded = false }) {
                   </div>
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Start Date *</label>
+                      <label>{t('leave.startDate')} *</label>
                       <input type="date" value={applyForm.start_date} onChange={e => setApplyForm({...applyForm, start_date: e.target.value})} required />
                     </div>
                     <div className="form-group">
-                      <label>End Date *</label>
+                      <label>{t('leave.endDate')} *</label>
                       <input type="date" value={applyForm.end_date} onChange={e => setApplyForm({...applyForm, end_date: e.target.value})} required />
                     </div>
                   </div>
                   <div className="form-group">
-                    <label>Reason *</label>
-                    <textarea value={applyForm.reason} onChange={e => setApplyForm({...applyForm, reason: e.target.value})} rows={3} required placeholder="Enter reason for leave" />
+                    <label>{t('leave.reason')} *</label>
+                    <textarea value={applyForm.reason} onChange={e => setApplyForm({...applyForm, reason: e.target.value})} rows={3} required placeholder={t('leave.reasonPlaceholder')} />
                   </div>
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="cancel-btn" onClick={() => setShowApplyModal(false)}>Cancel</button>
+                  <button type="button" className="cancel-btn" onClick={() => setShowApplyModal(false)}>{t('common.cancel')}</button>
                   <button type="submit" className="submit-btn" disabled={submitting}>
-                    {submitting ? 'Submitting...' : 'Submit'}
+                    {submitting ? t('leave.submitting') : t('common.submit')}
                   </button>
                 </div>
               </form>

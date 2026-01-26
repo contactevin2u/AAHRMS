@@ -3,9 +3,11 @@ import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSLetters.css';
 
 function ESSLetters() {
+  const { t, language } = useLanguage();
   const [employeeInfo, setEmployeeInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [letters, setLetters] = useState([]);
@@ -58,7 +60,7 @@ function ESSLetters() {
 
   const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-MY', {
+    return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -67,7 +69,7 @@ function ESSLetters() {
 
   const formatShortDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-MY', {
+    return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', {
       month: 'short',
       day: 'numeric'
     });
@@ -120,11 +122,11 @@ function ESSLetters() {
         {/* Page Header */}
         <div className="ess-page-header">
           <div className="header-content">
-            <h1>Letters</h1>
-            <p>Official HR documents</p>
+            <h1>{t('letters.title')}</h1>
+            <p>{t('letters.subtitle')}</p>
           </div>
           {unreadCount > 0 && (
-            <span className="unread-badge">{unreadCount} new</span>
+            <span className="unread-badge">{unreadCount} {t('letters.new')}</span>
           )}
         </div>
 
@@ -134,25 +136,25 @@ function ESSLetters() {
             className={`tab-btn ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
-            All ({letters.length})
+            {t('common.all')} ({letters.length})
           </button>
           <button
             className={`tab-btn ${filter === 'unread' ? 'active' : ''}`}
             onClick={() => setFilter('unread')}
           >
-            Unread ({unreadCount})
+            {t('letters.unread')} ({unreadCount})
           </button>
         </div>
 
         {loading ? (
           <div className="ess-loading">
             <div className="spinner"></div>
-            <p>Loading...</p>
+            <p>{t('common.loading')}</p>
           </div>
         ) : letters.length === 0 ? (
           <div className="empty-state">
             <span className="empty-icon">&#x1F4E8;</span>
-            <p>{filter === 'unread' ? 'No unread letters' : 'No letters found'}</p>
+            <p>{filter === 'unread' ? t('letters.noUnread') : t('letters.noLetters')}</p>
           </div>
         ) : (
           <div className="letters-list">
@@ -193,7 +195,7 @@ function ESSLetters() {
           <div className="ess-modal-overlay" onClick={() => setSelectedLetter(null)}>
             <div className="ess-modal letter-modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
-                <h2>Letter</h2>
+                <h2>{t('letters.viewLetter')}</h2>
                 <button className="close-btn" onClick={() => setSelectedLetter(null)}>&#x2715;</button>
               </div>
               <div className="modal-body">
@@ -248,7 +250,7 @@ function ESSLetters() {
               </div>
               <div className="modal-footer">
                 <button className="download-btn" onClick={handleDownload}>
-                  &#x2B07; Download PDF
+                  &#x2B07; {t('letters.downloadLetter')}
                 </button>
               </div>
             </div>

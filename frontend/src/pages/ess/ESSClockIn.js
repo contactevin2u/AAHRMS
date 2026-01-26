@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSClockIn.css';
 
 // Error Boundary to catch rendering errors
@@ -35,6 +36,7 @@ class ErrorBoundary extends Component {
 }
 
 function ESSClockInContent() {
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
   const videoRef = useRef(null);
@@ -392,11 +394,11 @@ function ESSClockInContent() {
   // Get action button label
   const getActionLabel = () => {
     switch (status?.next_action) {
-      case 'clock_in_1': return 'Clock In';
-      case 'clock_out_1': return 'Start Break';
-      case 'clock_in_2': return 'End Break';
-      case 'clock_out_2': return 'Clock Out';
-      default: return 'Clock In';
+      case 'clock_in_1': return t('attendance.clockIn');
+      case 'clock_out_1': return t('attendance.startBreak');
+      case 'clock_in_2': return t('attendance.endBreak');
+      case 'clock_out_2': return t('attendance.clockOut');
+      default: return t('attendance.clockIn');
     }
   };
 
@@ -404,10 +406,10 @@ function ESSClockInContent() {
   const getStatusMessage = () => {
     if (!status) return '';
     switch (status.status) {
-      case 'not_started': return 'Ready to start your day';
-      case 'working': return 'Currently working';
-      case 'on_break': return 'On break';
-      case 'completed': return 'Completed for today';
+      case 'not_started': return t('attendance.readyToStart');
+      case 'working': return t('attendance.currentlyWorking');
+      case 'on_break': return t('attendance.onBreak');
+      case 'completed': return t('attendance.completedToday');
       default: return '';
     }
   };
@@ -417,7 +419,7 @@ function ESSClockInContent() {
       <ESSLayout>
         <div className="ess-loading">
           <div className="spinner"></div>
-          <p>Loading...</p>
+          <p>{t('common.loading')}</p>
         </div>
       </ESSLayout>
     );
@@ -435,8 +437,8 @@ function ESSClockInContent() {
           <div className="offline-warning">
             <span className="offline-icon">&#x26A0;&#xFE0F;</span>
             <div>
-              <strong>You're Offline</strong>
-              <p>Clock-in requires an internet connection.</p>
+              <strong>{t('attendance.youreOffline')}</strong>
+              <p>{t('attendance.offlineMessage')}</p>
             </div>
           </div>
         )}
@@ -444,10 +446,10 @@ function ESSClockInContent() {
         {/* Server Time */}
         <div className="time-display">
           <span className="time">
-            {serverTime.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            {serverTime.toLocaleTimeString(language === 'ms' ? 'ms-MY' : 'en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
           <span className="date">
-            {serverTime.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {serverTime.toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}
           </span>
         </div>
 
@@ -455,7 +457,7 @@ function ESSClockInContent() {
         {noScheduleToday && (
           <div className="schedule-info no-schedule-info">
             <span className="schedule-icon">&#x1F4C5;</span>
-            <span>No shift scheduled today (attendance will be recorded)</span>
+            <span>{t('attendance.noShiftToday')}</span>
           </div>
         )}
 
@@ -463,7 +465,7 @@ function ESSClockInContent() {
         {scheduleStatus?.has_schedule && scheduleStatus?.schedule && (
           <div className="schedule-info">
             <span className="schedule-icon">&#x1F4C5;</span>
-            <span>Today's shift: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}</span>
+            <span>{t('attendance.todayShift')}: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}</span>
           </div>
         )}
 
@@ -476,19 +478,19 @@ function ESSClockInContent() {
         {status?.record && (
           <div className="timeline">
             <div className={`timeline-item ${status.record.clock_in_1 ? 'done' : ''}`}>
-              <span className="time-label">Clock In</span>
+              <span className="time-label">{t('attendance.clockIn')}</span>
               <span className="time-value">{status.record.clock_in_1 || '--:--'}</span>
             </div>
             <div className={`timeline-item ${status.record.clock_out_1 ? 'done' : ''}`}>
-              <span className="time-label">Break</span>
+              <span className="time-label">{t('attendance.break')}</span>
               <span className="time-value">{status.record.clock_out_1 || '--:--'}</span>
             </div>
             <div className={`timeline-item ${status.record.clock_in_2 ? 'done' : ''}`}>
-              <span className="time-label">Return</span>
+              <span className="time-label">{t('attendance.return')}</span>
               <span className="time-value">{status.record.clock_in_2 || '--:--'}</span>
             </div>
             <div className={`timeline-item ${status.record.clock_out_2 ? 'done' : ''}`}>
-              <span className="time-label">Clock Out</span>
+              <span className="time-label">{t('attendance.clockOut')}</span>
               <span className="time-value">{status.record.clock_out_2 || '--:--'}</span>
             </div>
           </div>
@@ -500,7 +502,7 @@ function ESSClockInContent() {
             {!cameraActive && !cameraLoading && !capturedPhoto && (
               <button className="start-camera-btn" onClick={startCamera} disabled={!isOnline}>
                 <span>&#x1F4F7;</span>
-                Take Selfie
+                {t('attendance.takeSelfie')}
               </button>
             )}
 
@@ -509,7 +511,7 @@ function ESSClockInContent() {
                 {cameraLoading && (
                   <div className="camera-loading">
                     <div className="spinner"></div>
-                    <p>Starting camera...</p>
+                    <p>{t('attendance.startingCamera')}</p>
                   </div>
                 )}
                 <video
@@ -536,10 +538,10 @@ function ESSClockInContent() {
                   onError={(e) => {
                     console.error('Image load error');
                     setCapturedPhoto(null);
-                    setError('Failed to load photo. Please try again.');
+                    setError(t('attendance.photoLoadError'));
                   }}
                 />
-                <button className="retake-btn" onClick={retakePhoto}>Retake</button>
+                <button className="retake-btn" onClick={retakePhoto}>{t('attendance.retake')}</button>
               </div>
             )}
           </div>
@@ -551,9 +553,9 @@ function ESSClockInContent() {
           {locationError ? (
             <span className="location-error">{locationError}</span>
           ) : location ? (
-            <span className="location-text">{address || 'Location captured'}</span>
+            <span className="location-text">{address || t('attendance.locationCaptured')}</span>
           ) : (
-            <span className="location-loading">Getting location...</span>
+            <span className="location-loading">{t('attendance.gettingLocation')}</span>
           )}
         </div>
 
@@ -581,7 +583,7 @@ function ESSClockInContent() {
             onClick={handleSubmit}
             disabled={!isOnline || !capturedPhoto || !location || submitting}
           >
-            {submitting ? 'Submitting...' : getActionLabel()}
+            {submitting ? t('claims.submitting') : getActionLabel()}
           </button>
         )}
 
@@ -589,10 +591,10 @@ function ESSClockInContent() {
         {status?.status === 'completed' && (
           <div className="completed-message">
             <span className="check-icon">&#x2705;</span>
-            <p>You've completed your attendance for today.</p>
+            <p>{t('attendance.completedMessage')}</p>
             {status.record && (
               <p className="hours-worked">
-                Total: {status.record.total_hours || 0} hours
+                {t('attendance.total')}: {status.record.total_hours || 0} {t('time.hours')}
               </p>
             )}
           </div>

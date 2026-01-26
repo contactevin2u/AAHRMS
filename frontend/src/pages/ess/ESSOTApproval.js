@@ -3,8 +3,10 @@ import ESSLayout from '../../components/ESSLayout';
 import { essApi } from '../../api';
 import { toast } from 'react-toastify';
 import { isSupervisorOrManager } from '../../utils/permissions';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 function ESSOTApproval({ embedded = false }) {
+  const { t, language } = useLanguage();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [pendingOT, setPendingOT] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,7 +58,7 @@ function ESSOTApproval({ embedded = false }) {
 
   const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-MY', {
+    return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
@@ -69,12 +71,12 @@ function ESSOTApproval({ embedded = false }) {
   };
 
   const months = [
-    { value: 1, label: 'January' }, { value: 2, label: 'February' },
-    { value: 3, label: 'March' }, { value: 4, label: 'April' },
-    { value: 5, label: 'May' }, { value: 6, label: 'June' },
-    { value: 7, label: 'July' }, { value: 8, label: 'August' },
-    { value: 9, label: 'September' }, { value: 10, label: 'October' },
-    { value: 11, label: 'November' }, { value: 12, label: 'December' }
+    { value: 1, label: t('months.january') }, { value: 2, label: t('months.february') },
+    { value: 3, label: t('months.march') }, { value: 4, label: t('months.april') },
+    { value: 5, label: t('months.may') }, { value: 6, label: t('months.june') },
+    { value: 7, label: t('months.july') }, { value: 8, label: t('months.august') },
+    { value: 9, label: t('months.september') }, { value: 10, label: t('months.october') },
+    { value: 11, label: t('months.november') }, { value: 12, label: t('months.december') }
   ];
 
   // Check access
@@ -83,8 +85,8 @@ function ESSOTApproval({ embedded = false }) {
   if (!hasAccess) {
     const accessDenied = (
       <div style={{ padding: '40px', textAlign: 'center' }}>
-        <h2>Access Denied</h2>
-        <p>This page is only available for Supervisors and Managers.</p>
+        <h2>{t('ot.accessDenied')}</h2>
+        <p>{t('ot.accessDeniedMessage')}</p>
       </div>
     );
     return embedded ? accessDenied : <ESSLayout>{accessDenied}</ESSLayout>;
@@ -95,9 +97,9 @@ function ESSOTApproval({ embedded = false }) {
         <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>
             <span style={{ marginRight: '8px' }}>&#x23F0;</span>
-            Overtime Approval
+            {t('ot.title')}
           </h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>Approve or reject staff overtime requests</p>
+          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{t('ot.subtitle')}</p>
         </div>
 
         {/* Filters */}
@@ -127,19 +129,19 @@ function ESSOTApproval({ embedded = false }) {
         {pendingOT.length > 0 && (
           <div style={{ background: '#fef3c7', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '20px' }}>&#x1F4DD;</span>
-            <span style={{ fontWeight: '500', color: '#92400e' }}>{pendingOT.length} overtime request{pendingOT.length > 1 ? 's' : ''} awaiting approval</span>
+            <span style={{ fontWeight: '500', color: '#92400e' }}>{t('ot.pendingCount', { count: pendingOT.length })}</span>
           </div>
         )}
 
         {/* OT Records */}
         <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
+            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>{t('common.loading')}</div>
           ) : pendingOT.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#x23F0;</div>
-              <h3 style={{ color: '#1e293b', margin: '0 0 8px 0' }}>No Overtime Requests</h3>
-              <p style={{ color: '#64748b', margin: 0 }}>There are no pending overtime approvals from your team</p>
+              <h3 style={{ color: '#1e293b', margin: '0 0 8px 0' }}>{t('ot.noOTRequests')}</h3>
+              <p style={{ color: '#64748b', margin: 0 }}>{t('ot.noPendingMessage')}</p>
             </div>
           ) : (
             <div>
@@ -165,20 +167,20 @@ function ESSOTApproval({ embedded = false }) {
                   {/* OT Details */}
                   <div style={{ background: '#fef3c7', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#92400e' }}>Overtime Request</span>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#92400e' }}>{t('ot.overtimeRequest')}</span>
                       <span style={{ fontSize: '20px', fontWeight: '700', color: '#f59e0b' }}>
                         {record.ot_hours ? `${parseFloat(record.ot_hours).toFixed(1)}h OT` : '-'}
                       </span>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px', color: '#78716c' }}>
                       <div>
-                        <span>Work Time: </span>
+                        <span>{t('ot.workTime')}: </span>
                         <span style={{ fontWeight: '500', color: '#44403c' }}>
                           {formatTime(record.clock_in_1)} - {formatTime(record.clock_out_2)}
                         </span>
                       </div>
                       <div>
-                        <span>Total Worked: </span>
+                        <span>{t('ot.totalWorked')}: </span>
                         <span style={{ fontWeight: '500', color: '#44403c' }}>{record.total_hours ? `${parseFloat(record.total_hours).toFixed(1)}h` : '-'}</span>
                       </div>
                     </div>
@@ -200,7 +202,7 @@ function ESSOTApproval({ embedded = false }) {
                         fontSize: '14px'
                       }}
                     >
-                      Approve
+                      {t('ot.approve')}
                     </button>
                     <button
                       onClick={() => setShowRejectModal(record.id)}
@@ -216,7 +218,7 @@ function ESSOTApproval({ embedded = false }) {
                         fontSize: '14px'
                       }}
                     >
-                      Reject
+                      {t('ot.reject')}
                     </button>
                   </div>
                 </div>
@@ -242,14 +244,14 @@ function ESSOTApproval({ embedded = false }) {
         {showRejectModal && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowRejectModal(null)}>
             <div style={{ background: 'white', width: '90%', maxWidth: '400px', borderRadius: '16px', padding: '24px' }} onClick={e => e.stopPropagation()}>
-              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>Reject OT</h3>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>{t('ot.rejectOT')}</h3>
 
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Reason (Optional)</label>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('ot.rejectionReason')} ({t('common.optional')})</label>
                 <textarea
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="Enter reason for rejection..."
+                  placeholder={t('ot.enterReason')}
                   rows={3}
                   style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px', resize: 'none' }}
                 />
@@ -260,13 +262,13 @@ function ESSOTApproval({ embedded = false }) {
                   onClick={() => setShowRejectModal(null)}
                   style={{ flex: 1, padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '14px' }}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleReject}
                   style={{ flex: 1, padding: '12px', border: 'none', borderRadius: '8px', background: '#ef4444', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
                 >
-                  Reject OT
+                  {t('ot.rejectOT')}
                 </button>
               </div>
             </div>

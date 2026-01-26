@@ -6,9 +6,11 @@ import ESSClaims from './ESSClaims';
 import ESSOTApproval from './ESSOTApproval';
 import { essApi } from '../../api';
 import { isSupervisorOrManager, isMimixCompany } from '../../utils/permissions';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSRequests.css';
 
 function ESSRequests() {
+  const { t, language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
 
@@ -149,7 +151,7 @@ function ESSRequests() {
   };
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const formatCurrency = (amount) => {
@@ -165,13 +167,13 @@ function ESSRequests() {
             className={activeTab === 'leave' ? 'active' : ''}
             onClick={() => setActiveTab('leave')}
           >
-            My Leave
+            {t('requests.myLeave')}
           </button>
           <button
             className={activeTab === 'claims' ? 'active' : ''}
             onClick={() => setActiveTab('claims')}
           >
-            My Claims
+            {t('requests.myClaims')}
           </button>
           {isSupOrMgr && (
             <>
@@ -180,7 +182,7 @@ function ESSRequests() {
                 onClick={() => setActiveTab('leave-approval')}
                 style={{ position: 'relative' }}
               >
-                Leave Approvals
+                {t('requests.leaveApprovals')}
                 {pendingLeaveCount > 0 && (
                   <span style={{
                     position: 'absolute',
@@ -203,7 +205,7 @@ function ESSRequests() {
                 onClick={() => setActiveTab('claims-approval')}
                 style={{ position: 'relative' }}
               >
-                Claims Approvals
+                {t('requests.claimsApprovals')}
                 {pendingClaimsCount > 0 && (
                   <span style={{
                     position: 'absolute',
@@ -228,7 +230,7 @@ function ESSRequests() {
               className={activeTab === 'ot' ? 'active' : ''}
               onClick={() => setActiveTab('ot')}
             >
-              OT Approvals
+              {t('requests.otApprovals')}
             </button>
           )}
         </div>
@@ -242,14 +244,14 @@ function ESSRequests() {
         {activeTab === 'leave-approval' && isSupOrMgr && (
           <div style={{ paddingBottom: '20px' }}>
             <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-              Pending Leave Requests
+              {t('requests.pendingLeaveRequests')}
             </h2>
             {loadingLeave ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
+              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>{t('common.loading')}</div>
             ) : pendingLeave.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px' }}>
                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
-                <div style={{ color: '#64748b' }}>No pending leave requests</div>
+                <div style={{ color: '#64748b' }}>{t('requests.noPendingLeave')}</div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -273,13 +275,13 @@ function ESSRequests() {
                         fontSize: '11px',
                         fontWeight: '600'
                       }}>
-                        Pending
+                        {t('claims.pending')}
                       </span>
                     </div>
                     <div style={{ marginBottom: '8px' }}>
                       <div style={{ fontWeight: '500', color: '#1976d2' }}>{leave.leave_type_name}</div>
                       <div style={{ fontSize: '13px', color: '#64748b' }}>
-                        {formatDate(leave.start_date)} - {formatDate(leave.end_date)} ({leave.total_days} day{leave.total_days > 1 ? 's' : ''})
+                        {formatDate(leave.start_date)} - {formatDate(leave.end_date)} ({leave.total_days} {t('leave.days')})
                       </div>
                     </div>
                     {leave.reason && (
@@ -301,7 +303,7 @@ function ESSRequests() {
                           cursor: 'pointer'
                         }}
                       >
-                        Approve
+                        {t('leave.approveLeave')}
                       </button>
                       <button
                         onClick={() => handleRejectLeave(leave.id)}
@@ -316,7 +318,7 @@ function ESSRequests() {
                           cursor: 'pointer'
                         }}
                       >
-                        Reject
+                        {t('leave.rejectLeave')}
                       </button>
                     </div>
                   </div>
@@ -330,14 +332,14 @@ function ESSRequests() {
         {activeTab === 'claims-approval' && isSupOrMgr && (
           <div style={{ paddingBottom: '20px' }}>
             <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-              Pending Claims
+              {t('requests.pendingClaims')}
             </h2>
             {loadingClaims ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
+              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>{t('common.loading')}</div>
             ) : pendingClaims.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px' }}>
                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
-                <div style={{ color: '#64748b' }}>No pending claims</div>
+                <div style={{ color: '#64748b' }}>{t('requests.noPendingClaims')}</div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -361,7 +363,7 @@ function ESSRequests() {
                         fontSize: '11px',
                         fontWeight: '600'
                       }}>
-                        Pending
+                        {t('claims.pending')}
                       </span>
                     </div>
                     <div style={{ marginBottom: '8px' }}>
@@ -386,7 +388,7 @@ function ESSRequests() {
                           rel="noopener noreferrer"
                           style={{ fontSize: '13px', color: '#1976d2', textDecoration: 'underline' }}
                         >
-                          View Receipt
+                          {t('requests.viewReceipt')}
                         </a>
                       </div>
                     )}
@@ -404,7 +406,7 @@ function ESSRequests() {
                           cursor: 'pointer'
                         }}
                       >
-                        Approve
+                        {t('claims.approveClaim')}
                       </button>
                       <button
                         onClick={() => handleRejectClaim(claim.id)}
@@ -419,7 +421,7 @@ function ESSRequests() {
                           cursor: 'pointer'
                         }}
                       >
-                        Reject
+                        {t('claims.rejectClaim')}
                       </button>
                     </div>
                   </div>

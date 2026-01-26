@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import ESSLayout from '../../components/ESSLayout';
 import { essApi } from '../../api';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 function ESSCalendar() {
+  const { t, language } = useLanguage();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
@@ -142,14 +144,16 @@ function ESSCalendar() {
   };
 
   const days = getDaysInMonth(currentMonth);
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNames = language === 'ms'
+    ? [t('days.sun'), t('days.mon'), t('days.tue'), t('days.wed'), t('days.thu'), t('days.fri'), t('days.sat')]
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
     <ESSLayout>
       <div style={{ paddingBottom: '80px' }}>
         <div style={{ marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>Calendar</h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>View your work schedule</p>
+          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>{t('calendar.title')}</h1>
+          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{t('calendar.subtitle')}</p>
         </div>
 
         {/* Month Navigation */}
@@ -158,7 +162,7 @@ function ESSCalendar() {
             &lt;
           </button>
           <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
-            {currentMonth.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })}
+            {currentMonth.toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { month: 'long', year: 'numeric' })}
           </h2>
           <button onClick={nextMonth} style={{ padding: '8px 16px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer' }}>
             &gt;
@@ -168,7 +172,7 @@ function ESSCalendar() {
         {/* Calendar Grid */}
         <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading schedule...</div>
+            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>{t('common.loading')}</div>
           ) : (
             <>
               {/* Day Headers */}
@@ -251,7 +255,7 @@ function ESSCalendar() {
         {!loading && Object.keys(schedules).length === 0 && (
           <div style={{ textAlign: 'center', padding: '24px', marginTop: '16px', background: '#f8fafc', borderRadius: '12px' }}>
             <div style={{ fontSize: '32px', marginBottom: '8px' }}>📅</div>
-            <div style={{ color: '#64748b' }}>No schedule for this month</div>
+            <div style={{ color: '#64748b' }}>{t('schedule.noScheduleMonth')}</div>
           </div>
         )}
 
@@ -260,7 +264,7 @@ function ESSCalendar() {
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000 }} onClick={() => setSelectedDate(null)}>
             <div style={{ background: 'white', width: '100%', maxWidth: '500px', borderRadius: '20px 20px 0 0', padding: '24px' }} onClick={e => e.stopPropagation()}>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>
-                {selectedDate.date.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                {selectedDate.date.toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </h3>
               {selectedDate.schedule ? (
                 <div style={{ background: getShiftColor(selectedDate.schedule), padding: '16px', borderRadius: '12px' }}>
@@ -270,22 +274,22 @@ function ESSCalendar() {
                     marginBottom: '8px',
                     color: getShiftColor(selectedDate.schedule, false)
                   }}>
-                    {selectedDate.schedule.shiftLabel || 'Work'} - {selectedDate.schedule.shiftName || 'Shift'}
+                    {selectedDate.schedule.shiftLabel || t('schedule.work')} - {selectedDate.schedule.shiftName || t('schedule.shift')}
                   </div>
                   <div style={{ color: '#64748b' }}>{selectedDate.schedule.time}</div>
                   {selectedDate.schedule.outlet && <div style={{ color: '#64748b', marginTop: '4px' }}>{selectedDate.schedule.outlet}</div>}
                   {selectedDate.schedule.isPublicHoliday && (
-                    <div style={{ marginTop: '8px', color: '#dc2626', fontWeight: '500' }}>Public Holiday</div>
+                    <div style={{ marginTop: '8px', color: '#dc2626', fontWeight: '500' }}>{t('schedule.publicHoliday')}</div>
                   )}
                   {selectedDate.schedule.attended && (
-                    <div style={{ marginTop: '8px', color: '#059669', fontWeight: '500' }}>Attended</div>
+                    <div style={{ marginTop: '8px', color: '#059669', fontWeight: '500' }}>{t('schedule.attended')}</div>
                   )}
                 </div>
               ) : (
-                <div style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>No schedule for this day (Day Off)</div>
+                <div style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>{t('schedule.noScheduleDay')}</div>
               )}
               <button onClick={() => setSelectedDate(null)} style={{ width: '100%', marginTop: '16px', padding: '14px', background: '#f1f5f9', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '500', cursor: 'pointer' }}>
-                Close
+                {t('common.close')}
               </button>
             </div>
           </div>

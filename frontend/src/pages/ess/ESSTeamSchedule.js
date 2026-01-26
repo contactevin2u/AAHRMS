@@ -3,9 +3,11 @@ import ESSLayout from '../../components/ESSLayout';
 import { essApi } from '../../api';
 import { toast } from 'react-toastify';
 import { isMimixCompany, isSupervisorOrManager } from '../../utils/permissions';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSTeamSchedule.css';
 
 function ESSTeamSchedule({ embedded = false }) {
+  const { t, language } = useLanguage();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [employees, setEmployees] = useState([]);
@@ -261,7 +263,7 @@ function ESSTeamSchedule({ embedded = false }) {
     // Parse date string as local date (not UTC)
     const [year, month, day] = dateStr.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    return date.toLocaleDateString('en-MY', { weekday: 'short', day: 'numeric', month: 'short' });
+    return date.toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { weekday: 'short', day: 'numeric', month: 'short' });
   };
 
   const getDaysInMonth = (date) => {
@@ -309,8 +311,8 @@ function ESSTeamSchedule({ embedded = false }) {
     const accessDenied = (
       <div className="ts-access-denied">
         <div className="ts-denied-icon">🔒</div>
-        <h2>Access Denied</h2>
-        <p>This page is only for Supervisors and Managers.</p>
+        <h2>{t('teamSchedule.accessDenied')}</h2>
+        <p>{t('teamSchedule.accessDeniedMessage')}</p>
       </div>
     );
     return embedded ? accessDenied : <ESSLayout>{accessDenied}</ESSLayout>;
@@ -321,8 +323,8 @@ function ESSTeamSchedule({ embedded = false }) {
         {/* Header */}
         <div className="ts-header">
           <div className="ts-header-left">
-            <h1>Team Schedule</h1>
-            <span className="ts-team-count">{filteredEmployees.length} members</span>
+            <h1>{t('schedule.teamSchedule')}</h1>
+            <span className="ts-team-count">{filteredEmployees.length} {t('teamSchedule.members')}</span>
           </div>
           <div className="ts-header-right">
             {weeklyStats?.warnings?.length > 0 && (
@@ -388,9 +390,9 @@ function ESSTeamSchedule({ embedded = false }) {
           <button className="ts-nav-btn" onClick={prevMonth}>‹</button>
           <div className="ts-month-display" onClick={goToday}>
             <span className="ts-month-name">
-              {currentMonth.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })}
+              {currentMonth.toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { month: 'long', year: 'numeric' })}
             </span>
-            <span className="ts-today-hint">Tap for today</span>
+            <span className="ts-today-hint">{t('teamSchedule.tapForToday')}</span>
           </div>
           <button className="ts-nav-btn" onClick={nextMonth}>›</button>
         </div>
@@ -398,7 +400,7 @@ function ESSTeamSchedule({ embedded = false }) {
         {loading ? (
           <div className="ts-loading">
             <div className="ts-spinner"></div>
-            <span>Loading schedules...</span>
+            <span>{t('common.loading')}</span>
           </div>
         ) : (
           /* Calendar View */

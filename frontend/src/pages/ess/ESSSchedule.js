@@ -4,9 +4,11 @@ import ESSLayout from '../../components/ESSLayout';
 import ESSTeamSchedule from './ESSTeamSchedule';
 import { essApi } from '../../api';
 import { isSupervisorOrManager, isMimixCompany } from '../../utils/permissions';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSSchedule.css';
 
 function ESSSchedule() {
+  const { t, language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
 
@@ -33,14 +35,14 @@ function ESSSchedule() {
             className={activeTab === 'my' ? 'active' : ''}
             onClick={() => setActiveTab('my')}
           >
-            My Schedule
+            {t('schedule.mySchedule')}
           </button>
           {showTeamTab && (
             <button
               className={activeTab === 'team' ? 'active' : ''}
               onClick={() => setActiveTab('team')}
             >
-              Team Schedule
+              {t('schedule.teamSchedule')}
             </button>
           )}
         </div>
@@ -55,6 +57,7 @@ function ESSSchedule() {
 
 // My Schedule Content
 function MyScheduleContent() {
+  const { t, language } = useLanguage();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [schedules, setSchedules] = useState({});
@@ -163,7 +166,9 @@ function MyScheduleContent() {
   const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
 
   const days = getDaysInMonth(currentMonth);
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNames = language === 'ms'
+    ? ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab']
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
     <>
@@ -171,7 +176,7 @@ function MyScheduleContent() {
       <div className="calendar-nav-ess">
         <button onClick={prevMonth}>&lt;</button>
         <span className="current-month">
-          {currentMonth.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })}
+          {currentMonth.toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { month: 'long', year: 'numeric' })}
         </span>
         <button onClick={nextMonth}>&gt;</button>
       </div>
@@ -179,7 +184,7 @@ function MyScheduleContent() {
       {/* Calendar Grid */}
       <div className="ess-calendar">
         {loading ? (
-          <div className="loading">Loading schedule...</div>
+          <div className="loading">{t('common.loading')}</div>
         ) : (
           <>
             <div className="calendar-header-row">
@@ -242,7 +247,7 @@ function MyScheduleContent() {
       {!loading && Object.keys(schedules).length === 0 && (
         <div className="no-requests" style={{ marginTop: '16px' }}>
           <div style={{ fontSize: '32px', marginBottom: '8px' }}>📅</div>
-          <div>No schedule for this month</div>
+          <div>{t('schedule.noScheduleMonth')}</div>
         </div>
       )}
 
@@ -251,39 +256,39 @@ function MyScheduleContent() {
         <div className="day-detail-overlay" onClick={() => setSelectedDate(null)}>
           <div className="day-detail-modal" onClick={e => e.stopPropagation()}>
             <h3>
-              {selectedDate.date.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {selectedDate.date.toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { weekday: 'long', day: 'numeric', month: 'long' })}
             </h3>
             {selectedDate.schedule ? (
               <div style={{ background: getShiftColor(selectedDate.schedule), padding: '12px', borderRadius: '8px' }}>
                 <div className="detail-row">
-                  <span className="label">Shift</span>
+                  <span className="label">{t('schedule.shift')}</span>
                   <span className="value" style={{ color: getShiftColor(selectedDate.schedule, false) }}>
-                    {selectedDate.schedule.shiftLabel || 'Work'} - {selectedDate.schedule.shiftName || 'Shift'}
+                    {selectedDate.schedule.shiftLabel || t('schedule.work')} - {selectedDate.schedule.shiftName || t('schedule.shift')}
                   </span>
                 </div>
                 <div className="detail-row">
-                  <span className="label">Time</span>
+                  <span className="label">{t('schedule.time')}</span>
                   <span className="value">{selectedDate.schedule.time}</span>
                 </div>
                 {selectedDate.schedule.outlet && (
                   <div className="detail-row">
-                    <span className="label">Outlet</span>
+                    <span className="label">{t('schedule.outlet')}</span>
                     <span className="value">{selectedDate.schedule.outlet}</span>
                   </div>
                 )}
                 {selectedDate.schedule.isPublicHoliday && (
-                  <div style={{ marginTop: '8px', color: '#dc2626', fontWeight: '500' }}>Public Holiday</div>
+                  <div style={{ marginTop: '8px', color: '#dc2626', fontWeight: '500' }}>{t('schedule.publicHoliday')}</div>
                 )}
                 {selectedDate.schedule.attended && (
-                  <div style={{ marginTop: '8px', color: '#059669', fontWeight: '500' }}>Attended</div>
+                  <div style={{ marginTop: '8px', color: '#059669', fontWeight: '500' }}>{t('schedule.attended')}</div>
                 )}
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '16px', color: '#64748b' }}>
-                No schedule for this day (Day Off)
+                {t('schedule.noScheduleDay')}
               </div>
             )}
-            <button className="close-detail" onClick={() => setSelectedDate(null)}>Close</button>
+            <button className="close-detail" onClick={() => setSelectedDate(null)}>{t('common.close')}</button>
           </div>
         </div>
       )}

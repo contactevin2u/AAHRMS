@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSNotifications.css';
 
 function ESSNotifications() {
+  const { t, language } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [filter, setFilter] = useState('all');
@@ -53,12 +55,12 @@ function ESSNotifications() {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffMins < 1) return t('notifications.justNow');
+    if (diffMins < 60) return t('notifications.minutesAgo', { count: diffMins });
+    if (diffHours < 24) return t('notifications.hoursAgo', { count: diffHours });
+    if (diffDays < 7) return t('notifications.daysAgo', { count: diffDays });
 
-    return d.toLocaleDateString('en-MY', {
+    return d.toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', {
       month: 'short',
       day: 'numeric'
     });
@@ -100,12 +102,12 @@ function ESSNotifications() {
         {/* Page Header */}
         <div className="ess-page-header">
           <div className="header-content">
-            <h1>Notifications</h1>
-            <p>Stay updated with announcements</p>
+            <h1>{t('notifications.title')}</h1>
+            <p>{t('notifications.subtitle')}</p>
           </div>
           {unreadCount > 0 && (
             <button className="mark-all-btn" onClick={handleMarkAllRead}>
-              Mark All Read
+              {t('notifications.markAllRead')}
             </button>
           )}
         </div>
@@ -116,25 +118,25 @@ function ESSNotifications() {
             className={`tab-btn ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
-            All ({notifications.length})
+            {t('common.all')} ({notifications.length})
           </button>
           <button
             className={`tab-btn ${filter === 'unread' ? 'active' : ''}`}
             onClick={() => setFilter('unread')}
           >
-            Unread ({unreadCount})
+            {t('notifications.unread')} ({unreadCount})
           </button>
         </div>
 
         {loading ? (
           <div className="ess-loading">
             <div className="spinner"></div>
-            <p>Loading...</p>
+            <p>{t('common.loading')}</p>
           </div>
         ) : filteredNotifications.length === 0 ? (
           <div className="empty-state">
             <span className="empty-icon">&#x1F514;</span>
-            <p>{filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}</p>
+            <p>{filter === 'unread' ? t('notifications.noUnread') : t('notifications.noNotifications')}</p>
           </div>
         ) : (
           <div className="notifications-list">

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSManagerOverview.css';
 
 function ESSManagerOverview() {
+  const { t, language } = useLanguage();
   const [overviewData, setOverviewData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -55,7 +57,7 @@ function ESSManagerOverview() {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('en-MY', {
+    return new Date(dateStr).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', {
       day: '2-digit',
       month: 'short'
     });
@@ -63,7 +65,7 @@ function ESSManagerOverview() {
 
   const formatTime = (timeStr) => {
     if (!timeStr) return '-';
-    return new Date(timeStr).toLocaleTimeString('en-MY', {
+    return new Date(timeStr).toLocaleTimeString(language === 'ms' ? 'ms-MY' : 'en-MY', {
       hour: '2-digit',
       minute: '2-digit'
     });
@@ -126,7 +128,7 @@ function ESSManagerOverview() {
       <ESSLayout>
         <div className="ess-loading">
           <div className="spinner"></div>
-          <p>Loading team overview...</p>
+          <p>{t('common.loading')}</p>
         </div>
       </ESSLayout>
     );
@@ -188,11 +190,11 @@ function ESSManagerOverview() {
       <div className="manager-overview">
         <header className="overview-header">
           <div>
-            <h1>Team Overview</h1>
-            <p>{new Date().toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <h1>{t('manager.teamOverview')}</h1>
+            <p>{new Date().toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
           </div>
           <button className="quick-add-btn" onClick={() => setShowQuickAdd(true)}>
-            + Add Staff
+            + {t('manager.addStaff')}
           </button>
         </header>
 
@@ -200,19 +202,19 @@ function ESSManagerOverview() {
         <div className="quick-stats">
           <div className="stat-card primary">
             <div className="stat-number">{summary.total_outlets}</div>
-            <div className="stat-label">Outlets</div>
+            <div className="stat-label">{t('manager.outlets')}</div>
           </div>
           <div className="stat-card info">
             <div className="stat-number">{summary.total_staff}</div>
-            <div className="stat-label">Staff</div>
+            <div className="stat-label">{t('manager.staff')}</div>
           </div>
           <div className="stat-card success">
             <div className="stat-number">{summary.clocked_in_today}</div>
-            <div className="stat-label">Working</div>
+            <div className="stat-label">{t('manager.working')}</div>
           </div>
           <div className="stat-card danger">
             <div className="stat-number">{totalNotClockedIn}</div>
-            <div className="stat-label">Not In</div>
+            <div className="stat-label">{t('manager.notIn')}</div>
           </div>
         </div>
 
@@ -222,25 +224,25 @@ function ESSManagerOverview() {
             className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
             onClick={() => setActiveTab('dashboard')}
           >
-            Dashboard
+            {t('manager.dashboard')}
           </button>
           <button
             className={`tab-btn ${activeTab === 'staff' ? 'active' : ''}`}
             onClick={() => setActiveTab('staff')}
           >
-            Staff Directory
+            {t('manager.staffDirectory')}
           </button>
           <button
             className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
             onClick={() => setActiveTab('attendance')}
           >
-            Attendance
+            {t('manager.attendance')}
           </button>
           <button
             className={`tab-btn ${activeTab === 'approvals' ? 'active' : ''}`}
             onClick={() => setActiveTab('approvals')}
           >
-            Approvals {(totalPendingLeave + totalPendingClaims) > 0 && (
+            {t('manager.approvals')} {(totalPendingLeave + totalPendingClaims) > 0 && (
               <span className="badge">{totalPendingLeave + totalPendingClaims}</span>
             )}
           </button>

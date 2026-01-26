@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import ESSLayout from '../../components/ESSLayout';
 import { essApi } from '../../api';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 function ESSClaims({ embedded = false }) {
+  const { t, language } = useLanguage();
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -226,7 +228,7 @@ function ESSClaims({ embedded = false }) {
   };
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const formatCurrency = (amount) => {
@@ -254,18 +256,18 @@ function ESSClaims({ embedded = false }) {
   const content = (
       <div style={{ paddingBottom: embedded ? '20px' : '80px' }}>
         <div style={{ marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>Claims</h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>Submit and track expense claims</p>
+          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>{t('claims.title')}</h1>
+          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{t('claims.subtitle')}</p>
         </div>
 
         {/* Summary Cards */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
           <div style={{ flex: 1, background: '#fef3c7', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '12px', color: '#92400e' }}>Pending</div>
+            <div style={{ fontSize: '12px', color: '#92400e' }}>{t('claims.pending')}</div>
             <div style={{ fontSize: '20px', fontWeight: '700', color: '#d97706' }}>{formatCurrency(totalPending)}</div>
           </div>
           <div style={{ flex: 1, background: '#d1fae5', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '12px', color: '#065f46' }}>Approved</div>
+            <div style={{ fontSize: '12px', color: '#065f46' }}>{t('claims.approved')}</div>
             <div style={{ fontSize: '20px', fontWeight: '700', color: '#059669' }}>{formatCurrency(totalApproved)}</div>
           </div>
         </div>
@@ -275,17 +277,17 @@ function ESSClaims({ embedded = false }) {
           onClick={() => setShowSubmitModal(true)}
           style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #1976d2, #1565c0)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: '600', cursor: 'pointer', marginBottom: '24px' }}
         >
-          + Submit Claim
+          + {t('claims.submitClaim')}
         </button>
 
         {/* Claims List */}
-        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>Recent Claims</h3>
+        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('claims.recentClaims')}</h3>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading claims...</div>
+          <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>{t('common.loading')}</div>
         ) : claims.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-            <div style={{ color: '#64748b' }}>No claims submitted yet</div>
+            <div style={{ color: '#64748b' }}>{t('claims.noClaims')}</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -307,33 +309,33 @@ function ESSClaims({ embedded = false }) {
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setShowSubmitModal(false); setVerification(null); setShowMismatchWarning(false); }}>
             <div style={{ background: 'white', width: '100%', maxWidth: '500px', borderRadius: '20px 20px 0 0', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
-                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>Submit Claim</h2>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>{t('claims.submitClaim')}</h2>
                 <button onClick={() => { setShowSubmitModal(false); setVerification(null); setShowMismatchWarning(false); }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#64748b' }}>&times;</button>
               </div>
               <form onSubmit={handleSubmit} style={{ padding: '20px' }}>
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Claim Type *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.claimType')} *</label>
                   <select value={submitForm.category} onChange={e => setSubmitForm({...submitForm, category: e.target.value})} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px' }}>
-                    <option value="">Select type</option>
+                    <option value="">{t('claims.selectType')}</option>
                     {claimTypes.map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </div>
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Amount (RM) *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.amount')} (RM) *</label>
                   <input type="number" step="0.01" value={submitForm.amount} onChange={handleAmountChange} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} placeholder="0.00" />
                 </div>
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Date *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.claimDate')} *</label>
                   <input type="date" value={submitForm.claim_date} onChange={e => setSubmitForm({...submitForm, claim_date: e.target.value})} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Description *</label>
-                  <textarea value={submitForm.description} onChange={e => setSubmitForm({...submitForm, description: e.target.value})} required rows={3} style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} placeholder="Enter claim details" />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.description')} *</label>
+                  <textarea value={submitForm.description} onChange={e => setSubmitForm({...submitForm, description: e.target.value})} required rows={3} style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} placeholder={t('claims.descriptionPlaceholder')} />
                 </div>
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Receipt *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.receipt')} *</label>
                   <input type="file" accept="image/*,.pdf,application/pdf" onChange={handleReceiptChange} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Accepted: Images or PDF (max 5MB)</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{t('claims.receiptHint')}</div>
                 </div>
 
                 {/* Verify Receipt Button */}
@@ -344,7 +346,7 @@ function ESSClaims({ embedded = false }) {
                     disabled={verifying}
                     style={{ width: '100%', padding: '12px', background: '#f0f9ff', color: '#0369a1', border: '1px solid #0369a1', borderRadius: '8px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', marginBottom: '16px', opacity: verifying ? 0.7 : 1 }}
                   >
-                    {verifying ? 'Verifying Receipt...' : 'Verify Receipt'}
+                    {verifying ? t('claims.verifying') : t('claims.verifyReceipt')}
                   </button>
                 )}
 
@@ -413,13 +415,13 @@ function ESSClaims({ embedded = false }) {
                 )}
 
                 <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                  <button type="button" onClick={() => { setShowSubmitModal(false); setVerification(null); setShowMismatchWarning(false); }} style={{ flex: 1, padding: '14px', border: '1px solid #e5e7eb', background: 'white', borderRadius: '8px', fontSize: '15px', cursor: 'pointer' }}>Cancel</button>
+                  <button type="button" onClick={() => { setShowSubmitModal(false); setVerification(null); setShowMismatchWarning(false); }} style={{ flex: 1, padding: '14px', border: '1px solid #e5e7eb', background: 'white', borderRadius: '8px', fontSize: '15px', cursor: 'pointer' }}>{t('common.cancel')}</button>
                   <button
                     type="submit"
                     disabled={submitting || verifying || verification?.isRejected}
                     style={{ flex: 1, padding: '14px', border: 'none', background: 'linear-gradient(135deg, #1976d2, #1565c0)', color: 'white', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', opacity: (submitting || verifying || verification?.isRejected) ? 0.7 : 1 }}
                   >
-                    {submitting ? 'Submitting...' : verifying ? 'Verifying...' : 'Submit'}
+                    {submitting ? t('claims.submitting') : verifying ? t('claims.verifying') : t('common.submit')}
                   </button>
                 </div>
               </form>

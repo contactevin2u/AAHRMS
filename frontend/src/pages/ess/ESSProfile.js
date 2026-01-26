@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import { isMimixCompany } from '../../utils/permissions';
+import { useLanguage } from '../../contexts/LanguageContext';
 import './ESSProfile.css';
 
 // Helper to compress image before upload
@@ -50,27 +51,28 @@ const MIXUE_AVATARS = [
   { id: 'kiss', name: 'Kiss', url: '/avatars/mixue/kiss.png' },
 ];
 
-// Field labels for display
-const FIELD_LABELS = {
-  name: 'Full Name',
-  ic_number: 'IC Number',
-  date_of_birth: 'Date of Birth',
-  phone: 'Phone',
-  address: 'Address',
-  email: 'Email',
-  bank_name: 'Bank Name',
-  bank_account_no: 'Account Number',
-  bank_account_holder: 'Account Holder',
-  epf_number: 'EPF Number',
-  socso_number: 'SOCSO Number',
-  tax_number: 'Tax Number (LHDN)',
-  marital_status: 'Marital Status',
-  spouse_working: 'Spouse Working',
-  children_count: 'Number of Children'
+// Field labels keys for display - will be translated
+const FIELD_LABEL_KEYS = {
+  name: 'profile.fields.fullName',
+  ic_number: 'profile.fields.icNumber',
+  date_of_birth: 'profile.fields.dateOfBirth',
+  phone: 'profile.fields.phone',
+  address: 'profile.fields.address',
+  email: 'profile.fields.email',
+  bank_name: 'profile.fields.bankName',
+  bank_account_no: 'profile.fields.accountNumber',
+  bank_account_holder: 'profile.fields.accountHolder',
+  epf_number: 'profile.fields.epfNumber',
+  socso_number: 'profile.fields.socsoNumber',
+  tax_number: 'profile.fields.taxNumber',
+  marital_status: 'profile.fields.maritalStatus',
+  spouse_working: 'profile.fields.spouseWorking',
+  children_count: 'profile.fields.childrenCount'
 };
 
 function ESSProfile() {
   const navigate = useNavigate();
+  const { t, language } = useLanguage();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -264,7 +266,7 @@ function ESSProfile() {
 
   const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-MY', {
+    return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', {
       day: 'numeric',
       month: 'short',
       year: 'numeric'
@@ -355,12 +357,18 @@ function ESSProfile() {
     };
   };
 
+  // Get translated field label
+  const getFieldLabel = (field) => {
+    const key = FIELD_LABEL_KEYS[field];
+    return key ? t(key) : field;
+  };
+
   if (loading) {
     return (
       <ESSLayout>
         <div className="ess-loading">
           <div className="spinner"></div>
-          <p>Loading profile...</p>
+          <p>{t('profile.loading')}</p>
         </div>
       </ESSLayout>
     );
@@ -371,7 +379,7 @@ function ESSProfile() {
       <ESSLayout>
         <div className="ess-error">
           <p>{error}</p>
-          <button onClick={fetchProfile}>Try Again</button>
+          <button onClick={fetchProfile}>{t('common.tryAgain')}</button>
         </div>
       </ESSLayout>
     );
@@ -404,7 +412,7 @@ function ESSProfile() {
               onClick={() => isMimixCompany(profile) ? setShowAvatarPicker(true) : fileInputRef.current?.click()}
               disabled={uploadingPicture}
             >
-              {profile.profile_picture ? 'Change' : 'Add Photo'}
+              {profile.profile_picture ? t('profile.changePhoto') : t('profile.addPhoto')}
             </button>
             {profile.profile_picture && (
               <button
@@ -412,7 +420,7 @@ function ESSProfile() {
                 onClick={handleDeletePicture}
                 disabled={uploadingPicture}
               >
-                Remove
+                {t('profile.removePhoto')}
               </button>
             )}
             <input
@@ -437,12 +445,12 @@ function ESSProfile() {
           <div className="avatar-picker-overlay" onClick={() => setShowAvatarPicker(false)}>
             <div className="avatar-picker-modal" onClick={e => e.stopPropagation()}>
               <div className="avatar-picker-header">
-                <h3>Choose Profile Picture</h3>
+                <h3>{t('profile.avatar.chooseTitle')}</h3>
                 <button className="close-btn" onClick={() => setShowAvatarPicker(false)}>&times;</button>
               </div>
 
               <div className="avatar-picker-section">
-                <h4>Mixue Avatars</h4>
+                <h4>{t('profile.avatar.mixueAvatars')}</h4>
                 <div className="avatar-grid">
                   {MIXUE_AVATARS.map(avatar => (
                     <div
@@ -458,11 +466,11 @@ function ESSProfile() {
               </div>
 
               <div className="avatar-picker-divider">
-                <span>or</span>
+                <span>{t('common.or')}</span>
               </div>
 
               <div className="avatar-picker-section">
-                <h4>Upload Your Own Photo</h4>
+                <h4>{t('profile.avatar.uploadOwn')}</h4>
                 <button
                   className="upload-photo-btn"
                   onClick={() => {
@@ -470,7 +478,7 @@ function ESSProfile() {
                     fileInputRef.current?.click();
                   }}
                 >
-                  Choose from Gallery
+                  {t('profile.avatar.chooseFromGallery')}
                 </button>
               </div>
             </div>
@@ -484,53 +492,53 @@ function ESSProfile() {
             onClick={() => navigate('/ess/payslips')}
           >
             <span className="quick-link-icon">💵</span>
-            <span>View Payslips</span>
+            <span>{t('profile.quickLinks.viewPayslips')}</span>
           </button>
           <button
             className="quick-link-btn"
             onClick={() => navigate('/ess/change-password')}
           >
             <span className="quick-link-icon">🔐</span>
-            <span>Change Password</span>
+            <span>{t('profile.quickLinks.changePassword')}</span>
           </button>
         </div>
 
         {/* Login Settings Section */}
         <section className="profile-section" style={{ marginTop: '16px' }}>
           <div className="section-header">
-            <h2>Login Settings</h2>
+            <h2>{t('profile.loginSettings.title')}</h2>
           </div>
           <p className="section-note" style={{ marginBottom: '12px' }}>
-            Use your username to login to ESS
+            {t('profile.loginSettings.hint')}
           </p>
           {isEditing ? (
             <div className="edit-form">
               <div className="form-group">
-                <label>Username</label>
+                <label>{t('profile.loginSettings.username')}</label>
                 <input
                   type="text"
                   name="username"
                   value={editForm.username}
                   onChange={(e) => setEditForm({ ...editForm, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                  placeholder="Enter username (letters, numbers, underscore)"
+                  placeholder={t('profile.loginSettings.usernamePlaceholder')}
                   maxLength={30}
                   style={{ textTransform: 'lowercase' }}
                 />
                 <small style={{ color: '#64748b', fontSize: '11px' }}>
-                  Min 4 characters. Only letters, numbers, and underscore allowed.
+                  {t('profile.loginSettings.usernameHint')}
                 </small>
               </div>
             </div>
           ) : (
             <div className="info-grid">
               <div className="info-item">
-                <label>Username</label>
+                <label>{t('profile.loginSettings.username')}</label>
                 <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>
-                  {profile.username || <em className="empty">Not set</em>}
+                  {profile.username || <em className="empty">{t('profile.notSet')}</em>}
                 </span>
               </div>
               <div className="info-item">
-                <label>Employee ID</label>
+                <label>{t('profile.fields.employeeId')}</label>
                 <span style={{ fontFamily: 'monospace' }}>{profile.employee_id}</span>
               </div>
             </div>
@@ -543,11 +551,11 @@ function ESSProfile() {
             <div className="banner-content">
               <div className="banner-icon">!</div>
               <div className="banner-text">
-                <h3>Complete Your Profile</h3>
-                <p>Please fill in your personal information to complete your profile.</p>
+                <h3>{t('profile.completion.title')}</h3>
+                <p>{t('profile.completion.message')}</p>
                 {profileStatus?.deadline && (
                   <p className="deadline">
-                    Deadline: {formatDate(profileStatus.deadline)}
+                    {t('profile.completion.deadline')}: {formatDate(profileStatus.deadline)}
                   </p>
                 )}
               </div>
@@ -556,11 +564,11 @@ function ESSProfile() {
               <div className="progress-fill" style={{ width: `${progress.percent}%` }}></div>
             </div>
             <div className="progress-text">
-              {progress.filled} of {progress.total} required fields completed ({progress.percent}%)
+              {t('profile.completion.progress', { filled: progress.filled, total: progress.total, percent: progress.percent })}
             </div>
             {profileStatus?.missing_fields?.length > 0 && (
               <div className="missing-fields">
-                <strong>Missing:</strong> {profileStatus.missing_fields.map(f => FIELD_LABELS[f] || f).join(', ')}
+                <strong>{t('profile.completion.missing')}:</strong> {profileStatus.missing_fields.map(f => getFieldLabel(f)).join(', ')}
               </div>
             )}
           </div>
@@ -570,10 +578,10 @@ function ESSProfile() {
         {isProfileComplete && (
           <div className="profile-verified-banner">
             <span className="verified-icon">&#10003;</span>
-            <span>Profile Verified</span>
+            <span>{t('profile.verified')}</span>
             {profile.profile_completed_at && (
               <span className="verified-date">
-                Completed on {formatDate(profile.profile_completed_at)}
+                {t('profile.completedOn')} {formatDate(profile.profile_completed_at)}
               </span>
             )}
           </div>
@@ -586,32 +594,32 @@ function ESSProfile() {
         {/* Personal Information Section */}
         <section className="profile-section">
           <div className="section-header">
-            <h2>Personal Information</h2>
+            <h2>{t('profile.personalInfo.title')}</h2>
             {!isEditing ? (
               <button className="edit-btn" onClick={() => setIsEditing(true)}>
-                {isProfileComplete ? 'Edit' : 'Complete Profile'}
+                {isProfileComplete ? t('common.edit') : t('profile.completeProfile')}
               </button>
             ) : (
               <div className="edit-actions">
                 <button className="cancel-btn" onClick={handleCancel} disabled={saving}>
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button className="save-btn" onClick={handleSave} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save'}
+                  {saving ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             )}
           </div>
 
           {isProfileComplete && !isEditing && (
-            <p className="section-note">Only phone and address can be edited. Contact HR for other changes.</p>
+            <p className="section-note">{t('profile.personalInfo.editNote')}</p>
           )}
 
           {isEditing ? (
             <div className="edit-form">
               {/* Name */}
               <div className={`form-group ${isFieldMissing('name') ? 'missing' : ''}`}>
-                <label>Full Name *</label>
+                <label>{t('profile.fields.fullName')} *</label>
                 {isFieldEditable('name') ? (
                   <input
                     type="text"
@@ -630,7 +638,7 @@ function ESSProfile() {
 
               {/* Date of Birth - Auto extracted from IC */}
               <div className="form-group">
-                <label>Date of Birth (from IC)</label>
+                <label>{t('profile.fields.dateOfBirthFromIC')}</label>
                 <div className="locked-field">
                   <span>{extractDOBFromIC(profile.ic_number) ? formatDate(extractDOBFromIC(profile.ic_number)) : '-'}</span>
                   <span className="lock-icon">&#128274;</span>
@@ -639,7 +647,7 @@ function ESSProfile() {
 
               {/* Phone */}
               <div className={`form-group ${isFieldMissing('phone') ? 'missing' : ''}`}>
-                <label>Phone *</label>
+                <label>{t('profile.fields.phone')} *</label>
                 <input
                   type="tel"
                   name="phone"
@@ -650,7 +658,7 @@ function ESSProfile() {
 
               {/* Email */}
               <div className="form-group">
-                <label>Email</label>
+                <label>{t('profile.fields.email')}</label>
                 {isFieldEditable('email') ? (
                   <input
                     type="email"
@@ -668,7 +676,7 @@ function ESSProfile() {
 
               {/* Address */}
               <div className={`form-group full-width ${isFieldMissing('address') ? 'missing' : ''}`}>
-                <label>Address *</label>
+                <label>{t('profile.fields.address')} *</label>
                 <textarea
                   name="address"
                   value={editForm.address}
@@ -679,17 +687,17 @@ function ESSProfile() {
 
               {/* Marital Status */}
               <div className="form-group">
-                <label>Marital Status</label>
+                <label>{t('profile.fields.maritalStatus')}</label>
                 {isFieldEditable('marital_status') ? (
                   <select
                     name="marital_status"
                     value={editForm.marital_status}
                     onChange={handleEditChange}
                   >
-                    <option value="single">Single</option>
-                    <option value="married">Married</option>
-                    <option value="divorced">Divorced</option>
-                    <option value="widowed">Widowed</option>
+                    <option value="single">{t('profile.maritalOptions.single')}</option>
+                    <option value="married">{t('profile.maritalOptions.married')}</option>
+                    <option value="divorced">{t('profile.maritalOptions.divorced')}</option>
+                    <option value="widowed">{t('profile.maritalOptions.widowed')}</option>
                   </select>
                 ) : (
                   <div className="locked-field">
@@ -703,7 +711,7 @@ function ESSProfile() {
               {(editForm.marital_status === 'married' || profile.marital_status === 'married') && (
                 <>
                   <div className="form-group">
-                    <label>Spouse Working</label>
+                    <label>{t('profile.fields.spouseWorking')}</label>
                     {isFieldEditable('spouse_working') ? (
                       <label className="checkbox-label">
                         <input
@@ -712,17 +720,17 @@ function ESSProfile() {
                           checked={editForm.spouse_working}
                           onChange={handleEditChange}
                         />
-                        Yes, spouse is working
+                        {t('profile.spouseWorkingYes')}
                       </label>
                     ) : (
                       <div className="locked-field">
-                        <span>{profile.spouse_working ? 'Yes' : 'No'}</span>
+                        <span>{profile.spouse_working ? t('common.yes') : t('common.no')}</span>
                         <span className="lock-icon">&#128274;</span>
                       </div>
                     )}
                   </div>
                   <div className="form-group">
-                    <label>Number of Children</label>
+                    <label>{t('profile.fields.childrenCount')}</label>
                     {isFieldEditable('children_count') ? (
                       <input
                         type="number"
@@ -744,44 +752,44 @@ function ESSProfile() {
           ) : (
             <div className="info-grid">
               <div className={`info-item ${isFieldMissing('name') ? 'missing' : ''}`}>
-                <label>Full Name</label>
-                <span>{profile.name || <em className="empty">Not provided</em>}</span>
+                <label>{t('profile.fields.fullName')}</label>
+                <span>{profile.name || <em className="empty">{t('profile.notProvided')}</em>}</span>
               </div>
               <div className="info-item">
-                <label>IC Number</label>
+                <label>{t('profile.fields.icNumber')}</label>
                 <span>{profile.ic_number || '-'}</span>
               </div>
               <div className="info-item">
-                <label>Date of Birth (from IC)</label>
+                <label>{t('profile.fields.dateOfBirthFromIC')}</label>
                 <span>{extractDOBFromIC(profile.ic_number) ? formatDate(extractDOBFromIC(profile.ic_number)) : '-'}</span>
               </div>
               <div className="info-item">
-                <label>Email</label>
+                <label>{t('profile.fields.email')}</label>
                 <span>{profile.email || '-'}</span>
               </div>
               <div className={`info-item ${isFieldMissing('phone') ? 'missing' : ''}`}>
-                <label>Phone</label>
-                <span>{profile.phone || <em className="empty">Not provided</em>}</span>
+                <label>{t('profile.fields.phone')}</label>
+                <span>{profile.phone || <em className="empty">{t('profile.notProvided')}</em>}</span>
               </div>
               <div className="info-item">
-                <label>Marital Status</label>
+                <label>{t('profile.fields.maritalStatus')}</label>
                 <span className="capitalize">{profile.marital_status || '-'}</span>
               </div>
               {profile.marital_status === 'married' && (
                 <>
                   <div className="info-item">
-                    <label>Spouse Working</label>
-                    <span>{profile.spouse_working ? 'Yes' : 'No'}</span>
+                    <label>{t('profile.fields.spouseWorking')}</label>
+                    <span>{profile.spouse_working ? t('common.yes') : t('common.no')}</span>
                   </div>
                   <div className="info-item">
-                    <label>Children</label>
+                    <label>{t('profile.fields.children')}</label>
                     <span>{profile.children_count ?? '-'}</span>
                   </div>
                 </>
               )}
               <div className={`info-item full-width ${isFieldMissing('address') ? 'missing' : ''}`}>
-                <label>Address</label>
-                <span>{profile.address || <em className="empty">Not provided</em>}</span>
+                <label>{t('profile.fields.address')}</label>
+                <span>{profile.address || <em className="empty">{t('profile.notProvided')}</em>}</span>
               </div>
             </div>
           )}
@@ -790,27 +798,27 @@ function ESSProfile() {
         {/* Bank & Payment Information */}
         <section className="profile-section">
           <div className="section-header">
-            <h2>Bank & Payment Information</h2>
+            <h2>{t('profile.bankInfo.title')}</h2>
             {!isProfileComplete && !isEditing && (
               <button className="edit-btn small" onClick={() => setIsEditing(true)}>
-                Edit
+                {t('common.edit')}
               </button>
             )}
           </div>
           {isProfileComplete && (
-            <p className="section-note">Contact HR to update bank details</p>
+            <p className="section-note">{t('profile.bankInfo.contactHR')}</p>
           )}
 
           {isEditing && !isProfileComplete ? (
             <div className="edit-form">
               <div className={`form-group ${isFieldMissing('bank_name') ? 'missing' : ''}`}>
-                <label>Bank Name *</label>
+                <label>{t('profile.fields.bankName')} *</label>
                 <select
                   name="bank_name"
                   value={editForm.bank_name}
                   onChange={handleEditChange}
                 >
-                  <option value="">Select bank</option>
+                  <option value="">{t('profile.bankInfo.selectBank')}</option>
                   <option value="Maybank">Maybank</option>
                   <option value="CIMB Bank">CIMB Bank</option>
                   <option value="Public Bank">Public Bank</option>
@@ -826,44 +834,44 @@ function ESSProfile() {
                   <option value="Affin Bank">Affin Bank</option>
                   <option value="Alliance Bank">Alliance Bank</option>
                   <option value="BSN">BSN</option>
-                  <option value="Other">Other</option>
+                  <option value="Other">{t('common.other')}</option>
                 </select>
               </div>
               <div className={`form-group ${isFieldMissing('bank_account_no') ? 'missing' : ''}`}>
-                <label>Account Number *</label>
+                <label>{t('profile.fields.accountNumber')} *</label>
                 <input
                   type="text"
                   name="bank_account_no"
                   value={editForm.bank_account_no}
                   onChange={handleEditChange}
-                  placeholder="Enter account number"
+                  placeholder={t('profile.bankInfo.enterAccountNumber')}
                 />
               </div>
               <div className="form-group">
-                <label>Account Holder Name</label>
+                <label>{t('profile.fields.accountHolder')}</label>
                 <input
                   type="text"
                   name="bank_account_holder"
                   value={editForm.bank_account_holder}
                   onChange={handleEditChange}
-                  placeholder="Name as per bank account"
+                  placeholder={t('profile.bankInfo.nameAsPerAccount')}
                 />
               </div>
             </div>
           ) : (
             <div className="info-grid">
               <div className={`info-item ${isFieldMissing('bank_name') ? 'missing' : ''}`}>
-                <label>Bank Name</label>
-                <span>{profile.bank_name || <em className="empty">Not provided</em>}</span>
+                <label>{t('profile.fields.bankName')}</label>
+                <span>{profile.bank_name || <em className="empty">{t('profile.notProvided')}</em>}</span>
                 {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
               </div>
               <div className={`info-item ${isFieldMissing('bank_account_no') ? 'missing' : ''}`}>
-                <label>Account Number</label>
-                <span className="mono">{profile.bank_account_no || <em className="empty">Not provided</em>}</span>
+                <label>{t('profile.fields.accountNumber')}</label>
+                <span className="mono">{profile.bank_account_no || <em className="empty">{t('profile.notProvided')}</em>}</span>
                 {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
               </div>
               <div className="info-item">
-                <label>Account Holder</label>
+                <label>{t('profile.fields.accountHolder')}</label>
                 <span>{profile.bank_account_holder || '-'}</span>
                 {isProfileComplete && <span className="lock-icon small">&#128274;</span>}
               </div>
@@ -873,40 +881,40 @@ function ESSProfile() {
 
         {/* Employment Details - Always Read Only */}
         <section className="profile-section">
-          <h2>Employment Details</h2>
-          <p className="section-note">Contact HR to update employment details</p>
+          <h2>{t('profile.employment.title')}</h2>
+          <p className="section-note">{t('profile.employment.contactHR')}</p>
           <div className="info-grid">
             <div className="info-item">
-              <label>Employee ID</label>
+              <label>{t('profile.fields.employeeId')}</label>
               <span>{profile.employee_id || '-'}</span>
             </div>
             <div className="info-item">
-              <label>{isMimixCompany(profile) ? 'Outlet' : 'Department'}</label>
+              <label>{isMimixCompany(profile) ? t('profile.fields.outlet') : t('profile.fields.department')}</label>
               <span>{isMimixCompany(profile) ? profile.outlet_name : profile.department_name || '-'}</span>
             </div>
             <div className="info-item">
-              <label>Position</label>
+              <label>{t('profile.fields.position')}</label>
               <span>{profile.position || '-'}</span>
             </div>
             <div className="info-item">
-              <label>Employment Type</label>
+              <label>{t('profile.fields.employmentType')}</label>
               <span className="capitalize">{profile.employment_type || '-'}</span>
             </div>
             <div className="info-item">
-              <label>Join Date</label>
+              <label>{t('profile.fields.joinDate')}</label>
               <span>{formatDate(profile.join_date)}</span>
             </div>
             <div className="info-item">
-              <label>Status</label>
+              <label>{t('profile.fields.status')}</label>
               {getStatusBadge(profile.status)}
             </div>
             <div className="info-item">
-              <label>Probation Status</label>
+              <label>{t('profile.fields.probationStatus')}</label>
               {getProbationBadge(profile.probation_status)}
             </div>
             {profile.probation_end_date && (
               <div className="info-item">
-                <label>Probation End Date</label>
+                <label>{t('profile.fields.probationEndDate')}</label>
                 <span>{formatDate(profile.probation_end_date)}</span>
               </div>
             )}
@@ -915,7 +923,7 @@ function ESSProfile() {
 
         {/* Last Login */}
         <div className="profile-footer">
-          <p>Last login: {profile.last_login ? formatDate(profile.last_login) : 'Never'}</p>
+          <p>{t('profile.lastLogin')}: {profile.last_login ? formatDate(profile.last_login) : t('common.never')}</p>
         </div>
       </div>
     </ESSLayout>
