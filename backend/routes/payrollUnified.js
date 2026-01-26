@@ -1757,8 +1757,17 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     };
     const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, ytdData, salaryBreakdown);
 
-    const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
-    const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
+    // EPF: Allow manual override (for matching KWSP table), otherwise use calculated value
+    // epf_override can be provided to set exact EPF amount from KWSP contribution table
+    const epfEmployee = updates.epf_override !== undefined && updates.epf_override !== null && updates.epf_override !== ''
+      ? parseFloat(updates.epf_override) || 0
+      : (statutory.epf_enabled ? statutoryResult.epf.employee : 0);
+    // EPF employer is auto-calculated based on employee override or standard rate
+    const epfEmployerRate = statutoryBase <= 5000 ? 0.13 : 0.12;
+    const epfEmployer = updates.epf_override !== undefined && updates.epf_override !== null && updates.epf_override !== ''
+      ? Math.round((parseFloat(updates.epf_override) / 0.11) * epfEmployerRate) // Calculate employer based on same wage bracket
+      : (statutory.epf_enabled ? statutoryResult.epf.employer : 0);
+
     const socsoEmployee = statutory.socso_enabled ? statutoryResult.socso.employee : 0;
     const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
     const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;

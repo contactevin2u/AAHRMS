@@ -560,7 +560,8 @@ function PayrollUnified() {
       trade_commission_amount: item.trade_commission_amount || 0, outstation_amount: item.outstation_amount || 0,
       bonus: item.bonus || 0, other_deductions: item.other_deductions || 0,
       deduction_remarks: item.deduction_remarks || '', notes: item.notes || '',
-      pcb_override: ''  // Empty means use calculated value, set value to override
+      epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
+      pcb_override: ''   // Empty means use calculated value, set value to override from MyTax
     });
     setShowItemModal(true);
     const statutoryBase = (parseFloat(item.basic_salary) || 0) + (parseFloat(item.commission_amount) || 0) +
@@ -1280,6 +1281,19 @@ function PayrollUnified() {
                       <input type="number" step="0.01" value={itemForm.other_deductions} onChange={(e) => setItemForm({ ...itemForm, other_deductions: parseFloat(e.target.value) || 0 })} />
                     </div>
                     <div className="form-group">
+                      <label>EPF Override (KWSP)</label>
+                      <input
+                        type="number"
+                        step="1"
+                        value={itemForm.epf_override}
+                        onChange={(e) => setItemForm({ ...itemForm, epf_override: e.target.value })}
+                        placeholder={`Calculated: ${statutoryPreview?.epf?.employee?.toFixed(0) || editingItem?.epf_employee || '0'}`}
+                      />
+                      <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated EPF. Enter value from KWSP table to override.</small>
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
                       <label>PCB Override (MyTax)</label>
                       <input
                         type="number"
@@ -1290,6 +1304,7 @@ function PayrollUnified() {
                       />
                       <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated PCB. Enter value from MyTax to override.</small>
                     </div>
+                    <div className="form-group"></div>
                   </div>
                   <div className="form-group">
                     <label>Notes</label>

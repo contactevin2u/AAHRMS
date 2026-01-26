@@ -61,10 +61,23 @@ const calculateAgeFromIC = (icNumber) => {
   return age;
 };
 
-// EPF Contribution Rates (effective 2024)
-// Employee: 11% standard, 0% for age > 60
-// Employer: 13% (salary <= RM5000) or 12% (salary > RM5000), 4% for age > 60
-// KWSP rounds contributions to nearest RM (not cents)
+// EPF Contribution Rates (effective 2024/2025)
+// Based on KWSP Third Schedule - EPF Act 1991
+// Reference: https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution
+//
+// IMPORTANT: For wages UNDER RM20,000:
+// - Contributions are based on wage brackets (Third Schedule)
+// - Each RM20 bracket has a fixed contribution amount
+// - Calculated on the UPPER LIMIT of each bracket
+// - Must be in whole ringgit (no cents)
+//
+// For wages RM20,000 AND ABOVE:
+// - Direct percentage calculation allowed
+// - Round to nearest ringgit
+//
+// Rates:
+// - Employee: 11% (standard), 0% (age > 60)
+// - Employer: 13% (wage <= RM5,000), 12% (wage > RM5,000), 4% (age > 60)
 const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', isMalaysian = true) => {
   let employeeRate, employerRate;
 
@@ -78,10 +91,18 @@ const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', isMala
     employerRate = grossSalary <= 5000 ? 0.13 : 0.12; // 13% or 12%
   }
 
-  // EPF wage ceiling is RM20,000 for contribution calculation
-  const epfWage = Math.min(grossSalary, 20000);
+  // EPF wage ceiling is RM20,000 for bracket-based calculation
+  let epfWage = grossSalary;
 
-  // KWSP rounds to nearest RM (not cents)
+  if (grossSalary < 20000) {
+    // For wages under RM20,000: Use KWSP Third Schedule bracket method
+    // Round UP to nearest RM20 (upper limit of wage bracket)
+    // This matches the official KWSP contribution table
+    epfWage = Math.ceil(grossSalary / 20) * 20;
+  }
+  // For wages >= RM20,000: Use actual wage (no ceiling for calculation)
+
+  // Calculate contributions and round to nearest RM (no cents allowed)
   return {
     employee: Math.round(epfWage * employeeRate),
     employer: Math.round(epfWage * employerRate)
