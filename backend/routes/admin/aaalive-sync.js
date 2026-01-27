@@ -8,7 +8,7 @@ const router = express.Router();
 const https = require('https');
 const pool = require('../../db');
 
-const API_URL = process.env.AAALIVE_API_URL || 'https://aaalive.my/_api/external';
+const API_URL = process.env.AAALIVE_API_URL || 'https://orderops-api-v1.onrender.com/_api/external';
 const API_KEY = process.env.AAALIVE_API_KEY;
 const AA_ALIVE_COMPANY_ID = 1;
 
@@ -63,7 +63,7 @@ router.get('/test', async (req, res) => {
 
     console.log(`Testing AA Alive API for date: ${testDate}`);
 
-    const response = await httpsGet(`${API_URL}/shifts?date=${testDate}`, {
+    const response = await httpsGet(`${API_URL}/shifts?shift_date=${testDate}`, {
       'X-API-Key': API_KEY
     });
 
@@ -114,10 +114,10 @@ router.get('/shifts', async (req, res) => {
 
     let url;
     if (start && end) {
-      url = `${API_URL}/shifts/range?start=${start}&end=${end}`;
+      url = `${API_URL}/shifts/range?start_date=${start}&end_date=${end}`;
     } else {
       const queryDate = date || new Date().toISOString().split('T')[0];
-      url = `${API_URL}/shifts?date=${queryDate}`;
+      url = `${API_URL}/shifts?shift_date=${queryDate}`;
     }
 
     console.log(`Fetching shifts from: ${url}`);
@@ -181,10 +181,10 @@ router.post('/sync', async (req, res) => {
     // Build API URL
     let url;
     if (start && end) {
-      url = `${API_URL}/shifts/range?start=${start}&end=${end}`;
+      url = `${API_URL}/shifts/range?start_date=${start}&end_date=${end}`;
     } else {
       const queryDate = date || new Date().toISOString().split('T')[0];
-      url = `${API_URL}/shifts?date=${queryDate}`;
+      url = `${API_URL}/shifts?shift_date=${queryDate}`;
     }
 
     console.log(`Syncing from Aalyx: ${url}`);

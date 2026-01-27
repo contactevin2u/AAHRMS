@@ -121,7 +121,8 @@
       "WebFetch(domain:calcpcb.hasil.gov.my)",
       "Bash(cd C:UsersuserDesktopAA HRMS)",
       "Bash(cd:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(vercel --prod:*)"
     ],
     "deny": [],
     "ask": []
