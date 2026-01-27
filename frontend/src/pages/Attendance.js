@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { attendanceApi, employeeApi, outletsApi, departmentApi, schedulesApi } from '../api';
+import { attendanceApi, employeeApi, outletsApi, departmentApi, schedulesApi, aaaliveApi } from '../api';
 import { toast } from 'react-toastify';
 import './Attendance.css';
 
@@ -55,6 +55,8 @@ const Attendance = () => {
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
   const isSupervisor = admin.role === 'supervisor';
   const isAAAlive = adminInfo.company_id === 1;
+
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -382,6 +384,33 @@ const Attendance = () => {
     return editingCell?.recordId === recordId && editingCell?.field === field;
   };
 
+  // Sync driver attendance from OrderOps (AA Alive only)
+  const handleSyncDrivers = async () => {
+    if (syncing) return;
+
+    try {
+      setSyncing(true);
+      const syncDate = `${filters.year}-${String(filters.month).padStart(2, '0')}-01`;
+      const endDate = new Date(filters.year, filters.month, 0).toISOString().split('T')[0];
+
+      toast.info('Syncing driver attendance...');
+
+      const res = await aaaliveApi.syncRange(syncDate, endDate);
+
+      if (res.data.success) {
+        const summary = res.data.summary || res.data;
+        toast.success(`Synced: ${summary.synced || 0} records, Skipped: ${summary.skipped || 0}, Failed: ${summary.failed || 0}`);
+        fetchData(); // Refresh attendance list
+      } else {
+        toast.error(res.data.error || 'Sync failed');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to sync driver attendance');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const formatTime = (time) => {
     if (!time) return '-';
     return time.substring(0, 5);
@@ -498,6 +527,15 @@ const Attendance = () => {
             <div className="pending-badge">
               {pendingCount} Pending
             </div>
+          )}
+          {isAAAlive && (
+            <button
+              className="sync-drivers-btn"
+              onClick={handleSyncDrivers}
+              disabled={syncing}
+            >
+              {syncing ? 'Syncing...' : 'Sync Drivers'}
+            </button>
           )}
           <button
             className="create-manual-btn"
@@ -1375,6 +1413,22 @@ const Attendance = () => {
           display: flex;
           align-items: center;
           gap: 12px;
+        }
+        .sync-drivers-btn {
+          background: #16a34a;
+          color: white;
+          border: none;
+          padding: 10px 16px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+        .sync-drivers-btn:hover {
+          background: #15803d;
+        }
+        .sync-drivers-btn:disabled {
+          background: #9ca3af;
+          cursor: not-allowed;
         }
         .create-manual-btn {
           background: #1976d2;

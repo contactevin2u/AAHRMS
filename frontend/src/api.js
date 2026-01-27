@@ -518,6 +518,25 @@ export const adminUsersApi = {
 };
 
 // =====================================================
+// AA ALIVE DRIVER SYNC API
+// =====================================================
+export const aaaliveApi = {
+  // Test API connection
+  test: (date) => api.get('/admin/aaalive/test', { params: { date } }),
+
+  // Get shifts from OrderOps
+  getShifts: (date) => api.get('/admin/aaalive/shifts', { params: { date } }),
+  getShiftsRange: (start, end) => api.get('/admin/aaalive/shifts', { params: { start, end } }),
+
+  // Get HRMS drivers
+  getDrivers: () => api.get('/admin/aaalive/drivers'),
+
+  // Sync driver attendance
+  sync: (date) => api.post('/admin/aaalive/sync', { date }),
+  syncRange: (start, end) => api.post('/admin/aaalive/sync', { start, end }),
+};
+
+// =====================================================
 // EMPLOYEE SELF-SERVICE (ESS) API
 // =====================================================
 

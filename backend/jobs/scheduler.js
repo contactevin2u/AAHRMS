@@ -7,6 +7,7 @@
 const cron = require('node-cron');
 const { runAutoClockOut } = require('./autoClockOut');
 const { runPublicHolidayNotifier } = require('./publicHolidayNotifier');
+const { runDriverSync, syncDriverAttendance } = require('./driverSync');
 
 /**
  * Initialize all scheduled jobs
@@ -48,10 +49,44 @@ function initScheduler() {
 
   console.log('[Scheduler] Public holiday notifier scheduled for 09:00 daily (MYT)');
 
+  // Driver Attendance Sync Job - Runs at 3:30 AM and 10:00 AM daily
+  // Syncs driver attendance from OrderOps to HRMS
+  const driverSyncMorningJob = cron.schedule('30 3 * * *', async () => {
+    console.log('[Scheduler] Running driver sync (3:30 AM) at', new Date().toISOString());
+    try {
+      const results = await runDriverSync();
+      console.log('[Scheduler] Driver sync (3:30 AM) completed:', results);
+    } catch (error) {
+      console.error('[Scheduler] Driver sync (3:30 AM) failed:', error);
+    }
+  }, {
+    scheduled: true,
+    timezone: 'Asia/Kuala_Lumpur'
+  });
+
+  console.log('[Scheduler] Driver sync scheduled for 03:30 daily (MYT)');
+
+  const driverSyncDayJob = cron.schedule('0 10 * * *', async () => {
+    console.log('[Scheduler] Running driver sync (10:00 AM) at', new Date().toISOString());
+    try {
+      const results = await runDriverSync();
+      console.log('[Scheduler] Driver sync (10:00 AM) completed:', results);
+    } catch (error) {
+      console.error('[Scheduler] Driver sync (10:00 AM) failed:', error);
+    }
+  }, {
+    scheduled: true,
+    timezone: 'Asia/Kuala_Lumpur'
+  });
+
+  console.log('[Scheduler] Driver sync scheduled for 10:00 daily (MYT)');
+
   // Return jobs for potential manual control
   return {
     autoClockOutJob,
-    publicHolidayJob
+    publicHolidayJob,
+    driverSyncMorningJob,
+    driverSyncDayJob
   };
 }
 
@@ -98,8 +133,29 @@ async function triggerPublicHolidayNotifier(daysAhead = 1) {
   }
 }
 
+/**
+ * Run driver sync manually (for testing or admin trigger)
+ * @param {string} date - Optional specific date to sync (YYYY-MM-DD)
+ */
+async function triggerDriverSync(date = null) {
+  console.log('[Scheduler] Manually triggering driver sync for', date || 'yesterday+today');
+  try {
+    if (date) {
+      const result = await syncDriverAttendance(date);
+      return { success: true, ...result };
+    } else {
+      const results = await runDriverSync();
+      return { success: true, ...results };
+    }
+  } catch (error) {
+    console.error('[Scheduler] Manual driver sync failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   initScheduler,
   triggerAutoClockOut,
-  triggerPublicHolidayNotifier
+  triggerPublicHolidayNotifier,
+  triggerDriverSync
 };
