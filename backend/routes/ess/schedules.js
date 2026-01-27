@@ -786,13 +786,18 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
   }
 
   // T+2 rule: Check if the date is at least 2 days in the future
-  const scheduleDate = new Date(schedule_date);
-  const twoDaysFromNow = new Date();
-  twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
-  twoDaysFromNow.setHours(0, 0, 0, 0);
+  // Managers and directors are exempt from this rule
+  const isManagerOrAbove = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director';
 
-  if (scheduleDate < twoDaysFromNow) {
-    throw new ValidationError('Cannot create/edit schedules within 2 days (T+2 rule)');
+  if (!isManagerOrAbove) {
+    const scheduleDate = new Date(schedule_date);
+    const twoDaysFromNow = new Date();
+    twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
+    twoDaysFromNow.setHours(0, 0, 0, 0);
+
+    if (scheduleDate < twoDaysFromNow) {
+      throw new ValidationError('Cannot create/edit schedules within 2 days (T+2 rule)');
+    }
   }
 
   const isMimix = isMimixCompany(req.employee.company_id);
@@ -920,7 +925,8 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
   const templatesMap = {};
   templatesResult.rows.forEach(t => { templatesMap[t.id] = t; });
 
-  // T+2 cutoff date
+  // T+2 cutoff date - managers and directors are exempt
+  const isManagerOrAbove = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director';
   const twoDaysFromNow = new Date();
   twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
   twoDaysFromNow.setHours(0, 0, 0, 0);
@@ -934,11 +940,13 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
         continue;
       }
 
-      // T+2 rule check
-      const schedDate = new Date(schedule_date);
-      if (schedDate < twoDaysFromNow) {
-        errors.push({ employee_id, schedule_date, error: 'Cannot schedule within 2 days (T+2 rule)' });
-        continue;
+      // T+2 rule check - skip for managers and directors
+      if (!isManagerOrAbove) {
+        const schedDate = new Date(schedule_date);
+        if (schedDate < twoDaysFromNow) {
+          errors.push({ employee_id, schedule_date, error: 'Cannot schedule within 2 days (T+2 rule)' });
+          continue;
+        }
       }
 
       const template = templatesMap[shift_template_id];
@@ -1095,13 +1103,18 @@ router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (r
   const schedule = existing.rows[0];
 
   // T+2 rule: Check if the date is at least 2 days in the future
-  const scheduleDate = new Date(schedule.schedule_date);
-  const twoDaysFromNow = new Date();
-  twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
-  twoDaysFromNow.setHours(0, 0, 0, 0);
+  // Managers and directors are exempt from this rule
+  const isManagerOrAbove = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director';
 
-  if (scheduleDate < twoDaysFromNow) {
-    throw new ValidationError('Cannot delete schedules within 2 days (T+2 rule)');
+  if (!isManagerOrAbove) {
+    const scheduleDate = new Date(schedule.schedule_date);
+    const twoDaysFromNow = new Date();
+    twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
+    twoDaysFromNow.setHours(0, 0, 0, 0);
+
+    if (scheduleDate < twoDaysFromNow) {
+      throw new ValidationError('Cannot delete schedules within 2 days (T+2 rule)');
+    }
   }
 
   // Check permission based on company type
