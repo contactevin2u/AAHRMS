@@ -406,15 +406,18 @@ function ESSClockInContent() {
   const getActionLabel = () => {
     const isAAAlive = status?.is_aa_alive;
     switch (status?.next_action) {
-      case 'clock_in_1': return t('attendance.clockIn');
+      case 'clock_in_1':
+        return isAAAlive ? `${t('attendance.clockIn')} 1` : t('attendance.clockIn');
       case 'clock_out_1':
-        // AA Alive: clock_out_1 is session end (clock out), not break
-        return isAAAlive ? t('attendance.clockOut') : t('attendance.startBreak');
+        // AA Alive: clock_out_1 is session 1 end, Mimix: break
+        return isAAAlive ? `${t('attendance.clockOut')} 1` : t('attendance.startBreak');
       case 'clock_in_2':
-        // AA Alive: clock_in_2 is optional new session, Mimix: return from break
-        return isAAAlive ? t('attendance.clockIn') : t('attendance.endBreak');
-      case 'clock_out_2': return t('attendance.clockOut');
-      default: return t('attendance.clockIn');
+        // AA Alive: clock_in_2 is session 2 start, Mimix: return from break
+        return isAAAlive ? `${t('attendance.clockIn')} 2` : t('attendance.endBreak');
+      case 'clock_out_2':
+        return isAAAlive ? `${t('attendance.clockOut')} 2` : t('attendance.clockOut');
+      default:
+        return isAAAlive ? `${t('attendance.clockIn')} 1` : t('attendance.clockIn');
     }
   };
 
@@ -602,27 +605,29 @@ function ESSClockInContent() {
         {status?.record && (
           <div className="timeline">
             <div className={`timeline-item ${status.record.clock_in_1 ? 'done' : ''}`}>
-              <span className="time-label">{t('attendance.clockIn')}</span>
+              <span className="time-label">
+                {status.is_aa_alive ? `${t('attendance.clockIn')} 1` : t('attendance.clockIn')}
+              </span>
               <span className="time-value">{status.record.clock_in_1 || '--:--'}</span>
             </div>
             <div className={`timeline-item ${status.record.clock_out_1 ? 'done' : ''}`}>
               <span className="time-label">
-                {status.is_aa_alive ? t('attendance.clockOut') : t('attendance.break')}
+                {status.is_aa_alive ? `${t('attendance.clockOut')} 1` : t('attendance.break')}
               </span>
               <span className="time-value">{status.record.clock_out_1 || '--:--'}</span>
             </div>
-            {/* Show session 2 only for non-AA Alive companies, or if AA Alive has session 2 data */}
-            {(!status.is_aa_alive || status.record.clock_in_2 || status.record.clock_out_2) && (
+            {/* AA Alive: Always show all 4 slots; Mimix: Show session 2 only when there's data */}
+            {(status.is_aa_alive || status.record.clock_in_2 || status.record.clock_out_2) && (
               <>
                 <div className={`timeline-item ${status.record.clock_in_2 ? 'done' : ''}`}>
                   <span className="time-label">
-                    {status.is_aa_alive ? t('attendance.clockIn') + ' 2' : t('attendance.return')}
+                    {status.is_aa_alive ? `${t('attendance.clockIn')} 2` : t('attendance.return')}
                   </span>
                   <span className="time-value">{status.record.clock_in_2 || '--:--'}</span>
                 </div>
                 <div className={`timeline-item ${status.record.clock_out_2 ? 'done' : ''}`}>
                   <span className="time-label">
-                    {status.is_aa_alive ? t('attendance.clockOut') + ' 2' : t('attendance.clockOut')}
+                    {status.is_aa_alive ? `${t('attendance.clockOut')} 2` : t('attendance.clockOut')}
                   </span>
                   <span className="time-value">{status.record.clock_out_2 || '--:--'}</span>
                 </div>

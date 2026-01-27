@@ -488,12 +488,18 @@ function ESSAttendanceContent() {
 
   // Get action button label
   const getActionLabel = () => {
+    const isAAAlive = status?.is_aa_alive;
     switch (status?.next_action) {
-      case 'clock_in_1': return t('attendance.clockIn');
-      case 'clock_out_1': return t('attendance.startBreak');
-      case 'clock_in_2': return t('attendance.endBreak');
-      case 'clock_out_2': return t('attendance.clockOut');
-      default: return t('attendance.clockIn');
+      case 'clock_in_1':
+        return isAAAlive ? `${t('attendance.clockIn')} 1` : t('attendance.clockIn');
+      case 'clock_out_1':
+        return isAAAlive ? `${t('attendance.clockOut')} 1` : t('attendance.startBreak');
+      case 'clock_in_2':
+        return isAAAlive ? `${t('attendance.clockIn')} 2` : t('attendance.endBreak');
+      case 'clock_out_2':
+        return isAAAlive ? `${t('attendance.clockOut')} 2` : t('attendance.clockOut');
+      default:
+        return isAAAlive ? `${t('attendance.clockIn')} 1` : t('attendance.clockIn');
     }
   };
 
@@ -504,6 +510,9 @@ function ESSAttendanceContent() {
       case 'not_started': return t('attendance.readyToStart');
       case 'working': return t('attendance.currentlyWorking');
       case 'on_break': return t('attendance.onBreak');
+      case 'session_ended':
+        // AA Alive: session ended, can optionally start new session
+        return t('attendance.sessionEnded') || 'Session 1 ended';
       case 'completed': return t('attendance.completedToday');
       default: return '';
     }
@@ -623,19 +632,27 @@ function ESSAttendanceContent() {
             {status?.record && (
               <div className="timeline">
                 <div className={`timeline-item ${status.record.clock_in_1 ? 'done' : ''}`}>
-                  <span className="time-label">{t('attendance.clockIn')}</span>
+                  <span className="time-label">
+                    {status.is_aa_alive ? `${t('attendance.clockIn')} 1` : t('attendance.clockIn')}
+                  </span>
                   <span className="time-value">{status.record.clock_in_1 || '--:--'}</span>
                 </div>
                 <div className={`timeline-item ${status.record.clock_out_1 ? 'done' : ''}`}>
-                  <span className="time-label">{t('attendance.break')}</span>
+                  <span className="time-label">
+                    {status.is_aa_alive ? `${t('attendance.clockOut')} 1` : t('attendance.break')}
+                  </span>
                   <span className="time-value">{status.record.clock_out_1 || '--:--'}</span>
                 </div>
                 <div className={`timeline-item ${status.record.clock_in_2 ? 'done' : ''}`}>
-                  <span className="time-label">{t('attendance.return')}</span>
+                  <span className="time-label">
+                    {status.is_aa_alive ? `${t('attendance.clockIn')} 2` : t('attendance.return')}
+                  </span>
                   <span className="time-value">{status.record.clock_in_2 || '--:--'}</span>
                 </div>
                 <div className={`timeline-item ${status.record.clock_out_2 ? 'done' : ''}`}>
-                  <span className="time-label">{t('attendance.clockOut')}</span>
+                  <span className="time-label">
+                    {status.is_aa_alive ? `${t('attendance.clockOut')} 2` : t('attendance.clockOut')}
+                  </span>
                   <span className="time-value">{status.record.clock_out_2 || '--:--'}</span>
                 </div>
               </div>
