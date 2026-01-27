@@ -42,11 +42,35 @@ function httpsGet(url, headers = {}) {
   });
 }
 
-// Driver ID mapping: Aalyx Driver ID -> HRMS Employee ID
-// Update this after checking the Aalyx driver list
+// Skip list for vehicle IDs (not actual drivers)
+const SKIP_DRIVERS = ['2 JC 2', '2JC2'];
+
+// Driver name mapping: OrderOps driver_name -> HRMS employee_id
+// Maps OrderOps names to HRMS employee IDs for matching
 const DRIVER_MAPPING = {
-  // Format: 'aalyx_driver_id': 'HRMS_employee_id'
-  // Example: '123': 'HAFIZ'
+  'IZWAN': 'IZUWAN',
+  'AIMAN': 'AIMAN',
+  'ALIF': 'ALIFF',
+  'ALIFF': 'ALIFF',
+  'IZUL': 'IZZUL',
+  'IZZUL': 'IZZUL',
+  'HAFIZ': 'HAFIZ',
+  'SALLEH': 'SALLEH',
+  'Salleh': 'SALLEH',
+  'DIN': 'ADIN',
+  'ADIN': 'ADIN',
+  'ADAM': 'ADAM',
+  'ASLIE': 'ASLIE',
+  'SAIFUL': 'SAIFUL',
+  'FAKHRUL': 'FAKHRUL',
+  'MAHADI': 'MAHADI',
+  'ASRI': 'ASRI',
+  'FAIQ': 'FAIQ',
+  'PIAN': 'PIAN',
+  'SHUKRI': 'SHUKRI',
+  'SYUKRI': 'SYUKRI',
+  'SABAH': 'SABAH',
+  'IQZAT': 'IQZAT'
 };
 
 /**
@@ -214,40 +238,47 @@ router.post('/sync', async (req, res) => {
 
     for (const shift of shifts) {
       try {
-        // Extract fields from Aalyx response
-        // Adjust these field names based on actual Aalyx response
-        const driverId = shift.driver_id || shift.driverId || shift.id;
-        const driverName = shift.driver_name || shift.driverName || shift.name;
-        const icNumber = shift.ic_number || shift.icNumber || shift.ic;
-        const workDate = shift.date || shift.work_date || shift.shiftDate;
-        const clockIn = shift.clock_in || shift.clockIn || shift.start_time || shift.startTime;
-        const clockOut = shift.clock_out || shift.clockOut || shift.end_time || shift.endTime;
-        const location = shift.location || shift.outlet || shift.branch;
+        // Extract fields from OrderOps response
+        const driverName = shift.driver_name;
+        const clockInMyt = shift.clock_in_at_myt;  // "2026-01-26 08:43:10"
+        const clockOutMyt = shift.clock_out_at_myt;
+        const clockInLocation = shift.clock_in_location;
+        const clockOutLocation = shift.clock_out_location;
+        const isOutstation = shift.is_outstation;
+        const totalWorkingHours = shift.total_working_hours;
+        const shiftStatus = shift.status;
+
+        // Extract date and time from MYT format
+        const workDate = clockInMyt ? clockInMyt.split(' ')[0] : null;  // "2026-01-26"
+        const clockIn = clockInMyt ? clockInMyt.split(' ')[1] : null;   // "08:43:10"
+        const clockOut = clockOutMyt ? clockOutMyt.split(' ')[1] : null;
+
+        if (!driverName || !workDate) {
+          results.failed.push({ shift, error: 'Missing driver_name or date' });
+          continue;
+        }
+
+        // Skip vehicle IDs
+        if (SKIP_DRIVERS.includes(driverName)) {
+          results.skipped.push({ driver_name: driverName, reason: 'Vehicle ID, not a driver' });
+          continue;
+        }
 
         // Find employee
         let employee = null;
 
-        // Method 1: IC number
-        if (icNumber) {
-          const cleanIC = String(icNumber).replace(/[-\s]/g, '');
-          const icResult = await client.query(`
-            SELECT id, employee_id, name FROM employees
-            WHERE company_id = $1 AND REPLACE(ic_number, '-', '') = $2 AND status = 'active'
-          `, [AA_ALIVE_COMPANY_ID, cleanIC]);
-          if (icResult.rows.length > 0) employee = icResult.rows[0];
-        }
-
-        // Method 2: Driver ID mapping
-        if (!employee && driverId && DRIVER_MAPPING[driverId]) {
+        // Method 1: Use driver mapping
+        const mappedEmployeeId = DRIVER_MAPPING[driverName] || DRIVER_MAPPING[driverName.toUpperCase()];
+        if (mappedEmployeeId) {
           const mapResult = await client.query(`
             SELECT id, employee_id, name FROM employees
-            WHERE company_id = $1 AND employee_id = $2 AND status = 'active'
-          `, [AA_ALIVE_COMPANY_ID, DRIVER_MAPPING[driverId]]);
+            WHERE company_id = $1 AND UPPER(employee_id) = UPPER($2) AND status = 'active'
+          `, [AA_ALIVE_COMPANY_ID, mappedEmployeeId]);
           if (mapResult.rows.length > 0) employee = mapResult.rows[0];
         }
 
-        // Method 3: Name match
-        if (!employee && driverName) {
+        // Method 2: Direct name match (fallback)
+        if (!employee) {
           const nameResult = await client.query(`
             SELECT id, employee_id, name FROM employees
             WHERE company_id = $1 AND status = 'active'
@@ -260,7 +291,7 @@ router.post('/sync', async (req, res) => {
         if (!employee) {
           results.failed.push({
             shift,
-            error: `Driver not found: ${driverName || driverId || icNumber}`
+            error: `Driver not found: ${driverName}`
           });
           continue;
         }
@@ -296,28 +327,35 @@ router.post('/sync', async (req, res) => {
           }
         } else {
           // Create new record
+          const notes = isOutstation ? 'Synced from OrderOps (Outstation)' : 'Synced from OrderOps';
+
           await client.query(`
             INSERT INTO clock_in_records (
               employee_id, company_id, work_date,
               clock_in_1, clock_out_2,
-              address_in_1, notes, status, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+              address_in_1, address_out_2,
+              total_work_hours,
+              notes, status, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
           `, [
             employee.id,
             AA_ALIVE_COMPANY_ID,
             workDate,
             clockIn || null,
             clockOut || null,
-            location || null,
-            'Synced from Aalyx',
-            clockOut ? 'completed' : 'clocked_in'
+            clockInLocation || null,
+            clockOutLocation || null,
+            totalWorkingHours || null,
+            notes,
+            shiftStatus === 'COMPLETED' ? 'completed' : 'clocked_in'
           ]);
 
           results.success.push({
             employee_id: employee.employee_id,
             name: employee.name,
             date: workDate,
-            action: 'created'
+            action: 'created',
+            outstation: isOutstation
           });
         }
       } catch (err) {
