@@ -46,6 +46,18 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const path = window.location.pathname;
+      const requestUrl = error.config?.url || '';
+
+      // Don't redirect if:
+      // 1. Already on login page (let component handle the error)
+      // 2. The request was a login attempt (let component show error message)
+      const isLoginPage = path === '/ess/login' || path === '/' || path === '/login';
+      const isLoginRequest = requestUrl.includes('/login') || requestUrl.includes('/ess/login');
+
+      if (isLoginPage || isLoginRequest) {
+        // Don't redirect, let the component handle the error
+        return Promise.reject(error);
+      }
 
       if (path.startsWith('/ess')) {
         localStorage.removeItem('employeeToken');
