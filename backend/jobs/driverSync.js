@@ -7,7 +7,7 @@ const https = require('https');
 const pool = require('../db');
 
 const API_URL = process.env.AAALIVE_API_URL || 'https://orderops-api-v1.onrender.com/_api/external';
-const API_KEY = process.env.AALALIVE_API_KEY;
+const API_KEY = process.env.AAALIVE_API_KEY;
 const AA_ALIVE_COMPANY_ID = 1;
 
 // Skip list for vehicle IDs (not actual drivers)
