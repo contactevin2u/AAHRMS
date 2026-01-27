@@ -148,16 +148,14 @@ async function autoGeneratePayroll(companyId, departmentId, month, year) {
       const basicSalary = parseFloat(emp.default_basic_salary) || 0;
       const allowance = parseFloat(emp.default_allowance) || 0;
 
-      // Get approved claims for this period
+      // Get all approved claims not yet linked to any payroll
       const claims = await client.query(`
         SELECT COALESCE(SUM(amount), 0) as total
         FROM claims
         WHERE employee_id = $1
           AND status = 'approved'
           AND linked_payroll_item_id IS NULL
-          AND EXTRACT(MONTH FROM claim_date) = $2
-          AND EXTRACT(YEAR FROM claim_date) = $3
-      `, [emp.id, month, year]);
+      `, [emp.id]);
 
       const claimsAmount = parseFloat(claims.rows[0].total) || 0;
 

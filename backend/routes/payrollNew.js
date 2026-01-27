@@ -279,15 +279,14 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       unpaidLeaveMap[r.employee_id] = parseFloat(r.unpaid_days) || 0;
     });
 
-    // Get approved claims for this month (not yet linked)
+    // Get all approved claims not yet linked to any payroll
     const claimsResult = await client.query(`
       SELECT employee_id, SUM(amount) as total_claims
       FROM claims
       WHERE status = 'approved'
         AND linked_payroll_item_id IS NULL
-        AND claim_date BETWEEN $1 AND $2
       GROUP BY employee_id
-    `, [startOfMonth, endOfMonth]);
+    `);
 
     const claimsMap = {};
     claimsResult.rows.forEach(r => {
@@ -766,8 +765,7 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
         WHERE employee_id = $2
           AND status = 'approved'
           AND linked_payroll_item_id IS NULL
-          AND claim_date BETWEEN $3 AND $4
-      `, [item.id, item.employee_id, startOfMonth, endOfMonth]);
+      `, [item.id, item.employee_id]);
     }
 
     // Update run status

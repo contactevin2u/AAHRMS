@@ -1107,7 +1107,7 @@ function PayrollUnified() {
                                 <>
                                   <button onClick={() => handleRecalculateItem(item.id)} className="action-btn recalc" title="Recalculate">↻</button>
                                   <button onClick={() => handleEditItem(item)} className="action-btn edit" title="Edit">✎</button>
-                                  <button onClick={() => handleDeleteItem(item)} className="action-btn delete" title="Remove from payroll">✕</button>
+                                  <button onClick={() => handleDeleteItem(item)} className="action-btn delete" title="Remove from payroll">🗑</button>
                                 </>
                               )}
                               <button onClick={() => handleViewPayslip(item.id)} className="action-btn view" title="View Payslip">📄</button>

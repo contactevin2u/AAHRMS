@@ -647,7 +647,7 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
           });
         }
 
-        // Get claims for this month
+        // Get all approved claims not yet linked to any payroll
         let claimsMap = {};
         if (features.auto_claims_linking) {
           const claimsResult = await client.query(`
@@ -655,9 +655,8 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
             FROM claims
             WHERE status = 'approved'
               AND linked_payroll_item_id IS NULL
-              AND claim_date BETWEEN $1 AND $2
             GROUP BY employee_id
-          `, [period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
+          `);
 
           claimsResult.rows.forEach(r => {
             claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0;
@@ -1122,20 +1121,16 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // Get approved claims
+    // Get all approved claims not yet linked to any payroll
     let claimsMap = {};
     if (features.auto_claims_linking) {
-      const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
-      const endOfMonth = new Date(year, month, 0).toISOString().split('T')[0];
-
       const claimsResult = await client.query(`
         SELECT employee_id, SUM(amount) as total_claims
         FROM claims
         WHERE status = 'approved'
           AND linked_payroll_item_id IS NULL
-          AND claim_date BETWEEN $1 AND $2
         GROUP BY employee_id
-      `, [startOfMonth, endOfMonth]);
+      `);
 
       claimsResult.rows.forEach(r => {
         claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0;
@@ -2269,8 +2264,7 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
           WHERE employee_id = $2
             AND status = 'approved'
             AND linked_payroll_item_id IS NULL
-            AND claim_date BETWEEN $3 AND $4
-        `, [item.id, item.employee_id, startOfMonth, endOfMonth]);
+        `, [item.id, item.employee_id]);
       }
     }
 
