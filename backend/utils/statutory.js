@@ -1,6 +1,9 @@
 /**
  * Malaysian Statutory Calculations
  * EPF, SOCSO, EIS, PCB rates for 2024/2025
+ *
+ * EPF Third Schedule - Effective 1 October 2025 (Act A1760/2025)
+ * SOCSO/EIS - Effective 1 October 2024 (Wage ceiling RM6,000)
  */
 
 // Check if IC number is Malaysian format (YYMMDD-SS-NNNN or YYMMDDSSNNNN)
@@ -61,8 +64,8 @@ const calculateAgeFromIC = (icNumber) => {
   return age;
 };
 
-// EPF Contribution Rates (effective 2024/2025)
-// Based on KWSP Third Schedule - EPF Act 1991
+// EPF Contribution Rates - Third Schedule (Effective 1 October 2025)
+// Based on KWSP Third Schedule - EPF Act 1991 as amended by Act A1760/2025
 // Reference: https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution
 //
 // IMPORTANT: For wages UNDER RM20,000:
@@ -77,20 +80,49 @@ const calculateAgeFromIC = (icNumber) => {
 // - Direct percentage calculation allowed
 // - Round to nearest ringgit
 //
-// Rates:
-// - Employee: 11% (standard), 0% (age > 60)
-// - Employer: 13% (wage <= RM5,000), 12% (wage > RM5,000), 4% (age > 60)
-const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', isMalaysian = true) => {
+// Employee Types and Rates (Third Schedule effective 1 Oct 2025):
+// Part A - Malaysian citizens, PRs, or those who elected before Aug 1998 (under 60):
+//   - Employee: 11%
+//   - Employer: 13% (wage <= RM5,000), 12% (wage > RM5,000)
+// Part B - Deleted by Act A1760/2025
+// Part C - Non-Malaysian PRs aged 60 and above:
+//   - Employee: 5.5%
+//   - Employer: 6.5% (wage <= RM5,000), 6% (wage > RM5,000)
+// Part D - Deleted by Act A1760/2025
+// Part E - Malaysian citizens aged 60 and above:
+//   - Employee: 0%
+//   - Employer: 4%
+// Part F - Foreign workers (non-citizens, non-PRs):
+//   - Employee: 2%
+//   - Employer: 2%
+//
+// employeeType: 'malaysian' (default), 'pr' (permanent resident), 'foreign' (foreign worker)
+const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', employeeType = 'malaysian') => {
   let employeeRate, employerRate;
 
-  if (age > 60) {
-    // Age over 60: Employee 0%, Employer 4%
-    employeeRate = 0;
-    employerRate = 0.04;
+  // Handle backward compatibility - convert boolean isMalaysian to employeeType
+  if (typeof employeeType === 'boolean') {
+    employeeType = employeeType ? 'malaysian' : 'foreign';
+  }
+
+  if (employeeType === 'foreign') {
+    // Part F - Foreign workers (non-citizens, non-PRs): 2% each
+    employeeRate = 0.02;
+    employerRate = 0.02;
+  } else if (age >= 60) {
+    if (employeeType === 'pr') {
+      // Part C - Non-Malaysian PRs aged 60+: Employee 5.5%, Employer 6.5%/6%
+      employeeRate = 0.055;
+      employerRate = grossSalary <= 5000 ? 0.065 : 0.06;
+    } else {
+      // Part E - Malaysian citizens aged 60+: Employee 0%, Employer 4%
+      employeeRate = 0;
+      employerRate = 0.04;
+    }
   } else {
-    // Standard rates
-    employeeRate = 0.11; // 11%
-    employerRate = grossSalary <= 5000 ? 0.13 : 0.12; // 13% or 12%
+    // Part A - Malaysian citizens, PRs under 60: Employee 11%, Employer 13%/12%
+    employeeRate = 0.11;
+    employerRate = grossSalary <= 5000 ? 0.13 : 0.12;
   }
 
   // EPF wage for bracket-based calculation
@@ -115,62 +147,88 @@ const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', isMala
   };
 };
 
-// SOCSO Contribution Table (2024)
+// SOCSO Contribution Table 2024 (Effective October 2024)
+// Ceiling increased from RM5,000 to RM6,000
 // Category 1: Employment Injury + Invalidity (age < 60)
 // Category 2: Employment Injury only (age >= 60)
+// Source: https://payroll.my/payroll-software/socso-contribution-table
 const SOCSO_TABLE = [
   { min: 0, max: 30, ee: 0.10, er: 0.40 },
   { min: 30.01, max: 50, ee: 0.20, er: 0.70 },
-  { min: 50.01, max: 70, ee: 0.30, er: 1.00 },
-  { min: 70.01, max: 100, ee: 0.40, er: 1.40 },
-  { min: 100.01, max: 140, ee: 0.60, er: 2.00 },
-  { min: 140.01, max: 200, ee: 0.85, er: 2.70 },
-  { min: 200.01, max: 300, ee: 1.25, er: 4.00 },
-  { min: 300.01, max: 400, ee: 1.75, er: 5.50 },
-  { min: 400.01, max: 500, ee: 2.25, er: 7.00 },
-  { min: 500.01, max: 600, ee: 2.75, er: 8.50 },
-  { min: 600.01, max: 700, ee: 3.25, er: 10.00 },
-  { min: 700.01, max: 800, ee: 3.75, er: 11.50 },
-  { min: 800.01, max: 900, ee: 4.25, er: 13.00 },
-  { min: 900.01, max: 1000, ee: 4.75, er: 14.50 },
-  { min: 1000.01, max: 1100, ee: 5.25, er: 16.00 },
-  { min: 1100.01, max: 1200, ee: 5.75, er: 17.50 },
-  { min: 1200.01, max: 1300, ee: 6.25, er: 19.00 },
-  { min: 1300.01, max: 1400, ee: 6.75, er: 20.50 },
-  { min: 1400.01, max: 1500, ee: 7.25, er: 22.00 },
-  { min: 1500.01, max: 1600, ee: 7.75, er: 23.50 },
-  { min: 1600.01, max: 1700, ee: 8.25, er: 25.00 },
-  { min: 1700.01, max: 1800, ee: 8.75, er: 26.50 },
-  { min: 1800.01, max: 1900, ee: 9.25, er: 28.00 },
-  { min: 1900.01, max: 2000, ee: 9.75, er: 29.50 },
-  { min: 2000.01, max: 2100, ee: 10.25, er: 31.00 },
-  { min: 2100.01, max: 2200, ee: 10.75, er: 32.50 },
-  { min: 2200.01, max: 2300, ee: 11.25, er: 34.00 },
-  { min: 2300.01, max: 2400, ee: 11.75, er: 35.50 },
-  { min: 2400.01, max: 2500, ee: 12.25, er: 37.00 },
-  { min: 2500.01, max: 2600, ee: 12.75, er: 38.50 },
-  { min: 2600.01, max: 2700, ee: 13.25, er: 40.00 },
-  { min: 2700.01, max: 2800, ee: 13.75, er: 41.50 },
-  { min: 2800.01, max: 2900, ee: 14.25, er: 43.00 },
-  { min: 2900.01, max: 3000, ee: 14.75, er: 44.50 },
-  { min: 3000.01, max: 3100, ee: 15.25, er: 46.00 },
-  { min: 3100.01, max: 3200, ee: 15.75, er: 47.50 },
-  { min: 3200.01, max: 3300, ee: 16.25, er: 49.00 },
-  { min: 3300.01, max: 3400, ee: 16.75, er: 50.50 },
-  { min: 3400.01, max: 3500, ee: 17.25, er: 52.00 },
-  { min: 3500.01, max: 3600, ee: 17.75, er: 53.50 },
-  { min: 3600.01, max: 3700, ee: 18.25, er: 55.00 },
-  { min: 3700.01, max: 3800, ee: 18.75, er: 56.50 },
-  { min: 3800.01, max: 3900, ee: 19.25, er: 58.00 },
-  { min: 3900.01, max: 4000, ee: 19.75, er: 59.50 },
-  { min: 4000.01, max: 5000, ee: 24.75, er: 69.05 },
+  { min: 50.01, max: 70, ee: 0.30, er: 1.10 },
+  { min: 70.01, max: 100, ee: 0.40, er: 1.50 },
+  { min: 100.01, max: 140, ee: 0.60, er: 2.10 },
+  { min: 140.01, max: 200, ee: 0.85, er: 2.95 },
+  { min: 200.01, max: 300, ee: 1.25, er: 4.35 },
+  { min: 300.01, max: 400, ee: 1.75, er: 6.15 },
+  { min: 400.01, max: 500, ee: 2.25, er: 7.85 },
+  { min: 500.01, max: 600, ee: 2.75, er: 9.65 },
+  { min: 600.01, max: 700, ee: 3.25, er: 11.35 },
+  { min: 700.01, max: 800, ee: 3.75, er: 13.15 },
+  { min: 800.01, max: 900, ee: 4.25, er: 14.85 },
+  { min: 900.01, max: 1000, ee: 4.75, er: 16.65 },
+  { min: 1000.01, max: 1100, ee: 5.25, er: 18.35 },
+  { min: 1100.01, max: 1200, ee: 5.75, er: 20.15 },
+  { min: 1200.01, max: 1300, ee: 6.25, er: 21.85 },
+  { min: 1300.01, max: 1400, ee: 6.75, er: 23.65 },
+  { min: 1400.01, max: 1500, ee: 7.25, er: 25.35 },
+  { min: 1500.01, max: 1600, ee: 7.75, er: 27.15 },
+  { min: 1600.01, max: 1700, ee: 8.25, er: 28.85 },
+  { min: 1700.01, max: 1800, ee: 8.75, er: 30.65 },
+  { min: 1800.01, max: 1900, ee: 9.25, er: 32.35 },
+  { min: 1900.01, max: 2000, ee: 9.75, er: 34.15 },
+  { min: 2000.01, max: 2100, ee: 10.25, er: 35.85 },
+  { min: 2100.01, max: 2200, ee: 10.75, er: 37.65 },
+  { min: 2200.01, max: 2300, ee: 11.25, er: 39.35 },
+  { min: 2300.01, max: 2400, ee: 11.75, er: 41.15 },
+  { min: 2400.01, max: 2500, ee: 12.25, er: 42.85 },
+  { min: 2500.01, max: 2600, ee: 12.75, er: 44.65 },
+  { min: 2600.01, max: 2700, ee: 13.25, er: 46.35 },
+  { min: 2700.01, max: 2800, ee: 13.75, er: 48.15 },
+  { min: 2800.01, max: 2900, ee: 14.25, er: 49.85 },
+  { min: 2900.01, max: 3000, ee: 14.75, er: 51.65 },
+  { min: 3000.01, max: 3100, ee: 15.25, er: 53.35 },
+  { min: 3100.01, max: 3200, ee: 15.75, er: 55.15 },
+  { min: 3200.01, max: 3300, ee: 16.25, er: 56.85 },
+  { min: 3300.01, max: 3400, ee: 16.75, er: 58.65 },
+  { min: 3400.01, max: 3500, ee: 17.25, er: 60.35 },
+  { min: 3500.01, max: 3600, ee: 17.75, er: 62.15 },
+  { min: 3600.01, max: 3700, ee: 18.25, er: 63.85 },
+  { min: 3700.01, max: 3800, ee: 18.75, er: 65.65 },
+  { min: 3800.01, max: 3900, ee: 19.25, er: 67.35 },
+  { min: 3900.01, max: 4000, ee: 19.75, er: 69.15 },
+  { min: 4000.01, max: 4100, ee: 20.25, er: 70.85 },
+  { min: 4100.01, max: 4200, ee: 20.75, er: 72.65 },
+  { min: 4200.01, max: 4300, ee: 21.25, er: 74.35 },
+  { min: 4300.01, max: 4400, ee: 21.75, er: 76.15 },
+  { min: 4400.01, max: 4500, ee: 22.25, er: 77.85 },
+  { min: 4500.01, max: 4600, ee: 22.75, er: 79.65 },
+  { min: 4600.01, max: 4700, ee: 23.25, er: 81.35 },
+  { min: 4700.01, max: 4800, ee: 23.75, er: 83.15 },
+  { min: 4800.01, max: 4900, ee: 24.25, er: 84.85 },
+  { min: 4900.01, max: 5000, ee: 24.75, er: 86.65 },
+  { min: 5000.01, max: 5100, ee: 25.25, er: 88.35 },
+  { min: 5100.01, max: 5200, ee: 25.75, er: 90.15 },
+  { min: 5200.01, max: 5300, ee: 26.25, er: 91.85 },
+  { min: 5300.01, max: 5400, ee: 26.75, er: 93.65 },
+  { min: 5400.01, max: 5500, ee: 27.25, er: 95.35 },
+  { min: 5500.01, max: 5600, ee: 27.75, er: 97.15 },
+  { min: 5600.01, max: 5700, ee: 28.25, er: 98.85 },
+  { min: 5700.01, max: 5800, ee: 28.75, er: 100.65 },
+  { min: 5800.01, max: 5900, ee: 29.25, er: 102.35 },
+  { min: 5900.01, max: 6000, ee: 29.75, er: 104.15 },
 ];
 
 const calculateSOCSO = (grossSalary, age = 30) => {
-  // SOCSO ceiling is RM5000
-  if (grossSalary > 5000) {
-    // Max contribution for salary > RM5000
-    return { employee: 24.75, employer: 69.05 };
+  // No contribution if salary is zero or negative
+  if (!grossSalary || grossSalary <= 0) {
+    return { employee: 0, employer: 0 };
+  }
+
+  // SOCSO ceiling is RM6000 (effective October 2024)
+  if (grossSalary > 6000) {
+    // Max contribution for salary > RM6000
+    return { employee: 29.75, employer: 104.15 };
   }
 
   const bracket = SOCSO_TABLE.find(b => grossSalary >= b.min && grossSalary <= b.max);
@@ -247,20 +305,35 @@ const EIS_TABLE = [
   { min: 4700.01, max: 4800, ee: 9.50, er: 9.50 },
   { min: 4800.01, max: 4900, ee: 9.70, er: 9.70 },
   { min: 4900.01, max: 5000, ee: 9.90, er: 9.90 },
+  { min: 5000.01, max: 5100, ee: 10.10, er: 10.10 },
+  { min: 5100.01, max: 5200, ee: 10.30, er: 10.30 },
+  { min: 5200.01, max: 5300, ee: 10.50, er: 10.50 },
+  { min: 5300.01, max: 5400, ee: 10.70, er: 10.70 },
+  { min: 5400.01, max: 5500, ee: 10.90, er: 10.90 },
+  { min: 5500.01, max: 5600, ee: 11.10, er: 11.10 },
+  { min: 5600.01, max: 5700, ee: 11.30, er: 11.30 },
+  { min: 5700.01, max: 5800, ee: 11.50, er: 11.50 },
+  { min: 5800.01, max: 5900, ee: 11.70, er: 11.70 },
+  { min: 5900.01, max: 6000, ee: 11.90, er: 11.90 },
 ];
 
 // EIS (Employment Insurance System)
-// Uses contribution table, ceiling RM5000
+// Uses contribution table, ceiling RM6000 (effective October 2024)
 const calculateEIS = (grossSalary, age = 30) => {
+  // No contribution if salary is zero or negative
+  if (!grossSalary || grossSalary <= 0) {
+    return { employee: 0, employer: 0 };
+  }
+
   // EIS not applicable for age >= 57
   if (age >= 57) {
     return { employee: 0, employer: 0 };
   }
 
-  // EIS ceiling is RM5000
-  if (grossSalary > 5000) {
-    // Max contribution for salary > RM5000
-    return { employee: 9.90, employer: 9.90 };
+  // EIS ceiling is RM6000 (effective October 2024)
+  if (grossSalary > 6000) {
+    // Max contribution for salary > RM6000
+    return { employee: 11.90, employer: 11.90 };
   }
 
   const bracket = EIS_TABLE.find(b => grossSalary >= b.min && grossSalary <= b.max);
