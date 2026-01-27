@@ -72,32 +72,38 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* Error Message */
+/* Error Message - Very visible! */
 .error-message {
-  background: #fef2f2;
-  border: 2px solid #dc2626;
-  color: #dc2626;
-  padding: 14px 16px;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
+  background: #dc2626;
+  border: 3px solid #b91c1c;
+  color: white;
+  padding: 16px 20px;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 700;
   margin-bottom: 16px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   text-align: center;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
 }
 
 .error-message.error-shake {
-  animation: error-shake 0.5s ease-in-out;
+  animation: error-shake 0.5s ease-in-out, error-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes error-shake {
   0%, 100% { transform: translateX(0); }
   20%, 60% { transform: translateX(-8px); }
   40%, 80% { transform: translateX(8px); }
+}
+
+@keyframes error-pulse {
+  0%, 100% { box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4); }
+  50% { box-shadow: 0 4px 20px rgba(220, 38, 38, 0.7); }
 }
 
 .error-icon {
@@ -108,7 +114,7 @@
 .error-tap-hint {
   font-size: 12px;
   font-weight: 400;
-  color: #991b1b;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* Form */

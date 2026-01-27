@@ -154,28 +154,34 @@ function ESSLogin() {
       console.error('Login error:', err);
       // Get error message from response
       let errorMsg = err.response?.data?.error || err.response?.data?.message || err.message;
+      const lowerMsg = (errorMsg || '').toLowerCase();
 
-      // Make message user-friendly
-      if (errorMsg?.toLowerCase().includes('password') || errorMsg?.toLowerCase().includes('incorrect')) {
+      // Make message user-friendly based on error type
+      if (lowerMsg.includes('password') || lowerMsg.includes('incorrect')) {
         errorMsg = language === 'ms'
-          ? 'Kata laluan salah. Sila cuba lagi.'
-          : 'Wrong password. Please try again.';
-      } else if (errorMsg?.toLowerCase().includes('not found') || errorMsg?.toLowerCase().includes('user')) {
+          ? '❌ Kata laluan salah!'
+          : '❌ Wrong password!';
+      } else if (lowerMsg.includes('invalid') || lowerMsg.includes('credentials')) {
         errorMsg = language === 'ms'
-          ? 'Pengguna tidak dijumpai. Sila semak nama pengguna anda.'
-          : 'User not found. Please check your username.';
+          ? '❌ Nama pengguna atau kata laluan salah!'
+          : '❌ Wrong username or password!';
+      } else if (lowerMsg.includes('not found') || lowerMsg.includes('user') || lowerMsg.includes('employee')) {
+        errorMsg = language === 'ms'
+          ? '❌ Pengguna tidak dijumpai!'
+          : '❌ User not found!';
       } else if (!errorMsg || errorMsg === 'Network Error') {
         errorMsg = language === 'ms'
-          ? 'Tiada sambungan internet. Sila cuba lagi.'
-          : 'No internet connection. Please try again.';
+          ? '❌ Tiada sambungan internet!'
+          : '❌ No internet connection!';
+      } else {
+        // Show generic error with the actual message
+        errorMsg = language === 'ms'
+          ? `❌ Log masuk gagal: ${errorMsg}`
+          : `❌ Login failed: ${errorMsg}`;
       }
 
       setError(errorMsg);
       setShowErrorPopup(true);
-
-      // Also alert as fallback (for older browsers or if popup fails)
-      // Remove this line after confirming popup works
-      // alert(errorMsg);
     } finally {
       setLoading(false);
     }
