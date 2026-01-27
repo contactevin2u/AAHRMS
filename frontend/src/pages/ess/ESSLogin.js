@@ -152,11 +152,30 @@ function ESSLogin() {
       }
     } catch (err) {
       console.error('Login error:', err);
-      const errorMsg = err.response?.data?.error || (language === 'ms'
-        ? 'Log masuk gagal. Sila semak nama pengguna dan kata laluan anda.'
-        : 'Login failed. Please check your username and password.');
+      // Get error message from response
+      let errorMsg = err.response?.data?.error || err.response?.data?.message || err.message;
+
+      // Make message user-friendly
+      if (errorMsg?.toLowerCase().includes('password') || errorMsg?.toLowerCase().includes('incorrect')) {
+        errorMsg = language === 'ms'
+          ? 'Kata laluan salah. Sila cuba lagi.'
+          : 'Wrong password. Please try again.';
+      } else if (errorMsg?.toLowerCase().includes('not found') || errorMsg?.toLowerCase().includes('user')) {
+        errorMsg = language === 'ms'
+          ? 'Pengguna tidak dijumpai. Sila semak nama pengguna anda.'
+          : 'User not found. Please check your username.';
+      } else if (!errorMsg || errorMsg === 'Network Error') {
+        errorMsg = language === 'ms'
+          ? 'Tiada sambungan internet. Sila cuba lagi.'
+          : 'No internet connection. Please try again.';
+      }
+
       setError(errorMsg);
       setShowErrorPopup(true);
+
+      // Also alert as fallback (for older browsers or if popup fails)
+      // Remove this line after confirming popup works
+      // alert(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -285,10 +304,12 @@ function ESSLogin() {
           </button>
         </div>
 
-        {/* Error Message */}
+        {/* Error Message - Always visible when error exists */}
         {error && (
-          <div className="error-message">
-            {error}
+          <div className="error-message error-shake" onClick={() => setShowErrorPopup(true)}>
+            <span className="error-icon">&#x26A0;</span>
+            <span>{error}</span>
+            <span className="error-tap-hint">{language === 'ms' ? '(tekan untuk bantuan)' : '(tap for help)'}</span>
           </div>
         )}
 
