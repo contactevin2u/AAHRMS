@@ -27,6 +27,7 @@ const outletsRoutes = require('./routes/outlets');
 const automationRoutes = require('./routes/automation');
 const bikRoutes = require('./routes/benefitsInKind');
 const retentionRoutes = require('./routes/admin/retention');
+const aaaliveRoutes = require('./routes/admin/aaalive-sync');  // AA Alive Driver Attendance Sync
 const schedulesRoutes = require('./routes/schedules');
 const positionsRoutes = require('./routes/positions');
 // Shift swap disabled - employees must work assigned shifts only
@@ -80,6 +81,7 @@ app.use('/api/outlets', outletsRoutes);  // Outlets (for Mimix A)
 app.use('/api/automation', automationRoutes);  // Automation & Scheduling
 app.use('/api/benefits-in-kind', bikRoutes);  // Benefits In Kind (AA Alive)
 app.use('/api/admin/retention', retentionRoutes);  // Data Retention Policy Management
+app.use('/api/admin/aaalive', aaaliveRoutes);  // AA Alive Driver Attendance Sync
 app.use('/api/schedules', schedulesRoutes);  // Employee Schedules (Mimix)
 app.use('/api/positions', positionsRoutes);  // Job Positions
 // Shift swap disabled - employees must work assigned shifts only
