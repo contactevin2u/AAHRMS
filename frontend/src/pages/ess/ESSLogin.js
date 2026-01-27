@@ -6,7 +6,7 @@ import './ESSLogin.css';
 
 function ESSLogin() {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [loginMethod, setLoginMethod] = useState('email'); // 'email' or 'ic'
   const [formData, setFormData] = useState({
     login: '',
@@ -16,11 +16,13 @@ function ESSLogin() {
   });
   const [idType, setIdType] = useState('ic'); // 'ic' or 'passport'
   const [error, setError] = useState('');
+  const [showErrorPopup, setShowErrorPopup] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [rememberMe, setRememberMe] = useState(true); // Default to remember
   const [autoLogging, setAutoLogging] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   // Check if already logged in OR auto-login with saved credentials
   useEffect(() => {
@@ -150,7 +152,11 @@ function ESSLogin() {
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
+      const errorMsg = err.response?.data?.error || (language === 'ms'
+        ? 'Log masuk gagal. Sila semak nama pengguna dan kata laluan anda.'
+        : 'Login failed. Please check your username and password.');
+      setError(errorMsg);
+      setShowErrorPopup(true);
     } finally {
       setLoading(false);
     }
@@ -177,9 +183,85 @@ function ESSLogin() {
     );
   }
 
+  // Get user-friendly error message
+  const getErrorMessage = () => {
+    if (!error) return '';
+    // Make error messages more user-friendly
+    if (error.toLowerCase().includes('invalid') || error.toLowerCase().includes('wrong') ||
+        error.toLowerCase().includes('incorrect') || error.toLowerCase().includes('not found') ||
+        error.toLowerCase().includes('tidak sah') || error.toLowerCase().includes('salah')) {
+      return language === 'ms'
+        ? 'Nama pengguna atau kata laluan salah. Sila cuba lagi.'
+        : 'Wrong username or password. Please try again.';
+    }
+    return error;
+  };
+
   return (
     <div className="ess-login-page">
+      {/* Error Popup Modal - Very visible! */}
+      {showErrorPopup && (
+        <div className="error-popup-overlay" onClick={() => setShowErrorPopup(false)}>
+          <div className="error-popup" onClick={e => e.stopPropagation()}>
+            <div className="error-popup-icon">&#x274C;</div>
+            <h2>{language === 'ms' ? 'Log Masuk Gagal!' : 'Login Failed!'}</h2>
+            <p className="error-popup-message">{getErrorMessage()}</p>
+            <div className="error-popup-help">
+              <p><strong>{language === 'ms' ? 'Sila pastikan:' : 'Please make sure:'}</strong></p>
+              <ul>
+                <li>{language === 'ms' ? 'Nama pengguna betul' : 'Username is correct'}</li>
+                <li>{language === 'ms' ? 'Kata laluan betul' : 'Password is correct'}</li>
+                <li>{language === 'ms' ? 'Huruf besar/kecil tepat' : 'Caps lock is off'}</li>
+              </ul>
+            </div>
+            <button className="error-popup-btn" onClick={() => setShowErrorPopup(false)}>
+              {language === 'ms' ? 'Cuba Lagi' : 'Try Again'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Help Modal */}
+      {showHelp && (
+        <div className="help-popup-overlay" onClick={() => setShowHelp(false)}>
+          <div className="help-popup" onClick={e => e.stopPropagation()}>
+            <div className="help-popup-header">
+              <h2>{language === 'ms' ? 'Bantuan Log Masuk' : 'Login Help'}</h2>
+              <button className="help-close-btn" onClick={() => setShowHelp(false)}>&times;</button>
+            </div>
+            <div className="help-popup-content">
+              <div className="help-section">
+                <h3>&#x1F4DD; {language === 'ms' ? 'Cara Log Masuk' : 'How to Login'}</h3>
+                <ol>
+                  <li>{language === 'ms' ? 'Masukkan nama pengguna (email atau IC)' : 'Enter your username (email or IC number)'}</li>
+                  <li>{language === 'ms' ? 'Masukkan kata laluan' : 'Enter your password'}</li>
+                  <li>{language === 'ms' ? 'Tekan butang "Log Masuk"' : 'Tap the "Sign In" button'}</li>
+                </ol>
+              </div>
+              <div className="help-section">
+                <h3>&#x1F511; {language === 'ms' ? 'Kata Laluan Pertama Kali' : 'First Time Password'}</h3>
+                <p>{language === 'ms'
+                  ? 'Jika pertama kali log masuk, kata laluan anda adalah nombor IC anda (tanpa tanda sempang).'
+                  : 'If logging in for the first time, your password is your IC number (without dashes).'}</p>
+                <p><strong>{language === 'ms' ? 'Contoh:' : 'Example:'}</strong> IC: 901234-12-5678 → {language === 'ms' ? 'Kata laluan:' : 'Password:'} 901234125678</p>
+              </div>
+              <div className="help-section">
+                <h3>&#x1F198; {language === 'ms' ? 'Masih Ada Masalah?' : 'Still Having Problems?'}</h3>
+                <p>{language === 'ms'
+                  ? 'Hubungi HR anda untuk bantuan.'
+                  : 'Contact your HR for assistance.'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="login-card">
+        {/* Help Button */}
+        <button className="help-btn" onClick={() => setShowHelp(true)} title={language === 'ms' ? 'Bantuan' : 'Help'}>
+          &#x2753;
+        </button>
+
         {/* Logo */}
         <div className="login-header">
           <img src="/logos/hr-default.png" alt="ESS" className="login-logo" />

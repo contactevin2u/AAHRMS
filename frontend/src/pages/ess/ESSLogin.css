@@ -354,6 +354,239 @@
   }
 }
 
+/* Help Button */
+.help-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.help-btn:hover {
+  background: #e2e8f0;
+  color: #1976d2;
+}
+
+.login-card {
+  position: relative;
+}
+
+/* Error Popup Overlay */
+.error-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.error-popup {
+  background: white;
+  border-radius: 16px;
+  padding: 32px 24px;
+  max-width: 340px;
+  width: 100%;
+  text-align: center;
+  animation: popIn 0.3s ease-out;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes popIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.error-popup-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-10px); }
+  40%, 80% { transform: translateX(10px); }
+}
+
+.error-popup h2 {
+  color: #dc2626;
+  font-size: 22px;
+  margin: 0 0 12px 0;
+}
+
+.error-popup-message {
+  color: #374151;
+  font-size: 16px;
+  margin: 0 0 20px 0;
+  line-height: 1.5;
+}
+
+.error-popup-help {
+  background: #fef3c7;
+  border-radius: 8px;
+  padding: 12px 16px;
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.error-popup-help p {
+  margin: 0 0 8px 0;
+  color: #92400e;
+  font-size: 14px;
+}
+
+.error-popup-help ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #a16207;
+  font-size: 13px;
+}
+
+.error-popup-help li {
+  margin-bottom: 4px;
+}
+
+.error-popup-btn {
+  background: linear-gradient(135deg, #1976d2, #1565c0);
+  color: white;
+  border: none;
+  padding: 14px 40px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.error-popup-btn:hover {
+  transform: scale(1.05);
+}
+
+/* Help Popup */
+.help-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.help-popup {
+  background: white;
+  border-radius: 16px;
+  max-width: 400px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: popIn 0.3s ease-out;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.help-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  background: white;
+}
+
+.help-popup-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.help-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.help-close-btn:hover {
+  background: #e2e8f0;
+}
+
+.help-popup-content {
+  padding: 20px 24px;
+}
+
+.help-section {
+  margin-bottom: 24px;
+}
+
+.help-section:last-child {
+  margin-bottom: 0;
+}
+
+.help-section h3 {
+  font-size: 15px;
+  color: #1e293b;
+  margin: 0 0 12px 0;
+}
+
+.help-section ol, .help-section ul {
+  margin: 0;
+  padding-left: 24px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.help-section p {
+  margin: 0 0 8px 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .login-card {
@@ -362,5 +595,17 @@
 
   .login-header h1 {
     font-size: 22px;
+  }
+
+  .error-popup {
+    padding: 24px 20px;
+  }
+
+  .error-popup-icon {
+    font-size: 48px;
+  }
+
+  .error-popup h2 {
+    font-size: 20px;
   }
 }

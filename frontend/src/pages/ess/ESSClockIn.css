@@ -475,3 +475,227 @@
   font-weight: 600;
   color: #1e293b !important;
 }
+
+/* Help Button */
+.clockin-help-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 8px 16px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 20px;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.clockin-help-btn:hover {
+  background: #e2e8f0;
+  color: #1976d2;
+}
+
+.ess-clockin {
+  position: relative;
+}
+
+/* Help Modal Overlay */
+.clockin-help-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  animation: helpFadeIn 0.2s ease-out;
+}
+
+@keyframes helpFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.clockin-help-modal {
+  background: white;
+  border-radius: 16px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  animation: helpSlideIn 0.3s ease-out;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes helpSlideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.clockin-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 1;
+}
+
+.clockin-help-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.clockin-help-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.clockin-help-close:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.clockin-help-content {
+  padding: 20px;
+}
+
+.help-guide-section {
+  margin-bottom: 28px;
+}
+
+.help-guide-section:last-child {
+  margin-bottom: 0;
+}
+
+.help-guide-section h3 {
+  font-size: 16px;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+/* Step by step guide */
+.help-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.help-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.step-number {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #1976d2, #1565c0);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-content strong {
+  display: block;
+  color: #1e293b;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.step-content p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* Browser guide */
+.browser-guide {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.browser-guide h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.browser-guide ol {
+  margin: 0;
+  padding-left: 20px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+/* Help tip */
+.help-tip {
+  display: flex;
+  gap: 10px;
+  background: #fef3c7;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 12px;
+}
+
+.help-tip span {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.help-tip p {
+  margin: 0;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.help-guide-section ol {
+  margin: 0;
+  padding-left: 20px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.8;
+}

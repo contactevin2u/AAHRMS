@@ -65,6 +65,7 @@ function ESSClockInContent() {
   const [address, setAddress] = useState('');
   const [locationError, setLocationError] = useState('');
   const [serverTime, setServerTime] = useState(new Date());
+  const [showHelp, setShowHelp] = useState(false);
 
   // Check camera permission on mount (does NOT trigger popup)
   useEffect(() => {
@@ -234,14 +235,24 @@ function ESSClockInContent() {
       console.error('Camera error:', err);
       setCameraLoading(false);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setError('Camera blocked. Try: 1) Refresh page, 2) Clear browser cache, 3) Use Chrome browser');
+        setError(language === 'ms'
+          ? 'Kamera disekat! Tekan butang "Bantuan" untuk panduan.'
+          : 'Camera blocked! Tap "Help" button for instructions.');
         setCameraPermission('denied');
+        // Auto-show help after a short delay
+        setTimeout(() => setShowHelp(true), 1500);
       } else if (err.name === 'NotFoundError') {
-        setError('No camera found. Please check your device has a camera.');
+        setError(language === 'ms'
+          ? 'Kamera tidak dijumpai. Sila semak peranti anda ada kamera.'
+          : 'No camera found. Please check your device has a camera.');
       } else if (err.name === 'NotReadableError') {
-        setError('Camera in use by another app. Please close other apps and try again.');
+        setError(language === 'ms'
+          ? 'Kamera sedang digunakan oleh aplikasi lain. Sila tutup aplikasi lain dan cuba lagi.'
+          : 'Camera in use by another app. Please close other apps and try again.');
       } else {
-        setError('Unable to access camera. Try using Chrome browser instead.');
+        setError(language === 'ms'
+          ? 'Tidak dapat mengakses kamera. Cuba gunakan Chrome browser.'
+          : 'Unable to access camera. Try using Chrome browser instead.');
       }
     }
   };
@@ -439,7 +450,112 @@ function ESSClockInContent() {
 
   return (
     <ESSLayout>
+      {/* Help Modal */}
+      {showHelp && (
+        <div className="clockin-help-overlay" onClick={() => setShowHelp(false)}>
+          <div className="clockin-help-modal" onClick={e => e.stopPropagation()}>
+            <div className="clockin-help-header">
+              <h2>{language === 'ms' ? 'Panduan Clock In' : 'Clock In Guide'}</h2>
+              <button className="clockin-help-close" onClick={() => setShowHelp(false)}>&times;</button>
+            </div>
+            <div className="clockin-help-content">
+              {/* Step by step guide */}
+              <div className="help-guide-section">
+                <h3>&#x1F4F1; {language === 'ms' ? 'Langkah-langkah Clock In' : 'How to Clock In'}</h3>
+                <div className="help-steps">
+                  <div className="help-step">
+                    <div className="step-number">1</div>
+                    <div className="step-content">
+                      <strong>{language === 'ms' ? 'Tekan "Ambil Swafoto"' : 'Tap "Take Selfie"'}</strong>
+                      <p>{language === 'ms' ? 'Tekan butang kamera untuk mula' : 'Tap the camera button to start'}</p>
+                    </div>
+                  </div>
+                  <div className="help-step">
+                    <div className="step-number">2</div>
+                    <div className="step-content">
+                      <strong>{language === 'ms' ? 'Benarkan Akses Kamera' : 'Allow Camera Access'}</strong>
+                      <p>{language === 'ms' ? 'Tekan "Allow" atau "Benarkan" apabila diminta' : 'Tap "Allow" when asked for permission'}</p>
+                    </div>
+                  </div>
+                  <div className="help-step">
+                    <div className="step-number">3</div>
+                    <div className="step-content">
+                      <strong>{language === 'ms' ? 'Ambil Gambar' : 'Take Photo'}</strong>
+                      <p>{language === 'ms' ? 'Tekan butang bulat untuk tangkap gambar' : 'Tap the round button to capture photo'}</p>
+                    </div>
+                  </div>
+                  <div className="help-step">
+                    <div className="step-number">4</div>
+                    <div className="step-content">
+                      <strong>{language === 'ms' ? 'Tekan Clock In/Out' : 'Tap Clock In/Out'}</strong>
+                      <p>{language === 'ms' ? 'Tekan butang biru untuk hantar' : 'Tap the blue button to submit'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Camera troubleshooting */}
+              <div className="help-guide-section">
+                <h3>&#x1F4F7; {language === 'ms' ? 'Kamera Tidak Berfungsi?' : 'Camera Not Working?'}</h3>
+
+                <div className="browser-guide">
+                  <h4>Chrome (Android)</h4>
+                  <ol>
+                    <li>{language === 'ms' ? 'Tekan ikon 🔒 di sebelah URL' : 'Tap the 🔒 icon next to URL'}</li>
+                    <li>{language === 'ms' ? 'Tekan "Permissions" atau "Kebenaran"' : 'Tap "Permissions"'}</li>
+                    <li>{language === 'ms' ? 'Pastikan "Camera" ditetapkan kepada "Allow"' : 'Set "Camera" to "Allow"'}</li>
+                    <li>{language === 'ms' ? 'Refresh halaman' : 'Refresh the page'}</li>
+                  </ol>
+                </div>
+
+                <div className="browser-guide">
+                  <h4>Safari (iPhone)</h4>
+                  <ol>
+                    <li>{language === 'ms' ? 'Buka Settings > Safari' : 'Open Settings > Safari'}</li>
+                    <li>{language === 'ms' ? 'Tekan "Camera"' : 'Tap "Camera"'}</li>
+                    <li>{language === 'ms' ? 'Pilih "Allow" atau "Ask"' : 'Select "Allow" or "Ask"'}</li>
+                    <li>{language === 'ms' ? 'Kembali dan refresh halaman' : 'Go back and refresh the page'}</li>
+                  </ol>
+                </div>
+
+                <div className="browser-guide">
+                  <h4>{language === 'ms' ? 'Samsung Internet' : 'Samsung Internet'}</h4>
+                  <ol>
+                    <li>{language === 'ms' ? 'Tekan ≡ Menu > Settings' : 'Tap ≡ Menu > Settings'}</li>
+                    <li>{language === 'ms' ? 'Tekan "Sites and downloads"' : 'Tap "Sites and downloads"'}</li>
+                    <li>{language === 'ms' ? 'Tekan "Site permissions"' : 'Tap "Site permissions"'}</li>
+                    <li>{language === 'ms' ? 'Tekan "Camera" > Allow' : 'Tap "Camera" > Allow'}</li>
+                  </ol>
+                </div>
+
+                <div className="help-tip">
+                  <span>&#x1F4A1;</span>
+                  <p>{language === 'ms'
+                    ? 'Jika masih tidak berfungsi, cuba gunakan Chrome browser.'
+                    : 'If still not working, try using Chrome browser.'}</p>
+                </div>
+              </div>
+
+              {/* Location help */}
+              <div className="help-guide-section">
+                <h3>&#x1F4CD; {language === 'ms' ? 'Lokasi Tidak Dikesan?' : 'Location Not Detected?'}</h3>
+                <ol>
+                  <li>{language === 'ms' ? 'Pastikan GPS/Location diaktifkan dalam telefon' : 'Make sure GPS/Location is turned on in your phone'}</li>
+                  <li>{language === 'ms' ? 'Benarkan akses lokasi apabila diminta' : 'Allow location access when asked'}</li>
+                  <li>{language === 'ms' ? 'Tunggu beberapa saat untuk mendapatkan lokasi' : 'Wait a few seconds to get location'}</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="ess-clockin">
+        {/* Help Button */}
+        <button className="clockin-help-btn" onClick={() => setShowHelp(true)}>
+          &#x2753; {language === 'ms' ? 'Bantuan' : 'Help'}
+        </button>
+
         {/* Offline Warning */}
         {!isOnline && (
           <div className="offline-warning">
