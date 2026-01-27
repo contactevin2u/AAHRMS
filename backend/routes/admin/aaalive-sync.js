@@ -5,11 +5,42 @@
 
 const express = require('express');
 const router = express.Router();
+const https = require('https');
 const pool = require('../../db');
 
 const API_URL = process.env.AAALIVE_API_URL || 'https://aaalive.my/_api/external';
 const API_KEY = process.env.AAALIVE_API_KEY;
 const AA_ALIVE_COMPANY_ID = 1;
+
+// Helper function to make HTTPS requests (compatible with all Node versions)
+function httpsGet(url, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const options = {
+      hostname: urlObj.hostname,
+      path: urlObj.pathname + urlObj.search,
+      method: 'GET',
+      headers: headers
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          statusText: res.statusMessage,
+          json: () => Promise.resolve(JSON.parse(data)),
+          text: () => Promise.resolve(data)
+        });
+      });
+    });
+
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 // Driver ID mapping: Aalyx Driver ID -> HRMS Employee ID
 // Update this after checking the Aalyx driver list
@@ -32,8 +63,8 @@ router.get('/test', async (req, res) => {
 
     console.log(`Testing AA Alive API for date: ${testDate}`);
 
-    const response = await fetch(`${API_URL}/shifts?date=${testDate}`, {
-      headers: { 'X-API-Key': API_KEY }
+    const response = await httpsGet(`${API_URL}/shifts?date=${testDate}`, {
+      'X-API-Key': API_KEY
     });
 
     const status = response.status;
@@ -91,9 +122,7 @@ router.get('/shifts', async (req, res) => {
 
     console.log(`Fetching shifts from: ${url}`);
 
-    const response = await fetch(url, {
-      headers: { 'X-API-Key': API_KEY }
-    });
+    const response = await httpsGet(url, { 'X-API-Key': API_KEY });
 
     if (response.ok) {
       const data = await response.json();
@@ -161,9 +190,7 @@ router.post('/sync', async (req, res) => {
     console.log(`Syncing from Aalyx: ${url}`);
 
     // Fetch from Aalyx
-    const response = await fetch(url, {
-      headers: { 'X-API-Key': API_KEY }
-    });
+    const response = await httpsGet(url, { 'X-API-Key': API_KEY });
 
     if (!response.ok) {
       const text = await response.text();
