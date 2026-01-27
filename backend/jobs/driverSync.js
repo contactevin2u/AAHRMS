@@ -10,8 +10,8 @@ const API_URL = process.env.AAALIVE_API_URL || 'https://orderops-api-v1.onrender
 const API_KEY = process.env.AAALIVE_API_KEY;
 const AA_ALIVE_COMPANY_ID = 1;
 
-// Skip list for vehicle IDs (not actual drivers)
-const SKIP_DRIVERS = ['2 JC 2', '2JC2'];
+// Skip list for vehicle IDs and non-driver entries
+const SKIP_DRIVERS = ['2 JC 2', '2JC2', 'Self Pick Up'];
 
 // Driver name mapping: OrderOps driver_name -> HRMS employee_id
 const DRIVER_MAPPING = {
@@ -37,7 +37,9 @@ const DRIVER_MAPPING = {
   'SHUKRI': 'SHUKRI',
   'SYUKRI': 'SYUKRI',
   'SABAH': 'SABAH',
-  'IQZAT': 'IQZAT'
+  'IQZAT': 'IQZAT',
+  'oyeng': 'SHUKRI',
+  'OYENG': 'SHUKRI'
 };
 
 // Helper function to make HTTPS requests

@@ -42,8 +42,8 @@ function httpsGet(url, headers = {}) {
   });
 }
 
-// Skip list for vehicle IDs (not actual drivers)
-const SKIP_DRIVERS = ['2 JC 2', '2JC2'];
+// Skip list for vehicle IDs and non-driver entries
+const SKIP_DRIVERS = ['2 JC 2', '2JC2', 'Self Pick Up'];
 
 // Driver name mapping: OrderOps driver_name -> HRMS employee_id
 // Maps OrderOps names to HRMS employee IDs for matching
@@ -70,7 +70,9 @@ const DRIVER_MAPPING = {
   'SHUKRI': 'SHUKRI',
   'SYUKRI': 'SYUKRI',
   'SABAH': 'SABAH',
-  'IQZAT': 'IQZAT'
+  'IQZAT': 'IQZAT',
+  'oyeng': 'SHUKRI',
+  'OYENG': 'SHUKRI'
 };
 
 /**
