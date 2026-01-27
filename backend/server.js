@@ -28,6 +28,7 @@ const automationRoutes = require('./routes/automation');
 const bikRoutes = require('./routes/benefitsInKind');
 const retentionRoutes = require('./routes/admin/retention');
 const aaaliveRoutes = require('./routes/admin/aaalive-sync');  // AA Alive Driver Attendance Sync
+const orderopsWebhookRoutes = require('./routes/webhooks/orderops');  // OrderOps Webhook (real-time driver sync)
 const schedulesRoutes = require('./routes/schedules');
 const positionsRoutes = require('./routes/positions');
 // Shift swap disabled - employees must work assigned shifts only
@@ -91,6 +92,7 @@ app.use('/api/advances', advancesRoutes);  // Salary Advances
 app.use('/api/payroll/ai', payrollAIRoutes);  // AI Payroll Assistant
 app.use('/api/public-holidays', publicHolidaysRoutes);  // Public Holidays Management
 app.use('/api/ea-forms', eaFormsRoutes);  // EA Forms (Borang EA)
+app.use('/api/webhooks/orderops', orderopsWebhookRoutes);  // OrderOps Webhook (real-time driver sync)
 
 // Health check
 app.get('/api/health', (req, res) => {
