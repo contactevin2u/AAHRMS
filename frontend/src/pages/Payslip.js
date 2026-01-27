@@ -313,7 +313,8 @@ function Payslip() {
           </div>
 
           {/* Employer Contributions - only show if any contribution exists */}
-          {(payslip.employer_contributions.epf_employer > 0 ||
+          {payslip.employer_contributions && (
+            payslip.employer_contributions.epf_employer > 0 ||
             payslip.employer_contributions.socso_employer > 0 ||
             payslip.employer_contributions.eis_employer > 0) && (
             <div className="employer-section">

@@ -154,8 +154,6 @@ async function canAutoApproveClaim(claim, claimType, automationConfig) {
   }
 
   // Check amount against claim type limit
-  const amount = parseFloat(claim.amount);
-
   if (claimType.auto_approve_max_amount && amount > parseFloat(claimType.auto_approve_max_amount)) {
     return {
       canAutoApprove: false,

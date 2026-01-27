@@ -27,12 +27,20 @@ function Contributions() {
     setLoading(true);
     try {
       const res = await payrollV2Api.getRuns();
-      // Only show finalized runs
-      const finalizedRuns = res.data.filter(r => r.status === 'finalized');
-      setRuns(finalizedRuns);
-      if (finalizedRuns.length > 0 && !selectedRunId) {
-        setSelectedRunId(finalizedRuns[0].id);
-        fetchSummary(finalizedRuns[0].id);
+      // Show both draft and finalized runs (draft first, then finalized by date)
+      const allRuns = res.data.filter(r => r.status === 'draft' || r.status === 'finalized');
+      // Sort: drafts first, then by year/month descending
+      allRuns.sort((a, b) => {
+        if (a.status === 'draft' && b.status !== 'draft') return -1;
+        if (a.status !== 'draft' && b.status === 'draft') return 1;
+        // Same status: sort by year/month descending
+        if (a.year !== b.year) return b.year - a.year;
+        return b.month - a.month;
+      });
+      setRuns(allRuns);
+      if (allRuns.length > 0 && !selectedRunId) {
+        setSelectedRunId(allRuns[0].id);
+        fetchSummary(allRuns[0].id);
       }
     } catch (error) {
       console.error('Error fetching runs:', error);
@@ -146,23 +154,26 @@ function Contributions() {
           <div className="contributions-layout">
             {/* Runs List */}
             <div className="runs-panel">
-              <h3>Finalized Payroll Runs</h3>
+              <h3>Payroll Runs</h3>
               {loading ? (
                 <div className="loading">Loading...</div>
               ) : runs.length === 0 ? (
-                <div className="no-data">No finalized payroll runs</div>
+                <div className="no-data">No payroll runs found</div>
               ) : (
                 <div className="runs-list">
                   {runs.map(run => (
                     <div
                       key={run.id}
-                      className={`run-card ${selectedRunId === run.id ? 'selected' : ''}`}
+                      className={`run-card ${selectedRunId === run.id ? 'selected' : ''} ${run.status === 'draft' ? 'draft' : ''}`}
                       onClick={() => handleRunSelect(run.id)}
                     >
                       <div className="run-period">
                         {getMonthName(run.month)} {run.year}
                         {run.department_name && (
                           <span className="run-dept"> - {run.department_name}</span>
+                        )}
+                        {run.status === 'draft' && (
+                          <span className="draft-badge">DRAFT</span>
                         )}
                       </div>
                       <div className="run-meta">
@@ -182,6 +193,9 @@ function Contributions() {
                     <h2>
                       {getMonthName(summary.run.month)} {summary.run.year}
                       {summary.run.department_name && ` - ${summary.run.department_name}`}
+                      {summary.run.status === 'draft' && (
+                        <span className="draft-badge header-badge">DRAFT</span>
+                      )}
                     </h2>
                     <span className="employee-count">{summary.employee_count} employees</span>
                   </div>
@@ -384,6 +398,7 @@ function Contributions() {
                       <tr>
                         <th>Month</th>
                         <th>Department</th>
+                        <th>Status</th>
                         <th>Employees</th>
                         <th>EPF</th>
                         <th>SOCSO</th>
@@ -394,9 +409,16 @@ function Contributions() {
                     </thead>
                     <tbody>
                       {yearReport.monthly.map((row, idx) => (
-                        <tr key={idx}>
+                        <tr key={idx} className={row.status === 'draft' ? 'draft-row' : ''}>
                           <td>{getMonthName(row.month)}</td>
                           <td>{row.department_name || 'All'}</td>
+                          <td>
+                            {row.status === 'draft' ? (
+                              <span className="draft-badge">DRAFT</span>
+                            ) : (
+                              <span className="finalized-badge">Finalized</span>
+                            )}
+                          </td>
                           <td>{row.employee_count}</td>
                           <td>{formatAmount(row.epf_total)}</td>
                           <td>{formatAmount(row.socso_total)}</td>
