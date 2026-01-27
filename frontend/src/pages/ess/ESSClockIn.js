@@ -719,6 +719,24 @@ function ESSClockInContent() {
           </div>
         )}
 
+        {/* Requirements Checklist - Show what user needs to do */}
+        {status?.status !== 'completed' && (!capturedPhoto || !location) && (
+          <div className="requirements-checklist">
+            <p className="checklist-title">
+              {language === 'ms' ? 'Sila lengkapkan:' : 'Please complete:'}
+            </p>
+            <div className={`checklist-item ${capturedPhoto ? 'done' : 'pending'}`}>
+              <span className="checklist-icon">{capturedPhoto ? '✓' : '○'}</span>
+              <span>{language === 'ms' ? 'Ambil swafoto' : 'Take selfie'}</span>
+              {!capturedPhoto && <span className="checklist-arrow">↑</span>}
+            </div>
+            <div className={`checklist-item ${location ? 'done' : 'pending'}`}>
+              <span className="checklist-icon">{location ? '✓' : '○'}</span>
+              <span>{language === 'ms' ? 'Lokasi dikesan' : 'Location detected'}</span>
+            </div>
+          </div>
+        )}
+
         {/* Submit Button */}
         {status?.status !== 'completed' && (
           <button

@@ -243,27 +243,42 @@
 .start-camera-btn {
   width: 100%;
   padding: 40px;
-  background: white;
-  border: 2px dashed #cbd5e1;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border: 3px solid #3b82f6;
   border-radius: 16px;
-  font-size: 16px;
-  color: #64748b;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1d4ed8;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  transition: border-color 0.2s, background 0.2s;
+  gap: 12px;
+  transition: all 0.2s;
+  animation: camera-pulse 2s ease-in-out infinite;
+}
+
+@keyframes camera-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 20px 5px rgba(59, 130, 246, 0.3);
+  }
 }
 
 .start-camera-btn:hover:not(:disabled) {
-  border-color: #1976d2;
-  background: #f8fafc;
+  background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
+  border-color: #2563eb;
+  transform: scale(1.02);
 }
 
 .start-camera-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  animation: none;
 }
 
 .start-camera-btn span {
@@ -698,4 +713,81 @@
   color: #475569;
   font-size: 14px;
   line-height: 1.8;
+}
+
+/* Requirements Checklist */
+.requirements-checklist {
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  width: 100%;
+  max-width: 300px;
+  animation: pulse-border 2s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #f59e0b; }
+  50% { border-color: #d97706; }
+}
+
+.checklist-title {
+  margin: 0 0 12px 0;
+  font-weight: 700;
+  color: #92400e;
+  font-size: 15px;
+  text-align: center;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.checklist-item:last-child {
+  margin-bottom: 0;
+}
+
+.checklist-item.pending {
+  background: white;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.checklist-item.done {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.checklist-icon {
+  font-size: 18px;
+  font-weight: 700;
+  width: 24px;
+  text-align: center;
+}
+
+.checklist-item.pending .checklist-icon {
+  color: #f59e0b;
+}
+
+.checklist-item.done .checklist-icon {
+  color: #059669;
+}
+
+.checklist-arrow {
+  margin-left: auto;
+  font-size: 18px;
+  animation: bounce-up 1s ease-in-out infinite;
+}
+
+@keyframes bounce-up {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
 }
