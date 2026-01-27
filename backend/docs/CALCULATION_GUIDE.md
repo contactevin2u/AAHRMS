@@ -1,8 +1,18 @@
 # AA HRMS - Calculation Guide
 
-Last Updated: 27 January 2026
+**Version:** 1.0.0
+**Last Updated:** 27 January 2026
+**Auto-Generated Changelog:** See [Change History](#change-history) below
 
 This document explains how working hours, overtime (OT), and payroll calculations work for both **AA Alive** and **Mimix** companies.
+
+---
+
+## Change History
+
+| Version | Date | Changed By | Description |
+|---------|------|------------|-------------|
+| 1.0.0 | 27 Jan 2026 | System | Initial calculation guide created |
 
 ---
 
@@ -311,6 +321,29 @@ WHERE total_hours > 0
 | `fix-incorrect-hours.js` | Fix records with incorrect hours (>20 or negative) |
 | `sync-hours-minutes.js` | Sync total_hours and total_work_minutes |
 | `add-missing-schedules.js` | Create schedules for clock records without schedules |
+| `update-calculation-guide.js` | Update this guide's changelog when calculation logic changes |
+
+---
+
+## Updating This Guide
+
+When calculation logic is modified, update this guide's changelog:
+
+```bash
+# Check if any calculation files were changed
+node scripts/update-calculation-guide.js --check
+
+# Add changelog entry after making changes
+node scripts/update-calculation-guide.js "Fixed OT calculation for overnight shifts"
+```
+
+**Monitored Files** (changes to these require guide update):
+- `backend/utils/otCalculation.js` - OT calculation logic
+- `backend/utils/statutory.js` - EPF, SOCSO, EIS, PCB calculations
+- `backend/utils/finalSettlement.js` - Prorate and final settlement
+- `backend/routes/ess/clockin.js` - Clock-in/out flow and hours calculation
+- `backend/routes/payrollUnified.js` - Payroll processing
+- `backend/routes/payrollAI.js` - AI-assisted payroll features
 
 ---
 
