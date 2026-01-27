@@ -166,6 +166,32 @@
   color: #2563eb;
 }
 
+.status-badge.session_ended {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+/* Optional action hint */
+.optional-action-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f0f9ff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  width: 100%;
+  max-width: 300px;
+  font-size: 13px;
+  color: #0369a1;
+  text-align: left;
+}
+
+.no-schedule-info {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+}
+
 /* Timeline */
 .timeline {
   display: flex;

@@ -393,10 +393,15 @@ function ESSClockInContent() {
 
   // Get action button label
   const getActionLabel = () => {
+    const isAAAlive = status?.is_aa_alive;
     switch (status?.next_action) {
       case 'clock_in_1': return t('attendance.clockIn');
-      case 'clock_out_1': return t('attendance.startBreak');
-      case 'clock_in_2': return t('attendance.endBreak');
+      case 'clock_out_1':
+        // AA Alive: clock_out_1 is session end (clock out), not break
+        return isAAAlive ? t('attendance.clockOut') : t('attendance.startBreak');
+      case 'clock_in_2':
+        // AA Alive: clock_in_2 is optional new session, Mimix: return from break
+        return isAAAlive ? t('attendance.clockIn') : t('attendance.endBreak');
       case 'clock_out_2': return t('attendance.clockOut');
       default: return t('attendance.clockIn');
     }
@@ -409,6 +414,9 @@ function ESSClockInContent() {
       case 'not_started': return t('attendance.readyToStart');
       case 'working': return t('attendance.currentlyWorking');
       case 'on_break': return t('attendance.onBreak');
+      case 'session_ended':
+        // AA Alive: session ended, can optionally start new session
+        return t('attendance.sessionEnded') || 'Session ended';
       case 'completed': return t('attendance.completedToday');
       default: return '';
     }
@@ -482,17 +490,36 @@ function ESSClockInContent() {
               <span className="time-value">{status.record.clock_in_1 || '--:--'}</span>
             </div>
             <div className={`timeline-item ${status.record.clock_out_1 ? 'done' : ''}`}>
-              <span className="time-label">{t('attendance.break')}</span>
+              <span className="time-label">
+                {status.is_aa_alive ? t('attendance.clockOut') : t('attendance.break')}
+              </span>
               <span className="time-value">{status.record.clock_out_1 || '--:--'}</span>
             </div>
-            <div className={`timeline-item ${status.record.clock_in_2 ? 'done' : ''}`}>
-              <span className="time-label">{t('attendance.return')}</span>
-              <span className="time-value">{status.record.clock_in_2 || '--:--'}</span>
-            </div>
-            <div className={`timeline-item ${status.record.clock_out_2 ? 'done' : ''}`}>
-              <span className="time-label">{t('attendance.clockOut')}</span>
-              <span className="time-value">{status.record.clock_out_2 || '--:--'}</span>
-            </div>
+            {/* Show session 2 only for non-AA Alive companies, or if AA Alive has session 2 data */}
+            {(!status.is_aa_alive || status.record.clock_in_2 || status.record.clock_out_2) && (
+              <>
+                <div className={`timeline-item ${status.record.clock_in_2 ? 'done' : ''}`}>
+                  <span className="time-label">
+                    {status.is_aa_alive ? t('attendance.clockIn') + ' 2' : t('attendance.return')}
+                  </span>
+                  <span className="time-value">{status.record.clock_in_2 || '--:--'}</span>
+                </div>
+                <div className={`timeline-item ${status.record.clock_out_2 ? 'done' : ''}`}>
+                  <span className="time-label">
+                    {status.is_aa_alive ? t('attendance.clockOut') + ' 2' : t('attendance.clockOut')}
+                  </span>
+                  <span className="time-value">{status.record.clock_out_2 || '--:--'}</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Optional action hint for AA Alive after session ended */}
+        {status?.is_aa_alive && status?.next_action_optional && (
+          <div className="optional-action-hint">
+            <span>&#x2139;&#xFE0F;</span>
+            <span>{t('attendance.optionalNewSession') || 'New session is optional. You can clock in again if needed.'}</span>
           </div>
         )}
 
