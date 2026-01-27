@@ -561,7 +561,8 @@ function PayrollUnified() {
       bonus: item.bonus || 0, other_deductions: item.other_deductions || 0,
       deduction_remarks: item.deduction_remarks || '', notes: item.notes || '',
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
-      pcb_override: ''   // Empty means use calculated value, set value to override from MyTax
+      pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
+      claims_override: '' // Empty means use calculated value, set value to override claims amount
     });
     setShowItemModal(true);
     const statutoryBase = (parseFloat(item.basic_salary) || 0) + (parseFloat(item.commission_amount) || 0) +
@@ -647,6 +648,18 @@ function PayrollUnified() {
     }
   };
 
+  const handleDeleteItem = async (item) => {
+    if (!window.confirm(`Remove ${item.employee_name} from this payroll?\n\nThis employee will be available for selection in other payroll runs.`)) {
+      return;
+    }
+    try {
+      await payrollV2Api.deleteItem(item.id);
+      fetchRunDetails(selectedRun.id);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to remove employee');
+    }
+  };
+
   const handleViewPayslip = async (itemId) => {
     try {
       const res = await payrollV2Api.getItemPayslip(itemId);
@@ -664,25 +677,39 @@ function PayrollUnified() {
     const deductions = data.deductions || {};
     const employer = data.employer_contributions || {};
     const totals = data.totals || {};
+    const perkeso = (deductions.socso_employee || 0) + (deductions.eis_employee || 0);
     return `<!DOCTYPE html><html><head><title>Payslip - ${emp.name}</title>
-      <style>body{font-family:Arial;padding:40px;max-width:800px;margin:0 auto}.header{text-align:center;margin-bottom:30px;border-bottom:2px solid #1e293b;padding-bottom:20px}.header h1{color:#1e293b;margin:0}.employee-info{display:flex;justify-content:space-between;margin-bottom:30px}.info-block h3{margin:0 0 10px;color:#1e293b}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{padding:12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f1f5f9}.section-title{background:#1e293b;color:white}.total-row{font-weight:bold;background:#f5f5f5}.amount{text-align:right}@media print{body{padding:20px}}</style>
+      <style>body{font-family:Arial;padding:40px;max-width:800px;margin:0 auto}.header{text-align:center;margin-bottom:30px;border-bottom:2px solid #1e293b;padding-bottom:20px}.header h1{color:#1e293b;margin:0}.employee-info{display:flex;justify-content:space-between;margin-bottom:30px}.info-block h3{margin:0 0 10px;color:#1e293b}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{padding:12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f1f5f9}.section-title{background:#1e293b;color:white}.total-row{font-weight:bold;background:#f5f5f5}.amount{text-align:right}.employer-section{background:#f8fafc;border:1px solid #e2e8f0;padding:15px;margin-top:20px;border-radius:4px}@media print{body{padding:20px}}</style>
       </head><body><div class="header"><h1>${data.company?.name || 'Company'}</h1><p>PAYSLIP</p><p>For ${period.month_name || getMonthName(period.month)} ${period.year}</p></div>
-      <div class="employee-info"><div class="info-block"><h3>Employee</h3><p><strong>Name:</strong> ${emp.name}</p><p><strong>ID:</strong> ${emp.code}</p><p><strong>Dept:</strong> ${emp.department || '-'}</p></div>
+      <div class="employee-info"><div class="info-block"><h3>Employee</h3><p><strong>Name:</strong> ${emp.name}</p><p><strong>ID:</strong> ${emp.code}</p><p><strong>Dept:</strong> ${emp.department || emp.outlet_name || '-'}</p></div>
       <div class="info-block"><h3>Payment</h3><p><strong>Bank:</strong> ${emp.bank_name || '-'}</p><p><strong>Account:</strong> ${emp.bank_account_no || '-'}</p></div></div>
       <table><tr class="section-title"><td colspan="2">EARNINGS</td></tr>
       <tr><td>Basic Salary</td><td class="amount">RM ${formatNum(earnings.basic_salary)}</td></tr>
       ${earnings.fixed_allowance > 0 ? `<tr><td>Allowance</td><td class="amount">RM ${formatNum(earnings.fixed_allowance)}</td></tr>` : ''}
-      ${earnings.ot_amount > 0 ? `<tr><td>OT</td><td class="amount">RM ${formatNum(earnings.ot_amount)}</td></tr>` : ''}
+      ${earnings.ot_amount > 0 ? `<tr><td>OT (${earnings.ot_hours} hrs)</td><td class="amount">RM ${formatNum(earnings.ot_amount)}</td></tr>` : ''}
+      ${earnings.ph_pay > 0 ? `<tr><td>PH Pay (${earnings.ph_days_worked} days)</td><td class="amount">RM ${formatNum(earnings.ph_pay)}</td></tr>` : ''}
+      ${earnings.incentive_amount > 0 ? `<tr><td>Incentive</td><td class="amount">RM ${formatNum(earnings.incentive_amount)}</td></tr>` : ''}
       ${earnings.commission_amount > 0 ? `<tr><td>Commission</td><td class="amount">RM ${formatNum(earnings.commission_amount)}</td></tr>` : ''}
+      ${earnings.trade_commission_amount > 0 ? `<tr><td>Trade Commission</td><td class="amount">RM ${formatNum(earnings.trade_commission_amount)}</td></tr>` : ''}
+      ${earnings.outstation_amount > 0 ? `<tr><td>Outstation</td><td class="amount">RM ${formatNum(earnings.outstation_amount)}</td></tr>` : ''}
+      ${earnings.claims_amount > 0 ? `<tr><td>Claims</td><td class="amount">RM ${formatNum(earnings.claims_amount)}</td></tr>` : ''}
       ${earnings.bonus > 0 ? `<tr><td>Bonus</td><td class="amount">RM ${formatNum(earnings.bonus)}</td></tr>` : ''}
       <tr class="total-row"><td>GROSS PAY</td><td class="amount">RM ${formatNum(totals.gross_salary)}</td></tr></table>
       <table><tr class="section-title"><td colspan="2">DEDUCTIONS</td></tr>
-      <tr><td>EPF</td><td class="amount">RM ${formatNum(deductions.epf_employee)}</td></tr>
-      <tr><td>SOCSO</td><td class="amount">RM ${formatNum(deductions.socso_employee)}</td></tr>
-      <tr><td>EIS</td><td class="amount">RM ${formatNum(deductions.eis_employee)}</td></tr>
-      <tr><td>PCB</td><td class="amount">RM ${formatNum(deductions.pcb)}</td></tr>
+      ${deductions.unpaid_leave_deduction > 0 ? `<tr><td>Unpaid Leave (${deductions.unpaid_leave_days} days)</td><td class="amount">RM ${formatNum(deductions.unpaid_leave_deduction)}</td></tr>` : ''}
+      <tr><td>EPF (Employee)</td><td class="amount">RM ${formatNum(deductions.epf_employee)}</td></tr>
+      <tr><td>SOCSO (Employee)</td><td class="amount">RM ${formatNum(deductions.socso_employee)}</td></tr>
+      <tr><td>EIS (Employee)</td><td class="amount">RM ${formatNum(deductions.eis_employee)}</td></tr>
+      <tr><td style="padding-left:20px;font-style:italic;color:#666">→ PERKESO Total</td><td class="amount" style="color:#666">RM ${formatNum(perkeso)}</td></tr>
+      <tr><td>PCB (Tax)</td><td class="amount">RM ${formatNum(deductions.pcb)}</td></tr>
+      ${deductions.advance_deduction > 0 ? `<tr><td>Advance Deduction</td><td class="amount">RM ${formatNum(deductions.advance_deduction)}</td></tr>` : ''}
+      ${deductions.other_deductions > 0 ? `<tr><td>Other Deductions</td><td class="amount">RM ${formatNum(deductions.other_deductions)}</td></tr>` : ''}
       <tr class="total-row"><td>TOTAL DEDUCTIONS</td><td class="amount">RM ${formatNum(totals.total_deductions)}</td></tr></table>
       <table><tr style="background:#1e293b;color:white"><td><strong>NET PAY</strong></td><td class="amount" style="font-size:1.3em"><strong>RM ${formatNum(totals.net_pay)}</strong></td></tr></table>
+      <div class="employer-section"><h4 style="margin:0 0 10px;color:#1e293b">Employer Contributions (For Reference)</h4>
+      <table style="margin:0"><tr><td>EPF (Employer)</td><td class="amount">RM ${formatNum(employer.epf_employer)}</td></tr>
+      <tr><td>SOCSO (Employer)</td><td class="amount">RM ${formatNum(employer.socso_employer)}</td></tr>
+      <tr><td>EIS (Employer)</td><td class="amount">RM ${formatNum(employer.eis_employer)}</td></tr></table></div>
       <script>window.print();</script></body></html>`;
   };
 
@@ -1054,7 +1081,7 @@ function PayrollUnified() {
                     <table>
                       <thead>
                         <tr>
-                          <th>Employee</th><th>Basic</th><th>OT</th><th>Allow</th><th>Claims</th><th>Comm.</th>
+                          <th>Employee</th><th>Basic</th><th>OT</th><th>Allow</th><th>Bonus</th><th>Claims</th><th>Comm.</th>
                           <th>Gross</th><th>EPF</th><th>SOCSO</th><th>EIS</th><th>PCB</th><th>Adv</th><th>Net</th><th></th>
                         </tr>
                       </thead>
@@ -1065,6 +1092,7 @@ function PayrollUnified() {
                             <td>{formatAmount(item.basic_salary)}</td>
                             <td>{parseFloat(item.ot_hours) > 0 ? formatAmount(item.ot_amount) : '-'}</td>
                             <td>{parseFloat(item.fixed_allowance) > 0 ? formatAmount(item.fixed_allowance) : '-'}</td>
+                            <td>{parseFloat(item.bonus) > 0 ? formatAmount(item.bonus) : '-'}</td>
                             <td>{parseFloat(item.claims_amount) > 0 ? formatAmount(item.claims_amount) : '-'}</td>
                             <td>{(parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0) > 0 ? formatAmount((parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0)) : '-'}</td>
                             <td><strong>{formatAmount(item.gross_salary)}</strong></td>
@@ -1077,11 +1105,12 @@ function PayrollUnified() {
                             <td>
                               {selectedRun.status === 'draft' && (
                                 <>
-                                  <button onClick={() => handleRecalculateItem(item.id)} className="action-btn recalc">↻</button>
-                                  <button onClick={() => handleEditItem(item)} className="action-btn edit">✎</button>
+                                  <button onClick={() => handleRecalculateItem(item.id)} className="action-btn recalc" title="Recalculate">↻</button>
+                                  <button onClick={() => handleEditItem(item)} className="action-btn edit" title="Edit">✎</button>
+                                  <button onClick={() => handleDeleteItem(item)} className="action-btn delete" title="Remove from payroll">✕</button>
                                 </>
                               )}
-                              <button onClick={() => handleViewPayslip(item.id)} className="action-btn view">📄</button>
+                              <button onClick={() => handleViewPayslip(item.id)} className="action-btn view" title="View Payslip">📄</button>
                             </td>
                           </tr>
                         ))}
@@ -1304,7 +1333,17 @@ function PayrollUnified() {
                       />
                       <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated PCB. Enter value from MyTax to override.</small>
                     </div>
-                    <div className="form-group"></div>
+                    <div className="form-group">
+                      <label>Claims Override</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.claims_override}
+                        onChange={(e) => setItemForm({ ...itemForm, claims_override: e.target.value })}
+                        placeholder={`Current: ${editingItem?.claims_amount || '0.00'}`}
+                      />
+                      <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use approved claims. Enter value to override total claims.</small>
+                    </div>
                   </div>
                   <div className="form-group">
                     <label>Notes</label>

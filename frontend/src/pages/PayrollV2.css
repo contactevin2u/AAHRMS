@@ -490,6 +490,15 @@
   color: #666;
 }
 
+.action-btn.delete {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.action-btn.delete:hover {
+  background: #fecaca;
+}
+
 /* Table Footer */
 .items-table tfoot .totals-row {
   background: #fafafa;

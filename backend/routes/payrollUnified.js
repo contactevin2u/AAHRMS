@@ -1725,8 +1725,12 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const outstationAmount = parseFloat(updates.outstation_amount ?? item.outstation_amount) || 0;
     const bonus = parseFloat(updates.bonus ?? item.bonus) || 0;
     const otherDeductions = parseFloat(updates.other_deductions ?? item.other_deductions) || 0;
-    const claimsAmount = parseFloat(item.claims_amount) || 0;
     const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
+
+    // Claims: Allow manual override similar to EPF/PCB
+    const claimsAmount = updates.claims_override !== undefined && updates.claims_override !== null && updates.claims_override !== ''
+      ? parseFloat(updates.claims_override) || 0
+      : parseFloat(item.claims_amount) || 0;
 
     // Gross salary
     const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
@@ -1798,8 +1802,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
         eis_employee = $20, eis_employer = $21,
         pcb = $22,
         total_deductions = $23, net_pay = $24, employer_total_cost = $25,
-        notes = $26, updated_at = NOW()
-      WHERE id = $27
+        notes = $26, claims_amount = $27, updated_at = NOW()
+      WHERE id = $28
       RETURNING *
     `, [
       basicSalary, fixedAllowance,
@@ -1814,7 +1818,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       eisEmployee, eisEmployer,
       pcb,
       totalDeductions, netPay, employerCost,
-      updates.notes, id
+      updates.notes, claimsAmount, id
     ]);
 
     // Update run totals
@@ -1824,6 +1828,69 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error updating payroll item:', error);
     res.status(500).json({ error: 'Failed to update payroll item' });
+  }
+});
+
+/**
+ * DELETE /api/payroll/items/:id
+ * Remove an employee from a draft payroll run
+ * Employee will be available for selection in other payroll runs
+ */
+router.delete('/items/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Get item and verify ownership
+    const itemResult = await pool.query(`
+      SELECT pi.*, pr.status as run_status, pr.company_id, pr.id as run_id,
+             e.name as employee_name
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pi.id = $1
+    `, [id]);
+
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll item not found' });
+    }
+
+    const item = itemResult.rows[0];
+
+    // Verify company ownership
+    if (item.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied: payroll item belongs to another company' });
+    }
+
+    // Only allow deletion from draft payroll
+    if (item.run_status === 'finalized') {
+      return res.status(400).json({ error: 'Cannot remove employee from finalized payroll' });
+    }
+
+    // Delete the payroll item
+    await pool.query('DELETE FROM payroll_items WHERE id = $1', [id]);
+
+    // Update run totals
+    await updateRunTotals(item.run_id);
+
+    // Check if run is now empty
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM payroll_items WHERE payroll_run_id = $1',
+      [item.run_id]
+    );
+
+    res.json({
+      message: `${item.employee_name} removed from payroll`,
+      employee_id: item.employee_id,
+      run_id: item.run_id,
+      remaining_employees: parseInt(countResult.rows[0].count)
+    });
+  } catch (error) {
+    console.error('Error deleting payroll item:', error);
+    res.status(500).json({ error: 'Failed to remove employee from payroll' });
   }
 });
 
@@ -2603,7 +2670,8 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
     // Calculate totals
     const totals = {
       basic_salary: 0, fixed_allowance: 0, ot_amount: 0, ph_pay: 0,
-      commission_amount: 0, bonus: 0, gross_salary: 0,
+      commission_amount: 0, incentive_amount: 0, outstation_amount: 0, claims_amount: 0,
+      bonus: 0, gross_salary: 0,
       epf_employee: 0, socso_employee: 0, eis_employee: 0, pcb: 0,
       total_deductions: 0, net_pay: 0,
       epf_employer: 0, socso_employer: 0, eis_employer: 0, employer_total_cost: 0
@@ -2615,6 +2683,9 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
       totals.ot_amount += parseFloat(row.ot_amount) || 0;
       totals.ph_pay += parseFloat(row.ph_pay) || 0;
       totals.commission_amount += parseFloat(row.commission_amount) || 0;
+      totals.incentive_amount += parseFloat(row.incentive_amount) || 0;
+      totals.outstation_amount += parseFloat(row.outstation_amount) || 0;
+      totals.claims_amount += parseFloat(row.claims_amount) || 0;
       totals.bonus += parseFloat(row.bonus) || 0;
       totals.gross_salary += parseFloat(row.gross_salary) || 0;
       totals.epf_employee += parseFloat(row.epf_employee) || 0;
@@ -2650,14 +2721,16 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
     const headers = [
       'No', 'Emp Code', 'Name', 'IC Number', 'Dept/Outlet',
       'Basic', 'Allowance', 'OT Hrs', 'OT Amt', 'PH Pay',
-      'Commission', 'Bonus', 'Gross',
-      'EPF', 'SOCSO', 'EIS', 'PCB', 'Other Ded', 'Total Ded', 'Net Pay',
+      'Commission', 'Incentive', 'Outstation', 'Claims', 'Bonus', 'Gross',
+      'EE EPF', 'EE SOCSO', 'EE EIS', 'PERKESO', 'PCB', 'Other Ded', 'Total Ded', 'Net Pay',
+      'ER EPF', 'ER SOCSO', 'ER EIS', 'Employer Cost',
       'Bank', 'Account No'
     ];
 
     let csv = headers.join(',') + '\n';
 
     result.rows.forEach((row, idx) => {
+      const perkeso = (parseFloat(row.socso_employee) || 0) + (parseFloat(row.eis_employee) || 0);
       csv += [
         idx + 1,
         `"${row.emp_code || ''}"`,
@@ -2670,36 +2743,53 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
         parseFloat(row.ot_amount || 0).toFixed(2),
         parseFloat(row.ph_pay || 0).toFixed(2),
         parseFloat(row.commission_amount || 0).toFixed(2),
+        parseFloat(row.incentive_amount || 0).toFixed(2),
+        parseFloat(row.outstation_amount || 0).toFixed(2),
+        parseFloat(row.claims_amount || 0).toFixed(2),
         parseFloat(row.bonus || 0).toFixed(2),
         parseFloat(row.gross_salary || 0).toFixed(2),
         parseFloat(row.epf_employee || 0).toFixed(2),
         parseFloat(row.socso_employee || 0).toFixed(2),
         parseFloat(row.eis_employee || 0).toFixed(2),
+        perkeso.toFixed(2),
         parseFloat(row.pcb || 0).toFixed(2),
         parseFloat(row.other_deductions || 0).toFixed(2),
         parseFloat(row.total_deductions || 0).toFixed(2),
         parseFloat(row.net_pay || 0).toFixed(2),
+        parseFloat(row.epf_employer || 0).toFixed(2),
+        parseFloat(row.socso_employer || 0).toFixed(2),
+        parseFloat(row.eis_employer || 0).toFixed(2),
+        parseFloat(row.employer_total_cost || 0).toFixed(2),
         `"${row.bank_name || ''}"`,
         `"${row.bank_account_no || ''}"`
       ].join(',') + '\n';
     });
 
     // Add totals row
+    const totalPerkeso = totals.socso_employee + totals.eis_employee;
     csv += [
       '', '', 'TOTAL', '', '',
       totals.basic_salary.toFixed(2),
       totals.fixed_allowance.toFixed(2),
       '', totals.ot_amount.toFixed(2), totals.ph_pay.toFixed(2),
       totals.commission_amount.toFixed(2),
+      totals.incentive_amount.toFixed(2),
+      totals.outstation_amount.toFixed(2),
+      totals.claims_amount.toFixed(2),
       totals.bonus.toFixed(2),
       totals.gross_salary.toFixed(2),
       totals.epf_employee.toFixed(2),
       totals.socso_employee.toFixed(2),
       totals.eis_employee.toFixed(2),
+      totalPerkeso.toFixed(2),
       totals.pcb.toFixed(2),
       '',
       totals.total_deductions.toFixed(2),
       totals.net_pay.toFixed(2),
+      totals.epf_employer.toFixed(2),
+      totals.socso_employer.toFixed(2),
+      totals.eis_employer.toFixed(2),
+      totals.employer_total_cost.toFixed(2),
       '', ''
     ].join(',') + '\n';
 
