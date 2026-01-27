@@ -280,7 +280,7 @@ async function processClaimAutoApproval(claimId) {
 
     const automationConfig = configResult.rows[0] || {
       claims_auto_approve: false,
-      claims_auto_approve_max_amount: 100,
+      claims_auto_approve_max_amount: 999999,  // No practical limit - auto-approve if amount matches
       claims_require_receipt_above: 50
     };
 

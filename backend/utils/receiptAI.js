@@ -461,14 +461,7 @@ async function verifyReceipt(imageData, claimedAmount, companyId, excludeClaimId
       return result;
     }
 
-    // Step 7: Check auto-approve limit (RM 100)
-    if (claimAmount > 100) {
-      result.requiresManualApproval = true;
-      result.warnings.push('Claim amount exceeds RM 100. Manual approval required.');
-      return result;
-    }
-
-    // All checks passed - can auto-approve
+    // All checks passed - can auto-approve (amount matches or is less than receipt)
     result.canAutoApprove = true;
     result.requiresManualApproval = false;
 
