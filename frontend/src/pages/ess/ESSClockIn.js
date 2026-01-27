@@ -636,6 +636,18 @@ function ESSClockInContent() {
           </div>
         )}
 
+        {/* AA Alive info note - no break tracking */}
+        {status?.is_aa_alive && (
+          <div className="aa-alive-note">
+            <span>&#x1F4DD;</span>
+            <span>
+              {language === 'ms'
+                ? 'Tiada perlu clock untuk rehat. Clock In dan Clock Out sahaja. Clock In 2 / Clock Out 2 adalah untuk sesi kedua (pilihan).'
+                : 'No need to clock for break. Clock In and Clock Out only. Clock In 2 / Clock Out 2 is for second session (optional).'}
+            </span>
+          </div>
+        )}
+
         {/* Optional action hint for AA Alive after session ended */}
         {status?.is_aa_alive && status?.next_action_optional && (
           <div className="optional-action-hint">

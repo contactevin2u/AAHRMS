@@ -171,6 +171,27 @@
   font-size: 18px;
 }
 
+/* AA Alive info note */
+.aa-alive-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #fefce8;
+  border: 1px solid #fef08a;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  width: 100%;
+  font-size: 13px;
+  color: #854d0e;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.aa-alive-note span:first-child {
+  flex-shrink: 0;
+}
+
 /* Clock In Instructions */
 .clockin-instructions {
   background: #f0f9ff;
