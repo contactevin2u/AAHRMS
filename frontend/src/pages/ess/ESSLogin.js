@@ -229,8 +229,7 @@ function ESSLogin() {
               <p><strong>{language === 'ms' ? 'Sila pastikan:' : 'Please make sure:'}</strong></p>
               <ul>
                 <li>{language === 'ms' ? 'Nama pengguna betul' : 'Username is correct'}</li>
-                <li>{language === 'ms' ? 'Kata laluan betul' : 'Password is correct'}</li>
-                <li>{language === 'ms' ? 'Huruf besar/kecil tepat' : 'Caps lock is off'}</li>
+                <li>{language === 'ms' ? 'Kata laluan betul (huruf besar/kecil penting)' : 'Password is correct (case-sensitive)'}</li>
               </ul>
             </div>
             <button className="error-popup-btn" onClick={() => setShowErrorPopup(false)}>
