@@ -64,9 +64,11 @@ router.post('/login', asyncHandler(async (req, res) => {
             e.department_id, e.company_id, e.outlet_id, e.must_change_password,
             e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
-            c.grouping_type as company_grouping_type, c.settings as company_settings
+            c.grouping_type as company_grouping_type, c.settings as company_settings,
+            d.name as department_name
      FROM employees e
      LEFT JOIN companies c ON e.company_id = c.id
+     LEFT JOIN departments d ON e.department_id = d.id
      WHERE (LOWER(e.email) = LOWER($1) OR LOWER(e.employee_id) = LOWER($1) OR LOWER(e.username) = LOWER($1)) AND e.status = 'active'`,
     [login]
   );
@@ -146,6 +148,8 @@ router.post('/login', asyncHandler(async (req, res) => {
       company_logo: employee.company_logo,
       company_grouping_type: employee.company_grouping_type,
       outlet_id: employee.outlet_id,
+      department_id: employee.department_id,
+      department_name: employee.department_name,
       employee_role: employee.employee_role || 'staff',
       position: employee.position,
       clock_in_required: employee.clock_in_required,
