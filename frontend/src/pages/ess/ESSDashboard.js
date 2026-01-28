@@ -68,8 +68,9 @@ function ESSDashboard() {
         }
       }
 
-      // Fetch pending OT approvals
-      if (canApproveOT(info)) {
+      // Fetch pending OT approvals (Mimix only - AA Alive doesn't use OT approval in ESS)
+      const isAAAliveCompany = info.company_grouping_type === 'department' || info.company_id === 1;
+      if (canApproveOT(info) && !isAAAliveCompany) {
         try {
           const otRes = await essApi.getPendingOT();
           approvals.ot = otRes.data?.length || 0;

@@ -49,7 +49,13 @@ function ESSAttendanceContent() {
   const showTeamTab = canViewTeamAttendance(employeeInfo);
   const canApprove = canApproveOT(employeeInfo);
 
-  const [activeTab, setActiveTab] = useState('clockin');
+  // Get employee info to determine default tab
+  const empInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
+  const isDriverCheck = empInfo.department?.toLowerCase() === 'driver' || empInfo.department_name?.toLowerCase() === 'driver';
+  const isAAAliveCheck = empInfo.company_grouping_type === 'department' || empInfo.company_id === 1;
+  const defaultTab = (isAAAliveCheck && isDriverCheck && !empInfo.clock_in_required) ? 'history' : 'clockin';
+
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -102,6 +108,10 @@ function ESSAttendanceContent() {
   // Check if feature is enabled (Mimix via features.clockIn OR AA Alive via clock_in_required OR driver)
   const isDriver = employeeInfo.department?.toLowerCase() === 'driver' || employeeInfo.department_name?.toLowerCase() === 'driver';
   const hasClockInAccess = employeeInfo.features?.clockIn || employeeInfo.clock_in_required || isDriver;
+
+  // AA Alive drivers: can view history but cannot clock in (they sync from OrderOps)
+  const isAAAlive = employeeInfo.company_grouping_type === 'department' || employeeInfo.company_id === 1;
+  const isAAAliveDriverOnly = isAAAlive && isDriver && !employeeInfo.clock_in_required;
 
   useEffect(() => {
     if (!hasClockInAccess) {
@@ -559,12 +569,15 @@ function ESSAttendanceContent() {
 
         {/* Tab Navigation */}
         <div className="ess-tabs">
-          <button
-            className={`tab-btn ${activeTab === 'clockin' ? 'active' : ''}`}
-            onClick={() => setActiveTab('clockin')}
-          >
-            {t('attendance.clockIn')}
-          </button>
+          {/* Hide Clock In tab for AA Alive drivers who don't need to clock in */}
+          {!isAAAliveDriverOnly && (
+            <button
+              className={`tab-btn ${activeTab === 'clockin' ? 'active' : ''}`}
+              onClick={() => setActiveTab('clockin')}
+            >
+              {t('attendance.clockIn')}
+            </button>
+          )}
           <button
             className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
             onClick={() => setActiveTab('history')}
@@ -584,8 +597,8 @@ function ESSAttendanceContent() {
           )}
         </div>
 
-        {/* Clock In Tab */}
-        {activeTab === 'clockin' && (
+        {/* Clock In Tab - Hidden for AA Alive drivers who don't clock in */}
+        {activeTab === 'clockin' && !isAAAliveDriverOnly && (
           <div className="clockin-section">
             {/* Offline Warning */}
             {!isOnline && (
