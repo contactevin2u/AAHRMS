@@ -234,7 +234,7 @@ function ESSDashboard() {
 
         {/* Quick Actions - Links to main pages only */}
         <div className="quick-actions">
-          {(features.clockIn || employeeInfo?.clock_in_required) && (
+          {(features.clockIn || employeeInfo?.clock_in_required || employeeInfo?.department?.toLowerCase() === 'driver' || employeeInfo?.department_name?.toLowerCase() === 'driver') && (
             <Link to="/ess/attendance" className="action-card clock-in">
               <span className="action-icon">&#x23F0;</span>
               <span className="action-label">{t('dashboard.quickActions.attendance')}</span>
@@ -291,7 +291,7 @@ function ESSDashboard() {
                 </div>
               </div>
             )}
-            {(features.clockIn || employeeInfo?.clock_in_required) && dashboardData?.attendance && (
+            {(features.clockIn || employeeInfo?.clock_in_required || employeeInfo?.department?.toLowerCase() === 'driver' || employeeInfo?.department_name?.toLowerCase() === 'driver') && dashboardData?.attendance && (
               <div className="stat-card">
                 <div className="stat-icon">&#x2705;</div>
                 <div className="stat-content">

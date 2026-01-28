@@ -73,11 +73,14 @@ function ESSLayout({ children }) {
 
   // Check if employee needs clock-in/attendance feature
   // Mimix: always enabled
-  // AA Alive: only if clock_in_required = true (handle boolean, string, or number)
+  // AA Alive: if clock_in_required = true OR if employee is a driver
   const clockInRequired = employeeInfo?.clock_in_required === true ||
                           employeeInfo?.clock_in_required === 'true' ||
                           employeeInfo?.clock_in_required === 1;
-  const showAttendance = isMimix || clockInRequired;
+  // Drivers can always see attendance page (even without clock_in_required)
+  const isDriver = employeeInfo?.department?.toLowerCase() === 'driver' ||
+                   employeeInfo?.department_name?.toLowerCase() === 'driver';
+  const showAttendance = isMimix || clockInRequired || isDriver;
 
   // Check if employee should see schedule/calendar
   // Mimix: always enabled

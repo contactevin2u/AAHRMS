@@ -11,6 +11,7 @@ const pool = require('../../db');
 const { asyncHandler, ValidationError } = require('../../middleware/errorHandler');
 const {
   isSupervisorOrManager,
+  isBossOrDirector,
   getManagedOutlets,
   isMimixCompany,
   canApproveForOutlet,
@@ -40,18 +41,25 @@ const authenticateEmployee = async (req, res, next) => {
 };
 
 /**
+ * Check if employee can approve OT (supervisor, manager, boss, or director)
+ */
+const canApproveOT = (employee) => {
+  return isSupervisorOrManager(employee) || isBossOrDirector(employee);
+};
+
+/**
  * GET /api/ess/ot-approvals/pending
  * Get all pending OT records for supervisor's outlets with enhanced filtering
  */
 router.get('/pending', authenticateEmployee, asyncHandler(async (req, res) => {
-  // Check if user is supervisor or manager
-  if (!isSupervisorOrManager(req.employee)) {
-    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  // Check if user is supervisor, manager, boss, or director
+  if (!canApproveOT(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor, Manager, or Director role required.' });
   }
 
-  // Get employee's full info
+  // Get employee's full info including position
   const empResult = await pool.query(
-    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    'SELECT employee_role, company_id, outlet_id, position FROM employees WHERE id = $1',
     [req.employee.id]
   );
   const employee = { ...req.employee, ...empResult.rows[0] };
@@ -60,7 +68,17 @@ router.get('/pending', authenticateEmployee, asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'OT approval is only available for outlet-based companies.' });
   }
 
-  const outletIds = await getManagedOutlets(employee);
+  // Boss/Director can see ALL outlets in the company
+  let outletIds;
+  if (isBossOrDirector(employee)) {
+    const allOutletsResult = await pool.query(
+      'SELECT id FROM outlets WHERE company_id = $1',
+      [employee.company_id]
+    );
+    outletIds = allOutletsResult.rows.map(r => r.id);
+  } else {
+    outletIds = await getManagedOutlets(employee);
+  }
 
   if (outletIds.length === 0) {
     return res.json({ records: [], summary: { total: 0, total_hours: 0 } });
@@ -184,14 +202,14 @@ router.post('/batch', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError('reason is required when rejecting OT');
   }
 
-  // Check if user is supervisor or manager
-  if (!isSupervisorOrManager(req.employee)) {
-    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  // Check if user is supervisor, manager, boss, or director
+  if (!canApproveOT(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor, Manager, or Director role required.' });
   }
 
-  // Get employee's full info
+  // Get employee's full info including position
   const empResult = await pool.query(
-    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    'SELECT employee_role, company_id, outlet_id, position FROM employees WHERE id = $1',
     [req.employee.id]
   );
   const approver = { ...req.employee, ...empResult.rows[0] };
@@ -200,7 +218,17 @@ router.post('/batch', authenticateEmployee, asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'Batch OT approval is only available for outlet-based companies.' });
   }
 
-  const outletIds = await getManagedOutlets(approver);
+  // Boss/Director can approve for ALL outlets
+  let outletIds;
+  if (isBossOrDirector(approver)) {
+    const allOutletsResult = await pool.query(
+      'SELECT id FROM outlets WHERE company_id = $1',
+      [approver.company_id]
+    );
+    outletIds = allOutletsResult.rows.map(r => r.id);
+  } else {
+    outletIds = await getManagedOutlets(approver);
+  }
 
   // Get all records to process
   const recordsResult = await pool.query(`
@@ -235,7 +263,8 @@ router.post('/batch', authenticateEmployee, asyncHandler(async (req, res) => {
       }
 
       // Check if approver can approve for this outlet
-      const canApprove = await canApproveForOutlet(approver, record.employee_outlet_id);
+      // Boss/Director can approve for any outlet
+      const canApprove = isBossOrDirector(approver) || await canApproveForOutlet(approver, record.employee_outlet_id);
       if (!canApprove) {
         results.skipped.push({ id: record.id, reason: 'No permission for this outlet' });
         continue;
@@ -306,12 +335,12 @@ router.post('/batch', authenticateEmployee, asyncHandler(async (req, res) => {
  * Get OT approval summary for the current period
  */
 router.get('/summary', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
-    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  if (!canApproveOT(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor, Manager, or Director role required.' });
   }
 
   const empResult = await pool.query(
-    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    'SELECT employee_role, company_id, outlet_id, position FROM employees WHERE id = $1',
     [req.employee.id]
   );
   const employee = { ...req.employee, ...empResult.rows[0] };
@@ -325,7 +354,17 @@ router.get('/summary', authenticateEmployee, asyncHandler(async (req, res) => {
     });
   }
 
-  const outletIds = await getManagedOutlets(employee);
+  // Boss/Director can see ALL outlets
+  let outletIds;
+  if (isBossOrDirector(employee)) {
+    const allOutletsResult = await pool.query(
+      'SELECT id FROM outlets WHERE company_id = $1',
+      [employee.company_id]
+    );
+    outletIds = allOutletsResult.rows.map(r => r.id);
+  } else {
+    outletIds = await getManagedOutlets(employee);
+  }
 
   if (outletIds.length === 0) {
     return res.json({

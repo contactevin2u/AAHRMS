@@ -10,7 +10,8 @@ const ROLES = {
   STAFF: 'staff',
   SUPERVISOR: 'supervisor',
   MANAGER: 'manager',
-  DIRECTOR: 'director'
+  DIRECTOR: 'director',
+  BOSS: 'boss'
 };
 
 // Company IDs
@@ -178,6 +179,32 @@ const canApproveForOutlet = async (employee, outletId) => {
  */
 const isSupervisorOrManager = (employee) => {
   return [ROLES.SUPERVISOR, ROLES.MANAGER].includes(employee.employee_role);
+};
+
+/**
+ * Check if employee is boss or director level (highest approval authority)
+ * Boss/Director can approve at any level
+ */
+const isBossOrDirector = (employee) => {
+  const role = (employee.employee_role || '').toLowerCase();
+  const position = (employee.position || '').toLowerCase();
+  return role === 'boss' || role === 'director' ||
+         position.includes('boss') || position.includes('director') ||
+         position.includes('owner');
+};
+
+/**
+ * Check if employee can approve claims for Mimix
+ * For Mimix: Only boss/director can approve claims (not supervisor/manager)
+ * For other companies: supervisor/manager can approve
+ */
+const canApproveClaimsForMimix = (employee) => {
+  if (!isMimixCompany(employee.company_id)) {
+    // Non-Mimix: supervisor/manager can approve
+    return isSupervisorOrManager(employee);
+  }
+  // Mimix: Only boss/director can approve claims
+  return isBossOrDirector(employee);
 };
 
 /**
@@ -376,6 +403,8 @@ module.exports = {
   canApproveBasedOnHierarchy,
   getHierarchyLevel,
   isSupervisorOrManager,
+  isBossOrDirector,
+  canApproveClaimsForMimix,
   canViewTeam,
   isMimixCompany,
   isAAAliveCompany,

@@ -9,7 +9,7 @@ const pool = require('../../db');
 const { authenticateEmployee } = require('../../middleware/auth');
 const { asyncHandler, ValidationError } = require('../../middleware/errorHandler');
 const { uploadClaim } = require('../../utils/cloudinaryStorage');
-const { isSupervisorOrManager, canApproveForEmployee } = require('../../middleware/essPermissions');
+const { isSupervisorOrManager, canApproveForEmployee, canApproveClaimsForMimix, isMimixCompany, isBossOrDirector } = require('../../middleware/essPermissions');
 const { verifyReceipt, generateReceiptHash, extractReceiptData } = require('../../utils/receiptAI');
 const { getEmployeeMealAllowance } = require('../../utils/claimsAutomation');
 
@@ -259,15 +259,31 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
 router.get('/team-pending', authenticateEmployee, asyncHandler(async (req, res) => {
   const employee = req.employee;
 
-  // Check if supervisor/manager
-  if (!isSupervisorOrManager(employee)) {
+  // For Mimix: Only boss/director can view/approve claims
+  // For other companies: supervisor/manager can view/approve
+  if (!canApproveClaimsForMimix(employee)) {
     return res.status(403).json({ error: 'Not authorized to view team claims' });
   }
 
   let query;
   let params;
 
-  if (employee.employee_role === 'supervisor') {
+  // For Mimix boss/director: See ALL pending claims from the company
+  if (isMimixCompany(employee.company_id) && isBossOrDirector(employee)) {
+    query = `
+      SELECT c.*, e.name as employee_name, e.employee_id as emp_code,
+             o.name as outlet_name, d.name as department_name
+      FROM claims c
+      JOIN employees e ON c.employee_id = e.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE c.status = 'pending'
+        AND e.id != $1
+        AND e.company_id = $2
+      ORDER BY c.created_at DESC
+    `;
+    params = [employee.id, employee.company_id];
+  } else if (employee.employee_role === 'supervisor') {
     // Supervisor: See claims from employees in same outlet
     query = `
       SELECT c.*, e.name as employee_name, e.employee_id as emp_code,
@@ -321,14 +337,15 @@ router.get('/team-pending', authenticateEmployee, asyncHandler(async (req, res) 
   res.json(result.rows);
 }));
 
-// Approve a claim (supervisor/manager)
+// Approve a claim (supervisor/manager, or boss/director for Mimix)
 router.post('/:id/supervisor-approve', authenticateEmployee, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { remarks } = req.body;
   const employee = req.employee;
 
-  // Check if supervisor/manager
-  if (!isSupervisorOrManager(employee)) {
+  // For Mimix: Only boss/director can approve claims
+  // For other companies: supervisor/manager can approve
+  if (!canApproveClaimsForMimix(employee)) {
     return res.status(403).json({ error: 'Not authorized to approve claims' });
   }
 
@@ -352,12 +369,20 @@ router.post('/:id/supervisor-approve', authenticateEmployee, asyncHandler(async 
     return res.status(400).json({ error: 'Claim is not pending' });
   }
 
-  // Verify supervisor can approve this employee's claim
-  const canApprove = await canApproveForEmployee(employee, {
-    outlet_id: claim.outlet_id,
-    department_id: claim.department_id,
-    company_id: claim.company_id
-  });
+  // For Mimix boss/director: Can approve any claim in the company
+  // For others: Check outlet/department scope
+  let canApprove = false;
+  if (isMimixCompany(employee.company_id) && isBossOrDirector(employee)) {
+    // Boss/director can approve any claim in Mimix
+    canApprove = claim.company_id === employee.company_id;
+  } else {
+    // Supervisor/manager: Check outlet/department scope
+    canApprove = await canApproveForEmployee(employee, {
+      outlet_id: claim.outlet_id,
+      department_id: claim.department_id,
+      company_id: claim.company_id
+    });
+  }
 
   if (!canApprove) {
     return res.status(403).json({ error: 'Not authorized to approve this claim' });
@@ -383,7 +408,7 @@ router.post('/:id/supervisor-approve', authenticateEmployee, asyncHandler(async 
   });
 }));
 
-// Reject a claim (supervisor/manager)
+// Reject a claim (supervisor/manager, or boss/director for Mimix)
 router.post('/:id/supervisor-reject', authenticateEmployee, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { remarks } = req.body;
@@ -393,8 +418,9 @@ router.post('/:id/supervisor-reject', authenticateEmployee, asyncHandler(async (
     throw new ValidationError('Rejection reason is required');
   }
 
-  // Check if supervisor/manager
-  if (!isSupervisorOrManager(employee)) {
+  // For Mimix: Only boss/director can reject claims
+  // For other companies: supervisor/manager can reject
+  if (!canApproveClaimsForMimix(employee)) {
     return res.status(403).json({ error: 'Not authorized to reject claims' });
   }
 
@@ -418,14 +444,22 @@ router.post('/:id/supervisor-reject', authenticateEmployee, asyncHandler(async (
     return res.status(400).json({ error: 'Claim is not pending' });
   }
 
-  // Verify supervisor can approve this employee's claim
-  const canApprove = await canApproveForEmployee(employee, {
-    outlet_id: claim.outlet_id,
-    department_id: claim.department_id,
-    company_id: claim.company_id
-  });
+  // For Mimix boss/director: Can reject any claim in the company
+  // For others: Check outlet/department scope
+  let canReject = false;
+  if (isMimixCompany(employee.company_id) && isBossOrDirector(employee)) {
+    // Boss/director can reject any claim in Mimix
+    canReject = claim.company_id === employee.company_id;
+  } else {
+    // Supervisor/manager: Check outlet/department scope
+    canReject = await canApproveForEmployee(employee, {
+      outlet_id: claim.outlet_id,
+      department_id: claim.department_id,
+      company_id: claim.company_id
+    });
+  }
 
-  if (!canApprove) {
+  if (!canReject) {
     return res.status(403).json({ error: 'Not authorized to reject this claim' });
   }
 

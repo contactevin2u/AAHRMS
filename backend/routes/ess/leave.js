@@ -14,6 +14,7 @@ const { authenticateEmployee } = require('../../middleware/auth');
 const { asyncHandler, ValidationError } = require('../../middleware/errorHandler');
 const {
   isSupervisorOrManager,
+  isBossOrDirector,
   getManagedOutlets,
   getInitialApprovalLevel,
   isMimixCompany,
@@ -582,23 +583,31 @@ router.post('/:id/revert', authenticateEmployee, asyncHandler(async (req, res) =
 }));
 
 // =====================================================
-// SUPERVISOR/MANAGER APPROVAL ENDPOINTS (Mimix only)
+// SUPERVISOR/MANAGER/BOSS/DIRECTOR APPROVAL ENDPOINTS (Mimix only)
 // =====================================================
+
+/**
+ * Check if employee can approve leave (supervisor, manager, boss, or director)
+ */
+const canApproveLeave = (employee) => {
+  return isSupervisorOrManager(employee) || isBossOrDirector(employee);
+};
 
 /**
  * Get pending leave requests for supervisor/manager's team
  * Supervisors see their outlet's staff
  * Managers see all outlets they manage
+ * Boss/Director sees all pending leave requests
  */
 router.get('/team-pending', authenticateEmployee, asyncHandler(async (req, res) => {
-  // Check if user is supervisor or manager
-  if (!isSupervisorOrManager(req.employee)) {
-    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  // Check if user is supervisor, manager, boss, or director
+  if (!canApproveLeave(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor, Manager, or Director role required.' });
   }
 
-  // Get employee's full info including role
+  // Get employee's full info including role and position
   const empResult = await pool.query(
-    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    'SELECT employee_role, company_id, outlet_id, position FROM employees WHERE id = $1',
     [req.employee.id]
   );
   const employee = { ...req.employee, ...empResult.rows[0] };
@@ -608,55 +617,91 @@ router.get('/team-pending', authenticateEmployee, asyncHandler(async (req, res) 
     return res.status(403).json({ error: 'Team leave approval is only available for outlet-based companies.' });
   }
 
-  // Get outlets this supervisor/manager can approve for
-  const outletIds = await getManagedOutlets(employee);
+  // Boss/Director can see ALL outlets
+  let outletIds;
+  if (isBossOrDirector(employee)) {
+    const allOutletsResult = await pool.query(
+      'SELECT id FROM outlets WHERE company_id = $1',
+      [employee.company_id]
+    );
+    outletIds = allOutletsResult.rows.map(r => r.id);
+  } else {
+    outletIds = await getManagedOutlets(employee);
+  }
 
   if (outletIds.length === 0) {
     return res.json([]);
   }
 
   // Get pending leave requests from employees in managed outlets
-  // approval_level=1 means waiting for supervisor, approval_level=2 means waiting for manager
-  const result = await pool.query(
-    `SELECT lr.*,
-            lt.code,
-            lt.name as leave_type_name,
-            lt.requires_attachment,
-            e.name as employee_name,
-            e.employee_id as emp_code,
-            e.outlet_id,
-            o.name as outlet_name
-     FROM leave_requests lr
-     JOIN leave_types lt ON lr.leave_type_id = lt.id
-     JOIN employees e ON lr.employee_id = e.id
-     LEFT JOIN outlets o ON e.outlet_id = o.id
-     WHERE e.outlet_id = ANY($1)
-       AND lr.status = 'pending'
-       AND (
-         (lr.approval_level = 1 AND $2 = 'supervisor')
-         OR (lr.approval_level = 2 AND $2 = 'manager')
-       )
-     ORDER BY lr.created_at ASC`,
-    [outletIds, employee.employee_role]
-  );
+  // Boss/Director can see ALL pending leave at any approval level
+  // Supervisor sees approval_level=1, Manager sees approval_level=2
+  let result;
+  if (isBossOrDirector(employee)) {
+    // Boss/Director sees all pending leave requests
+    result = await pool.query(
+      `SELECT lr.*,
+              lt.code,
+              lt.name as leave_type_name,
+              lt.requires_attachment,
+              e.name as employee_name,
+              e.employee_id as emp_code,
+              e.outlet_id,
+              e.employee_role,
+              o.name as outlet_name
+       FROM leave_requests lr
+       JOIN leave_types lt ON lr.leave_type_id = lt.id
+       JOIN employees e ON lr.employee_id = e.id
+       LEFT JOIN outlets o ON e.outlet_id = o.id
+       WHERE e.outlet_id = ANY($1)
+         AND lr.status = 'pending'
+       ORDER BY lr.created_at ASC`,
+      [outletIds]
+    );
+  } else {
+    // Supervisor/Manager sees based on approval level
+    result = await pool.query(
+      `SELECT lr.*,
+              lt.code,
+              lt.name as leave_type_name,
+              lt.requires_attachment,
+              e.name as employee_name,
+              e.employee_id as emp_code,
+              e.outlet_id,
+              e.employee_role,
+              o.name as outlet_name
+       FROM leave_requests lr
+       JOIN leave_types lt ON lr.leave_type_id = lt.id
+       JOIN employees e ON lr.employee_id = e.id
+       LEFT JOIN outlets o ON e.outlet_id = o.id
+       WHERE e.outlet_id = ANY($1)
+         AND lr.status = 'pending'
+         AND (
+           (lr.approval_level = 1 AND $2 = 'supervisor')
+           OR (lr.approval_level = 2 AND $2 = 'manager')
+         )
+       ORDER BY lr.created_at ASC`,
+      [outletIds, employee.employee_role]
+    );
+  }
 
   res.json(result.rows);
 }));
 
 /**
- * Approve leave request (supervisor/manager)
+ * Approve leave request (supervisor/manager/boss/director)
  */
 router.post('/:id/approve', authenticateEmployee, asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  // Check if user is supervisor or manager
-  if (!isSupervisorOrManager(req.employee)) {
-    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  // Check if user is supervisor, manager, boss, or director
+  if (!canApproveLeave(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor, Manager, or Director role required.' });
   }
 
-  // Get employee's full info
+  // Get employee's full info including position
   const empResult = await pool.query(
-    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    'SELECT employee_role, company_id, outlet_id, position FROM employees WHERE id = $1',
     [req.employee.id]
   );
   const approver = { ...req.employee, ...empResult.rows[0] };
