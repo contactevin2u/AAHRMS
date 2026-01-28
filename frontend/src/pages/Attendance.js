@@ -850,10 +850,13 @@ const Attendance = () => {
                       </td>
                       <td><strong>{formatDate(record.work_date)}</strong></td>
                       <td>
-                        <div className="employee-info">
-                          <span className="emp-name">{record.employee_name}</span>
-                          <span className="emp-code">{record.emp_code}</span>
-                        </div>
+                        <span
+                          className="emp-id-link"
+                          title={record.employee_name}
+                          onClick={() => alert(record.employee_name)}
+                        >
+                          {record.emp_code}
+                        </span>
                       </td>
                       {!isSupervisor && <td>{isAAAlive ? (record.department_name || '-') : (record.outlet_name || '-')}</td>}
                       <td className="time-cell">
@@ -1129,7 +1132,7 @@ const Attendance = () => {
               </div>
 
               <div className="gps-locations-list">
-                {gpsModal.location_in_1 && (
+                {(gpsModal.location_in_1 || gpsModal.address_in_1) && (
                   <div className="gps-location-item">
                     <div className="gps-location-header">
                       <span className="gps-label">Clock In 1 (Start Work)</span>
@@ -1140,22 +1143,26 @@ const Attendance = () => {
                         <span className="address-text">{gpsModal.address_in_1}</span>
                       </div>
                     )}
-                    <div className="gps-coords">
-                      <span className="coords-label">Lat:</span>
-                      <span className="coords-value">{parseLocation(gpsModal.location_in_1)?.lat?.toFixed(6) || '-'}</span>
-                      <span className="coords-label">Lng:</span>
-                      <span className="coords-value">{parseLocation(gpsModal.location_in_1)?.lng?.toFixed(6) || '-'}</span>
-                    </div>
-                    <button
-                      className="open-map-btn"
-                      onClick={() => openInMaps(parseLocation(gpsModal.location_in_1))}
-                    >
-                      Open in Google Maps
-                    </button>
+                    {gpsModal.location_in_1 && (
+                      <>
+                        <div className="gps-coords">
+                          <span className="coords-label">Lat:</span>
+                          <span className="coords-value">{parseLocation(gpsModal.location_in_1)?.lat?.toFixed(6) || '-'}</span>
+                          <span className="coords-label">Lng:</span>
+                          <span className="coords-value">{parseLocation(gpsModal.location_in_1)?.lng?.toFixed(6) || '-'}</span>
+                        </div>
+                        <button
+                          className="open-map-btn"
+                          onClick={() => openInMaps(parseLocation(gpsModal.location_in_1))}
+                        >
+                          Open in Google Maps
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
 
-                {gpsModal.location_out_1 && (
+                {(gpsModal.location_out_1 || gpsModal.address_out_1) && (
                   <div className="gps-location-item">
                     <div className="gps-location-header">
                       <span className="gps-label">Clock Out 1 (Break Start)</span>
@@ -1166,22 +1173,26 @@ const Attendance = () => {
                         <span className="address-text">{gpsModal.address_out_1}</span>
                       </div>
                     )}
-                    <div className="gps-coords">
-                      <span className="coords-label">Lat:</span>
-                      <span className="coords-value">{parseLocation(gpsModal.location_out_1)?.lat?.toFixed(6) || '-'}</span>
-                      <span className="coords-label">Lng:</span>
-                      <span className="coords-value">{parseLocation(gpsModal.location_out_1)?.lng?.toFixed(6) || '-'}</span>
-                    </div>
-                    <button
-                      className="open-map-btn"
-                      onClick={() => openInMaps(parseLocation(gpsModal.location_out_1))}
-                    >
-                      Open in Google Maps
-                    </button>
+                    {gpsModal.location_out_1 && (
+                      <>
+                        <div className="gps-coords">
+                          <span className="coords-label">Lat:</span>
+                          <span className="coords-value">{parseLocation(gpsModal.location_out_1)?.lat?.toFixed(6) || '-'}</span>
+                          <span className="coords-label">Lng:</span>
+                          <span className="coords-value">{parseLocation(gpsModal.location_out_1)?.lng?.toFixed(6) || '-'}</span>
+                        </div>
+                        <button
+                          className="open-map-btn"
+                          onClick={() => openInMaps(parseLocation(gpsModal.location_out_1))}
+                        >
+                          Open in Google Maps
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
 
-                {gpsModal.location_in_2 && (
+                {(gpsModal.location_in_2 || gpsModal.address_in_2) && (
                   <div className="gps-location-item">
                     <div className="gps-location-header">
                       <span className="gps-label">Clock In 2 (Return from Break)</span>
@@ -1192,22 +1203,26 @@ const Attendance = () => {
                         <span className="address-text">{gpsModal.address_in_2}</span>
                       </div>
                     )}
-                    <div className="gps-coords">
-                      <span className="coords-label">Lat:</span>
-                      <span className="coords-value">{parseLocation(gpsModal.location_in_2)?.lat?.toFixed(6) || '-'}</span>
-                      <span className="coords-label">Lng:</span>
-                      <span className="coords-value">{parseLocation(gpsModal.location_in_2)?.lng?.toFixed(6) || '-'}</span>
-                    </div>
-                    <button
-                      className="open-map-btn"
-                      onClick={() => openInMaps(parseLocation(gpsModal.location_in_2))}
-                    >
-                      Open in Google Maps
-                    </button>
+                    {gpsModal.location_in_2 && (
+                      <>
+                        <div className="gps-coords">
+                          <span className="coords-label">Lat:</span>
+                          <span className="coords-value">{parseLocation(gpsModal.location_in_2)?.lat?.toFixed(6) || '-'}</span>
+                          <span className="coords-label">Lng:</span>
+                          <span className="coords-value">{parseLocation(gpsModal.location_in_2)?.lng?.toFixed(6) || '-'}</span>
+                        </div>
+                        <button
+                          className="open-map-btn"
+                          onClick={() => openInMaps(parseLocation(gpsModal.location_in_2))}
+                        >
+                          Open in Google Maps
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
 
-                {gpsModal.location_out_2 && (
+                {(gpsModal.location_out_2 || gpsModal.address_out_2) && (
                   <div className="gps-location-item">
                     <div className="gps-location-header">
                       <span className="gps-label">Clock Out 2 (End Work)</span>
@@ -1218,23 +1233,28 @@ const Attendance = () => {
                         <span className="address-text">{gpsModal.address_out_2}</span>
                       </div>
                     )}
-                    <div className="gps-coords">
-                      <span className="coords-label">Lat:</span>
-                      <span className="coords-value">{parseLocation(gpsModal.location_out_2)?.lat?.toFixed(6) || '-'}</span>
-                      <span className="coords-label">Lng:</span>
-                      <span className="coords-value">{parseLocation(gpsModal.location_out_2)?.lng?.toFixed(6) || '-'}</span>
-                    </div>
-                    <button
-                      className="open-map-btn"
-                      onClick={() => openInMaps(parseLocation(gpsModal.location_out_2))}
-                    >
-                      Open in Google Maps
-                    </button>
+                    {gpsModal.location_out_2 && (
+                      <>
+                        <div className="gps-coords">
+                          <span className="coords-label">Lat:</span>
+                          <span className="coords-value">{parseLocation(gpsModal.location_out_2)?.lat?.toFixed(6) || '-'}</span>
+                          <span className="coords-label">Lng:</span>
+                          <span className="coords-value">{parseLocation(gpsModal.location_out_2)?.lng?.toFixed(6) || '-'}</span>
+                        </div>
+                        <button
+                          className="open-map-btn"
+                          onClick={() => openInMaps(parseLocation(gpsModal.location_out_2))}
+                        >
+                          Open in Google Maps
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
 
-                {!gpsModal.location_in_1 && !gpsModal.location_out_1 && !gpsModal.location_in_2 && !gpsModal.location_out_2 && (
-                  <p className="no-gps-data">No GPS data recorded for this entry</p>
+                {!gpsModal.location_in_1 && !gpsModal.location_out_1 && !gpsModal.location_in_2 && !gpsModal.location_out_2 &&
+                 !gpsModal.address_in_1 && !gpsModal.address_out_1 && !gpsModal.address_in_2 && !gpsModal.address_out_2 && (
+                  <p className="no-gps-data">No location data recorded for this entry</p>
                 )}
               </div>
             </div>
@@ -1899,6 +1919,16 @@ const Attendance = () => {
           font-size: 12px;
           color: #666;
           font-style: italic;
+        }
+
+        /* Employee ID Link */
+        .emp-id-link {
+          color: #1976d2;
+          cursor: pointer;
+          font-weight: 500;
+        }
+        .emp-id-link:hover {
+          text-decoration: underline;
         }
         .modal-footer {
           display: flex;
