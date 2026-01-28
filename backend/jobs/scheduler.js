@@ -81,6 +81,9 @@ function initScheduler() {
 
   console.log('[Scheduler] Driver sync scheduled for 10:00 daily (MYT)');
 
+  // Note: Auto-Approve Leave is now done immediately upon application (not via cron)
+  // See: backend/routes/ess/leave.js - Annual Leave for AA Alive is auto-approved instantly
+
   // Return jobs for potential manual control
   return {
     autoClockOutJob,

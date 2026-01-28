@@ -600,6 +600,7 @@ export const essApi = {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
   cancelLeaveRequest: (id) => api.post(`/ess/leave/${id}/cancel`, {}, essApiConfig),
+  revertLeave: (id) => api.post(`/ess/leave/${id}/revert`, {}, essApiConfig),
 
   // Team Leave (Supervisor/Manager)
   getTeamPendingLeave: () => api.get('/ess/leave/team-pending', essApiConfig),

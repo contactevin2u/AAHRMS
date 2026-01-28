@@ -59,10 +59,16 @@ function ESSLeave({ embedded = false }) {
         reason: applyForm.reason
       };
       console.log('[Leave Apply] Submitting:', payload);
-      await essApi.applyLeave(payload);
+      const response = await essApi.applyLeave(payload);
       setShowApplyModal(false);
       setApplyForm({ leave_type_id: '', start_date: '', end_date: '', reason: '' });
-      alert('Leave application submitted!');
+
+      // Show different message based on auto-approval status
+      if (response.data?.autoApproved) {
+        alert('Leave auto-approved! Your Annual Leave has been approved automatically.');
+      } else {
+        alert('Leave application submitted! Pending approval.');
+      }
       fetchData();
     } catch (error) {
       console.error('[Leave Apply] Error:', error.response?.data);
@@ -76,13 +82,23 @@ function ESSLeave({ embedded = false }) {
     return new Date(date).toLocaleDateString(language === 'ms' ? 'ms-MY' : 'en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status, autoApproved = false) => {
     const styles = {
       pending: { bg: '#fef3c7', color: '#d97706' },
       approved: { bg: '#d1fae5', color: '#059669' },
       rejected: { bg: '#fee2e2', color: '#dc2626' }
     };
     const s = styles[status] || styles.pending;
+
+    // Show AI Approved badge for auto-approved leaves
+    if (status === 'approved' && autoApproved) {
+      return (
+        <span style={{ background: '#dbeafe', color: '#1d4ed8', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' }}>
+          AI Approved
+        </span>
+      );
+    }
+
     return (
       <span style={{ background: s.bg, color: s.color, padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' }}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -155,12 +171,26 @@ function ESSLeave({ embedded = false }) {
                   <div key={app.id} className="application-card">
                     <div className="app-header">
                       <span className="app-type">{app.leave_type_name || app.leave_type || app.type}</span>
-                      {getStatusBadge(app.status)}
+                      {getStatusBadge(app.status, app.auto_approved)}
                     </div>
                     <div className="app-dates">
-                      {formatDate(app.start_date)} - {formatDate(app.end_date)} ({app.days || calculateDays(app.start_date, app.end_date)} day{(app.days || calculateDays(app.start_date, app.end_date)) > 1 ? 's' : ''})
+                      {formatDate(app.start_date)} - {formatDate(app.end_date)} ({app.days || app.total_days || calculateDays(app.start_date, app.end_date)} day{(app.days || app.total_days || calculateDays(app.start_date, app.end_date)) > 1 ? 's' : ''})
                     </div>
                     <div className="app-reason">{app.reason}</div>
+                    {/* AI Auto-approved notice */}
+                    {app.auto_approved && app.status === 'approved' && (
+                      <div style={{
+                        marginTop: '10px',
+                        padding: '10px 12px',
+                        background: '#eff6ff',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        color: '#1e40af',
+                        lineHeight: '1.4'
+                      }}>
+                        <strong>AI Auto-Approved.</strong> Boss JC has the authority to cancel this approval if needed.
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -219,9 +249,22 @@ function ESSLeave({ embedded = false }) {
                     <div className="history-date">{formatDate(app.start_date)}</div>
                     <div className="history-details">
                       <span className="history-type">{app.leave_type_name || app.leave_type || app.type}</span>
-                      <span className="history-days">{app.days || calculateDays(app.start_date, app.end_date)} day{(app.days || calculateDays(app.start_date, app.end_date)) > 1 ? 's' : ''}</span>
+                      <span className="history-days">{app.days || app.total_days || calculateDays(app.start_date, app.end_date)} day{(app.days || app.total_days || calculateDays(app.start_date, app.end_date)) > 1 ? 's' : ''}</span>
                     </div>
-                    {getStatusBadge(app.status)}
+                    {getStatusBadge(app.status, app.auto_approved)}
+                    {/* AI Auto-approved notice */}
+                    {app.auto_approved && app.status === 'approved' && (
+                      <div style={{
+                        marginTop: '8px',
+                        fontSize: '11px',
+                        color: '#1e40af',
+                        background: '#eff6ff',
+                        padding: '6px 10px',
+                        borderRadius: '6px'
+                      }}>
+                        AI Auto-Approved. Boss JC can cancel if needed.
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

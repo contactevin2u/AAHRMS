@@ -743,6 +743,14 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='child_number') THEN
           ALTER TABLE leave_requests ADD COLUMN child_number INTEGER;
         END IF;
+        -- auto_approved: flag for AI auto-approved leaves (AA Alive only)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='auto_approved') THEN
+          ALTER TABLE leave_requests ADD COLUMN auto_approved BOOLEAN DEFAULT FALSE;
+        END IF;
+        -- auto_approved_at: timestamp when leave was auto-approved
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leave_requests' AND column_name='auto_approved_at') THEN
+          ALTER TABLE leave_requests ADD COLUMN auto_approved_at TIMESTAMP;
+        END IF;
       END $$;
 
       -- Claims

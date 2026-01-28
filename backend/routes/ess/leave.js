@@ -25,6 +25,7 @@ const {
   checkLeaveEligibility,
   initializeYearlyLeaveBalances
 } = require('../../utils/leaveProration');
+const { revertAutoApprovedLeave, AA_ALIVE_COMPANY_ID } = require('../../jobs/autoApproveLeave');
 
 // Multer setup for MC upload (in-memory)
 const upload = multer({
@@ -123,9 +124,11 @@ router.get('/history', authenticateEmployee, asyncHandler(async (req, res) => {
            lt.requires_attachment,
            sup.name as supervisor_name,
            mgr.name as manager_name,
-           au.name as approver_name
+           au.name as approver_name,
+           e.company_id
     FROM leave_requests lr
     JOIN leave_types lt ON lr.leave_type_id = lt.id
+    JOIN employees e ON lr.employee_id = e.id
     LEFT JOIN employees sup ON lr.supervisor_id = sup.id
     LEFT JOIN employees mgr ON lr.manager_id = mgr.id
     LEFT JOIN admin_users au ON lr.approver_id = au.id
@@ -406,14 +409,54 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
   // Determine initial approval level based on role and company
   const approvalLevel = getInitialApprovalLevel(employee);
 
+  // Check if this qualifies for auto-approval:
+  // - AA Alive company (company_id = 1)
+  // - Annual Leave (code = 'AL')
+  // - Has sufficient balance (already validated above for paid leave)
+  const isAAAlive = employee.company_id === AA_ALIVE_COMPANY_ID;
+  const isAnnualLeave = leaveType.code === 'AL';
+  const shouldAutoApprove = isAAAlive && isAnnualLeave && leaveType.is_paid;
+
+  let leaveStatus = 'pending';
+  let autoApproved = false;
+
+  if (shouldAutoApprove) {
+    leaveStatus = 'approved';
+    autoApproved = true;
+    console.log(`[Leave Apply] Auto-approving Annual Leave for AA Alive employee ${req.employee.id}`);
+  }
+
   // Create leave request
   const result = await pool.query(
     `INSERT INTO leave_requests
-       (employee_id, leave_type_id, start_date, end_date, total_days, reason, status, approval_level, mc_url, half_day, child_number)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10)
+       (employee_id, leave_type_id, start_date, end_date, total_days, reason, status, approval_level, mc_url, half_day, child_number, auto_approved, auto_approved_at, approved_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
-    [req.employee.id, leaveType.id, start_date, end_date, totalDays, reason, approvalLevel, mcUrl, half_day || null, child_number || null]
+    [
+      req.employee.id, leaveType.id, start_date, end_date, totalDays, reason,
+      leaveStatus, approvalLevel, mcUrl, half_day || null, child_number || null,
+      autoApproved, autoApproved ? new Date() : null, autoApproved ? new Date() : null
+    ]
   );
+
+  // If auto-approved, deduct leave balance immediately
+  if (autoApproved && leaveType.is_paid) {
+    const year = new Date(start_date).getFullYear();
+    await pool.query(
+      `UPDATE leave_balances
+       SET used_days = used_days + $1, updated_at = NOW()
+       WHERE employee_id = $2 AND leave_type_id = $3 AND year = $4`,
+      [totalDays, req.employee.id, leaveType.id, year]
+    );
+    console.log(`[Leave Apply] Deducted ${totalDays} days from balance for auto-approved leave`);
+
+    // Create notification for auto-approval
+    await pool.query(
+      `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+       VALUES ($1, 'leave', 'Leave Auto-Approved', 'Your Annual Leave request has been automatically approved.', 'leave_request', $2)`,
+      [req.employee.id, result.rows[0].id]
+    );
+  }
 
   // Create notification for supervisor if Mimix
   if (isMimixCompany(employee.company_id) && approvalLevel === 1) {
@@ -433,11 +476,12 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
     }
   }
 
-  console.log(`New leave request from employee ${req.employee.id}: ${totalDays} days of ${leaveType.code}, approval_level: ${approvalLevel}`);
+  console.log(`New leave request from employee ${req.employee.id}: ${totalDays} days of ${leaveType.code}, approval_level: ${approvalLevel}, auto_approved: ${autoApproved}`);
 
   res.status(201).json({
-    message: 'Leave request submitted successfully',
-    request: result.rows[0]
+    message: autoApproved ? 'Leave request auto-approved!' : 'Leave request submitted successfully',
+    request: result.rows[0],
+    autoApproved
   });
 }));
 
@@ -523,6 +567,18 @@ router.post('/:id/cancel', authenticateEmployee, asyncHandler(async (req, res) =
   await pool.query('DELETE FROM leave_requests WHERE id = $1', [id]);
 
   res.json({ message: 'Leave request cancelled successfully' });
+}));
+
+// Revert auto-approved leave request (AA Alive only)
+router.post('/:id/revert', authenticateEmployee, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await revertAutoApprovedLeave(parseInt(id), req.employee.id);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 }));
 
 // =====================================================
