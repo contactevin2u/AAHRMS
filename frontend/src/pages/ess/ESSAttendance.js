@@ -99,8 +99,9 @@ function ESSAttendanceContent() {
     checkCameraPermission();
   }, []);
 
-  // Check if feature is enabled (Mimix via features.clockIn OR AA Alive via clock_in_required)
-  const hasClockInAccess = employeeInfo.features?.clockIn || employeeInfo.clock_in_required;
+  // Check if feature is enabled (Mimix via features.clockIn OR AA Alive via clock_in_required OR driver)
+  const isDriver = employeeInfo.department?.toLowerCase() === 'driver' || employeeInfo.department_name?.toLowerCase() === 'driver';
+  const hasClockInAccess = employeeInfo.features?.clockIn || employeeInfo.clock_in_required || isDriver;
 
   useEffect(() => {
     if (!hasClockInAccess) {
@@ -807,7 +808,53 @@ function ESSAttendanceContent() {
                 <p>{t('attendance.noRecordsThisMonth')}</p>
               </div>
             ) : (
-              <div className="history-list">
+              <>
+                {/* Monthly Summary for Drivers */}
+                {isDriver && (
+                  <div className="driver-summary">
+                    <h3>{language === 'ms' ? 'Ringkasan Bulan Ini' : 'This Month Summary'}</h3>
+                    <div className="summary-cards">
+                      <div className="summary-card">
+                        <span className="summary-icon">&#x23F0;</span>
+                        <div className="summary-content">
+                          <span className="summary-value">
+                            {history.reduce((sum, r) => sum + (parseFloat(r.ot_hours) || 0), 0).toFixed(1)}
+                          </span>
+                          <span className="summary-label">{language === 'ms' ? 'Jumlah OT (jam)' : 'Total OT (hrs)'}</span>
+                        </div>
+                      </div>
+                      <div className="summary-card deduction">
+                        <span className="summary-icon">&#x26A0;</span>
+                        <div className="summary-content">
+                          <span className="summary-value">
+                            {history.reduce((sum, r) => {
+                              const hrs = parseFloat(r.total_hours) || 0;
+                              // Deduction if working less than 9 hours (including 1hr break)
+                              if (hrs > 0 && hrs < 9) {
+                                return sum + (9 - hrs);
+                              }
+                              return sum;
+                            }, 0).toFixed(1)}
+                          </span>
+                          <span className="summary-label">{language === 'ms' ? 'Potongan (jam)' : 'Deduction (hrs)'}</span>
+                        </div>
+                      </div>
+                      <div className="summary-card">
+                        <span className="summary-icon">&#x1F4C5;</span>
+                        <div className="summary-content">
+                          <span className="summary-value">{history.length}</span>
+                          <span className="summary-label">{language === 'ms' ? 'Hari Bekerja' : 'Days Worked'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="summary-note">
+                      {language === 'ms'
+                        ? '* Potongan dikira apabila jumlah jam kerja kurang dari 9 jam (termasuk 1 jam rehat)'
+                        : '* Deduction calculated when total hours less than 9 hrs (including 1hr break)'}
+                    </p>
+                  </div>
+                )}
+                <div className="history-list">
                 {history.map((record, idx) => (
                   <div key={idx} className="history-card">
                     <div className="history-date">
@@ -832,6 +879,7 @@ function ESSAttendanceContent() {
                   </div>
                 ))}
               </div>
+              </>
             )}
           </div>
         )}
