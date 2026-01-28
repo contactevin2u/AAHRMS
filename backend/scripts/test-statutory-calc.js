@@ -17,7 +17,7 @@ const imageData = [
   { name: 'Nur Azlina', basic: 3300, commission: 0, allowance: 0, overtime: 0, bonus: 0, gross: 3300, epf_ee: 363, epf_er: 429, socso_ee: 16.25, eis_ee: 6.50, pcb: 0, net: 2914.25 },
   { name: 'Siti Fatimah', basic: 2600, commission: 0, allowance: 500, overtime: 87.5, bonus: 1000, gross: 4187.50, epf_ee: 396, epf_er: 468, socso_ee: 12.75, eis_ee: 5.10, pcb: 0, net: 3773.65 },
   { name: 'Nur Hasliza', basic: 1800, commission: 0, allowance: 200, overtime: 0, bonus: 300, gross: 2300, epf_ee: 231, epf_er: 273, socso_ee: 8.75, eis_ee: 3.50, pcb: 0, net: 2056.75 },
-  { name: 'Alia Natasha', basic: 5000, commission: 950, allowance: 0, overtime: 600, bonus: 1000, gross: 7550, epf_ee: 770, epf_er: 840, socso_ee: 29.75, eis_ee: 11.90, pcb: 262.85, net: 6475.50 },
+  { name: 'Alia Natasha', basic: 5000, commission: 950, allowance: 600, overtime: 0, bonus: 1000, gross: 7550, epf_ee: 770, epf_er: 840, socso_ee: 29.75, eis_ee: 11.90, pcb: 262.85, net: 6475.50 },
   { name: 'Tan Hui Yang', basic: 0, commission: 14277, allowance: 0, overtime: 0, bonus: 0, gross: 14277, epf_ee: 1573, epf_er: 1716, socso_ee: 29.75, eis_ee: 11.90, pcb: 0, net: 12662.35 },
   { name: 'Nashratun', basic: 0, commission: 17114, allowance: 0, overtime: 0, bonus: 0, gross: 17114, epf_ee: 1892, epf_er: 2064, socso_ee: 29.75, eis_ee: 11.90, pcb: 0, net: 15180.35 },
   { name: 'Connie', basic: 4700, commission: 1700, allowance: 0, overtime: 0, bonus: 0, gross: 6400, epf_ee: 704, epf_er: 768, socso_ee: 29.75, eis_ee: 11.90, pcb: 194.00, net: 5460.35 },
