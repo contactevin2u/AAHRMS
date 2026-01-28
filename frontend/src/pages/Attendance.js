@@ -881,17 +881,11 @@ const Attendance = () => {
                         {(record.location_in_1 || record.location_out_1 || record.location_in_2 || record.location_out_2 ||
                           record.address_in_1 || record.address_out_1 || record.address_in_2 || record.address_out_2) ? (
                           <button
-                            className="gps-btn has-location"
+                            className="gps-btn"
                             onClick={() => showGpsDetails(record)}
-                            title={record.address_in_1 || record.address_out_1 || record.address_in_2 || record.address_out_2 || "View Location"}
+                            title="View Location"
                           >
-                            {(() => {
-                              const addr = record.address_in_1 || record.address_out_1 || record.address_in_2 || record.address_out_2;
-                              if (addr) {
-                                return addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
-                              }
-                              return 'View';
-                            })()}
+                            View
                           </button>
                         ) : (
                           <span className="no-gps">-</span>
@@ -1905,16 +1899,6 @@ const Attendance = () => {
           font-size: 12px;
           color: #666;
           font-style: italic;
-        }
-
-        /* GPS Button with Address */
-        .gps-btn.has-location {
-          max-width: 150px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          font-size: 11px;
-          padding: 4px 8px;
         }
         .modal-footer {
           display: flex;
