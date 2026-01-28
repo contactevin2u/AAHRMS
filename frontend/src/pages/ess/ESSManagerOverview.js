@@ -20,7 +20,8 @@ function ESSManagerOverview() {
     name: '',
     id_type: 'ic',
     ic_number: '',
-    outlet_id: ''
+    outlet_id: '',
+    position_id: ''
   });
   const [quickAddLoading, setQuickAddLoading] = useState(false);
   const [quickAddResult, setQuickAddResult] = useState(null);
@@ -125,7 +126,8 @@ function ESSManagerOverview() {
       name: '',
       id_type: 'ic',
       ic_number: '',
-      outlet_id: ''
+      outlet_id: '',
+      position_id: ''
     });
     setQuickAddResult(null);
   };
@@ -188,7 +190,7 @@ function ESSManagerOverview() {
     );
   }
 
-  const { outlets, summary } = overviewData || { outlets: [], summary: {} };
+  const { outlets, positions, summary } = overviewData || { outlets: [], positions: [], summary: {} };
 
   // Calculate totals
   const totalPendingLeave = outlets.reduce((sum, o) => sum + o.pending_leave_count, 0);
@@ -638,6 +640,19 @@ function ESSManagerOverview() {
                       <option value="">Select outlet</option>
                       {outlets.map(outlet => (
                         <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Position</label>
+                    <select
+                      value={quickAddForm.position_id}
+                      onChange={(e) => setQuickAddForm({ ...quickAddForm, position_id: e.target.value })}
+                    >
+                      <option value="">Select position (optional)</option>
+                      {positions.map(pos => (
+                        <option key={pos.id} value={pos.id}>{pos.name}</option>
                       ))}
                     </select>
                   </div>

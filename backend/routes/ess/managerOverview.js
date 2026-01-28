@@ -162,8 +162,15 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
     totalClockedIn += clockedInCount;
   }
 
+  // Get positions for this company (for Quick Add dropdown)
+  const positionsResult = await pool.query(
+    'SELECT id, name, role FROM positions WHERE company_id = $1 ORDER BY name',
+    [companyId]
+  );
+
   res.json({
     outlets: outletsData,
+    positions: positionsResult.rows,
     summary: {
       total_outlets: outletsData.length,
       total_staff: totalStaff,
