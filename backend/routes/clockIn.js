@@ -83,7 +83,7 @@ function calculateWorkTime(record) {
 // Get all attendance records (filtered by company/outlet)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, outlet_id, month, year, status, start_date, end_date } = req.query;
+    const { employee_id, outlet_id, month, year, status, start_date, end_date, region } = req.query;
     const companyId = getCompanyFilter(req);
     const supervisorOutletId = getOutletFilter(req);
 
@@ -93,6 +93,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
              COALESCE(cr.ot_hours, ROUND(cr.ot_minutes / 60.0, 1)) as ot_hours,
              e.name as employee_name,
              e.employee_id as emp_code,
+             e.region as employee_region,
              d.name as department_name,
              o.name as outlet_name,
              approver.name as approved_by_name
@@ -155,6 +156,12 @@ router.get('/', authenticateAdmin, async (req, res) => {
       paramCount++;
       query += ` AND cr.work_date <= $${paramCount}`;
       params.push(end_date);
+    }
+
+    if (region) {
+      paramCount++;
+      query += ` AND e.region = $${paramCount}`;
+      params.push(region);
     }
 
     query += ' ORDER BY cr.work_date DESC, e.name';

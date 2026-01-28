@@ -22,7 +22,8 @@ const Attendance = () => {
     ot_status: '',
     outlet_id: '',
     department_id: '',
-    employee_id: ''
+    employee_id: '',
+    region: ''
   });
   const [gpsModal, setGpsModal] = useState(null);
   const [photoModal, setPhotoModal] = useState(null);
@@ -614,6 +615,17 @@ const Attendance = () => {
               {departments.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
+            </select>
+          </div>
+        )}
+
+        {isAAAlive && (
+          <div className="filter-group">
+            <label>Region</label>
+            <select name="region" value={filters.region} onChange={handleFilterChange}>
+              <option value="">All Regions</option>
+              <option value="sabah">Sabah</option>
+              <option value="semenanjung">Semenanjung</option>
             </select>
           </div>
         )}
