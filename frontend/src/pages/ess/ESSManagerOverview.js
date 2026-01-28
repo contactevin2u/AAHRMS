@@ -18,6 +18,7 @@ function ESSManagerOverview() {
   const [quickAddForm, setQuickAddForm] = useState({
     employee_id: '',
     name: '',
+    id_type: 'ic',
     ic_number: '',
     outlet_id: ''
   });
@@ -122,6 +123,7 @@ function ESSManagerOverview() {
     setQuickAddForm({
       employee_id: '',
       name: '',
+      id_type: 'ic',
       ic_number: '',
       outlet_id: ''
     });
@@ -663,15 +665,31 @@ function ESSManagerOverview() {
                   </div>
 
                   <div className="form-group">
-                    <label>IC Number *</label>
+                    <label>ID Type *</label>
+                    <select
+                      value={quickAddForm.id_type}
+                      onChange={(e) => setQuickAddForm({ ...quickAddForm, id_type: e.target.value, ic_number: '' })}
+                      required
+                    >
+                      <option value="ic">IC (Malaysian)</option>
+                      <option value="passport">Passport (Foreign Worker)</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>{quickAddForm.id_type === 'ic' ? 'IC Number' : 'Passport Number'} *</label>
                     <input
                       type="text"
                       value={quickAddForm.ic_number}
                       onChange={(e) => setQuickAddForm({ ...quickAddForm, ic_number: e.target.value })}
-                      placeholder="e.g. 901234567890"
+                      placeholder={quickAddForm.id_type === 'ic' ? 'e.g. 901234567890' : 'e.g. A12345678'}
                       required
                     />
-                    <small className="hint">IC number will be used as initial password</small>
+                    <small className="hint">
+                      {quickAddForm.id_type === 'ic'
+                        ? 'IC number will be used as initial password'
+                        : 'Passport number will be used as initial password'}
+                    </small>
                   </div>
 
                   <div className="modal-actions">

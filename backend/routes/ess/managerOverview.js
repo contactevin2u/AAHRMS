@@ -223,7 +223,7 @@ router.post('/quick-add', authenticateEmployee, asyncHandler(async (req, res) =>
     return res.status(403).json({ error: 'Access denied. Manager level or above required.' });
   }
 
-  const { employee_id, name, ic_number, outlet_id, position_id } = req.body;
+  const { employee_id, name, ic_number, id_type: providedIdType, outlet_id, position_id } = req.body;
 
   // Get manager's company and managed outlets
   const empResult = await pool.query(
@@ -267,8 +267,8 @@ router.post('/quick-add', authenticateEmployee, asyncHandler(async (req, res) =>
     return res.status(400).json({ error: 'Employee ID already exists in this company' });
   }
 
-  // Auto-detect and format IC number
-  const id_type = detectIDType(ic_number);
+  // Use provided id_type or auto-detect
+  const id_type = providedIdType || detectIDType(ic_number);
   const formattedIC = id_type === 'ic' ? formatIC(ic_number) : ic_number;
 
   // Auto-extract date of birth and gender from IC
