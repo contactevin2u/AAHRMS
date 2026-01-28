@@ -250,6 +250,17 @@ function ESSClaims({ embedded = false }) {
     );
   };
 
+  const getPayrollMonthBadge = (payrollMonth, payrollYear) => {
+    if (!payrollMonth || !payrollYear) return null;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthName = monthNames[payrollMonth - 1];
+    return (
+      <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: '600' }}>
+        {monthName} {payrollYear} Payroll
+      </span>
+    );
+  };
+
   const totalPending = claims.filter(c => c.status === 'pending').reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
   const totalApproved = claims.filter(c => c.status === 'approved').reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
 
@@ -298,7 +309,12 @@ function ESSClaims({ embedded = false }) {
                   {getStatusBadge(claim.status, claim.auto_approved)}
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: '700', color: '#1976d2', marginBottom: '8px' }}>{formatCurrency(claim.amount)}</div>
-                <div style={{ fontSize: '13px', color: '#64748b' }}>{formatDate(claim.claim_date)} - {claim.description}</div>
+                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>{formatDate(claim.claim_date)} - {claim.description}</div>
+                {(claim.payroll_month && claim.payroll_year) && (
+                  <div style={{ marginTop: '4px' }}>
+                    {getPayrollMonthBadge(claim.payroll_month, claim.payroll_year)}
+                  </div>
+                )}
               </div>
             ))}
           </div>
