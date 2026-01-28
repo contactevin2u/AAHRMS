@@ -893,3 +893,56 @@
   border-top: none;
   padding-top: 0;
 }
+
+/* Approval Action Buttons */
+.approval-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-approve {
+  flex: 1;
+  padding: 10px 16px;
+  background: #22c55e;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-approve:hover:not(:disabled) {
+  background: #16a34a;
+}
+
+.btn-approve:disabled {
+  background: #86efac;
+  cursor: not-allowed;
+}
+
+.btn-reject {
+  flex: 1;
+  padding: 10px 16px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-reject:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.btn-reject:disabled {
+  background: #fca5a5;
+  cursor: not-allowed;
+}

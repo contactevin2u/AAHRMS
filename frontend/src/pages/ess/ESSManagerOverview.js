@@ -24,6 +24,11 @@ function ESSManagerOverview() {
   const [quickAddLoading, setQuickAddLoading] = useState(false);
   const [quickAddResult, setQuickAddResult] = useState(null);
 
+  // Approval state
+  const [approvalLoading, setApprovalLoading] = useState({});
+  const [showRejectModal, setShowRejectModal] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+
   useEffect(() => {
     fetchOverview();
   }, []);
@@ -121,6 +126,43 @@ function ESSManagerOverview() {
       outlet_id: ''
     });
     setQuickAddResult(null);
+  };
+
+  // Approve leave request
+  const handleApproveLeave = async (leaveId) => {
+    setApprovalLoading(prev => ({ ...prev, [`leave_${leaveId}`]: true }));
+    try {
+      await essApi.approveLeave(leaveId);
+      // Refresh data
+      fetchOverview();
+    } catch (err) {
+      console.error('Error approving leave:', err);
+      alert(err.response?.data?.error || 'Failed to approve leave');
+    } finally {
+      setApprovalLoading(prev => ({ ...prev, [`leave_${leaveId}`]: false }));
+    }
+  };
+
+  // Reject leave request
+  const handleRejectLeave = async () => {
+    if (!rejectReason.trim()) {
+      alert('Please enter a rejection reason');
+      return;
+    }
+    const leaveId = showRejectModal;
+    setApprovalLoading(prev => ({ ...prev, [`leave_${leaveId}`]: true }));
+    try {
+      await essApi.rejectLeave(leaveId, rejectReason);
+      setShowRejectModal(null);
+      setRejectReason('');
+      // Refresh data
+      fetchOverview();
+    } catch (err) {
+      console.error('Error rejecting leave:', err);
+      alert(err.response?.data?.error || 'Failed to reject leave');
+    } finally {
+      setApprovalLoading(prev => ({ ...prev, [`leave_${leaveId}`]: false }));
+    }
   };
 
   if (loading) {
@@ -492,6 +534,22 @@ function ESSManagerOverview() {
                         <span className="leave-days">{leave.total_days} day(s)</span>
                       </div>
                       {leave.reason && <p className="approval-reason">{leave.reason}</p>}
+                      <div className="approval-actions">
+                        <button
+                          className="btn-approve"
+                          onClick={() => handleApproveLeave(leave.id)}
+                          disabled={approvalLoading[`leave_${leave.id}`]}
+                        >
+                          {approvalLoading[`leave_${leave.id}`] ? '...' : '✓ Approve'}
+                        </button>
+                        <button
+                          className="btn-reject"
+                          onClick={() => setShowRejectModal(leave.id)}
+                          disabled={approvalLoading[`leave_${leave.id}`]}
+                        >
+                          ✗ Reject
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -624,6 +682,40 @@ function ESSManagerOverview() {
                   </div>
                 </form>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Reject Leave Modal */}
+        {showRejectModal && (
+          <div className="modal-overlay" onClick={() => setShowRejectModal(null)}>
+            <div className="quick-add-modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Reject Leave Request</h2>
+                <button className="close-btn" onClick={() => setShowRejectModal(null)}>&times;</button>
+              </div>
+              <div className="form-group">
+                <label>Rejection Reason *</label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Please provide a reason for rejection..."
+                  rows={3}
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowRejectModal(null)}>Cancel</button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ backgroundColor: '#dc3545' }}
+                  onClick={handleRejectLeave}
+                  disabled={approvalLoading[`leave_${showRejectModal}`]}
+                >
+                  {approvalLoading[`leave_${showRejectModal}`] ? 'Rejecting...' : 'Reject Leave'}
+                </button>
+              </div>
             </div>
           </div>
         )}
