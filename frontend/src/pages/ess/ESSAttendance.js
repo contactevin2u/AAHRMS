@@ -52,7 +52,8 @@ function ESSAttendanceContent() {
   // Get employee info to determine default tab
   const empInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const isDriverCheck = empInfo.department?.toLowerCase() === 'driver' || empInfo.department_name?.toLowerCase() === 'driver';
-  const isAAAliveCheck = empInfo.company_grouping_type === 'department' || empInfo.company_id === 1;
+  // eslint-disable-next-line
+  const isAAAliveCheck = empInfo.company_grouping_type === 'department' || empInfo.company_id == 1;
   const defaultTab = (isAAAliveCheck && isDriverCheck && !empInfo.clock_in_required) ? 'history' : 'clockin';
 
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -110,7 +111,8 @@ function ESSAttendanceContent() {
   const hasClockInAccess = employeeInfo.features?.clockIn || employeeInfo.clock_in_required || isDriver;
 
   // AA Alive drivers: can view history but cannot clock in (they sync from OrderOps)
-  const isAAAlive = employeeInfo.company_grouping_type === 'department' || employeeInfo.company_id === 1;
+  // eslint-disable-next-line
+  const isAAAlive = employeeInfo.company_grouping_type === 'department' || employeeInfo.company_id == 1;
   const isAAAliveDriverOnly = isAAAlive && isDriver && !employeeInfo.clock_in_required;
 
   useEffect(() => {

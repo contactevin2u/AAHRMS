@@ -1192,7 +1192,29 @@
   font-style: italic;
 }
 
-@media (max-width: 400px) {
+@media (max-width: 480px) {
+  .summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .summary-card {
+    padding: 12px 8px;
+  }
+
+  .summary-card .summary-value {
+    font-size: 20px;
+  }
+
+  .summary-card .summary-label {
+    font-size: 10px;
+  }
+
+  .summary-card .summary-icon {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 360px) {
   .summary-cards {
     grid-template-columns: 1fr;
   }
