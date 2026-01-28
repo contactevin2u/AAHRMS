@@ -878,7 +878,7 @@ function ESSAttendanceContent() {
                             {history.reduce((sum, r) => {
                               const hrs = parseFloat(r.total_hours) || 0;
                               // AA Alive: 9 hours (including break), Mimix: 7.5 hours (excluding break)
-                              const threshold = status?.is_aa_alive ? 9 : 7.5;
+                              const threshold = (isAAAliveDriverOnly || isAAAlive || status?.is_aa_alive) ? 9 : 7.5;
                               if (hrs > 0 && hrs < threshold) {
                                 return sum + (threshold - hrs);
                               }
@@ -897,7 +897,7 @@ function ESSAttendanceContent() {
                       </div>
                     </div>
                     <p className="summary-note">
-                      {status?.is_aa_alive
+                      {(isAAAliveDriverOnly || isAAAlive || status?.is_aa_alive)
                         ? (language === 'ms'
                           ? '* Potongan dikira apabila jumlah jam kerja kurang dari 9 jam (termasuk rehat)'
                           : '* Deduction calculated when total hours less than 9 hrs (including break)')
