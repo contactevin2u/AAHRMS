@@ -799,7 +799,7 @@ const Attendance = () => {
                 <th className="time-col">Clock In 2<br/><small>Return</small></th>
                 <th className="time-col">Clock Out 2<br/><small>End Work</small></th>
                 <th>Selfie</th>
-                <th>Location</th>
+                <th>GPS</th>
                 {!isAAAlive && <th title="Calculated from clock times">Calc Hours</th>}
                 <th>Total Hours</th>
                 <th>OT Hours</th>
@@ -879,41 +879,13 @@ const Attendance = () => {
                       </td>
                       <td className="gps-cell">
                         {(record.location_in_1 || record.location_out_1 || record.location_in_2 || record.location_out_2) ? (
-                          <div className="gps-inline">
-                            {(() => {
-                              // Show first available location (prefer clock_in_1)
-                              const loc = record.location_in_1 || record.location_out_1 || record.location_in_2 || record.location_out_2;
-                              const addr = record.address_in_1 || record.address_out_1 || record.address_in_2 || record.address_out_2;
-                              const coords = parseLocation(loc);
-                              return (
-                                <>
-                                  {addr && (
-                                    <div className="gps-address-inline" title={addr}>
-                                      {addr.length > 30 ? addr.substring(0, 30) + '...' : addr}
-                                    </div>
-                                  )}
-                                  {coords && (
-                                    <div className="gps-coords-inline">
-                                      <span
-                                        className="coords-link"
-                                        onClick={() => openInMaps(coords)}
-                                        title="Open in Google Maps"
-                                      >
-                                        {coords.lat?.toFixed(4)}, {coords.lng?.toFixed(4)}
-                                      </span>
-                                    </div>
-                                  )}
-                                  <button
-                                    className="gps-view-all-btn"
-                                    onClick={() => showGpsDetails(record)}
-                                    title="View all GPS locations"
-                                  >
-                                    All
-                                  </button>
-                                </>
-                              );
-                            })()}
-                          </div>
+                          <button
+                            className="gps-btn"
+                            onClick={() => showGpsDetails(record)}
+                            title="View GPS Coordinates"
+                          >
+                            View
+                          </button>
                         ) : (
                           <span className="no-gps">-</span>
                         )}
@@ -1926,48 +1898,6 @@ const Attendance = () => {
           font-size: 12px;
           color: #666;
           font-style: italic;
-        }
-
-        /* GPS Inline Display */
-        .gps-inline {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          font-size: 11px;
-          max-width: 160px;
-        }
-        .gps-address-inline {
-          color: #333;
-          font-weight: 500;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          cursor: default;
-        }
-        .gps-coords-inline {
-          color: #666;
-        }
-        .coords-link {
-          color: #1976d2;
-          cursor: pointer;
-          text-decoration: underline;
-        }
-        .coords-link:hover {
-          color: #1565c0;
-        }
-        .gps-view-all-btn {
-          background: #e3f2fd;
-          color: #1976d2;
-          border: none;
-          padding: 2px 6px;
-          border-radius: 3px;
-          cursor: pointer;
-          font-size: 10px;
-          margin-top: 2px;
-          width: fit-content;
-        }
-        .gps-view-all-btn:hover {
-          background: #bbdefb;
         }
         .modal-footer {
           display: flex;
