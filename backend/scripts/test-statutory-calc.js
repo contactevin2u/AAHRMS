@@ -7,7 +7,7 @@ const { calculateStatutory, calculateNetPay } = require('../utils/statutoryCalcu
 // Image data for verification
 const imageData = [
   { name: 'Lau Jia Cheng', basic: 10000, commission: 0, allowance: 500, overtime: 0, bonus: 0, gross: 10500, epf_ee: 1100, epf_er: 1200, socso_ee: 29.75, eis_ee: 11.90, pcb: 928.45, net: 8429.90 },
-  { name: 'Evin Lim', basic: 8750, commission: 6000, allowance: 2500, overtime: 1750, bonus: 0, gross: 19000, epf_ee: 1776, epf_er: 1628, socso_ee: 29.75, eis_ee: 11.90, pcb: 2736.10, net: 14594.25 },
+  { name: 'Evin Lim', basic: 8750, commission: 6000, allowance: 2500, overtime: 1750, bonus: 0, gross: 19000, epf_ee: 1628, epf_er: 1776, socso_ee: 29.75, eis_ee: 11.90, pcb: 2736.10, net: 14594.25 },
   { name: 'Leong Xia Hwei', basic: 4300, commission: 0, allowance: 0, overtime: 0, bonus: 0, gross: 4300, epf_ee: 473, epf_er: 559, socso_ee: 21.25, eis_ee: 8.50, pcb: 67.85, net: 3729.40 },
   { name: 'Michelle Chean', basic: 4100, commission: 8878, allowance: 0, overtime: 0, bonus: 4000, gross: 16978, epf_ee: 1870, epf_er: 2040, socso_ee: 29.75, eis_ee: 11.90, pcb: 828.50, net: 14237.85 },
   { name: 'Rafina', basic: 0, commission: 25170, allowance: 0, overtime: 0, bonus: 1000, gross: 26170, epf_ee: 2879, epf_er: 3141, socso_ee: 29.75, eis_ee: 11.90, pcb: 0, net: 23249.35 },
