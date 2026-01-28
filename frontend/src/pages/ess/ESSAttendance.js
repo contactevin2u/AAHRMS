@@ -826,8 +826,19 @@ function ESSAttendanceContent() {
                 <div className="driver-summary">
                     <h3>{language === 'ms' ? 'Ringkasan Bulan Ini' : 'This Month Summary'}</h3>
                     <div className="summary-cards">
-                      {/* For AA Alive: Show total OT directly */}
-                      {status?.is_aa_alive ? (
+                      {/* For AA Alive drivers: Only show total OT (no approval needed) */}
+                      {isAAAliveDriverOnly ? (
+                        <div className="summary-card">
+                          <span className="summary-icon">&#x23F0;</span>
+                          <div className="summary-content">
+                            <span className="summary-value">
+                              {history.reduce((sum, r) => sum + (parseFloat(r.ot_hours) || 0), 0).toFixed(1)}
+                            </span>
+                            <span className="summary-label">{language === 'ms' ? 'Jumlah OT (jam)' : 'Total OT (hrs)'}</span>
+                          </div>
+                        </div>
+                      ) : status?.is_aa_alive ? (
+                        /* For other AA Alive employees with clock in: Show total OT */
                         <div className="summary-card">
                           <span className="summary-icon">&#x23F0;</span>
                           <div className="summary-content">
