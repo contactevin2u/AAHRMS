@@ -137,6 +137,17 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError('Receipt is required');
   }
 
+  // Auto-reject toll claims - toll is not claimable
+  const descLower = (description || '').toLowerCase();
+  const categoryLower = (category || '').toLowerCase();
+  if (categoryLower.includes('toll') || descLower.includes('toll')) {
+    return res.status(400).json({
+      error: 'Claim rejected',
+      reason: 'Toll expenses are not claimable. Please contact HR if you have questions.',
+      autoRejected: true
+    });
+  }
+
   // Get employee's company_id for Cloudinary folder organization
   const empResult = await pool.query(
     'SELECT company_id FROM employees WHERE id = $1',
