@@ -1142,6 +1142,22 @@
   background: #fef2f2;
 }
 
+.summary-card.approved {
+  background: #f0fdf4;
+}
+
+.summary-card.approved .summary-value {
+  color: #16a34a;
+}
+
+.summary-card.pending {
+  background: #fffbeb;
+}
+
+.summary-card.pending .summary-value {
+  color: #d97706;
+}
+
 .summary-card .summary-icon {
   font-size: 24px;
 }

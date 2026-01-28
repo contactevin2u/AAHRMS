@@ -813,24 +813,50 @@ function ESSAttendanceContent() {
                 <div className="driver-summary">
                     <h3>{language === 'ms' ? 'Ringkasan Bulan Ini' : 'This Month Summary'}</h3>
                     <div className="summary-cards">
-                      <div className="summary-card">
-                        <span className="summary-icon">&#x23F0;</span>
-                        <div className="summary-content">
-                          <span className="summary-value">
-                            {history.reduce((sum, r) => sum + (parseFloat(r.ot_hours) || 0), 0).toFixed(1)}
-                          </span>
-                          <span className="summary-label">{language === 'ms' ? 'Jumlah OT (jam)' : 'Total OT (hrs)'}</span>
+                      {/* For AA Alive: Show total OT directly */}
+                      {status?.is_aa_alive ? (
+                        <div className="summary-card">
+                          <span className="summary-icon">&#x23F0;</span>
+                          <div className="summary-content">
+                            <span className="summary-value">
+                              {history.reduce((sum, r) => sum + (parseFloat(r.ot_hours) || 0), 0).toFixed(1)}
+                            </span>
+                            <span className="summary-label">{language === 'ms' ? 'Jumlah OT (jam)' : 'Total OT (hrs)'}</span>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        /* For Mimix: Show approved OT and pending OT separately */
+                        <>
+                          <div className="summary-card approved">
+                            <span className="summary-icon">&#x2705;</span>
+                            <div className="summary-content">
+                              <span className="summary-value">
+                                {history.reduce((sum, r) => sum + (r.ot_approved === true ? (parseFloat(r.ot_hours) || 0) : 0), 0).toFixed(1)}
+                              </span>
+                              <span className="summary-label">{language === 'ms' ? 'OT Diluluskan' : 'Approved OT (hrs)'}</span>
+                            </div>
+                          </div>
+                          <div className="summary-card pending">
+                            <span className="summary-icon">&#x23F3;</span>
+                            <div className="summary-content">
+                              <span className="summary-value">
+                                {history.reduce((sum, r) => sum + (r.ot_flagged && r.ot_approved === null ? (parseFloat(r.ot_hours) || 0) : 0), 0).toFixed(1)}
+                              </span>
+                              <span className="summary-label">{language === 'ms' ? 'OT Menunggu' : 'Pending OT (hrs)'}</span>
+                            </div>
+                          </div>
+                        </>
+                      )}
                       <div className="summary-card deduction">
                         <span className="summary-icon">&#x26A0;</span>
                         <div className="summary-content">
                           <span className="summary-value">
                             {history.reduce((sum, r) => {
                               const hrs = parseFloat(r.total_hours) || 0;
-                              // Deduction if working less than 9 hours (including 1hr break)
-                              if (hrs > 0 && hrs < 9) {
-                                return sum + (9 - hrs);
+                              // AA Alive: 9 hours (including break), Mimix: 7.5 hours (excluding break)
+                              const threshold = status?.is_aa_alive ? 9 : 7.5;
+                              if (hrs > 0 && hrs < threshold) {
+                                return sum + (threshold - hrs);
                               }
                               return sum;
                             }, 0).toFixed(1)}
@@ -847,9 +873,14 @@ function ESSAttendanceContent() {
                       </div>
                     </div>
                     <p className="summary-note">
-                      {language === 'ms'
-                        ? '* Potongan dikira apabila jumlah jam kerja kurang dari 9 jam (termasuk 1 jam rehat)'
-                        : '* Deduction calculated when total hours less than 9 hrs (including 1hr break)'}
+                      {status?.is_aa_alive
+                        ? (language === 'ms'
+                          ? '* Potongan dikira apabila jumlah jam kerja kurang dari 9 jam (termasuk rehat)'
+                          : '* Deduction calculated when total hours less than 9 hrs (including break)')
+                        : (language === 'ms'
+                          ? '* Potongan dikira apabila jumlah jam kerja kurang dari 7.5 jam (tidak termasuk rehat)'
+                          : '* Deduction calculated when total hours less than 7.5 hrs (excluding break)')
+                      }
                     </p>
                   </div>
                 <div className="history-list">
