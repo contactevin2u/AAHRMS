@@ -3,7 +3,7 @@
  * Handles caching, offline functionality, and blocks clock-in when offline
  */
 
-const CACHE_NAME = 'ess-pwa-v4';
+const CACHE_NAME = 'ess-pwa-v5';
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = [
@@ -253,6 +253,10 @@ self.addEventListener('fetch', (event) => {
               });
             }
             return networkResponse;
+          })
+          .catch(() => {
+            // Asset not in cache and network failed - return empty response
+            return new Response('', { status: 408, statusText: 'Offline' });
           });
       })
   );
