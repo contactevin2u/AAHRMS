@@ -107,8 +107,16 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
     `, [outlet.id]);
 
     // Get today's attendance for this outlet
+    // Combine work_date with time columns to create proper timestamps
     const attendanceResult = await pool.query(`
-      SELECT cr.id, cr.clock_in_1 as clock_in_time, cr.clock_out_2 as clock_out_time, cr.status,
+      SELECT cr.id,
+             CASE WHEN cr.clock_in_1 IS NOT NULL
+                  THEN (cr.work_date || ' ' || cr.clock_in_1)::timestamp
+                  ELSE NULL END as clock_in_time,
+             CASE WHEN cr.clock_out_2 IS NOT NULL
+                  THEN (cr.work_date || ' ' || cr.clock_out_2)::timestamp
+                  ELSE NULL END as clock_out_time,
+             cr.status,
              e.name as employee_name, e.employee_id as emp_code
       FROM clock_in_records cr
       JOIN employees e ON cr.employee_id = e.id
@@ -342,11 +350,18 @@ router.get('/outlet/:outletId/attendance', authenticateEmployee, asyncHandler(as
   }
 
   // Get all staff with their attendance for the date
+  // Combine work_date with time columns to create proper timestamps
   const result = await pool.query(`
     SELECT e.id, e.name, e.employee_id, e.position,
            p.name as position_name,
            s.shift_start, s.shift_end, s.status as schedule_status,
-           cr.clock_in_1 as clock_in_time, cr.clock_out_2 as clock_out_time, cr.status as attendance_status,
+           CASE WHEN cr.clock_in_1 IS NOT NULL
+                THEN (cr.work_date || ' ' || cr.clock_in_1)::timestamp
+                ELSE NULL END as clock_in_time,
+           CASE WHEN cr.clock_out_2 IS NOT NULL
+                THEN (cr.work_date || ' ' || cr.clock_out_2)::timestamp
+                ELSE NULL END as clock_out_time,
+           cr.status as attendance_status,
            cr.total_hours, cr.late_minutes, cr.ot_hours
     FROM employees e
     LEFT JOIN positions p ON e.position_id = p.id
