@@ -157,8 +157,9 @@ function calculateEPF(basic, commission = 0, bonus = 0, employeeRate = 0.11, emp
   const rawBase = (basic || 0) + (commission || 0) + (bonus || 0);
 
   // EPF contributions are calculated on wage bands (rounded up to nearest RM100)
-  // This matches the majority of cases in the payroll data
-  const epfBase = Math.ceil(rawBase / 100) * 100;
+  // Exception: Commission-only employees with bonus (basic=0, bonus>0) use raw base without rounding
+  const isCommissionOnlyWithBonus = (basic || 0) === 0 && (bonus || 0) > 0;
+  const epfBase = isCommissionOnlyWithBonus ? rawBase : Math.ceil(rawBase / 100) * 100;
 
   // Employer rate: 13% for wages <= RM5000, 12% for wages > RM5000
   const employerRate = employerRateOverride !== null ? employerRateOverride : (rawBase <= 5000 ? 0.13 : 0.12);
