@@ -6,12 +6,12 @@ const pool = new Pool({
 });
 
 // Image values for comparison (EPF, SOCSO, EIS, PCB, Claims)
-// Updated with corrected values from LHDN/KWSP slips
+// Values from screenshot image - DO NOT MODIFY
 const imageValues = {
   'LAU JIA CHENG': { epf_ee: 1100, epf_er: 1200, socso_ee: 29.75, eis_ee: 11.90, pcb: 928.45, claim: 0 },
-  'EVIN LIM': { epf_ee: 1628, epf_er: 1776, socso_ee: 29.75, eis_ee: 11.90, pcb: 2736.10, claim: 0 },  // Fixed: EPF was swapped
+  'EVIN LIM': { epf_ee: 1776, epf_er: 1628, socso_ee: 29.75, eis_ee: 11.90, pcb: 2736.10, claim: 0 },
   'LEONG XIA HWEI': { epf_ee: 473, epf_er: 559, socso_ee: 21.25, eis_ee: 8.50, pcb: 67.85, claim: 44.45 },
-  'MICHELLE CHEAN MEI TZEE': { epf_ee: 2101, epf_er: 2292, socso_ee: 29.75, eis_ee: 11.90, pcb: 1014.75, claim: 51.05 },  // Updated from LHDN slip
+  'MICHELLE CHEAN MEI TZEE': { epf_ee: 1870, epf_er: 2040, socso_ee: 29.75, eis_ee: 11.90, pcb: 828.50, claim: 51.05 },
   'RAFINA BINTI MUHAMMAD FIRDAUS RAMESH': { epf_ee: 2879, epf_er: 3141, socso_ee: 29.75, eis_ee: 11.90, pcb: 0, claim: 8191.23 },
   'HIDAYAH BINTI MUSTAPA': { epf_ee: 1133, epf_er: 1236, socso_ee: 29.75, eis_ee: 11.90, pcb: 0, claim: 273.43 },
   'RAJA NUR SYAKIRAH BINTI RAJA SHURAN': { epf_ee: 1584, epf_er: 1728, socso_ee: 29.75, eis_ee: 11.90, pcb: 0, claim: 526.50 },
