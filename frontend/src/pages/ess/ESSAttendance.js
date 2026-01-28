@@ -809,9 +809,8 @@ function ESSAttendanceContent() {
               </div>
             ) : (
               <>
-                {/* Monthly Summary for Drivers */}
-                {isDriver && (
-                  <div className="driver-summary">
+                {/* Monthly Summary for All Employees */}
+                <div className="driver-summary">
                     <h3>{language === 'ms' ? 'Ringkasan Bulan Ini' : 'This Month Summary'}</h3>
                     <div className="summary-cards">
                       <div className="summary-card">
@@ -853,7 +852,6 @@ function ESSAttendanceContent() {
                         : '* Deduction calculated when total hours less than 9 hrs (including 1hr break)'}
                     </p>
                   </div>
-                )}
                 <div className="history-list">
                 {history.map((record, idx) => (
                   <div key={idx} className="history-card">
