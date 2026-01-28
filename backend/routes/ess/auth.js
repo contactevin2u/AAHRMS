@@ -258,10 +258,12 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
             e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings,
-            o.name as outlet_name
+            o.name as outlet_name,
+            d.name as department_name
      FROM employees e
      LEFT JOIN companies c ON e.company_id = c.id
      LEFT JOIN outlets o ON e.outlet_id = o.id
+     LEFT JOIN departments d ON e.department_id = d.id
      WHERE e.employee_id = $1 AND e.status = 'active'`,
     [employee_id]
   );
@@ -334,6 +336,8 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
       company_grouping_type: employee.company_grouping_type,
       outlet_id: employee.outlet_id,
       outlet_name: employee.outlet_name,
+      department_id: employee.department_id,
+      department_name: employee.department_name,
       employee_role: employee.employee_role || 'staff',
       position: employee.position,
       clock_in_required: employee.clock_in_required,
@@ -365,10 +369,12 @@ router.post('/login-name', asyncHandler(async (req, res) => {
             e.employee_role, e.position, e.clock_in_required,
             c.name as company_name, c.code as company_code, c.logo_url as company_logo,
             c.grouping_type as company_grouping_type, c.settings as company_settings,
-            o.name as outlet_name
+            o.name as outlet_name,
+            d.name as department_name
      FROM employees e
      LEFT JOIN companies c ON e.company_id = c.id
      LEFT JOIN outlets o ON e.outlet_id = o.id
+     LEFT JOIN departments d ON e.department_id = d.id
      WHERE UPPER(REPLACE(REPLACE(REPLACE(e.name, ' ', ''), '-', ''), '.', '')) = $1
        AND e.status = 'active'`,
     [normalizedInputName]
@@ -442,6 +448,8 @@ router.post('/login-name', asyncHandler(async (req, res) => {
       company_grouping_type: employee.company_grouping_type,
       outlet_id: employee.outlet_id,
       outlet_name: employee.outlet_name,
+      department_id: employee.department_id,
+      department_name: employee.department_name,
       employee_role: employee.employee_role || 'staff',
       position: employee.position,
       clock_in_required: employee.clock_in_required,
