@@ -1089,3 +1089,105 @@
     padding: 20px;
   }
 }
+
+/* ============================================
+   DRIVER SUMMARY STYLES
+   ============================================ */
+
+.driver-summary {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.driver-summary h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.driver-summary h3::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 16px;
+  background: #1976d2;
+  border-radius: 2px;
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.summary-card {
+  background: #f0f9ff;
+  border-radius: 10px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.summary-card.deduction {
+  background: #fef2f2;
+}
+
+.summary-card .summary-icon {
+  font-size: 24px;
+}
+
+.summary-card .summary-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-card .summary-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1976d2;
+}
+
+.summary-card.deduction .summary-value {
+  color: #dc2626;
+}
+
+.summary-card .summary-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.summary-note {
+  margin-top: 12px;
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+  font-style: italic;
+}
+
+@media (max-width: 400px) {
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-card {
+    flex-direction: row;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .summary-card .summary-content {
+    align-items: flex-start;
+  }
+}
