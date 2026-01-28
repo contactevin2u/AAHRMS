@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../api';
+import api, { employeeApi } from '../../api';
 
 const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
   const [fullData, setFullData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [managedOutlets, setManagedOutlets] = useState([]);
 
   // Check if company uses outlets (Mimix = company_id 3)
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
@@ -20,6 +21,22 @@ const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
       setLoading(true);
       const res = await api.get(`/employees/${employee.id}`);
       setFullData(res.data);
+
+      // Fetch managed outlets for managers/supervisors
+      const empData = res.data;
+      const isManagerOrSupervisor = ['manager', 'supervisor'].includes(empData.employee_role) ||
+        empData.position?.toLowerCase().includes('manager') ||
+        empData.position?.toLowerCase().includes('supervisor');
+
+      if (isManagerOrSupervisor) {
+        try {
+          const outletsRes = await employeeApi.getEmployeeOutlets(employee.id);
+          setManagedOutlets(outletsRes.data?.outlets || []);
+        } catch (err) {
+          console.error('Error fetching managed outlets:', err);
+          setManagedOutlets([]);
+        }
+      }
     } catch (err) {
       console.error('Error fetching employee details:', err);
       setFullData(employee); // Fallback to passed data
@@ -180,6 +197,29 @@ const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
                 )}
               </div>
             </div>
+
+            {/* Managed Outlets - Show for managers/supervisors (any company) */}
+            {(['manager', 'supervisor'].includes(data.employee_role) ||
+              data.position?.toLowerCase().includes('manager') ||
+              data.position?.toLowerCase().includes('supervisor')) && (
+              <div className="detail-section">
+                <h4>Managed Outlets</h4>
+                {managedOutlets.length > 0 ? (
+                  <div className="managed-outlets-list">
+                    {managedOutlets.map(outlet => (
+                      <div key={outlet.id} className="managed-outlet-item">
+                        <span className="outlet-name">{outlet.name}</span>
+                        {outlet.address && <span className="outlet-address">{outlet.address}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
+                    No outlets assigned yet
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Bank Information */}
             <div className="detail-section">
@@ -418,6 +458,33 @@ const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
           .detail-grid {
             grid-template-columns: 1fr;
           }
+        }
+
+        .managed-outlets-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .managed-outlet-item {
+          display: flex;
+          flex-direction: column;
+          padding: 10px 12px;
+          background: #f1f5f9;
+          border-radius: 8px;
+          border-left: 3px solid #1976d2;
+        }
+
+        .managed-outlet-item .outlet-name {
+          font-weight: 600;
+          color: #1e293b;
+          font-size: 14px;
+        }
+
+        .managed-outlet-item .outlet-address {
+          font-size: 12px;
+          color: #64748b;
+          margin-top: 2px;
         }
       `}</style>
     </div>
