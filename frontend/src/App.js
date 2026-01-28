@@ -78,7 +78,7 @@ function ESSSupervisorProtectedRoute({ children }) {
     return <Navigate to="/ess/dashboard" replace />;
   }
 
-  return children;
+  return <LanguageProvider>{children}</LanguageProvider>;
 }
 
 // ESS Manager Protected Route - for manager only pages (team overview)
@@ -99,7 +99,7 @@ function ESSManagerProtectedRoute({ children }) {
     return <Navigate to="/ess/dashboard" replace />;
   }
 
-  return children;
+  return <LanguageProvider>{children}</LanguageProvider>;
 }
 
 function App() {
