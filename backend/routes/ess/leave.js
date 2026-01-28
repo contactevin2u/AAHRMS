@@ -727,12 +727,34 @@ router.post('/:id/approve', authenticateEmployee, asyncHandler(async (req, res) 
   }
 
   // Verify approver can approve for this outlet
-  const canApprove = await canApproveForOutlet(approver, leaveRequest.employee_outlet_id);
+  // Boss/Director can approve for any outlet in the company
+  const canApprove = isBossOrDirector(approver) || await canApproveForOutlet(approver, leaveRequest.employee_outlet_id);
   if (!canApprove) {
     return res.status(403).json({ error: 'You cannot approve leave for this employee' });
   }
 
-  // Verify approval level matches approver's role
+  // Boss/Director can approve at any level and fully approve the request
+  if (isBossOrDirector(approver)) {
+    // Boss/Director fully approves the leave request
+    await pool.query(
+      `UPDATE leave_requests
+       SET manager_id = $1, manager_approved = true, manager_approved_at = NOW(),
+           approval_level = 3
+       WHERE id = $2`,
+      [req.employee.id, id]
+    );
+
+    // Create notification for employee
+    await pool.query(
+      `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+       VALUES ($1, 'leave', 'Leave Request Update', 'Your leave request has been approved by management. Pending final admin approval.', 'leave_request', $2)`,
+      [leaveRequest.employee_id, id]
+    );
+
+    return res.json({ message: 'Leave approved by management. Pending final admin approval.' });
+  }
+
+  // Verify approval level matches approver's role (for supervisor/manager)
   if (leaveRequest.approval_level === 1 && approver.employee_role !== 'supervisor') {
     return res.status(400).json({ error: 'This leave request requires supervisor approval first' });
   }
@@ -782,7 +804,7 @@ router.post('/:id/approve', authenticateEmployee, asyncHandler(async (req, res) 
 }));
 
 /**
- * Reject leave request (supervisor/manager)
+ * Reject leave request (supervisor/manager/boss/director)
  */
 router.post('/:id/reject', authenticateEmployee, asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -792,14 +814,14 @@ router.post('/:id/reject', authenticateEmployee, asyncHandler(async (req, res) =
     return res.status(400).json({ error: 'Rejection reason is required' });
   }
 
-  // Check if user is supervisor or manager
-  if (!isSupervisorOrManager(req.employee)) {
-    return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
+  // Check if user is supervisor, manager, boss, or director
+  if (!canApproveLeave(req.employee)) {
+    return res.status(403).json({ error: 'Access denied. Supervisor, Manager, or Director role required.' });
   }
 
-  // Get employee's full info
+  // Get employee's full info including position
   const empResult = await pool.query(
-    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    'SELECT employee_role, company_id, outlet_id, position FROM employees WHERE id = $1',
     [req.employee.id]
   );
   const approver = { ...req.employee, ...empResult.rows[0] };
@@ -825,8 +847,9 @@ router.post('/:id/reject', authenticateEmployee, asyncHandler(async (req, res) =
   }
 
   // Verify approver can approve for this outlet
-  const canApprove = await canApproveForOutlet(approver, leaveRequest.employee_outlet_id);
-  if (!canApprove) {
+  // Boss/Director can reject for any outlet in the company
+  const canReject = isBossOrDirector(approver) || await canApproveForOutlet(approver, leaveRequest.employee_outlet_id);
+  if (!canReject) {
     return res.status(403).json({ error: 'You cannot reject leave for this employee' });
   }
 
@@ -849,17 +872,17 @@ router.post('/:id/reject', authenticateEmployee, asyncHandler(async (req, res) =
 }));
 
 /**
- * Get count of pending leave approvals for supervisor/manager
+ * Get count of pending leave approvals for supervisor/manager/boss/director
  */
 router.get('/team-pending-count', authenticateEmployee, asyncHandler(async (req, res) => {
-  // Check if user is supervisor or manager
-  if (!isSupervisorOrManager(req.employee)) {
+  // Check if user is supervisor, manager, boss, or director
+  if (!canApproveLeave(req.employee)) {
     return res.json({ count: 0 });
   }
 
-  // Get employee's full info
+  // Get employee's full info including position
   const empResult = await pool.query(
-    'SELECT employee_role, company_id, outlet_id FROM employees WHERE id = $1',
+    'SELECT employee_role, company_id, outlet_id, position FROM employees WHERE id = $1',
     [req.employee.id]
   );
   const employee = { ...req.employee, ...empResult.rows[0] };
@@ -868,24 +891,48 @@ router.get('/team-pending-count', authenticateEmployee, asyncHandler(async (req,
     return res.json({ count: 0 });
   }
 
-  const outletIds = await getManagedOutlets(employee);
+  // Boss/Director can see ALL outlets
+  let outletIds;
+  if (isBossOrDirector(employee)) {
+    const allOutletsResult = await pool.query(
+      'SELECT id FROM outlets WHERE company_id = $1',
+      [employee.company_id]
+    );
+    outletIds = allOutletsResult.rows.map(r => r.id);
+  } else {
+    outletIds = await getManagedOutlets(employee);
+  }
 
   if (outletIds.length === 0) {
     return res.json({ count: 0 });
   }
 
-  const result = await pool.query(
-    `SELECT COUNT(*) as count
-     FROM leave_requests lr
-     JOIN employees e ON lr.employee_id = e.id
-     WHERE e.outlet_id = ANY($1)
-       AND lr.status = 'pending'
-       AND (
-         (lr.approval_level = 1 AND $2 = 'supervisor')
-         OR (lr.approval_level = 2 AND $2 = 'manager')
-       )`,
-    [outletIds, employee.employee_role]
-  );
+  let result;
+  if (isBossOrDirector(employee)) {
+    // Boss/Director sees all pending leave requests
+    result = await pool.query(
+      `SELECT COUNT(*) as count
+       FROM leave_requests lr
+       JOIN employees e ON lr.employee_id = e.id
+       WHERE e.outlet_id = ANY($1)
+         AND lr.status = 'pending'`,
+      [outletIds]
+    );
+  } else {
+    // Supervisor/Manager sees based on approval level
+    result = await pool.query(
+      `SELECT COUNT(*) as count
+       FROM leave_requests lr
+       JOIN employees e ON lr.employee_id = e.id
+       WHERE e.outlet_id = ANY($1)
+         AND lr.status = 'pending'
+         AND (
+           (lr.approval_level = 1 AND $2 = 'supervisor')
+           OR (lr.approval_level = 2 AND $2 = 'manager')
+         )`,
+      [outletIds, employee.employee_role]
+    );
+  }
 
   res.json({ count: parseInt(result.rows[0].count) });
 }));

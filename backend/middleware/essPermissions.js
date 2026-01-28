@@ -374,20 +374,36 @@ const isAAAliveIndoorSalesManager = async (employee) => {
 const buildPermissionFlags = async (employee) => {
   const isMimix = isMimixCompany(employee.company_id);
   const isSupOrMgr = isSupervisorOrManager(employee);
-  const managedOutlets = isSupOrMgr ? await getManagedOutlets(employee) : [];
+  const isBossDir = isBossOrDirector(employee);
+  const canApproveOTLeave = isSupOrMgr || isBossDir;
+
+  // Get managed outlets - boss/director gets all outlets
+  let managedOutlets = [];
+  if (isBossDir && isMimix) {
+    const pool = require('../db');
+    const allOutletsResult = await pool.query(
+      'SELECT id FROM outlets WHERE company_id = $1',
+      [employee.company_id]
+    );
+    managedOutlets = allOutletsResult.rows.map(r => r.id);
+  } else if (isSupOrMgr) {
+    managedOutlets = await getManagedOutlets(employee);
+  }
 
   // AA Alive Indoor Sales Manager can also approve OT and manage schedules
   const isIndoorSalesManager = await isAAAliveIndoorSalesManager(employee);
 
   return {
     employee_role: employee.employee_role || ROLES.STAFF,
-    can_approve_leave: isSupOrMgr && isMimix,
-    can_approve_ot: (isSupOrMgr && isMimix) || isIndoorSalesManager,
-    can_approve_swaps: isSupOrMgr && isMimix,
-    can_view_team: isSupOrMgr,
-    can_manage_schedule: (isSupOrMgr && isMimix) || isIndoorSalesManager,
+    can_approve_leave: (canApproveOTLeave && isMimix) || isIndoorSalesManager,
+    can_approve_ot: (canApproveOTLeave && isMimix) || isIndoorSalesManager,
+    can_approve_swaps: canApproveOTLeave && isMimix,
+    can_approve_claims: canApproveClaimsForMimix(employee),
+    can_view_team: canApproveOTLeave,
+    can_manage_schedule: (canApproveOTLeave && isMimix) || isIndoorSalesManager,
     managed_outlets: managedOutlets,
     is_mimix: isMimix,
+    is_boss_or_director: isBossDir,
     is_indoor_sales_manager: isIndoorSalesManager
   };
 };
