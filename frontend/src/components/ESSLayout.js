@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import OfflineBanner from './OfflineBanner';
 import { isSupervisorOrManager, isMimixCompany, getRoleDisplayName } from '../utils/permissions';
+import { essApi } from '../api';
 import { useLanguage } from '../contexts/LanguageContext';
 import './ESSLayout.css';
 
@@ -17,6 +18,20 @@ function ESSLayout({ children }) {
     if (storedInfo) {
       setEmployeeInfo(JSON.parse(storedInfo));
     }
+
+    // Refresh employee info from server to pick up admin changes (e.g. clock_in_required)
+    const refreshEmployeeInfo = async () => {
+      try {
+        const res = await essApi.me();
+        if (res.data?.employee) {
+          localStorage.setItem('employeeInfo', JSON.stringify(res.data.employee));
+          setEmployeeInfo(res.data.employee);
+        }
+      } catch (e) {
+        // Ignore - use cached info
+      }
+    };
+    refreshEmployeeInfo();
   }, []);
 
   // Fetch unread notification count
