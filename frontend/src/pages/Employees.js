@@ -223,12 +223,8 @@ function Employees() {
       setAllowanceTypes(allowTypesRes.data);
       setPositions(positionsRes.data);
 
-      // Expand all groups by default
-      const expanded = {};
-      (outletsRes.data || []).forEach(o => { expanded['outlet-' + o.id] = true; });
-      (deptRes.data || []).forEach(d => { expanded['dept-' + d.id] = true; });
-      expanded['no-group'] = true;
-      setExpandedGroups(expanded);
+      // Collapse all groups by default - click to expand
+      setExpandedGroups({});
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {

@@ -15,7 +15,7 @@ const Attendance = () => {
   const [summaryData, setSummaryData] = useState(null);
   const [expandedOutlets, setExpandedOutlets] = useState({});
   const [expandedPositions, setExpandedPositions] = useState({});
-  const [filterMode, setFilterMode] = useState('month'); // 'month', 'date', 'range'
+  const [filterMode, setFilterMode] = useState('date'); // 'month', 'date', 'range'
   const [filters, setFilters] = useState({
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
@@ -55,6 +55,9 @@ const Attendance = () => {
   // Reject OT modal state
   const [showRejectOTModal, setShowRejectOTModal] = useState(null);
   const [rejectOTReason, setRejectOTReason] = useState('');
+
+  // Expandable row state - click to show details
+  const [expandedRows, setExpandedRows] = useState({});
 
   const admin = JSON.parse(localStorage.getItem('admin') || '{}');
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
@@ -136,12 +139,8 @@ const Attendance = () => {
         year: filters.year
       });
       setSummaryData(res.data);
-      // Auto-expand all outlets
-      const expanded = {};
-      res.data.outlets?.forEach(o => {
-        expanded[o.outlet_id || 'no_outlet'] = true;
-      });
-      setExpandedOutlets(expanded);
+      // Collapse all outlets by default - click to expand
+      setExpandedOutlets({});
     } catch (error) {
       console.error('Error fetching summary:', error);
     } finally {
@@ -873,18 +872,12 @@ const Attendance = () => {
                       selectedRecords.length === records.filter(r => r.status === 'pending').length}
                   />
                 </th>
+                <th></th>
                 <th>Date</th>
                 <th>Employee</th>
                 {!isSupervisor && <th>{isAAAlive ? 'Department' : 'Outlet'}</th>}
-                <th className="time-col">Clock In 1<br/><small>Start Work</small></th>
-                <th className="time-col">Clock Out 1<br/><small>Break</small></th>
-                <th className="time-col">Clock In 2<br/><small>Return</small></th>
-                <th className="time-col">Clock Out 2<br/><small>End Work</small></th>
-                <th>Selfie</th>
-                <th>GPS</th>
-                {!isAAAlive && <th title="Calculated from clock times">Calc Hours</th>}
-                <th>Total Hours</th>
-                <th>OT Hours</th>
+                <th>Hours</th>
+                <th>OT</th>
                 {!isAAAlive && <th>OT Status</th>}
                 <th>Status</th>
                 <th>Actions</th>
@@ -911,7 +904,7 @@ const Attendance = () => {
                 if (filteredRecords.length === 0) {
                   return (
                     <tr>
-                      <td colSpan={isSupervisor ? (isAAAlive ? 14 : 17) : (isAAAlive ? 15 : 18)} className="no-data">
+                      <td colSpan={!isSupervisor ? (!isAAAlive ? 10 : 9) : (!isAAAlive ? 9 : 8)} className="no-data">
                         No attendance records found
                       </td>
                     </tr>
@@ -919,8 +912,11 @@ const Attendance = () => {
                 }
                 return filteredRecords.map(record => {
                   const calcHours = calculateActualHours(record);
+                  const isExpanded = expandedRows[record.id];
+                  const colCount = !isSupervisor ? (!isAAAlive ? 10 : 9) : (!isAAAlive ? 9 : 8);
                   return (
-                    <tr key={record.id} className={selectedRecords.includes(record.id) ? 'selected' : ''}>
+                    <React.Fragment key={record.id}>
+                    <tr className={`${selectedRecords.includes(record.id) ? 'selected' : ''} ${isExpanded ? 'expanded-parent' : ''}`}>
                       <td className="checkbox-col">
                         {record.status === 'pending' && (
                           <input
@@ -929,6 +925,9 @@ const Attendance = () => {
                             onChange={() => handleSelectRecord(record.id)}
                           />
                         )}
+                      </td>
+                      <td className="expand-toggle" onClick={() => setExpandedRows(prev => ({ ...prev, [record.id]: !prev[record.id] }))}>
+                        <span style={{ cursor: 'pointer', fontSize: '0.8rem' }}>{isExpanded ? '▼' : '▶'}</span>
                       </td>
                       <td><strong>{formatDate(record.work_date)}</strong></td>
                       <td>
@@ -941,60 +940,8 @@ const Attendance = () => {
                         </span>
                       </td>
                       {!isSupervisor && <td>{isAAAlive ? (record.department_name || '-') : (record.outlet_name || '-')}</td>}
-                      <td className="time-cell">
-                        {formatTime(record.clock_in_1)}
-                      </td>
-                      <td className="time-cell">{formatTime(record.clock_out_1)}</td>
-                      <td className="time-cell">{formatTime(record.clock_in_2)}</td>
-                      <td className="time-cell">
-                        {formatTime(record.clock_out_2)}
-                      </td>
-                      <td className="photo-cell">
-                        {hasPhotos(record) ? (
-                          <button
-                            className="photo-btn"
-                            onClick={() => showPhotoDetails(record)}
-                            title="View Selfie Photos"
-                          >
-                            View
-                          </button>
-                        ) : (
-                          <span className="no-photo">-</span>
-                        )}
-                      </td>
-                      <td className="gps-cell">
-                        {(record.location_in_1 || record.location_out_1 || record.location_in_2 || record.location_out_2 ||
-                          record.address_in_1 || record.address_out_1 || record.address_in_2 || record.address_out_2) ? (
-                          <button
-                            className="gps-btn"
-                            onClick={() => showGpsDetails(record)}
-                            title="View Location"
-                          >
-                            View
-                          </button>
-                        ) : (
-                          <span className="no-gps">-</span>
-                        )}
-                      </td>
-                      {!isAAAlive && (
-                        <td className="calc-hours-cell" title="Calculated from clock times">
-                          {calcHours !== null ? (
-                            <span className={calcHours < 8 ? 'under-hours' : ''}>
-                              {calcHours.toFixed(1)}h
-                            </span>
-                          ) : (
-                            <span className="in-progress">Working...</span>
-                          )}
-                        </td>
-                      )}
                       <td className="hours-cell">
                         {renderEditableHours(record, 'total_work_hours', record.total_hours, true)}
-                        {/* Show combined total if OT is approved */}
-                        {!isAAAlive && record.ot_approved && record.ot_hours > 0 && (
-                          <span className="combined-total" title="Total + Approved OT">
-                            = {((parseFloat(record.total_hours) || 0) + (parseFloat(record.ot_hours) || 0)).toFixed(1)}h
-                          </span>
-                        )}
                       </td>
                       <td className="hours-cell ot">
                         {renderEditableHours(record, 'ot_hours', record.ot_hours, false)}
@@ -1088,6 +1035,53 @@ const Attendance = () => {
                         </button>
                       </td>
                     </tr>
+                    {isExpanded && (
+                      <tr className="expanded-detail-row">
+                        <td colSpan={colCount}>
+                          <div className="detail-grid">
+                            <div className="detail-section">
+                              <h4>Clock Times</h4>
+                              <div className="detail-items">
+                                <span><strong>In 1:</strong> {formatTime(record.clock_in_1)}</span>
+                                <span><strong>Out 1:</strong> {formatTime(record.clock_out_1)}</span>
+                                <span><strong>In 2:</strong> {formatTime(record.clock_in_2)}</span>
+                                <span><strong>Out 2:</strong> {formatTime(record.clock_out_2)}</span>
+                              </div>
+                            </div>
+                            {!isAAAlive && (
+                              <div className="detail-section">
+                                <h4>Calculated</h4>
+                                <div className="detail-items">
+                                  <span><strong>Calc Hours:</strong> {calcHours !== null ? `${calcHours.toFixed(1)}h` : 'Working...'}</span>
+                                  {record.ot_approved && record.ot_hours > 0 && (
+                                    <span><strong>Total+OT:</strong> {((parseFloat(record.total_hours) || 0) + (parseFloat(record.ot_hours) || 0)).toFixed(1)}h</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            <div className="detail-section">
+                              <h4>Verification</h4>
+                              <div className="detail-items">
+                                <span><strong>Selfie:</strong> {hasPhotos(record) ? (
+                                  <button className="photo-btn" onClick={() => showPhotoDetails(record)} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>View</button>
+                                ) : '-'}</span>
+                                <span><strong>GPS:</strong> {(record.location_in_1 || record.location_out_1 || record.location_in_2 || record.location_out_2 ||
+                                  record.address_in_1 || record.address_out_1 || record.address_in_2 || record.address_out_2) ? (
+                                  <button className="gps-btn" onClick={() => showGpsDetails(record)} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>View</button>
+                                ) : '-'}</span>
+                              </div>
+                            </div>
+                            {record.notes && (
+                              <div className="detail-section">
+                                <h4>Notes</h4>
+                                <p style={{ margin: 0, fontSize: '0.85rem' }}>{record.notes}</p>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 });
               })()}

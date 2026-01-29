@@ -116,12 +116,8 @@ function Leave() {
       setPendingCount(countRes.data.count);
       setOutlets(outletsRes.data || []);
       setDepartments(deptsRes.data || []);
-      // Expand all groups by default
-      const expanded = {};
-      (outletsRes.data || []).forEach(o => { expanded['outlet-' + o.id] = true; });
-      (deptsRes.data || []).forEach(d => { expanded['dept-' + d.id] = true; });
-      expanded['no-group'] = true;
-      setExpandedGroups(expanded);
+      // Collapse all groups by default - click to expand
+      setExpandedGroups({});
     } catch (error) {
       console.error('Error fetching initial data:', error);
     }

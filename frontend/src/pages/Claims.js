@@ -31,6 +31,9 @@ function Claims() {
     department_id: ''
   });
 
+  // Expandable rows
+  const [expandedClaims, setExpandedClaims] = useState({});
+
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
@@ -573,29 +576,29 @@ function Claims() {
                           onChange={toggleSelectAll}
                         />
                       </th>
+                      <th></th>
                       <th>Date</th>
                       <th>Employee</th>
                       <th>Category</th>
-                      <th>Description</th>
                       <th>Amount</th>
-                      <th>Receipt</th>
                       <th>Status</th>
-                      <th>AI Info</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {claims.length === 0 ? (
                       <tr>
-                        <td colSpan="10" className="no-data">No claims found</td>
+                        <td colSpan="8" className="no-data">No claims found</td>
                       </tr>
                     ) : (
                       claims.map(claim => {
                         const aiInfo = getAIInfo(claim);
                         const attention = needsAttention(claim);
+                        const isExpanded = expandedClaims[claim.id];
 
                         return (
-                          <tr key={claim.id} className={attention ? 'needs-attention' : ''}>
+                          <React.Fragment key={claim.id}>
+                          <tr className={attention ? 'needs-attention' : ''}>
                             <td>
                               {claim.status === 'pending' && !claim.linked_payroll_item_id && (
                                 <input
@@ -605,54 +608,16 @@ function Claims() {
                                 />
                               )}
                             </td>
+                            <td style={{ cursor: 'pointer', textAlign: 'center', width: '24px' }} onClick={() => setExpandedClaims(prev => ({ ...prev, [claim.id]: !prev[claim.id] }))}>
+                              <span style={{ fontSize: '0.8rem' }}>{isExpanded ? '▼' : '▶'}</span>
+                            </td>
                             <td>{formatDate(claim.claim_date)}</td>
                             <td><strong>{claim.employee_name}</strong></td>
                             <td>
                               <span className="category-badge">{getCategoryLabel(claim.category)}</span>
                             </td>
-                            <td className="desc-cell">{claim.description || '-'}</td>
                             <td><strong>{formatAmount(claim.amount)}</strong></td>
-                            <td>
-                              {claim.receipt_url ? (
-                                <a
-                                  href={claim.receipt_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="receipt-link"
-                                  title="View Receipt"
-                                >
-                                  View
-                                </a>
-                              ) : (
-                                <span className="no-receipt">-</span>
-                              )}
-                            </td>
                             <td>{getStatusBadge(claim.status)}</td>
-                            <td>
-                              {claim.linked_payroll_item_id ? (
-                                <span className="linked-badge">Linked</span>
-                              ) : aiInfo ? (
-                                <span
-                                  className="ai-reason-badge"
-                                  title={aiInfo.reasons.join('\n')}
-                                  style={{
-                                    display: 'inline-block',
-                                    padding: '2px 8px',
-                                    background: aiInfo.type === 'auto-approved' ? '#f0fdf4' : (attention ? '#fef3c7' : '#f3f4f6'),
-                                    color: aiInfo.type === 'auto-approved' ? '#16a34a' : (attention ? '#92400e' : '#6b7280'),
-                                    borderRadius: '4px',
-                                    fontSize: '11px',
-                                    maxWidth: '150px',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    cursor: 'help'
-                                  }}
-                                >
-                                  {aiInfo.type === 'auto-approved' ? '🤖 ' : (attention ? '⚠️ ' : '')}{aiInfo.reasons[0]}
-                                </span>
-                              ) : '-'}
-                            </td>
                             <td>
                               <div className="action-buttons">
                                 {claim.status === 'pending' && !claim.linked_payroll_item_id && (
@@ -674,6 +639,35 @@ function Claims() {
                               </div>
                             </td>
                           </tr>
+                          {isExpanded && (
+                            <tr className="expanded-detail-row">
+                              <td colSpan="8" style={{ padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
+                                  {claim.description && (
+                                    <div><strong style={{ color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase' }}>Description</strong><br/>{claim.description}</div>
+                                  )}
+                                  <div>
+                                    <strong style={{ color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase' }}>Receipt</strong><br/>
+                                    {claim.receipt_url ? (
+                                      <a href={claim.receipt_url} target="_blank" rel="noopener noreferrer" className="receipt-link">View Receipt</a>
+                                    ) : 'No receipt'}
+                                  </div>
+                                  {aiInfo && (
+                                    <div>
+                                      <strong style={{ color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase' }}>AI Info</strong><br/>
+                                      <span style={{ color: aiInfo.type === 'auto-approved' ? '#16a34a' : (attention ? '#92400e' : '#6b7280') }}>
+                                        {aiInfo.reasons.join(', ')}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {claim.linked_payroll_item_id && (
+                                    <div><strong style={{ color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase' }}>Payroll</strong><br/>Linked to payroll</div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          </React.Fragment>
                         );
                       })
                     )}
