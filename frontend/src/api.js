@@ -38,25 +38,62 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle auth errors - only redirect on 401 (unauthorized), not 403 (forbidden)
+// Handle auth errors - attempt token refresh on 401 before redirecting
 // 401 = not authenticated (need to login)
 // 403 = authenticated but not permitted (don't logout, just show error)
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+const onRefreshed = (token) => {
+  refreshSubscribers.forEach(cb => cb(token));
+  refreshSubscribers = [];
+};
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
       const path = window.location.pathname;
       const requestUrl = error.config?.url || '';
 
-      // Don't redirect if:
-      // 1. Already on login page (let component handle the error)
-      // 2. The request was a login attempt (let component show error message)
       const isLoginPage = path === '/ess/login' || path === '/' || path === '/login';
       const isLoginRequest = requestUrl.includes('/login') || requestUrl.includes('/ess/login');
+      const isRefreshRequest = requestUrl.includes('/refresh');
 
-      if (isLoginPage || isLoginRequest) {
-        // Don't redirect, let the component handle the error
+      if (isLoginPage || isLoginRequest || isRefreshRequest) {
         return Promise.reject(error);
+      }
+
+      // For ESS routes, attempt token refresh
+      if (path.startsWith('/ess') && localStorage.getItem('employeeToken')) {
+        if (!isRefreshing) {
+          isRefreshing = true;
+          try {
+            const res = await api.post('/ess/auth/refresh');
+            const newToken = res.data.token;
+            localStorage.setItem('employeeToken', newToken);
+            isRefreshing = false;
+            onRefreshed(newToken);
+            // Retry the original request
+            error.config.headers.Authorization = `Bearer ${newToken}`;
+            return api(error.config);
+          } catch (refreshError) {
+            isRefreshing = false;
+            refreshSubscribers = [];
+            localStorage.removeItem('employeeToken');
+            localStorage.removeItem('employeeInfo');
+            window.location.href = '/ess/login';
+            return Promise.reject(refreshError);
+          }
+        } else {
+          // Queue requests while refreshing
+          return new Promise((resolve) => {
+            refreshSubscribers.push((token) => {
+              error.config.headers.Authorization = `Bearer ${token}`;
+              resolve(api(error.config));
+            });
+          });
+        }
       }
 
       if (path.startsWith('/ess')) {
@@ -71,6 +108,20 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Auto-refresh ESS token every 4 hours to prevent expiry during active use
+setInterval(async () => {
+  const token = localStorage.getItem('employeeToken');
+  const path = window.location.pathname;
+  if (token && path.startsWith('/ess')) {
+    try {
+      const res = await api.post('/ess/auth/refresh');
+      localStorage.setItem('employeeToken', res.data.token);
+    } catch (e) {
+      // Silent fail - will refresh on next 401
+    }
+  }
+}, 4 * 60 * 60 * 1000); // 4 hours
 
 export const feedbackApi = {
   submit: (data) => api.post('/feedback/submit', data),

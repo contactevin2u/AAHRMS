@@ -20,7 +20,7 @@ const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'strict',
-  maxAge: 8 * 60 * 60 * 1000, // 8 hours
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
   path: '/'
 };
 
@@ -127,7 +127,7 @@ router.post('/login', asyncHandler(async (req, res) => {
       features
     },
     process.env.JWT_SECRET,
-    { expiresIn: '8h' }
+    { expiresIn: '24h' }
   );
 
   // Set HttpOnly cookie
@@ -314,7 +314,7 @@ router.post('/login-ic', asyncHandler(async (req, res) => {
       features
     },
     process.env.JWT_SECRET,
-    { expiresIn: '8h' }
+    { expiresIn: '24h' }
   );
 
   // Set HttpOnly cookie
@@ -426,7 +426,7 @@ router.post('/login-name', asyncHandler(async (req, res) => {
       features
     },
     process.env.JWT_SECRET,
-    { expiresIn: '8h' }
+    { expiresIn: '24h' }
   );
 
   // Set HttpOnly cookie
@@ -686,6 +686,43 @@ router.post('/change-password', authenticateEmployee, asyncHandler(async (req, r
       permissions
     }
   });
+}));
+
+// Refresh token - extends session without re-login
+router.post('/refresh', authenticateEmployee, asyncHandler(async (req, res) => {
+  // Re-fetch employee to get latest data
+  const result = await pool.query(
+    `SELECT e.*, c.name as company_name FROM employees e
+     LEFT JOIN companies c ON e.company_id = c.id
+     WHERE e.id = $1 AND e.status = 'active'`,
+    [req.employee.id]
+  );
+
+  if (result.rows.length === 0) {
+    return res.status(401).json({ error: 'Employee no longer active' });
+  }
+
+  const employee = result.rows[0];
+  const features = await buildPermissionFlags(employee);
+
+  const token = jwt.sign(
+    {
+      id: employee.id,
+      employee_id: employee.employee_id,
+      name: employee.name,
+      email: employee.email,
+      role: 'employee',
+      employee_role: employee.employee_role || 'staff',
+      company_id: employee.company_id,
+      outlet_id: employee.outlet_id,
+      features
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+
+  res.cookie('ess_token', token, COOKIE_OPTIONS);
+  res.json({ token, message: 'Token refreshed' });
 }));
 
 // Logout (clear HttpOnly cookie)

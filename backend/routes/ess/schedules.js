@@ -802,10 +802,10 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
   }
 
   // T+2 rule: Check if the date is at least 2 days in the future
-  // Managers and directors are exempt from this rule
-  const isManagerOrAbove = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director';
+  // Managers, directors, and designated schedule managers are exempt
+  const isExemptFromT2 = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director' || (await isAAAliveIndoorSalesManager(req.employee));
 
-  if (!isManagerOrAbove) {
+  if (!isExemptFromT2) {
     const scheduleDate = new Date(schedule_date);
     const twoDaysFromNow = new Date();
     twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
@@ -942,8 +942,8 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
   const templatesMap = {};
   templatesResult.rows.forEach(t => { templatesMap[t.id] = t; });
 
-  // T+2 cutoff date - managers and directors are exempt
-  const isManagerOrAbove = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director';
+  // T+2 cutoff date - managers, directors, and designated schedule managers are exempt
+  const isManagerOrAbove = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director' || (await isAAAliveIndoorSalesManager(req.employee));
   const twoDaysFromNow = new Date();
   twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
   twoDaysFromNow.setHours(0, 0, 0, 0);
@@ -1121,10 +1121,10 @@ router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (r
   const schedule = existing.rows[0];
 
   // T+2 rule: Check if the date is at least 2 days in the future
-  // Managers and directors are exempt from this rule
-  const isManagerOrAbove = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director';
+  // Managers, directors, and designated schedule managers are exempt
+  const isExemptFromT2 = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director' || (await isAAAliveIndoorSalesManager(req.employee));
 
-  if (!isManagerOrAbove) {
+  if (!isExemptFromT2) {
     const scheduleDate = new Date(schedule.schedule_date);
     const twoDaysFromNow = new Date();
     twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
