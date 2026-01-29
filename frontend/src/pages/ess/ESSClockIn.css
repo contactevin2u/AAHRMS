@@ -513,11 +513,33 @@
   color: #1e293b !important;
 }
 
-/* Help Button */
-.clockin-help-btn {
+/* Top Action Buttons */
+.clockin-top-actions {
   position: absolute;
   top: 12px;
   right: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.clockin-refresh-btn {
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clockin-refresh-btn:active {
+  transform: rotate(180deg);
+}
+
+/* Help Button */
+.clockin-help-btn {
+  position: static;
   padding: 8px 16px;
   background: #f1f5f9;
   border: none;
@@ -529,7 +551,6 @@
   align-items: center;
   gap: 4px;
   transition: all 0.2s;
-  z-index: 10;
 }
 
 .clockin-help-btn:hover {

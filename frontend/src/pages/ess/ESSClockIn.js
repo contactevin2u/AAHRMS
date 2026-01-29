@@ -559,10 +559,15 @@ function ESSClockInContent() {
       )}
 
       <div className="ess-clockin">
-        {/* Help Button */}
-        <button className="clockin-help-btn" onClick={() => setShowHelp(true)}>
-          &#x2753; {language === 'ms' ? 'Bantuan' : 'Help'}
-        </button>
+        {/* Top Action Buttons */}
+        <div className="clockin-top-actions">
+          <button className="clockin-refresh-btn" onClick={() => { fetchStatus(); setSuccess(''); setError(''); }}>
+            &#x1F504;
+          </button>
+          <button className="clockin-help-btn" onClick={() => setShowHelp(true)}>
+            &#x2753; {language === 'ms' ? 'Bantuan' : 'Help'}
+          </button>
+        </div>
 
         {/* Offline Warning */}
         {!isOnline && (
