@@ -55,8 +55,6 @@ router.get('/:id', authenticateEmployee, asyncHandler(async (req, res) => {
       o.name as outlet_name,
       c.name as company_name,
       c.address as company_address,
-      c.epf_number as company_epf,
-      c.socso_number as company_socso,
       c.id as company_id
     FROM payroll_items pi
     JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
@@ -80,9 +78,7 @@ router.get('/:id', authenticateEmployee, asyncHandler(async (req, res) => {
     company: {
       id: item.company_id,
       name: item.company_name || 'AA ALIVE SDN BHD',
-      address: item.company_address || '',
-      epf_number: item.company_epf || '',
-      socso_number: item.company_socso || ''
+      address: item.company_address || ''
     },
     employee: {
       code: item.emp_code,
