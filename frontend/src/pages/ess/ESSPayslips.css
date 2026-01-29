@@ -489,14 +489,10 @@
     display: none !important;
   }
 
-  /* Hide ESS layout elements */
-  .ess-sidebar,
+  /* Hide ESS layout elements except main content */
   .ess-header,
   .ess-bottom-nav,
-  .ess-layout > *:not(.ess-main-content),
-  header,
-  nav,
-  aside {
+  .ess-sidebar {
     display: none !important;
   }
 
@@ -507,8 +503,11 @@
     font-size: 11px !important;
   }
 
-  .ess-main-content,
-  .ess-content {
+  .ess-layout {
+    display: block !important;
+  }
+
+  .ess-main {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
@@ -596,13 +595,14 @@
     padding-bottom: 2px;
   }
 
-  .ess-payslip-table td {
+  .ess-payslip-row {
     padding: 4px 0;
     font-size: 0.75rem;
   }
 
-  .ess-payslip-table tfoot td {
+  .ess-payslip-total {
     padding-top: 6px;
+    font-size: 0.75rem;
   }
 
   .ess-net-pay-row {
