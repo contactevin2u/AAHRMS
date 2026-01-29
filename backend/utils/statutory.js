@@ -889,10 +889,14 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
     const bonus = breakdown.bonus || 0;
     const ot = breakdown.ot || 0;
 
-    // LHDN PCB: Y1 (normal) = basic salary only
-    // Yt (additional) = allowance + commission + bonus + OT (all non-basic components)
-    normalRemuneration = basic;
-    additionalRemuneration = allowance + commission + bonus + ot;
+    // LHDN PCB allowance treatment per employee:
+    //   'normal'   = include in Y1 (taxable fixed allowance, e.g. housing)
+    //   'additional' = include in Yt (taxable but variable)
+    //   'excluded'  = non-taxable allowance, excluded from PCB entirely (default)
+    const allowancePcb = employee.allowance_pcb || 'additional';
+    const pcbAllowance = allowancePcb === 'excluded' ? 0 : allowance;
+    normalRemuneration = basic + (allowancePcb === 'normal' ? allowance : 0);
+    additionalRemuneration = (allowancePcb === 'additional' ? allowance : 0) + commission + bonus + ot;
 
     // LHDN assigns ALL monthly EPF to K1, Kt = 0
     actualEPFNormal = epf.employee;
@@ -901,13 +905,14 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
 
   const currentMonth = month || (new Date().getMonth() + 1);
 
-  // LP1: SOCSO contribution deductible for PCB (max RM350/year per LHDN spec)
-  // EIS is NOT included in LP1 for PCB calculation
-  const annualSOCSO = Math.min(socso.employee * 12, 350);
+  // LHDN PCB uses ∑LP + LP1 for PERKESO deduction (accumulated + current month)
+  // LP1 = current month SOCSO + EIS (NOT annualized, NOT capped)
+  // ∑LP = accumulated SOCSO + EIS from prior months (from ytdData.otherDeductions)
+  const currentLP1 = socso.employee + eis.employee;
 
   if (ytdData) {
     // Use full LHDN formula with YTD data
-    // Include SOCSO as part of other deductions (ELP)
+    // ∑LP comes from ytdData.otherDeductions (accumulated prior months)
     const pcbResult = calculatePCBFull({
       normalRemuneration,
       additionalRemuneration,
@@ -922,7 +927,7 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
       childrenCount,
       isDisabled: employee.is_disabled || false,
       spouseDisabled: employee.spouse_disabled || false,
-      otherDeductions: (ytdData.otherDeductions || 0) + annualSOCSO,
+      otherDeductions: (ytdData.otherDeductions || 0) + currentLP1,
       epfRate: actualEPFRate || 0.11,
       actualEPFNormal,
       actualEPFAdditional
@@ -940,7 +945,7 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
         maritalStatus,
         spouseWorking,
         childrenCount,
-        otherDeductions: annualSOCSO,
+        otherDeductions: currentLP1,
         epfRate: actualEPFRate || 0.11,
         actualEPFNormal,
         actualEPFAdditional
