@@ -97,12 +97,15 @@ function ESSClockInContent() {
     fetchStatus();
   }, [navigate]);
 
-  // Update server time every second
+  // Update server time every second + refresh status every 30s
   useEffect(() => {
     const timer = setInterval(() => {
       setServerTime(new Date());
     }, 1000);
-    return () => clearInterval(timer);
+    const statusTimer = setInterval(() => {
+      fetchStatus();
+    }, 30000);
+    return () => { clearInterval(timer); clearInterval(statusTimer); };
   }, []);
 
   const fetchStatus = async () => {
