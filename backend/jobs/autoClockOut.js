@@ -116,12 +116,12 @@ async function processAutoClockOut(record, schedule, employee) {
       const adjustedMinutes = (shiftEndMinutes + 60) % (24 * 60);
       clockOutTime = minutesToTime(adjustedMinutes);
     } else {
-      // Normal shift: clock_out at 1:00 AM (01:00:00)
-      clockOutTime = '01:00:00';
+      // Normal shift: clock_out at 2:00 AM (02:00:00)
+      clockOutTime = '02:00:00';
     }
   } else {
-    // No schedule: clock_out at 1:00 AM
-    clockOutTime = '01:00:00';
+    // No schedule: clock_out at 2:00 AM
+    clockOutTime = '02:00:00';
   }
 
   // Calculate work minutes with auto clock-out
@@ -218,7 +218,7 @@ async function runAutoClockOut() {
     // Process all unclosed records from before today (not just yesterday)
     console.log('[AutoClockOut] Processing all unclosed records before:', todayStr);
 
-    // Find all incomplete clock-in records from before today (Mimix companies only)
+    // Find all incomplete clock-in records from before today (Mimix only, not AA Alive)
     // where clock_in_1 exists but clock_out_2 is NULL
     // Also handle NULL is_auto_clock_out (for older records)
     const incompleteRecords = await client.query(
@@ -231,8 +231,9 @@ async function runAutoClockOut() {
          AND cir.clock_in_1 IS NOT NULL
          AND cir.clock_out_2 IS NULL
          AND (cir.is_auto_clock_out = FALSE OR cir.is_auto_clock_out IS NULL)
-         AND c.grouping_type = 'outlet'`,
-      [todayStr]
+         AND c.grouping_type = 'outlet'
+         AND cir.company_id != $2`,
+      [todayStr, 1]
     );
 
     console.log('[AutoClockOut] Found', incompleteRecords.rows.length, 'incomplete records from before', todayStr);
@@ -342,5 +343,5 @@ module.exports = {
   minutesToTime,
   calculateWorkMinutes,
   calculateScheduledMinutes,
-  STANDARD_WORK_MINUTES
+  STANDARD_WORK_MINUTES_MIMIX
 };

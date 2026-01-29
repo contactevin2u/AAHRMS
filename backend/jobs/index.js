@@ -10,7 +10,7 @@ const {
   getRecordsNeedingReview,
   markAsReviewed,
   processAutoClockOut,
-  STANDARD_WORK_MINUTES
+  STANDARD_WORK_MINUTES_MIMIX
 } = require('./autoClockOut');
 
 module.exports = {
@@ -23,5 +23,5 @@ module.exports = {
   getRecordsNeedingReview,
   markAsReviewed,
   processAutoClockOut,
-  STANDARD_WORK_MINUTES
+  STANDARD_WORK_MINUTES_MIMIX
 };

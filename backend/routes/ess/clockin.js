@@ -71,10 +71,10 @@ const STANDARD_WORK_MINUTES_MIMIX = 450;
 // AA Alive: 9 hours = 540 minutes (break included, no separate break clock)
 const STANDARD_WORK_MINUTES_AA_ALIVE = 540;
 
-// Night shift cutoff time (1:30 AM) - actions before this time are treated as previous day
+// Night shift cutoff time (2:00 AM) - actions before this time are treated as previous day
 // This applies to companies with night shifts (like Mimix)
-const NIGHT_SHIFT_CUTOFF_HOUR = 1;
-const NIGHT_SHIFT_CUTOFF_MINUTE = 30;
+const NIGHT_SHIFT_CUTOFF_HOUR = 2;
+const NIGHT_SHIFT_CUTOFF_MINUTE = 0;
 
 // Maximum allowed photo size (200KB as per storage minimization policy)
 const MAX_PHOTO_SIZE_KB = 200;
