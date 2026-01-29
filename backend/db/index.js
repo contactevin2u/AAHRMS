@@ -371,6 +371,10 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='probation_notes') THEN
           ALTER TABLE employees ADD COLUMN probation_notes TEXT;
         END IF;
+        -- Residency status for EPF rate determination (malaysian/pr/foreign)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='residency_status') THEN
+          ALTER TABLE employees ADD COLUMN residency_status VARCHAR(20) DEFAULT 'malaysian';
+        END IF;
         -- Multi-company support
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='company_id') THEN
           ALTER TABLE employees ADD COLUMN company_id INTEGER REFERENCES companies(id) DEFAULT 1;

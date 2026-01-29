@@ -121,6 +121,10 @@ async function calculateFinalSettlement(resignationId) {
         e.marital_status,
         e.spouse_working,
         e.children_count,
+        e.date_of_birth,
+        e.residency_status,
+        e.is_disabled,
+        e.spouse_disabled,
         e.join_date,
         e.company_id,
         c.name as company_name,
@@ -261,24 +265,64 @@ async function calculateFinalSettlement(resignationId) {
     };
 
     if (proratedSalary > 0 || proratedBonus > 0) {
-      const age = calculateAgeFromIC(r.ic_number) || 30;
-      const statutory = calculateAllStatutory({
-        basicSalary: proratedSalary,
+      // Build employee object for statutory calculation
+      const employeeObj = {
+        ic_number: r.ic_number,
+        date_of_birth: r.date_of_birth,
+        marital_status: r.marital_status || 'single',
+        spouse_working: r.spouse_working || false,
+        children_count: r.children_count || 0,
+        residency_status: r.residency_status || 'malaysian',
+        is_disabled: r.is_disabled || false,
+        spouse_disabled: r.spouse_disabled || false
+      };
+
+      // Statutory base for settlement = prorated salary + bonus (no commission in settlement)
+      const settlementStatutoryBase = proratedSalary + proratedBonus;
+
+      // Build salary breakdown for proper PCB calculation
+      const salaryBreakdown = {
+        basic: proratedSalary,
+        allowance: 0,
         commission: 0,
         bonus: proratedBonus,
-        maritalStatus: r.marital_status || 'single',
-        spouseWorking: r.spouse_working || false,
-        childrenCount: r.children_count || 0,
-        age: age
-      });
+        ot: 0,
+        pcbGross: proratedSalary + proratedBonus
+      };
+
+      // Get YTD data for the resignation month for accurate PCB
+      const ytdResult = await client.query(`
+        SELECT
+          COALESCE(SUM(pi.gross_salary), 0) as ytd_gross,
+          COALESCE(SUM(pi.epf_employee), 0) as ytd_epf,
+          COALESCE(SUM(pi.pcb), 0) as ytd_pcb
+        FROM payroll_items pi
+        JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+        WHERE pi.employee_id = $1
+          AND pr.year = $2
+          AND pr.month < $3
+          AND pr.status = 'finalized'
+      `, [r.emp_id, lastYear, lastMonth]);
+
+      const ytdData = {
+        ytdGross: parseFloat(ytdResult.rows[0]?.ytd_gross || 0),
+        ytdEPF: parseFloat(ytdResult.rows[0]?.ytd_epf || 0),
+        ytdPCB: parseFloat(ytdResult.rows[0]?.ytd_pcb || 0),
+        ytdZakat: 0
+      };
+
+      const statutory = calculateAllStatutory(settlementStatutoryBase, employeeObj, lastMonth, ytdData, salaryBreakdown);
 
       statutoryDeductions = {
-        epf_employee: statutory.epfEmployee || 0,
-        socso_employee: statutory.socsoEmployee || 0,
-        eis_employee: statutory.eisEmployee || 0,
+        epf_employee: statutory.epf.employee || 0,
+        epf_employer: statutory.epf.employer || 0,
+        socso_employee: statutory.socso.employee || 0,
+        socso_employer: statutory.socso.employer || 0,
+        eis_employee: statutory.eis.employee || 0,
+        eis_employer: statutory.eis.employer || 0,
         pcb: statutory.pcb || 0,
-        total: (statutory.epfEmployee || 0) + (statutory.socsoEmployee || 0) +
-               (statutory.eisEmployee || 0) + (statutory.pcb || 0)
+        total: (statutory.epf.employee || 0) + (statutory.socso.employee || 0) +
+               (statutory.eis.employee || 0) + (statutory.pcb || 0)
       };
     }
 

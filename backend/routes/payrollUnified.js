@@ -1682,7 +1682,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     // Get current item and settings
     const itemResult = await pool.query(`
       SELECT pi.*, pr.month, pr.year, pr.status as run_status, pr.company_id,
-             e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count
+             e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
+             e.residency_status
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       JOIN employees e ON pi.employee_id = e.id
@@ -1906,7 +1907,8 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
       SELECT pi.*, pr.month, pr.year, pr.status as run_status, pr.company_id,
              pr.period_start_date, pr.period_end_date,
              e.id as emp_id, e.department_id, e.default_basic_salary,
-             e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count
+             e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
+             e.residency_status
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       JOIN employees e ON pi.employee_id = e.id

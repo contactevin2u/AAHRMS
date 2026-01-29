@@ -404,6 +404,8 @@ router.post('/', authenticateAdmin, async (req, res) => {
       address, bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
       marital_status, spouse_working, children_count, date_of_birth,
+      // Residency status for EPF rate determination
+      residency_status,
       // Default salary fields
       default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
       // Additional earning fields
@@ -553,20 +555,20 @@ router.post('/', authenticateAdmin, async (req, res) => {
         employee_id, name, email, phone, ic_number, id_type, department_id, outlet_id, position, position_id, join_date,
         address, bank_name, bank_account_no, bank_account_holder,
         epf_number, socso_number, tax_number, epf_contribution_type,
-        marital_status, spouse_working, children_count, date_of_birth, gender,
+        marital_status, spouse_working, children_count, date_of_birth, gender, residency_status,
         default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
         default_bonus, default_incentive, hourly_rate, work_type,
         employment_type, probation_months, probation_end_date, probation_status,
         salary_before_confirmation, salary_after_confirmation, increment_amount,
         company_id, profile_completed, password_hash, must_change_password
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46)
        RETURNING *`,
       [
         employee_id, toNullable(name), toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(finalPosition), toNullable(position_id), join_date,
         toNullable(address), toNullable(bank_name), toNullable(bank_account_no), toNullable(bank_account_holder),
         toNullable(epf_number), toNullable(socso_number), toNullable(tax_number), epf_contribution_type || 'normal',
-        marital_status || 'single', spouse_working || false, children_count || 0, toNullable(finalDateOfBirth), toNullable(finalGender),
+        marital_status || 'single', spouse_working || false, children_count || 0, toNullable(finalDateOfBirth), toNullable(finalGender), residency_status || 'malaysian',
         finalBasicSalary || 0, default_allowance || 0, commission_rate || 0, per_trip_rate || 0, ot_rate || 0, outstation_rate || 0,
         default_bonus || 0, default_incentive || 0, finalHourlyRate || 0, finalWorkType,
         empType, probMonths, probation_end_date, empType === 'confirmed' ? 'confirmed' : 'ongoing',
@@ -638,6 +640,8 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       address, bank_name, bank_account_no, bank_account_holder,
       epf_number, socso_number, tax_number, epf_contribution_type,
       marital_status, spouse_working, children_count, date_of_birth,
+      // Residency status for EPF rate determination
+      residency_status,
       // Default salary fields
       default_basic_salary, default_allowance, commission_rate, per_trip_rate, ot_rate, outstation_rate,
       // Additional earning fields
@@ -768,8 +772,9 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
            employment_type = $34, probation_months = $35, probation_end_date = $36,
            salary_before_confirmation = $37, salary_after_confirmation = $38, increment_amount = $39,
            probation_notes = $40, probation_status = $41, employee_role = $42,
+           residency_status = $43,
            updated_at = NOW()
-       WHERE id = $43
+       WHERE id = $44
        RETURNING *`,
       [
         employee_id, name, toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(finalPosition), toNullable(position_id), toNullable(join_date), status,
@@ -781,7 +786,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
         default_bonus || 0, default_incentive || 0,
         newEmpType, newProbMonths, probation_end_date,
         toNullable(salary_before_confirmation), toNullable(salary_after_confirmation), toNullable(calcIncrement),
-        toNullable(probation_notes), newProbationStatus, finalEmployeeRole, id
+        toNullable(probation_notes), newProbationStatus, finalEmployeeRole, residency_status || 'malaysian', id
       ]
     );
 

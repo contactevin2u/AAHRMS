@@ -62,6 +62,7 @@ const INITIAL_FORM_STATE = {
   socso_number: '',
   tax_number: '',
   epf_contribution_type: 'normal',
+  residency_status: 'malaysian',
   marital_status: 'single',
   spouse_working: false,
   children_count: 0,
@@ -498,6 +499,17 @@ const EmployeeForm = ({
       </div>
 
       <div className="form-row">
+        <div className="form-group">
+          <label>Residency Status (EPF Rate)</label>
+          <select
+            value={form.residency_status}
+            onChange={(e) => setForm({ ...form, residency_status: e.target.value })}
+          >
+            <option value="malaysian">Malaysian Citizen</option>
+            <option value="pr">Permanent Resident (PR)</option>
+            <option value="foreign">Foreign Worker</option>
+          </select>
+        </div>
         <div className="form-group">
           <label>Marital Status</label>
           <select

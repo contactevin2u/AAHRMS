@@ -118,6 +118,7 @@ function EmployeeEdit() {
         socso_number: employee.socso_number || '',
         tax_number: employee.tax_number || '',
         epf_contribution_type: employee.epf_contribution_type || 'normal',
+        residency_status: employee.residency_status || 'malaysian',
         marital_status: employee.marital_status || 'single',
         spouse_working: employee.spouse_working || false,
         children_count: employee.children_count || 0,

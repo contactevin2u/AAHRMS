@@ -840,8 +840,15 @@ const getEmployeeAge = (employee) => {
  *                            - pcbGross: Full gross for PCB calculation (includes allowance)
  */
 const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdData = null, breakdown = null) => {
-  // Determine if employee is Malaysian based on IC format
-  const isMalaysian = isMalaysianIC(employee.ic_number);
+  // Determine employee type for EPF:
+  // 1. Use explicit residency_status if set (malaysian/pr/foreign)
+  // 2. Fall back to IC-based detection (malaysian if valid IC, foreign otherwise)
+  let employeeType;
+  if (employee.residency_status && ['malaysian', 'pr', 'foreign'].includes(employee.residency_status)) {
+    employeeType = employee.residency_status;
+  } else {
+    employeeType = isMalaysianIC(employee.ic_number) ? 'malaysian' : 'foreign';
+  }
 
   // Get age from IC or DOB
   const age = getEmployeeAge(employee);
@@ -852,7 +859,7 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
 
   // Calculate statutory contributions on statutoryBase (not full gross)
   // EPF, SOCSO, EIS apply to statutoryBase (basic + commission, excludes allowance if configured)
-  const epf = calculateEPF(statutoryBase, age, 'normal', isMalaysian);
+  const epf = calculateEPF(statutoryBase, age, 'normal', employeeType);
   const socso = calculateSOCSO(statutoryBase, age);
   const eis = calculateEIS(statutoryBase, age);
 
@@ -867,6 +874,10 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
   let additionalRemuneration = 0;
   let actualEPFNormal = null;  // Actual EPF on normal salary
   let actualEPFAdditional = null;  // Actual EPF on additional salary
+
+  // Derive actual EPF employee rate from the calculated EPF result
+  // This avoids hardcoding 0.11 which is wrong for foreign workers (2%), age 60+ (0% or 5.5%), etc.
+  const actualEPFRate = statutoryBase > 0 ? epf.employee / statutoryBase : 0;
 
   if (breakdown) {
     // pcbGross = full gross including allowance for PCB calculation
@@ -884,11 +895,11 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
     // Additional remuneration = commission + bonus + OT (variable pay)
     additionalRemuneration = commission + bonus + ot;
 
-    // Actual EPF amounts (EPF is only on statutory base, not on allowance if not configured)
+    // Actual EPF amounts using the correct rate for this employee type/age
     // EPF on normal = EPF on basic only (if allowance is not in statutory base)
     // This ensures K1 in PCB formula uses correct EPF amount
-    actualEPFNormal = Math.round(basic * 0.11);  // EPF on basic salary
-    actualEPFAdditional = Math.round(commission * 0.11);  // EPF on commission
+    actualEPFNormal = Math.round(basic * actualEPFRate);
+    actualEPFAdditional = Math.round(commission * actualEPFRate);
   }
 
   const currentMonth = month || (new Date().getMonth() + 1);
@@ -915,7 +926,7 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
       isDisabled: employee.is_disabled || false,
       spouseDisabled: employee.spouse_disabled || false,
       otherDeductions: (ytdData.otherDeductions || 0) + annualSOCSO,
-      epfRate: 0.11,
+      epfRate: actualEPFRate || 0.11,
       actualEPFNormal,
       actualEPFAdditional
     });
@@ -933,7 +944,7 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
         spouseWorking,
         childrenCount,
         otherDeductions: annualSOCSO,
-        epfRate: 0.11,
+        epfRate: actualEPFRate || 0.11,
         actualEPFNormal,
         actualEPFAdditional
       });
