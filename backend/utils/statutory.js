@@ -889,23 +889,20 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
     const bonus = breakdown.bonus || 0;
     const ot = breakdown.ot || 0;
 
-    // Normal remuneration for PCB = basic + allowance (regular monthly pay)
-    normalRemuneration = basic + allowance;
+    // LHDN PCB: Y1 (normal) = basic salary only
+    // Yt (additional) = allowance + commission + bonus + OT (all non-basic components)
+    normalRemuneration = basic;
+    additionalRemuneration = allowance + commission + bonus + ot;
 
-    // Additional remuneration = commission + bonus + OT (variable pay)
-    additionalRemuneration = commission + bonus + ot;
-
-    // Actual EPF amounts using the correct rate for this employee type/age
-    // EPF on normal = EPF on basic only (if allowance is not in statutory base)
-    // This ensures K1 in PCB formula uses correct EPF amount
-    actualEPFNormal = Math.round(basic * actualEPFRate);
-    actualEPFAdditional = Math.round(commission * actualEPFRate);
+    // LHDN assigns ALL monthly EPF to K1, Kt = 0
+    actualEPFNormal = epf.employee;
+    actualEPFAdditional = 0;
   }
 
   const currentMonth = month || (new Date().getMonth() + 1);
 
-  // SOCSO contribution is deductible for PCB (ELP - Employment Life Protection)
-  // Annualized SOCSO capped at RM350/year
+  // LP1: SOCSO contribution deductible for PCB (max RM350/year per LHDN spec)
+  // EIS is NOT included in LP1 for PCB calculation
   const annualSOCSO = Math.min(socso.employee * 12, 350);
 
   if (ytdData) {
