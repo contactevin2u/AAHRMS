@@ -74,49 +74,40 @@ function ESSPayslips() {
 
     setDownloading(true);
     try {
-      // Force a fixed width for consistent A4 rendering
-      const originalWidth = element.style.width;
-      element.style.width = '800px';
+      // Force a fixed width for consistent rendering
+      const originalStyle = element.getAttribute('style') || '';
+      element.style.width = '600px';
+      element.style.padding = '24px';
+      element.style.fontSize = '12px';
 
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff',
-        width: 800
+        backgroundColor: '#ffffff'
       });
 
-      // Restore original width
-      element.style.width = originalWidth;
+      // Restore original style
+      element.setAttribute('style', originalStyle);
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
+      const pageWidth = 210;
+      const pageHeight = 297;
       const margin = 10;
-      const imgWidth = pageWidth - (margin * 2);
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const maxW = pageWidth - (margin * 2);
+      const maxH = pageHeight - (margin * 2);
 
-      if (imgHeight <= pageHeight - (margin * 2)) {
-        pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight);
-      } else {
-        // Multi-page support for long payslips
-        let y = 0;
-        const contentHeight = pageHeight - (margin * 2);
-        const sourceSliceHeight = (canvas.width * contentHeight) / imgWidth;
-        while (y < canvas.height) {
-          const pageCanvas = document.createElement('canvas');
-          pageCanvas.width = canvas.width;
-          pageCanvas.height = Math.min(sourceSliceHeight, canvas.height - y);
-          const ctx = pageCanvas.getContext('2d');
-          ctx.drawImage(canvas, 0, y, canvas.width, pageCanvas.height, 0, 0, canvas.width, pageCanvas.height);
-          const pageData = pageCanvas.toDataURL('image/png');
-          const sliceImgHeight = (pageCanvas.height * imgWidth) / canvas.width;
-          if (y > 0) pdf.addPage();
-          pdf.addImage(pageData, 'PNG', margin, margin, imgWidth, sliceImgHeight);
-          y += sourceSliceHeight;
-        }
+      // Scale to fit one page
+      let imgWidth = maxW;
+      let imgHeight = (canvas.height * imgWidth) / canvas.width;
+      if (imgHeight > maxH) {
+        imgHeight = maxH;
+        imgWidth = (canvas.width * imgHeight) / canvas.height;
       }
+
+      const xOffset = margin + (maxW - imgWidth) / 2;
+      pdf.addImage(imgData, 'PNG', xOffset, margin, imgWidth, imgHeight);
 
       const fileName = `Payslip_${payslipDetail.employee.code}_${payslipDetail.period.month_name}_${payslipDetail.period.year}.pdf`;
       pdf.save(fileName);

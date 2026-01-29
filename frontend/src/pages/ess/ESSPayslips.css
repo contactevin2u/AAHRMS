@@ -474,21 +474,15 @@
   margin: 5px 0;
 }
 
-/* Print Styles */
+/* Print Styles - fit on one A4 page */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
   .no-print {
     display: none !important;
-  }
-
-  .ess-payslip-page {
-    padding: 0;
-    max-width: none;
-  }
-
-  .ess-payslip-container {
-    box-shadow: none;
-    border: none;
-    padding: 20mm;
   }
 
   /* Hide ESS layout elements */
@@ -504,6 +498,9 @@
 
   body {
     background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 11px !important;
   }
 
   .ess-main-content,
@@ -513,27 +510,133 @@
     width: 100% !important;
   }
 
+  .ess-payslip-page {
+    padding: 0;
+    max-width: none;
+  }
+
+  .ess-payslip-container {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+  }
+
+  /* Compact spacing for one-page fit */
+  .ess-letterhead {
+    margin-bottom: 10px;
+    gap: 12px;
+  }
+
   .ess-letterhead-logo img {
-    width: 70px;
-    height: 70px;
+    width: 50px;
+    height: 50px;
   }
 
   .ess-letterhead-info h1 {
-    font-size: 1.4rem;
+    font-size: 1.1rem;
+    margin-bottom: 2px;
+  }
+
+  .ess-letterhead-info .ess-company-reg,
+  .ess-letterhead-info .ess-company-address {
+    font-size: 0.75rem;
+    margin: 0;
   }
 
   .ess-letter-divider {
+    margin-bottom: 10px;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .ess-payslip-header {
+    padding-bottom: 8px;
+    margin-bottom: 8px;
   }
 
   .ess-payslip-title h2 {
-    font-size: 1.3rem;
+    font-size: 1rem;
+    margin-bottom: 2px;
+  }
+
+  .ess-payslip-title p {
+    font-size: 0.85rem;
+  }
+
+  .ess-employee-section {
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .ess-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+
+  .ess-info-row .ess-label,
+  .ess-info-row .ess-value {
+    font-size: 0.75rem;
+  }
+
+  .ess-info-row .ess-label {
+    min-width: 70px;
+  }
+
+  .ess-section-block {
+    margin-bottom: 8px;
+  }
+
+  .ess-section-heading {
+    font-size: 0.7rem;
+    margin-bottom: 4px;
+    padding-bottom: 2px;
+  }
+
+  .ess-payslip-table td {
+    padding: 4px 0;
+    font-size: 0.75rem;
+  }
+
+  .ess-payslip-table tfoot td {
+    padding-top: 6px;
   }
 
   .ess-net-pay-row {
+    padding: 8px 0;
+    margin-bottom: 8px;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .ess-net-label {
+    font-size: 0.8rem;
+  }
+
+  .ess-net-value {
+    font-size: 1rem;
+  }
+
+  .ess-bank-section {
+    padding: 8px 12px;
+    margin-bottom: 8px;
+  }
+
+  .ess-bank-section h3 {
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+  }
+
+  .ess-bank-section p {
+    font-size: 0.75rem;
+  }
+
+  .ess-payslip-footer {
+    padding-top: 8px;
+  }
+
+  .ess-payslip-footer p {
+    font-size: 0.7rem;
+    margin: 2px 0;
   }
 }
 
