@@ -24,6 +24,7 @@ const {
   calculateYearsOfService,
   getEntitlementByServiceYears,
   checkLeaveEligibility,
+  initializeLeaveBalances,
   initializeYearlyLeaveBalances
 } = require('../../utils/leaveProration');
 const { revertAutoApprovedLeave, AA_ALIVE_COMPANY_ID } = require('../../jobs/autoApproveLeave');
@@ -59,6 +60,20 @@ router.get('/balance', authenticateEmployee, asyncHandler(async (req, res) => {
 
   const employee = empResult.rows[0];
   const yearsOfService = calculateYearsOfService(employee.join_date);
+
+  // Auto-initialize leave balances if none exist for current year
+  const checkExisting = await pool.query(
+    'SELECT COUNT(*) as cnt FROM leave_balances WHERE employee_id = $1 AND year = $2',
+    [employeeId, currentYear]
+  );
+  if (parseInt(checkExisting.rows[0].cnt) === 0) {
+    try {
+      await initializeLeaveBalances(employeeId, employee.company_id, employee.join_date, { gender: employee.gender });
+      console.log(`[Leave Balance] Auto-initialized balances for employee ${employeeId}, year ${currentYear}`);
+    } catch (initErr) {
+      console.error('[Leave Balance] Auto-init failed:', initErr.message);
+    }
+  }
 
   // Get leave balances with full leave type info
   const result = await pool.query(
