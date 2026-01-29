@@ -426,10 +426,12 @@ function ESSTeamSchedule({ embedded = false }) {
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
                 // T+2 rule: Can only edit schedules 2+ days in advance
+                // Managers, directors, and designated schedule managers are exempt
+                const isExemptFromLock = ['manager', 'admin', 'director'].includes(employeeInfo?.employee_role) || employeeInfo?.permissions?.can_manage_schedule;
                 const twoDaysFromNow = new Date();
                 twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
                 twoDaysFromNow.setHours(0, 0, 0, 0);
-                const isLocked = date < twoDaysFromNow; // Past, today, and tomorrow are locked
+                const isLocked = !isExemptFromLock && date < twoDaysFromNow;
                 const workingSchedules = daySchedules.filter(s => s.status !== 'off');
                 const daySummary = getDaySummary(daySchedules);
 
