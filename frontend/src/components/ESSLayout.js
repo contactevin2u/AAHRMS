@@ -95,12 +95,13 @@ function ESSLayout({ children }) {
   // Drivers can always see attendance page (even without clock_in_required)
   const isDriver = employeeInfo?.department?.toLowerCase() === 'driver' ||
                    employeeInfo?.department_name?.toLowerCase() === 'driver';
-  const showAttendance = isMimix || clockInRequired || isDriver;
+  const canManageScheduleFlag = employeeInfo?.permissions?.can_manage_schedule;
+  const showAttendance = isMimix || clockInRequired || isDriver || canManageScheduleFlag;
 
   // Check if employee should see schedule/calendar
   // Mimix: always enabled
-  // AA Alive: any employee with clock_in_required can view their schedule
-  const showCalendar = isMimix || clockInRequired || isDriver;
+  // AA Alive: any employee with clock_in_required, or designated schedule managers
+  const showCalendar = isMimix || clockInRequired || isDriver || canManageScheduleFlag;
 
   // Check if employee is supervisor/manager (can see team management features)
   const isSupOrMgr = isSupervisorOrManager(employeeInfo);
