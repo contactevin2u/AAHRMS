@@ -314,6 +314,29 @@ router.get('/', authenticateAdmin, async (req, res) => {
     query += ' ORDER BY e.created_at DESC';
 
     const result = await pool.query(query, params);
+
+    // Fill in outlet names for managers/supervisors who have NULL outlet_id
+    const managersWithoutOutlet = result.rows.filter(e => !e.outlet_name && ['manager', 'supervisor'].includes(e.employee_role));
+    if (managersWithoutOutlet.length > 0) {
+      const managerIds = managersWithoutOutlet.map(e => e.id);
+      const outletsResult = await pool.query(
+        `SELECT eo.employee_id, o.name FROM employee_outlets eo
+         JOIN outlets o ON o.id = eo.outlet_id
+         WHERE eo.employee_id = ANY($1) ORDER BY o.name`,
+        [managerIds]
+      );
+      const outletsByManager = {};
+      for (const row of outletsResult.rows) {
+        if (!outletsByManager[row.employee_id]) outletsByManager[row.employee_id] = [];
+        outletsByManager[row.employee_id].push(row.name);
+      }
+      for (const emp of managersWithoutOutlet) {
+        if (outletsByManager[emp.id]) {
+          emp.outlet_name = outletsByManager[emp.id].join(', ');
+        }
+      }
+    }
+
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching employees:', error);
@@ -328,9 +351,10 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
     const companyId = getCompanyFilter(req);
 
     let query = `
-      SELECT e.*, d.name as department_name, d.payroll_structure_code
+      SELECT e.*, d.name as department_name, d.payroll_structure_code, o.name as outlet_name
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
       WHERE e.id = $1
     `;
     const params = [id];
@@ -347,7 +371,22 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    res.json(result.rows[0]);
+    const employee = result.rows[0];
+
+    // For managers/supervisors with no outlet_id, show their managed outlets
+    if (!employee.outlet_name && ['manager', 'supervisor'].includes(employee.employee_role)) {
+      const outletsResult = await pool.query(
+        `SELECT o.name FROM employee_outlets eo
+         JOIN outlets o ON o.id = eo.outlet_id
+         WHERE eo.employee_id = $1 ORDER BY o.name`,
+        [employee.id]
+      );
+      if (outletsResult.rows.length > 0) {
+        employee.outlet_name = outletsResult.rows.map(r => r.name).join(', ');
+      }
+    }
+
+    res.json(employee);
   } catch (error) {
     console.error('Error fetching employee:', error);
     res.status(500).json({ error: 'Failed to fetch employee' });

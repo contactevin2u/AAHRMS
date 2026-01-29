@@ -149,7 +149,10 @@ const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
                 {usesOutlets ? (
                   <div className="detail-item">
                     <label>Outlet</label>
-                    <span>{data.outlet_name || '-'}</span>
+                    <span>{managedOutlets.length > 0
+                      ? managedOutlets.map(o => o.name).join(', ')
+                      : (data.outlet_name || '-')
+                    }</span>
                   </div>
                 ) : (
                   <div className="detail-item">
@@ -197,29 +200,6 @@ const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
                 )}
               </div>
             </div>
-
-            {/* Managed Outlets - Show for managers/supervisors (any company) */}
-            {(['manager', 'supervisor'].includes(data.employee_role) ||
-              data.position?.toLowerCase().includes('manager') ||
-              data.position?.toLowerCase().includes('supervisor')) && (
-              <div className="detail-section">
-                <h4>Managed Outlets</h4>
-                {managedOutlets.length > 0 ? (
-                  <div className="managed-outlets-list">
-                    {managedOutlets.map(outlet => (
-                      <div key={outlet.id} className="managed-outlet-item">
-                        <span className="outlet-name">{outlet.name}</span>
-                        {outlet.address && <span className="outlet-address">{outlet.address}</span>}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
-                    No outlets assigned yet
-                  </p>
-                )}
-              </div>
-            )}
 
             {/* Bank Information */}
             <div className="detail-section">
@@ -460,32 +440,6 @@ const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
           }
         }
 
-        .managed-outlets-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .managed-outlet-item {
-          display: flex;
-          flex-direction: column;
-          padding: 10px 12px;
-          background: #f1f5f9;
-          border-radius: 8px;
-          border-left: 3px solid #1976d2;
-        }
-
-        .managed-outlet-item .outlet-name {
-          font-weight: 600;
-          color: #1e293b;
-          font-size: 14px;
-        }
-
-        .managed-outlet-item .outlet-address {
-          font-size: 12px;
-          color: #64748b;
-          margin-top: 2px;
-        }
       `}</style>
     </div>
   );

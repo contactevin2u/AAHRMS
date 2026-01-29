@@ -108,6 +108,19 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
 
   const employee = result.rows[0];
 
+  // For managers/supervisors with no outlet_id, show their managed outlets
+  if (!employee.outlet_name && ['manager', 'supervisor'].includes(employee.employee_role)) {
+    const outletsResult = await pool.query(
+      `SELECT o.name FROM employee_outlets eo
+       JOIN outlets o ON o.id = eo.outlet_id
+       WHERE eo.employee_id = $1 ORDER BY o.name`,
+      [employee.id]
+    );
+    if (outletsResult.rows.length > 0) {
+      employee.outlet_name = outletsResult.rows.map(r => r.name).join(', ');
+    }
+  }
+
   // Remove sensitive fields (salary, rates, passwords)
   const sanitizedEmployee = sanitizeEmployeeData(employee);
 

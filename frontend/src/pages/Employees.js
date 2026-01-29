@@ -1664,21 +1664,56 @@ function Employees() {
                 </div>
 
                 <div className="form-row">
-                  {isMimix ? (
-                    <div className="form-group">
-                      <label>Outlet *</label>
-                      <select
-                        value={form.outlet_id}
-                        onChange={(e) => setForm({ ...form, outlet_id: e.target.value })}
-                        required
-                      >
-                        <option value="">Select outlet</option>
-                        {outlets.map(o => (
-                          <option key={o.id} value={o.id}>{o.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
+                  {isMimix ? (() => {
+                    const selectedPosition = positions.find(p => p.id === parseInt(form.position_id));
+                    const isManagerOrSupervisor = selectedPosition?.role === 'manager' || selectedPosition?.role === 'supervisor' ||
+                      selectedPosition?.name?.toLowerCase().includes('manager') || selectedPosition?.name?.toLowerCase().includes('supervisor') ||
+                      (editingEmployee && ['manager', 'supervisor'].includes(editingEmployee.employee_role));
+
+                    return isManagerOrSupervisor ? (
+                      <div className="form-group">
+                        <label>
+                          Outlet * <span className="outlet-count">({managerOutlets.length} selected)</span>
+                        </label>
+                        <div className="outlet-actions">
+                          <button type="button" className="outlet-action-btn" onClick={() => setManagerOutlets(outlets.map(o => o.id))}>Select All</button>
+                          <button type="button" className="outlet-action-btn" onClick={() => setManagerOutlets([])}>Clear All</button>
+                        </div>
+                        <div className="outlet-checkbox-grid">
+                          {outlets.map(outlet => (
+                            <label key={outlet.id} className={`outlet-checkbox ${managerOutlets.includes(outlet.id) ? 'selected' : ''}`}>
+                              <input
+                                type="checkbox"
+                                checked={managerOutlets.includes(outlet.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setManagerOutlets([...managerOutlets, outlet.id]);
+                                  } else {
+                                    setManagerOutlets(managerOutlets.filter(id => id !== outlet.id));
+                                  }
+                                }}
+                              />
+                              <span>{outlet.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="form-group">
+                        <label>Outlet *</label>
+                        <select
+                          value={form.outlet_id}
+                          onChange={(e) => setForm({ ...form, outlet_id: e.target.value })}
+                          required
+                        >
+                          <option value="">Select outlet</option>
+                          {outlets.map(o => (
+                            <option key={o.id} value={o.id}>{o.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })() : (
                     <div className="form-group">
                       <label>Department *</label>
                       <select
@@ -1709,47 +1744,6 @@ function Employees() {
                     </select>
                   </div>
                 </div>
-
-                {/* Manager/Supervisor Outlet Assignment (Mimix only) */}
-                {isMimix && (() => {
-                  const selectedPosition = positions.find(p => p.id === parseInt(form.position_id));
-                  const isManagerOrSupervisor = selectedPosition?.role === 'manager' || selectedPosition?.role === 'supervisor' ||
-                    selectedPosition?.name?.toLowerCase().includes('manager') || selectedPosition?.name?.toLowerCase().includes('supervisor') ||
-                    (editingEmployee && ['manager', 'supervisor'].includes(editingEmployee.employee_role));
-                  return isManagerOrSupervisor && (
-                    <div className="form-row">
-                      <div className="form-group full-width">
-                        <label>
-                          Managed Outlets
-                          <span className="outlet-count">({managerOutlets.length} selected)</span>
-                        </label>
-                        <div className="outlet-actions">
-                          <button type="button" className="outlet-action-btn" onClick={() => setManagerOutlets(outlets.map(o => o.id))}>Select All</button>
-                          <button type="button" className="outlet-action-btn" onClick={() => setManagerOutlets([])}>Clear All</button>
-                        </div>
-                        <div className="outlet-checkbox-grid">
-                          {outlets.map(outlet => (
-                            <label key={outlet.id} className={`outlet-checkbox ${managerOutlets.includes(outlet.id) ? 'selected' : ''}`}>
-                              <input
-                                type="checkbox"
-                                checked={managerOutlets.includes(outlet.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setManagerOutlets([...managerOutlets, outlet.id]);
-                                  } else {
-                                    setManagerOutlets(managerOutlets.filter(id => id !== outlet.id));
-                                  }
-                                }}
-                              />
-                              <span>{outlet.name}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <small className="field-hint">Select which outlets this manager/supervisor can manage. They will only see employees and approve requests from these outlets.</small>
-                      </div>
-                    </div>
-                  );
-                })()}
 
                 <div className="form-row">
                   <div className="form-group">
