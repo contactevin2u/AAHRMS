@@ -524,6 +524,9 @@ export const adminUsersApi = {
 
   getMyPermissions: () => api.get('/admin-users/me/permissions'),
 
+  // Login history
+  getLoginHistory: (params) => api.get('/admin-users/login-history', { params }),
+
   // Profile management
   getMyProfile: () => api.get('/admin-users/me/profile'),
   updateMyProfile: (data) => api.put('/admin-users/me/profile', data),

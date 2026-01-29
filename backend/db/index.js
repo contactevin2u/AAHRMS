@@ -129,6 +129,17 @@ const initDb = async () => {
         END IF;
       END $$;
 
+      -- Login history for audit trail
+      CREATE TABLE IF NOT EXISTS admin_login_history (
+        id SERIAL PRIMARY KEY,
+        admin_user_id INTEGER REFERENCES admin_users(id),
+        username VARCHAR(50),
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        success BOOLEAN DEFAULT TRUE
+      );
+
       -- Roles table for permission management
       CREATE TABLE IF NOT EXISTS admin_roles (
         id SERIAL PRIMARY KEY,

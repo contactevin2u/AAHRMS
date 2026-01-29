@@ -40,6 +40,13 @@ router.post('/login', async (req, res) => {
     const validPassword = await bcrypt.compare(password, admin.password_hash);
 
     if (!validPassword) {
+      // Log failed login attempt
+      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+      const userAgent = req.headers['user-agent'] || 'unknown';
+      await pool.query(
+        'INSERT INTO admin_login_history (admin_user_id, username, ip_address, user_agent, success) VALUES ($1, $2, $3, $4, false)',
+        [admin.id, username, ip, userAgent]
+      );
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -47,6 +54,14 @@ router.post('/login', async (req, res) => {
     await pool.query(
       'UPDATE admin_users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
       [admin.id]
+    );
+
+    // Log login history with IP
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    await pool.query(
+      'INSERT INTO admin_login_history (admin_user_id, username, ip_address, user_agent, success) VALUES ($1, $2, $3, $4, true)',
+      [admin.id, admin.username, ip, userAgent]
     );
 
     const token = jwt.sign(

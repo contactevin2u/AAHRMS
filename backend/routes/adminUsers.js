@@ -49,6 +49,57 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get login history (must be before /:id route)
+router.get('/login-history', authenticateAdmin, async (req, res) => {
+  try {
+    if (!isSuperAdmin(req)) {
+      return res.status(403).json({ error: 'Super admin access required' });
+    }
+
+    const { date, days } = req.query;
+    let dateFilter;
+    const params = [];
+
+    if (date) {
+      params.push(date);
+      dateFilter = `WHERE lh.login_at::date = $1`;
+    } else {
+      const d = parseInt(days) || 7;
+      params.push(d);
+      dateFilter = `WHERE lh.login_at >= NOW() - ($1 || ' days')::interval`;
+    }
+
+    const result = await pool.query(`
+      SELECT lh.id, lh.admin_user_id, lh.username,
+             au.name, au.role, au.company_id,
+             lh.ip_address, lh.user_agent, lh.login_at, lh.success
+      FROM admin_login_history lh
+      LEFT JOIN admin_users au ON lh.admin_user_id = au.id
+      ${dateFilter}
+      ORDER BY lh.login_at DESC
+      LIMIT 500
+    `, params);
+
+    const summary = await pool.query(`
+      SELECT lh.username, au.name, COUNT(*) as login_count,
+             COUNT(*) FILTER (WHERE lh.success = true) as success_count,
+             COUNT(*) FILTER (WHERE lh.success = false) as failed_count,
+             array_agg(DISTINCT lh.ip_address) as ip_addresses,
+             MAX(lh.login_at) as last_login
+      FROM admin_login_history lh
+      LEFT JOIN admin_users au ON lh.admin_user_id = au.id
+      ${dateFilter}
+      GROUP BY lh.username, au.name
+      ORDER BY login_count DESC
+    `, params);
+
+    res.json({ history: result.rows, summary: summary.rows });
+  } catch (error) {
+    console.error('Login history error:', error);
+    res.status(500).json({ error: 'Failed to fetch login history' });
+  }
+});
+
 // Get single admin user
 router.get('/:id', authenticateAdmin, async (req, res) => {
   try {

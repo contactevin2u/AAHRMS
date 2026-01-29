@@ -37,6 +37,12 @@ function UserAccess() {
   const [searchError, setSearchError] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
 
+  // Login History state
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [loginSummary, setLoginSummary] = useState([]);
+  const [loginHistoryLoading, setLoginHistoryLoading] = useState(false);
+  const [loginHistoryDate, setLoginHistoryDate] = useState(new Date().toISOString().split('T')[0]);
+
   useEffect(() => {
     const adminInfo = localStorage.getItem('adminInfo');
     if (adminInfo) setCurrentUser(JSON.parse(adminInfo));
@@ -60,6 +66,22 @@ function UserAccess() {
       setLoading(false);
     }
   };
+
+  // ========== LOGIN HISTORY FUNCTIONS ==========
+  const fetchLoginHistory = useCallback(async (date) => {
+    setLoginHistoryLoading(true);
+    try {
+      const res = await adminUsersApi.getLoginHistory({ date });
+      setLoginHistory(res.data.history || []);
+      setLoginSummary(res.data.summary || []);
+    } catch (error) {
+      console.error('Error fetching login history:', error);
+      setLoginHistory([]);
+      setLoginSummary([]);
+    } finally {
+      setLoginHistoryLoading(false);
+    }
+  }, []);
 
   // ========== USER FUNCTIONS ==========
   const handleUserSubmit = async (e) => {
@@ -316,6 +338,11 @@ function UserAccess() {
           <button className={`tab ${activeTab === 'passwords' ? 'active' : ''}`} onClick={() => setActiveTab('passwords')}>
             Password Status
           </button>
+          {isSuperAdmin() && (
+            <button className={`tab ${activeTab === 'loginHistory' ? 'active' : ''}`} onClick={() => { setActiveTab('loginHistory'); fetchLoginHistory(loginHistoryDate); }}>
+              Login History
+            </button>
+          )}
         </div>
 
         {/* ========== USERS TAB ========== */}
@@ -517,6 +544,99 @@ function UserAccess() {
                 <h3>Search for Employees</h3>
                 <p>Enter an employee name, ID, or email to check their password status.</p>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ========== LOGIN HISTORY TAB ========== */}
+        {activeTab === 'loginHistory' && (
+          <div className="tab-content">
+            <div className="tab-header">
+              <h2>Login History</h2>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <input type="date" value={loginHistoryDate}
+                  onChange={(e) => { setLoginHistoryDate(e.target.value); fetchLoginHistory(e.target.value); }}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px' }}
+                />
+              </div>
+            </div>
+
+            {loginHistoryLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Loading...</div>
+            ) : (
+              <>
+                {/* Summary Cards */}
+                {loginSummary.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                    {loginSummary.map((s, idx) => (
+                      <div key={idx} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                        <div style={{ fontWeight: '600', fontSize: '16px', marginBottom: '4px' }}>{s.name || s.username}</div>
+                        <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '12px' }}>@{s.username}</div>
+                        <div style={{ display: 'flex', gap: '16px', fontSize: '14px' }}>
+                          <div><span style={{ color: '#059669', fontWeight: '600' }}>{s.success_count}</span> success</div>
+                          {parseInt(s.failed_count) > 0 && (
+                            <div><span style={{ color: '#dc2626', fontWeight: '600' }}>{s.failed_count}</span> failed</div>
+                          )}
+                        </div>
+                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
+                          IPs: {(s.ip_addresses || []).join(', ')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Detailed History Table */}
+                {loginHistory.length > 0 ? (
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Time</th>
+                          <th>User</th>
+                          <th>IP Address</th>
+                          <th>Status</th>
+                          <th>Browser</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loginHistory.map((h) => (
+                          <tr key={h.id}>
+                            <td>{new Date(h.login_at).toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</td>
+                            <td>
+                              <div className="user-info">
+                                <div className="user-details">
+                                  <span className="user-name">{h.name || h.username}</span>
+                                  <span className="user-username">@{h.username}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td><code>{h.ip_address}</code></td>
+                            <td>
+                              <span style={{
+                                padding: '4px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600',
+                                background: h.success ? '#d1fae5' : '#fee2e2',
+                                color: h.success ? '#059669' : '#dc2626'
+                              }}>
+                                {h.success ? 'Success' : 'Failed'}
+                              </span>
+                            </td>
+                            <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '12px', color: '#64748b' }}>
+                              {h.user_agent?.substring(0, 60)}...
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">📋</div>
+                    <h3>No Login Records</h3>
+                    <p>No login activity found for this date. Login tracking starts from now.</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
