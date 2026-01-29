@@ -6,6 +6,9 @@ import './Contributions.css';
 
 function PayrollUnified() {
   const [mainTab, setMainTab] = useState('payroll'); // 'payroll' or 'contributions'
+  const [expandedEmployee, setExpandedEmployee] = useState(null); // show full name on click
+  const [inlineEditing, setInlineEditing] = useState(null); // { itemId, field }
+  const [inlineValue, setInlineValue] = useState('');
 
   // ========== PAYROLL STATE ==========
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
@@ -786,6 +789,69 @@ function PayrollUnified() {
   const getMonthName = (month) => new Date(2000, month - 1, 1).toLocaleString('en', { month: 'long' });
   const getStatusBadge = (status) => <span className={`status-badge ${status}`}>{status}</span>;
 
+  // Inline edit handlers
+  const startInlineEdit = (itemId, field, currentValue) => {
+    if (selectedRun?.status !== 'draft') return;
+    setInlineEditing({ itemId, field });
+    setInlineValue(currentValue || 0);
+  };
+
+  const saveInlineEdit = async () => {
+    if (!inlineEditing) return;
+    const { itemId, field } = inlineEditing;
+    try {
+      const item = selectedRun.items.find(i => i.id === itemId);
+      if (!item) return;
+      const payload = {
+        basic_salary: item.basic_salary || 0,
+        fixed_allowance: item.fixed_allowance || 0,
+        ot_hours: item.ot_hours || 0,
+        ot_amount: item.ot_amount || 0,
+        commission_amount: item.commission_amount || 0,
+        trade_commission_amount: item.trade_commission_amount || 0,
+        bonus: item.bonus || 0,
+        other_deductions: item.other_deductions || 0,
+        notes: item.notes || '',
+      };
+      // Map display field to payload field
+      const fieldMap = {
+        basic_salary: 'basic_salary',
+        ot_amount: 'ot_amount',
+        fixed_allowance: 'fixed_allowance',
+        bonus: 'bonus',
+        commission_amount: 'commission_amount',
+        pcb: 'pcb_override',
+        advance_deduction: 'advance_deduction',
+      };
+      const payloadField = fieldMap[field] || field;
+      payload[payloadField] = parseFloat(inlineValue) || 0;
+      await payrollV2Api.updateItem(itemId, payload);
+      fetchRunDetails(selectedRun.id);
+      fetchRuns();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to update');
+    }
+    setInlineEditing(null);
+  };
+
+  const cancelInlineEdit = () => {
+    setInlineEditing(null);
+  };
+
+  // Determine which optional columns have data
+  const getVisibleColumns = (items) => {
+    if (!items || items.length === 0) return {};
+    const hasValue = (field) => items.some(item => parseFloat(item[field]) > 0);
+    return {
+      ot: hasValue('ot_amount'),
+      allow: hasValue('fixed_allowance'),
+      bonus: hasValue('bonus'),
+      claims: hasValue('claims_amount'),
+      comm: items.some(item => (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0) > 0),
+      adv: hasValue('advance_deduction'),
+    };
+  };
+
   // ========== RENDER ==========
   return (
     <Layout>
@@ -1077,46 +1143,90 @@ function PayrollUnified() {
                   )}
 
                   {/* Items Table */}
-                  <div className="items-table full-breakdown">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Employee</th><th>Basic</th><th>OT</th><th>Allow</th><th>Bonus</th><th>Claims</th><th>Comm.</th>
-                          <th>Gross</th><th>EPF</th><th>SOCSO</th><th>EIS</th><th>PCB</th><th>Adv</th><th>Net</th><th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedRun.items?.map(item => (
-                          <tr key={item.id}>
-                            <td className="employee-cell"><strong>{item.employee_name}</strong><small>{item.emp_code}</small></td>
-                            <td>{formatAmount(item.basic_salary)}</td>
-                            <td>{parseFloat(item.ot_hours) > 0 ? formatAmount(item.ot_amount) : '-'}</td>
-                            <td>{parseFloat(item.fixed_allowance) > 0 ? formatAmount(item.fixed_allowance) : '-'}</td>
-                            <td>{parseFloat(item.bonus) > 0 ? formatAmount(item.bonus) : '-'}</td>
-                            <td>{parseFloat(item.claims_amount) > 0 ? formatAmount(item.claims_amount) : '-'}</td>
-                            <td>{(parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0) > 0 ? formatAmount((parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0)) : '-'}</td>
-                            <td><strong>{formatAmount(item.gross_salary)}</strong></td>
-                            <td>{formatAmount(item.epf_employee)}</td>
-                            <td>{formatAmount(item.socso_employee)}</td>
-                            <td>{formatAmount(item.eis_employee)}</td>
-                            <td>{formatAmount(item.pcb)}</td>
-                            <td>{parseFloat(item.advance_deduction) > 0 ? formatAmount(item.advance_deduction) : '-'}</td>
-                            <td><strong>{formatAmount(item.net_pay)}</strong></td>
-                            <td>
-                              {selectedRun.status === 'draft' && (
-                                <>
-                                  <button onClick={() => handleRecalculateItem(item.id)} className="action-btn recalc" title="Recalculate">↻</button>
-                                  <button onClick={() => handleEditItem(item)} className="action-btn edit" title="Edit">✎</button>
-                                  <button onClick={() => handleDeleteItem(item)} className="action-btn delete" title="Remove from payroll">🗑</button>
-                                </>
-                              )}
-                              <button onClick={() => handleViewPayslip(item.id)} className="action-btn view" title="View Payslip">📄</button>
-                            </td>
+                  {(() => {
+                    const vis = getVisibleColumns(selectedRun.items);
+                    const isDraft = selectedRun.status === 'draft';
+                    const renderCell = (item, field, value) => {
+                      const isEditing = inlineEditing?.itemId === item.id && inlineEditing?.field === field;
+                      if (isEditing) {
+                        return (
+                          <td>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={inlineValue}
+                              onChange={(e) => setInlineValue(e.target.value)}
+                              onBlur={saveInlineEdit}
+                              onKeyDown={(e) => { if (e.key === 'Enter') saveInlineEdit(); if (e.key === 'Escape') cancelInlineEdit(); }}
+                              autoFocus
+                              style={{ width: '80px', padding: '2px 4px', fontSize: '0.85rem' }}
+                            />
+                          </td>
+                        );
+                      }
+                      return (
+                        <td
+                          onClick={() => isDraft ? startInlineEdit(item.id, field, value) : null}
+                          style={isDraft ? { cursor: 'pointer' } : {}}
+                          title={isDraft ? 'Click to edit' : ''}
+                        >
+                          {formatAmount(value)}
+                        </td>
+                      );
+                    };
+                    return (
+                    <div className="items-table full-breakdown">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Employee</th><th>Basic</th>
+                            {vis.ot && <th>OT</th>}
+                            {vis.allow && <th>Allow</th>}
+                            {vis.bonus && <th>Bonus</th>}
+                            {vis.claims && <th>Claims</th>}
+                            {vis.comm && <th>Comm.</th>}
+                            <th>Gross</th><th>EPF</th><th>SOCSO</th><th>EIS</th><th>PCB</th>
+                            {vis.adv && <th>Adv</th>}
+                            <th>Net</th><th></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {selectedRun.items?.map(item => (
+                            <tr key={item.id}>
+                              <td className="employee-cell" style={{ cursor: 'pointer' }} onClick={() => setExpandedEmployee(expandedEmployee === item.id ? null : item.id)}>
+                                <strong>{item.emp_code}</strong>
+                                {expandedEmployee === item.id && <div style={{ fontSize: '0.8rem', color: '#555', marginTop: '2px' }}>{item.employee_name}</div>}
+                              </td>
+                              {renderCell(item, 'basic_salary', item.basic_salary)}
+                              {vis.ot && renderCell(item, 'ot_amount', item.ot_amount)}
+                              {vis.allow && renderCell(item, 'fixed_allowance', item.fixed_allowance)}
+                              {vis.bonus && renderCell(item, 'bonus', item.bonus)}
+                              {vis.claims && <td>{formatAmount(item.claims_amount)}</td>}
+                              {vis.comm && renderCell(item, 'commission_amount', (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0))}
+                              <td><strong>{formatAmount(item.gross_salary)}</strong></td>
+                              <td>{formatAmount(item.epf_employee)}</td>
+                              <td>{formatAmount(item.socso_employee)}</td>
+                              <td>{formatAmount(item.eis_employee)}</td>
+                              {renderCell(item, 'pcb', item.pcb)}
+                              {vis.adv && <td>{formatAmount(item.advance_deduction)}</td>}
+                              <td><strong>{formatAmount(item.net_pay)}</strong></td>
+                              <td>
+                                {isDraft && (
+                                  <>
+                                    <button onClick={() => handleRecalculateItem(item.id)} className="action-btn recalc" title="Recalculate">↻</button>
+                                    <button onClick={() => handleEditItem(item)} className="action-btn edit" title="Full Edit">✎</button>
+                                    <button onClick={() => handleDeleteItem(item)} className="action-btn delete" title="Remove from payroll">🗑</button>
+                                  </>
+                                )}
+                                <button onClick={() => handleViewPayslip(item.id)} className="action-btn view" title="View Payslip">📄</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    );
+                  })()}
                 </>
               ) : (
                 <div className="no-selection"><p>Select a payroll run</p></div>
