@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter, getOutletFilter, isSupervisor, isAdmin } = require('../middleware/tenant');
+const { isAAAliveCompany } = require('../middleware/essPermissions');
 
 /**
  * Clock In/Out Routes - 4 Actions Per Day
@@ -18,14 +19,16 @@ const { getCompanyFilter, getOutletFilter, isSupervisor, isAdmin } = require('..
  * OT = Working hours - 7.5 hours
  */
 
-const STANDARD_WORK_MINUTES = 450; // 7.5 hours (excluding break)
+const STANDARD_WORK_MINUTES_MIMIX = 450; // 7.5 hours (excluding break)
+const STANDARD_WORK_MINUTES_AA_ALIVE = 540; // 9 hours (break included)
 
 /**
  * Calculate total work time and OT
  * @param {Object} record - Clock record with all 4 time slots
  * @returns {Object} - { totalMinutes, breakMinutes, workMinutes, otMinutes }
  */
-function calculateWorkTime(record) {
+function calculateWorkTime(record, companyId) {
+  const standardMinutes = isAAAliveCompany(companyId) ? STANDARD_WORK_MINUTES_AA_ALIVE : STANDARD_WORK_MINUTES_MIMIX;
   const { clock_in_1, clock_out_1, clock_in_2, clock_out_2 } = record;
 
   let totalMinutes = 0;
@@ -64,7 +67,7 @@ function calculateWorkTime(record) {
   }
 
   // Calculate OT (anything above 8.5 hours)
-  const otMinutes = Math.max(0, totalMinutes - STANDARD_WORK_MINUTES);
+  const otMinutes = Math.max(0, totalMinutes - standardMinutes);
 
   return {
     totalMinutes,
@@ -340,7 +343,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
     const record = result.rows[0];
 
     // Calculate and update work time
-    const calc = calculateWorkTime(record);
+    const calc = calculateWorkTime(record, record.company_id);
     await pool.query(`
       UPDATE clock_in_records SET
         total_work_minutes = $1,
@@ -400,7 +403,7 @@ router.put('/:id/action/:action', authenticateAdmin, async (req, res) => {
 
     // Recalculate work time
     const record = result.rows[0];
-    const calc = calculateWorkTime(record);
+    const calc = calculateWorkTime(record, record.company_id);
     await pool.query(`
       UPDATE clock_in_records SET
         total_work_minutes = $1,
@@ -801,8 +804,9 @@ router.post('/:id/approve-with-schedule', authenticateAdmin, async (req, res) =>
       totalMinutes = Math.max(0, t2_out - t1_in);
     }
 
-    // Calculate OT (hours above 8.5h = 510 minutes)
-    const otMinutes = Math.max(0, totalMinutes - STANDARD_WORK_MINUTES);
+    // Calculate OT based on company standard hours
+    const standardMins = isAAAliveCompany(record.company_id) ? STANDARD_WORK_MINUTES_AA_ALIVE : STANDARD_WORK_MINUTES_MIMIX;
+    const otMinutes = Math.max(0, totalMinutes - standardMins);
     const totalHours = Math.round(totalMinutes / 60 * 100) / 100;
     const otHours = Math.round(otMinutes / 60 * 100) / 100;
 
@@ -1422,7 +1426,7 @@ router.post('/employee/clock', async (req, res) => {
     const record = result.rows[0];
 
     // Recalculate work time
-    const calc = calculateWorkTime(record);
+    const calc = calculateWorkTime(record, record.company_id);
     await pool.query(`
       UPDATE clock_in_records SET
         total_work_minutes = $1,

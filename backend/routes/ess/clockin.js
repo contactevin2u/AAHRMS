@@ -66,9 +66,10 @@ const {
 const { checkWrongShift } = require('../../utils/attendanceDeduction');
 const { getOTApprovalSetting } = require('../../utils/otCalculation');
 
-// Standard work time: 7.5 hours = 450 minutes (excluding 1 hour break)
-// Total shift = 8.5 hours (7.5 work + 1 hour break)
-const STANDARD_WORK_MINUTES = 450;
+// Mimix: 7.5 hours = 450 minutes (excluding 1 hour break)
+const STANDARD_WORK_MINUTES_MIMIX = 450;
+// AA Alive: 9 hours = 540 minutes (break included, no separate break clock)
+const STANDARD_WORK_MINUTES_AA_ALIVE = 540;
 
 // Night shift cutoff time (1:30 AM) - actions before this time are treated as previous day
 // This applies to companies with night shifts (like Mimix)
@@ -104,7 +105,8 @@ const authenticateEmployee = async (req, res, next) => {
 // - Minimum 1 hour OT required (less than 1 hour = 0)
 // - Round OT to nearest 0.5 hour, rounding DOWN
 // - e.g., 0.9h OT = 0 (below min), 1.2h = 1h, 1.7h = 1.5h
-function calculateWorkTime(record) {
+function calculateWorkTime(record, companyId) {
+  const standardMinutes = isAAAliveCompany(companyId) ? STANDARD_WORK_MINUTES_AA_ALIVE : STANDARD_WORK_MINUTES_MIMIX;
   const { clock_in_1, clock_out_1, clock_in_2, clock_out_2 } = record;
 
   if (!clock_in_1) return { totalMinutes: 0, otMinutes: 0, rawOtMinutes: 0, totalHours: 0, otHours: 0 };
@@ -137,7 +139,7 @@ function calculateWorkTime(record) {
   }
 
   // Raw OT minutes (before applying rules)
-  const rawOtMinutes = Math.max(0, totalMinutes - STANDARD_WORK_MINUTES);
+  const rawOtMinutes = Math.max(0, totalMinutes - standardMinutes);
   const rawOtHours = rawOtMinutes / 60;
 
   // Apply OT rules:
@@ -708,7 +710,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
         ...existingRecord.rows[0],
         clock_out_1: currentTime
       };
-      const { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
+      const { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord, company_id);
 
       // OT flagging (only for full-time, part-time employees have no OT)
       const otFlagged = !isPartTime && otMinutes > 0;
@@ -836,7 +838,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
       ...existingRecord.rows[0],
       clock_out_2: currentTime
     };
-    let { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
+    let { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord, company_id);
 
     // Apply work type rules for normal clock-out
     // Full Time: Calculate actual hours, OT after 8.5 hrs (510 minutes)
@@ -1089,7 +1091,7 @@ router.post('/out', authenticateEmployee, asyncHandler(async (req, res) => {
     ...existingRecord.rows[0],
     clock_out_2: currentTime
   };
-  let { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord);
+  let { totalMinutes, otMinutes, totalHours, otHours } = calculateWorkTime(updatedRecord, company_id);
 
   // Apply work type rules for normal clock-out
   // Full Time: OT after 8.5 hrs, Part Time: No OT flagging - salary based on working hours only

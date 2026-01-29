@@ -15,9 +15,12 @@
  */
 
 const pool = require('../db');
+const { isAAAliveCompany } = require('../middleware/essPermissions');
 
-// Standard work time: 7.5 hours = 450 minutes (excluding 1 hour break)
-const STANDARD_WORK_MINUTES = 450;
+// Mimix: 7.5 hours = 450 minutes (excluding break)
+const STANDARD_WORK_MINUTES_MIMIX = 450;
+// AA Alive: 9 hours = 540 minutes (break included)
+const STANDARD_WORK_MINUTES_AA_ALIVE = 540;
 
 /**
  * Convert time string (HH:MM:SS or HH:MM) to minutes since midnight
@@ -73,7 +76,7 @@ function calculateWorkMinutes(record) {
  * Calculate scheduled work minutes from schedule
  */
 function calculateScheduledMinutes(schedule) {
-  if (!schedule) return STANDARD_WORK_MINUTES;
+  if (!schedule) return STANDARD_WORK_MINUTES_MIMIX;
 
   const startMinutes = timeToMinutes(schedule.shift_start);
   const endMinutes = timeToMinutes(schedule.shift_end);
@@ -134,8 +137,9 @@ async function processAutoClockOut(record, schedule, employee) {
   const workType = employee.work_type || 'full_time';
 
   if (workType === 'full_time') {
-    // Full Time: Cap at 8.5 hours (510 minutes), no OT on auto clock-out
-    totalWorkMinutes = Math.min(totalWorkMinutes, STANDARD_WORK_MINUTES);
+    // Full Time: Cap at standard hours, no OT on auto clock-out
+    const standardCap = isAAAliveCompany(record.company_id) ? STANDARD_WORK_MINUTES_AA_ALIVE : STANDARD_WORK_MINUTES_MIMIX;
+    totalWorkMinutes = Math.min(totalWorkMinutes, standardCap);
     otMinutes = 0; // No OT for auto clock-out
   } else {
     // Part Time: Count scheduled hours only, no OT
