@@ -137,7 +137,7 @@ function Analytics() {
           <div className="analytics-stat-card">
             <div className="stat-label">Total Gross</div>
             <div className="stat-value">{formatRM(overview?.totalGross)}</div>
-            <div className="stat-change neutral">Deductions: {formatRM(overview?.totalDeductions)}</div>
+            <div className="stat-change neutral">Excl. Claims: {formatRM(overview?.totalGrossExClaims)}</div>
           </div>
         </div>
 
@@ -153,6 +153,7 @@ function Analytics() {
                 <Tooltip formatter={(v) => formatRM(v)} />
                 <Legend />
                 <Line type="monotone" dataKey="totalGross" stroke="#3b82f6" strokeWidth={2} name="Gross" dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="totalGrossExClaims" stroke="#8b5cf6" strokeWidth={2} name="Gross (excl. Claims)" dot={{ r: 3 }} strokeDasharray="5 5" />
                 <Line type="monotone" dataKey="totalNet" stroke="#10b981" strokeWidth={2} name="Net Pay" dot={{ r: 3 }} />
                 <Line type="monotone" dataKey="totalDeductions" stroke="#f59e0b" strokeWidth={2} name="Deductions" dot={{ r: 3 }} />
               </LineChart>
@@ -235,6 +236,7 @@ function Analytics() {
                     <th>Department</th>
                     <th>Employees</th>
                     <th>Total Salary</th>
+                    <th>Gross (excl. Claims)</th>
                     <th>Avg Salary</th>
                     <th>% of Payroll</th>
                   </tr>
@@ -248,6 +250,7 @@ function Analytics() {
                       <td><strong>{d.departmentName}</strong></td>
                       <td>{d.employeeCount}</td>
                       <td>{formatRM(d.totalNet)}</td>
+                      <td>{formatRM(d.totalGrossExClaims)}</td>
                       <td>{formatRM(d.avgSalary)}</td>
                       <td>{d.percentage}%</td>
                     </tr>

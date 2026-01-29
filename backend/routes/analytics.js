@@ -49,6 +49,7 @@ router.get('/payroll-overview', authenticateAdmin, async (req, res) => {
     const current = await pool.query(`
       SELECT
         COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
+        COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
         COALESCE(SUM(pi.net_pay), 0) AS total_net,
         COALESCE(SUM(pi.total_deductions), 0) AS total_deductions,
         COUNT(DISTINCT pi.employee_id) AS employee_count,
@@ -99,6 +100,7 @@ router.get('/payroll-overview', authenticateAdmin, async (req, res) => {
       month: latest.month,
       year: latest.year,
       totalGross: parseFloat(currentData.total_gross),
+      totalGrossExClaims: parseFloat(currentData.total_gross_ex_claims),
       totalNet: currentNet,
       totalDeductions: parseFloat(currentData.total_deductions),
       employeeCount: parseInt(currentData.employee_count),
@@ -129,6 +131,7 @@ router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
         d.id AS department_id,
         d.name AS department_name,
         COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
+        COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
         COALESCE(SUM(pi.net_pay), 0) AS total_net,
         COUNT(DISTINCT pi.employee_id) AS employee_count,
         CASE WHEN COUNT(DISTINCT pi.employee_id) > 0
@@ -150,6 +153,7 @@ router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
       departmentId: r.department_id,
       departmentName: r.department_name || 'Unassigned',
       totalGross: parseFloat(r.total_gross),
+      totalGrossExClaims: parseFloat(r.total_gross_ex_claims),
       totalNet: parseFloat(r.total_net),
       employeeCount: parseInt(r.employee_count),
       avgSalary: parseFloat(r.avg_salary),
@@ -178,7 +182,8 @@ router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
     // Top 10 highest paid
     const top10 = await pool.query(`
       SELECT e.name, d.name AS department_name,
-        pi.net_pay, pi.gross_salary
+        pi.net_pay, pi.gross_salary,
+        (pi.gross_salary - COALESCE(pi.claims_amount, 0)) AS gross_ex_claims
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       JOIN employees e ON pi.employee_id = e.id
@@ -194,7 +199,8 @@ router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
     const topByDept = await pool.query(`
       SELECT DISTINCT ON (d.id)
         d.name AS department_name, e.name AS employee_name,
-        pi.net_pay, pi.gross_salary
+        pi.net_pay, pi.gross_salary,
+        (pi.gross_salary - COALESCE(pi.claims_amount, 0)) AS gross_ex_claims
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       JOIN employees e ON pi.employee_id = e.id
@@ -212,13 +218,15 @@ router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
         name: r.name,
         department: r.department_name || 'Unassigned',
         netPay: parseFloat(r.net_pay),
-        grossSalary: parseFloat(r.gross_salary)
+        grossSalary: parseFloat(r.gross_salary),
+        grossExClaims: parseFloat(r.gross_ex_claims)
       })),
       topByDepartment: topByDept.rows.map(r => ({
         department: r.department_name || 'Unassigned',
         employeeName: r.employee_name,
         netPay: parseFloat(r.net_pay),
-        grossSalary: parseFloat(r.gross_salary)
+        grossSalary: parseFloat(r.gross_salary),
+        grossExClaims: parseFloat(r.gross_ex_claims)
       }))
     });
   } catch (error) {
@@ -241,6 +249,7 @@ router.get('/monthly-trend', authenticateAdmin, async (req, res) => {
     const result = await pool.query(`
       SELECT pr.month, pr.year,
         COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
+        COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
         COALESCE(SUM(pi.net_pay), 0) AS total_net,
         COALESCE(SUM(pi.total_deductions), 0) AS total_deductions,
         COUNT(DISTINCT pi.employee_id) AS employee_count
@@ -259,6 +268,7 @@ router.get('/monthly-trend', authenticateAdmin, async (req, res) => {
       year: r.year,
       label: `${['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][r.month]} ${r.year}`,
       totalGross: parseFloat(r.total_gross),
+      totalGrossExClaims: parseFloat(r.total_gross_ex_claims),
       totalNet: parseFloat(r.total_net),
       totalDeductions: parseFloat(r.total_deductions),
       employeeCount: parseInt(r.employee_count)
