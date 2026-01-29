@@ -4,6 +4,8 @@ import { essApi } from '../../api';
 import ESSLayout from '../../components/ESSLayout';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { loadFaceDetectionModels, detectFaceFromBase64 } from '../../utils/faceDetection';
+import { detectTextFromBase64 } from '../../utils/textDetection';
 import './ESSClockIn.css';
 
 // Error Boundary to catch rendering errors
@@ -67,6 +69,10 @@ function ESSClockInContent() {
   const [serverTime, setServerTime] = useState(new Date());
   const [showHelp, setShowHelp] = useState(false);
 
+  // Photo AI warning (warning only, never blocks)
+  const [photoWarning, setPhotoWarning] = useState(null); // { type: 'success'|'warning', message }
+  const [validating, setValidating] = useState(false);
+
   // Check camera permission on mount (does NOT trigger popup)
   useEffect(() => {
     const checkCameraPermission = async () => {
@@ -96,6 +102,13 @@ function ESSClockInContent() {
     }
     fetchStatus();
   }, [navigate]);
+
+  // Preload face detection models for Mimix
+  useEffect(() => {
+    if (status && !status.is_aa_alive) {
+      loadFaceDetectionModels().catch(() => {});
+    }
+  }, [status]);
 
   // Update server time every second + refresh status every 30s
   useEffect(() => {
@@ -207,9 +220,10 @@ function ESSClockInContent() {
         streamRef.current = null;
       }
 
+      const useBackCamera = status?.is_indoor_sales;
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'user',
+          facingMode: useBackCamera ? { ideal: 'environment' } : 'user',
           width: { ideal: 640 },
           height: { ideal: 480 }
         },
@@ -301,15 +315,55 @@ function ESSClockInContent() {
       // Stop camera first, then set photo
       stopCamera();
       setCapturedPhoto(photoData);
+      runPhotoWarningCheck(photoData);
     } catch (err) {
       console.error('Photo capture error:', err);
       setError('Failed to capture photo. Please try again.');
     }
   };
 
+  // Run AI warning check (warning only, never blocks submission)
+  const runPhotoWarningCheck = async (photoData) => {
+    const isIndoorSales = status?.is_indoor_sales;
+    const isMimix = status && !status.is_aa_alive;
+
+    // AA Alive non-Indoor-Sales: no check needed
+    if (!isIndoorSales && !isMimix) {
+      setPhotoWarning(null);
+      return;
+    }
+
+    setValidating(true);
+    setPhotoWarning(null);
+
+    try {
+      if (isIndoorSales) {
+        const result = await detectTextFromBase64(photoData);
+        setPhotoWarning(result.valid
+          ? { type: 'success', message: language === 'ms' ? 'Teks dikesan' : 'Text detected' }
+          : { type: 'warning', message: language === 'ms' ? 'Ini bukan gambar log panggilan.' : 'This does not look like a call log.' }
+        );
+      } else if (isMimix) {
+        const result = await detectFaceFromBase64(photoData, { captureSource: 'camera' });
+        setPhotoWarning(result.faceDetected
+          ? { type: 'success', message: language === 'ms' ? 'Wajah dikesan' : 'Face detected' }
+          : { type: 'warning', message: language === 'ms' ? 'Tiada wajah dikesan. Sila pastikan wajah anda kelihatan jelas.' : 'No face detected. Please make sure your face is clearly visible.' }
+        );
+      }
+    } catch (err) {
+      console.error('Photo warning check error:', err);
+      // Silently ignore errors - never block
+      setPhotoWarning(null);
+    } finally {
+      setValidating(false);
+    }
+  };
+
   // Retake photo
   const retakePhoto = () => {
     setCapturedPhoto(null);
+    setPhotoWarning(null);
+    setValidating(false);
     startCamera();
   };
 
@@ -383,8 +437,9 @@ function ESSClockInContent() {
         latitude: location.latitude,
         longitude: location.longitude,
         address: address,
-        face_detected: true,  // TODO: Implement actual face detection
-        face_confidence: 0.95
+        face_detected: true,
+        face_confidence: 0.95,
+        photo_ai_warning: photoWarning?.type === 'warning' ? photoWarning.message : null
       });
 
       const successMsg = res.data.message;
@@ -671,8 +726,10 @@ function ESSClockInContent() {
           <div className="camera-section">
             {!cameraActive && !cameraLoading && !capturedPhoto && (
               <button className="start-camera-btn" onClick={startCamera} disabled={!isOnline}>
-                <span>&#x1F4F7;</span>
-                {t('attendance.takeSelfie')}
+                <span>{status?.is_indoor_sales ? '\uD83D\uDCDE' : '\uD83D\uDCF7'}</span>
+                {status?.is_indoor_sales
+                  ? (language === 'ms' ? 'Ambil Gambar Log Panggilan' : 'Take Call Log Photo')
+                  : t('attendance.takeSelfie')}
               </button>
             )}
 
@@ -690,7 +747,7 @@ function ESSClockInContent() {
                   playsInline
                   muted
                   webkit-playsinline="true"
-                  style={{ width: '100%', height: 'auto' }}
+                  style={{ width: '100%', height: 'auto', transform: status?.is_indoor_sales ? 'none' : undefined }}
                 />
                 {cameraActive && !cameraLoading && (
                   <button className="capture-btn" onClick={capturePhoto}>
@@ -704,7 +761,8 @@ function ESSClockInContent() {
               <div className="photo-preview">
                 <img
                   src={capturedPhoto}
-                  alt="Selfie"
+                  alt={status?.is_indoor_sales ? 'Call Log' : 'Selfie'}
+                  style={status?.is_indoor_sales ? { transform: 'none' } : undefined}
                   onError={(e) => {
                     console.error('Image load error');
                     setCapturedPhoto(null);
@@ -712,6 +770,18 @@ function ESSClockInContent() {
                   }}
                 />
                 <button className="retake-btn" onClick={retakePhoto}>{t('attendance.retake')}</button>
+              </div>
+            )}
+            {capturedPhoto && validating && (
+              <div className="photo-warning-box validating">
+                <span className="pw-spinner"></span>
+                <span>{language === 'ms' ? 'Memeriksa gambar...' : 'Checking photo...'}</span>
+              </div>
+            )}
+            {capturedPhoto && !validating && photoWarning && (
+              <div className={`photo-warning-box ${photoWarning.type}`}>
+                <span>{photoWarning.type === 'success' ? '\u2705' : '\u26A0\uFE0F'}</span>
+                <span>{photoWarning.message}</span>
               </div>
             )}
           </div>

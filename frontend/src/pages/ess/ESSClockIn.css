@@ -401,6 +401,45 @@
   cursor: pointer;
 }
 
+/* Photo AI Warning Box */
+.photo-warning-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.photo-warning-box.validating {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.photo-warning-box.success {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.photo-warning-box.warning {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.pw-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(3, 105, 161, 0.3);
+  border-top-color: #0369a1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
 /* Location Section */
 .location-section {
   display: flex;

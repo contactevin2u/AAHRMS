@@ -386,6 +386,71 @@ function validateClockData(data, action) {
   return errors;
 }
 
+/**
+ * Send photo AI warning notifications to managers/admin
+ * Called when employee clocks in/out but AI detected an issue (warning only, not blocking)
+ */
+async function sendPhotoWarningNotifications(employeeId, employeeName, companyId, warningMessage, action) {
+  try {
+    const isAAAlive = isAAAliveCompany(companyId);
+    const isMimix = isMimixCompany(companyId);
+    const actionLabel = action.replace(/_/g, ' ');
+
+    if (isMimix) {
+      // Mimix: notify supervisor/manager in same outlet + all admin employees
+      const empOutlet = await pool.query('SELECT outlet_id FROM employees WHERE id = $1', [employeeId]);
+      const outletId = empOutlet.rows[0]?.outlet_id;
+
+      if (outletId) {
+        // Find supervisors/managers in same outlet
+        const managers = await pool.query(
+          `SELECT id FROM employees
+           WHERE outlet_id = $1 AND employee_role IN ('supervisor', 'manager') AND status = 'active' AND id != $2`,
+          [outletId, employeeId]
+        );
+        for (const mgr of managers.rows) {
+          await pool.query(
+            `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+             VALUES ($1, 'system', 'Photo Warning', $2, 'employee', $3)`,
+            [mgr.id, `${employeeName} (${actionLabel}): ${warningMessage}`, employeeId]
+          );
+        }
+      }
+    } else if (isAAAlive) {
+      // AA Alive Indoor Sales: notify Rafina (schedule manager)
+      const rafina = await pool.query(
+        `SELECT id FROM employees WHERE employee_id = 'RAFINA' AND status = 'active' LIMIT 1`
+      );
+      if (rafina.rows.length > 0) {
+        await pool.query(
+          `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+           VALUES ($1, 'system', 'Photo Warning', $2, 'employee', $3)`,
+          [rafina.rows[0].id, `${employeeName} (${actionLabel}): ${warningMessage}`, employeeId]
+        );
+      }
+    }
+
+    // Also notify all admin-level employees (company_id match, role = manager or above)
+    const admins = await pool.query(
+      `SELECT id FROM employees
+       WHERE company_id = $1 AND employee_role IN ('admin', 'hr_admin', 'director') AND status = 'active' AND id != $2`,
+      [companyId, employeeId]
+    );
+    for (const admin of admins.rows) {
+      await pool.query(
+        `INSERT INTO notifications (employee_id, type, title, message, reference_type, reference_id)
+         VALUES ($1, 'system', 'Photo Warning', $2, 'employee', $3)`,
+        [admin.id, `${employeeName} (${actionLabel}): ${warningMessage}`, employeeId]
+      );
+    }
+
+    console.log(`[PhotoWarning] Notifications sent for employee ${employeeId}: ${warningMessage}`);
+  } catch (err) {
+    console.error('[PhotoWarning] Failed to send notifications:', err);
+    // Don't throw - notification failure should not block clock action
+  }
+}
+
 // Get today's status (supports 4-action structure)
 // Also checks for open shifts from yesterday (for night shift workers)
 // AA Alive: 2-action flow (clock_in_1, clock_out_1 = session end, optional clock_in_2/clock_out_2 for 2nd session)
@@ -394,13 +459,18 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   const employeeId = req.employee.id;
   const today = getCurrentDate();
 
-  // Get employee's company to determine flow type
+  // Get employee's company and department to determine flow type
   const empCompanyResult = await pool.query(
-    'SELECT company_id FROM employees WHERE id = $1',
+    `SELECT e.company_id, d.name as department_name
+     FROM employees e
+     LEFT JOIN departments d ON e.department_id = d.id
+     WHERE e.id = $1`,
     [employeeId]
   );
   const companyId = empCompanyResult.rows[0]?.company_id;
+  const departmentName = empCompanyResult.rows[0]?.department_name || '';
   const isAAAlive = isAAAliveCompany(companyId);
+  const isIndoorSales = isAAAlive && departmentName.toLowerCase().includes('indoor sales');
 
   // First, check if there's an open shift from yesterday that needs to be closed
   // This handles night shift workers who clock out after midnight
@@ -437,6 +507,8 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
         status,
         next_action: nextAction,
         is_yesterday_shift: true,
+        is_aa_alive: isAAAlive,
+        is_indoor_sales: isIndoorSales,
         record: {
           ...openYesterdayShift,
           total_hours: openYesterdayShift.total_work_minutes ? (openYesterdayShift.total_work_minutes / 60).toFixed(2) : null,
@@ -466,6 +538,8 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
     return res.json({
       status: 'not_started',
       next_action: 'clock_in_1',
+      is_aa_alive: isAAAlive,
+      is_indoor_sales: isIndoorSales,
       record: null
     });
   }
@@ -503,6 +577,7 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
     next_action: nextAction,
     next_action_optional: nextActionOptional,
     is_aa_alive: isAAAlive,
+    is_indoor_sales: isIndoorSales,
     record: {
       ...record,
       total_hours: record.total_work_minutes ? (record.total_work_minutes / 60).toFixed(2) : null,
@@ -522,10 +597,12 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     address,
     face_detected,
     face_confidence,
+    photo_ai_warning,
     timestamp
   } = req.body;
 
   const employeeId = req.employee.id;
+  const employeeName = req.employee.name;
   let workDate = getCurrentDate(); // Default to today
   const currentTime = getCurrentTime();
 
@@ -567,6 +644,11 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
   }
 
   const { company_id, outlet_id, grouping_type } = empResult.rows[0];
+
+  // Fire photo AI warning notification (non-blocking, fire-and-forget)
+  if (photo_ai_warning) {
+    sendPhotoWarningNotifications(employeeId, employeeName, company_id, photo_ai_warning, action);
+  }
 
   // Schedule check for outlet-based companies (Mimix)
   // Clock-in is validated against assigned shift - wrong shift = absent
