@@ -191,8 +191,8 @@
    ================================================ */
 
 .ess-payslip-page {
-  padding: 16px;
-  max-width: 900px;
+  padding: 12px;
+  max-width: 600px;
   margin: 0 auto;
 }
 
@@ -260,9 +260,9 @@
 
 .ess-payslip-container {
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
-  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 20px;
   border: 1px solid #e2e8f0;
 }
 
@@ -279,8 +279,8 @@
 }
 
 .ess-letterhead-logo img {
-  width: 80px;
-  height: 80px;
+  width: 60px;
+  height: 60px;
   object-fit: contain;
 }
 
@@ -289,8 +289,8 @@
 }
 
 .ess-letterhead-info h1 {
-  margin: 0 0 5px 0;
-  font-size: 1.5rem;
+  margin: 0 0 4px 0;
+  font-size: 1.2rem;
   color: #1e293b;
   font-weight: 700;
 }
@@ -350,8 +350,8 @@
 
 .ess-info-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .ess-info-row {
@@ -373,17 +373,17 @@
 
 /* Single-column payslip layout (matching admin) */
 .ess-section-block {
-  margin-bottom: 25px;
+  margin-bottom: 20px;
 }
 
 .ess-section-heading {
   color: #64748b;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin: 0 0 8px 0;
-  padding-bottom: 6px;
+  margin: 0 0 6px 0;
+  padding-bottom: 4px;
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -393,23 +393,26 @@
 }
 
 .ess-payslip-table td {
-  padding: 10px 0;
+  padding: 8px 0;
   border-bottom: 1px solid #f1f5f9;
   color: #1e293b;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+}
+
+.ess-payslip-table td:first-child {
+  padding-right: 12px;
 }
 
 .ess-payslip-table .ess-amount {
   text-align: right;
-  font-family: monospace;
-  font-size: 0.95rem;
+  font-weight: 500;
   white-space: nowrap;
 }
 
 .ess-payslip-table tfoot td {
   border-bottom: none;
   border-top: 2px solid #e2e8f0;
-  padding-top: 12px;
+  padding-top: 10px;
 }
 
 .ess-total-row td {
@@ -421,23 +424,22 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 0;
+  padding: 14px 0;
   border-top: 2px solid #1e293b;
   border-bottom: 2px solid #1e293b;
 }
 
 .ess-net-label {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
 }
 
 .ess-net-value {
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: #1976d2;
-  font-family: monospace;
 }
 
 .ess-bank-section {
@@ -537,37 +539,57 @@
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+  .ess-payslip-page {
+    padding: 8px;
+  }
+
   .ess-payslip-container {
-    padding: 20px;
+    padding: 16px;
+    border-radius: 10px;
   }
 
   .ess-letterhead {
-    flex-direction: column;
-    text-align: center;
+    gap: 12px;
   }
 
   .ess-letterhead-logo img {
-    width: 60px;
-    height: 60px;
+    width: 48px;
+    height: 48px;
   }
 
-  .ess-payslip-header {
-    flex-direction: column;
-    gap: 15px;
+  .ess-letterhead-info h1 {
+    font-size: 1rem;
   }
 
-  .ess-payslip-title {
-    text-align: center;
+  .ess-letterhead-info .ess-company-reg,
+  .ess-letterhead-info .ess-company-address {
+    font-size: 0.75rem;
   }
 
-  .ess-info-grid {
-    grid-template-columns: 1fr;
+  .ess-payslip-title h2 {
+    font-size: 1.1rem;
   }
 
-  .ess-net-pay-row {
-    flex-direction: column;
-    text-align: center;
-    gap: 8px;
+  .ess-payslip-title p {
+    font-size: 0.9rem;
+  }
+
+  .ess-employee-section {
+    padding: 12px;
+  }
+
+  .ess-info-row .ess-label {
+    min-width: 80px;
+    font-size: 0.8rem;
+  }
+
+  .ess-info-row .ess-value {
+    font-size: 0.8rem;
+  }
+
+  .ess-payslip-table td {
+    font-size: 0.8rem;
+    padding: 7px 0;
   }
 
   .ess-payslip-actions {
@@ -579,6 +601,7 @@
   .ess-print-btn {
     width: 100%;
     text-align: center;
+    padding: 10px 16px;
   }
 }
 

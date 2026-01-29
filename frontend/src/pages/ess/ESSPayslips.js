@@ -347,7 +347,6 @@ function ESSPayslips() {
                 </tfoot>
               </table>
             </div>
-            )}
 
             {/* Net Pay */}
             <div className="ess-section-block ess-net-pay-row">
