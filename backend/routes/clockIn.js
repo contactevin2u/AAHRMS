@@ -46,24 +46,27 @@ function calculateWorkTime(record, companyId) {
   const t2_in = parseTime(clock_in_2);
   const t2_out = parseTime(clock_out_2);
 
+  // Handle overnight: if out time < in time, add 24h (1440 min)
+  const diff = (start, end) => end >= start ? end - start : end + 1440 - start;
+
   // Morning session: clock_in_1 to clock_out_1
   if (t1_in !== null && t1_out !== null) {
-    totalMinutes += Math.max(0, t1_out - t1_in);
+    totalMinutes += diff(t1_in, t1_out);
   }
 
   // Break time: clock_out_1 to clock_in_2
   if (t1_out !== null && t2_in !== null) {
-    breakMinutes = Math.max(0, t2_in - t1_out);
+    breakMinutes = diff(t1_out, t2_in);
   }
 
   // Afternoon session: clock_in_2 to clock_out_2
   if (t2_in !== null && t2_out !== null) {
-    totalMinutes += Math.max(0, t2_out - t2_in);
+    totalMinutes += diff(t2_in, t2_out);
   }
 
   // If only clock_in_1 and clock_out_2 exist (no break recorded)
   if (t1_in !== null && t2_out !== null && t1_out === null && t2_in === null) {
-    totalMinutes = Math.max(0, t2_out - t1_in);
+    totalMinutes = diff(t1_in, t2_out);
   }
 
   // Calculate OT (anything above 8.5 hours)
@@ -793,15 +796,17 @@ router.post('/:id/approve-with-schedule', authenticateAdmin, async (req, res) =>
     const t2_out = parseTime(record.clock_out_2);
 
     let totalMinutes = 0;
+    // Handle overnight: if out time < in time, add 24h
+    const timeDiff = (s, e) => e >= s ? e - s : e + 1440 - s;
 
     if (t1_in !== null && t1_out !== null) {
-      totalMinutes += Math.max(0, t1_out - t1_in);
+      totalMinutes += timeDiff(t1_in, t1_out);
     }
     if (t2_in !== null && t2_out !== null) {
-      totalMinutes += Math.max(0, t2_out - t2_in);
+      totalMinutes += timeDiff(t2_in, t2_out);
     }
     if (t1_in !== null && t2_out !== null && t1_out === null && t2_in === null) {
-      totalMinutes = Math.max(0, t2_out - t1_in);
+      totalMinutes = timeDiff(t1_in, t2_out);
     }
 
     // Calculate OT based on company standard hours
@@ -841,6 +846,40 @@ router.post('/:id/approve-with-schedule', authenticateAdmin, async (req, res) =>
   } catch (error) {
     console.error('Error approving attendance with schedule:', error);
     res.status(500).json({ error: 'Failed to approve attendance' });
+  }
+});
+
+// Recalculate work hours for all records in a given month (fixes overnight shift calculations)
+router.post('/recalculate', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = getCompanyFilter(req);
+    const { month, year } = req.body;
+    if (!month || !year) return res.status(400).json({ error: 'month and year required' });
+
+    let query = `SELECT * FROM clock_in_records WHERE EXTRACT(MONTH FROM work_date) = $1 AND EXTRACT(YEAR FROM work_date) = $2`;
+    const params = [month, year];
+    if (companyId !== null) {
+      query += ` AND company_id = $3`;
+      params.push(companyId);
+    }
+    const records = await pool.query(query, params);
+    let updated = 0;
+    for (const record of records.rows) {
+      const calc = calculateWorkTime(record, record.company_id);
+      if (calc.totalHours !== parseFloat(record.total_work_hours || 0) || calc.otHours !== parseFloat(record.ot_hours || 0)) {
+        await pool.query(`
+          UPDATE clock_in_records SET
+            total_work_minutes = $1, total_break_minutes = $2, ot_minutes = $3,
+            total_work_hours = $4, ot_hours = $5
+          WHERE id = $6
+        `, [calc.workMinutes, calc.breakMinutes, calc.otMinutes, calc.totalHours, calc.otHours, record.id]);
+        updated++;
+      }
+    }
+    res.json({ message: `Recalculated ${updated} of ${records.rows.length} records`, updated, total: records.rows.length });
+  } catch (error) {
+    console.error('Error recalculating:', error);
+    res.status(500).json({ error: 'Failed to recalculate' });
   }
 });
 

@@ -114,28 +114,31 @@ function calculateWorkTime(record, companyId) {
   let totalMinutes = 0;
   let breakMinutes = 0;
 
+  // Handle overnight: if out time < in time, add 24h (1440 min)
+  const timeDiff = (start, end) => end >= start ? end - start : end + 1440 - start;
+
   // Calculate morning session (clock_in_1 to clock_out_1)
   if (clock_in_1 && clock_out_1) {
     const start1 = timeToMinutes(clock_in_1);
     const end1 = timeToMinutes(clock_out_1);
-    totalMinutes += Math.max(0, end1 - start1);
+    totalMinutes += timeDiff(start1, end1);
   }
 
   // Calculate afternoon session (clock_in_2 to clock_out_2)
   if (clock_in_2 && clock_out_2) {
     const start2 = timeToMinutes(clock_in_2);
     const end2 = timeToMinutes(clock_out_2);
-    totalMinutes += Math.max(0, end2 - start2);
+    totalMinutes += timeDiff(start2, end2);
   }
 
   // If only clock_in_1 and clock_out_2 (no break recorded)
   if (clock_in_1 && clock_out_2 && !clock_out_1 && !clock_in_2) {
-    totalMinutes = timeToMinutes(clock_out_2) - timeToMinutes(clock_in_1);
+    totalMinutes = timeDiff(timeToMinutes(clock_in_1), timeToMinutes(clock_out_2));
   }
 
   // Calculate break time
   if (clock_out_1 && clock_in_2) {
-    breakMinutes = timeToMinutes(clock_in_2) - timeToMinutes(clock_out_1);
+    breakMinutes = timeDiff(timeToMinutes(clock_out_1), timeToMinutes(clock_in_2));
   }
 
   // Raw OT minutes (before applying rules)

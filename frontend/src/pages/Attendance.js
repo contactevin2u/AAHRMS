@@ -562,6 +562,21 @@ const Attendance = () => {
             </button>
           )}
           <button
+            className="sync-drivers-btn"
+            onClick={async () => {
+              if (!window.confirm('Recalculate work hours for all records in this period? This fixes overnight shift calculations.')) return;
+              try {
+                const res = await attendanceApi.recalculate({ month: filters.month, year: filters.year });
+                toast.success(res.data.message);
+                fetchData();
+              } catch (err) {
+                toast.error('Failed to recalculate');
+              }
+            }}
+          >
+            Recalculate Hours
+          </button>
+          <button
             className="create-manual-btn"
             onClick={() => setShowManualModal(true)}
           >
