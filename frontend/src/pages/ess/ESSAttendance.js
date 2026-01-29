@@ -759,14 +759,16 @@ function ESSAttendanceContent() {
                     />
                     {cameraActive && !cameraLoading && (
                       <div className="capture-container">
-                        <button
-                          className="switch-camera-btn"
-                          onClick={switchCamera}
-                          title="Switch Camera"
-                          style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer', zIndex: 2 }}
-                        >
-                          &#x1F504;
-                        </button>
+                        {isAAAliveCheck && (
+                          <button
+                            className="switch-camera-btn"
+                            onClick={switchCamera}
+                            title="Switch Camera"
+                            style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer', zIndex: 2 }}
+                          >
+                            &#x1F504;
+                          </button>
+                        )}
                         <button className="capture-btn" onClick={capturePhoto}>
                           <span className="capture-inner"></span>
                         </button>
