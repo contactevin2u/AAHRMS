@@ -264,6 +264,9 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   padding: 20px;
   border: 1px solid #e2e8f0;
+  overflow: hidden;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 /* Letterhead */
@@ -374,6 +377,8 @@
 /* Single-column payslip layout (matching admin) */
 .ess-section-block {
   margin-bottom: 20px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .ess-section-heading {
@@ -390,6 +395,7 @@
 .ess-payslip-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .ess-payslip-table td {
@@ -400,7 +406,12 @@
 }
 
 .ess-payslip-table td:first-child {
-  padding-right: 12px;
+  width: 60%;
+  padding-right: 8px;
+}
+
+.ess-payslip-table td:last-child {
+  width: 40%;
 }
 
 .ess-payslip-table .ess-amount {

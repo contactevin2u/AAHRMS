@@ -36,6 +36,7 @@ const positionsRoutes = require('./routes/positions');
 const commissionRoutes = require('./routes/commission');  // Indoor Sales commissions
 const advancesRoutes = require('./routes/advances');  // Salary Advances
 const payrollAIRoutes = require('./routes/payrollAI');  // AI Payroll Assistant
+const analyticsRoutes = require('./routes/analytics');  // Analytics Dashboard
 const publicHolidaysRoutes = require('./routes/publicHolidays');  // Public Holidays Management
 const eaFormsRoutes = require('./routes/ea-forms');  // EA Forms (Borang EA)
 
@@ -90,6 +91,7 @@ app.use('/api/positions', positionsRoutes);  // Job Positions
 app.use('/api/commission', commissionRoutes);  // Indoor Sales commissions
 app.use('/api/advances', advancesRoutes);  // Salary Advances
 app.use('/api/payroll/ai', payrollAIRoutes);  // AI Payroll Assistant
+app.use('/api/analytics', analyticsRoutes);  // Analytics Dashboard
 app.use('/api/public-holidays', publicHolidaysRoutes);  // Public Holidays Management
 app.use('/api/ea-forms', eaFormsRoutes);  // EA Forms (Borang EA)
 app.use('/api/webhooks/orderops', orderopsWebhookRoutes);  // OrderOps Webhook (real-time driver sync)

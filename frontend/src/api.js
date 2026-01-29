@@ -747,4 +747,14 @@ export const essApi = {
   managerQuickAddEmployee: (data) => api.post('/ess/manager-overview/quick-add', data, essApiConfig),
 };
 
+export const analyticsApi = {
+  getPayrollOverview: () => api.get('/analytics/payroll-overview'),
+  getDepartmentBreakdown: () => api.get('/analytics/department-breakdown'),
+  getSalaryRanking: () => api.get('/analytics/salary-ranking'),
+  getMonthlyTrend: (months = 12) => api.get('/analytics/monthly-trend', { params: { months } }),
+  getHeadcount: () => api.get('/analytics/headcount'),
+  getAttendanceSummary: () => api.get('/analytics/attendance-summary'),
+  getAiInsights: () => api.get('/analytics/ai-insights'),
+};
+
 export default api;
