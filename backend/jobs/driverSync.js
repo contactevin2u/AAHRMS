@@ -168,16 +168,16 @@ async function syncDriverAttendance(date = null) {
 
         // Check existing record
         const existingResult = await client.query(`
-          SELECT id, clock_in_1, clock_out_2 FROM clock_in_records
+          SELECT id, clock_in_1, clock_out_1 FROM clock_in_records
           WHERE employee_id = $1 AND work_date = $2
         `, [employee.id, workDate]);
 
         if (existingResult.rows.length > 0) {
           const existing = existingResult.rows[0];
 
-          if (clockOut && !existing.clock_out_2) {
+          if (clockOut && !existing.clock_out_1) {
             await client.query(`
-              UPDATE clock_in_records SET clock_out_2 = $1, status = 'completed', updated_at = NOW()
+              UPDATE clock_in_records SET clock_out_1 = $1, status = 'completed', updated_at = NOW()
               WHERE id = $2
             `, [clockOut, existing.id]);
 
@@ -191,8 +191,8 @@ async function syncDriverAttendance(date = null) {
           await client.query(`
             INSERT INTO clock_in_records (
               employee_id, company_id, work_date,
-              clock_in_1, clock_out_2,
-              address_in_1, address_out_2,
+              clock_in_1, clock_out_1,
+              address_in_1, address_out_1,
               total_work_hours,
               notes, status, created_at, updated_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())

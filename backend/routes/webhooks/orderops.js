@@ -176,15 +176,15 @@ router.post('/clock-out', verifyWebhook, async (req, res) => {
       await client.query(`
         INSERT INTO clock_in_records (
           employee_id, company_id, work_date,
-          clock_out_2, address_out_2, total_work_hours,
+          clock_out_1, address_out_1, total_work_hours,
           notes, status, created_at, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'completed', NOW(), NOW())
       `, [employee.id, AA_ALIVE_COMPANY_ID, workDate, clockOut, clock_out_location || null, total_working_hours || null, notes]);
     } else {
-      // Update existing record
+      // Update existing record - AA Alive uses single session (clock_in_1 → clock_out_1)
       await client.query(`
         UPDATE clock_in_records
-        SET clock_out_2 = $1, address_out_2 = $2, total_work_hours = $3, status = 'completed', updated_at = NOW()
+        SET clock_out_1 = $1, address_out_1 = $2, total_work_hours = $3, status = 'completed', updated_at = NOW()
         WHERE id = $4
       `, [clockOut, clock_out_location || null, total_working_hours || null, existing.rows[0].id]);
     }
@@ -255,7 +255,7 @@ router.post('/shift', verifyWebhook, async (req, res) => {
 
     // Check existing record
     const existing = await client.query(
-      'SELECT id, clock_in_1, clock_out_2 FROM clock_in_records WHERE employee_id = $1 AND work_date = $2',
+      'SELECT id, clock_in_1, clock_out_1 FROM clock_in_records WHERE employee_id = $1 AND work_date = $2',
       [employee.id, workDate]
     );
 
@@ -263,13 +263,13 @@ router.post('/shift', verifyWebhook, async (req, res) => {
     const status = shiftStatus === 'COMPLETED' ? 'completed' : (clockOut ? 'completed' : 'clocked_in');
 
     if (existing.rows.length > 0) {
-      // Update existing record
+      // Update existing record - AA Alive uses single session (clock_in_1 → clock_out_1)
       await client.query(`
         UPDATE clock_in_records
         SET clock_in_1 = COALESCE($1, clock_in_1),
-            clock_out_2 = COALESCE($2, clock_out_2),
+            clock_out_1 = COALESCE($2, clock_out_1),
             address_in_1 = COALESCE($3, address_in_1),
-            address_out_2 = COALESCE($4, address_out_2),
+            address_out_1 = COALESCE($4, address_out_1),
             total_work_hours = COALESCE($5, total_work_hours),
             status = $6,
             updated_at = NOW()
@@ -278,12 +278,12 @@ router.post('/shift', verifyWebhook, async (req, res) => {
 
       res.json({ success: true, action: 'updated', employee_id: employee.employee_id });
     } else {
-      // Create new record
+      // Create new record - AA Alive uses single session (clock_in_1 → clock_out_1)
       await client.query(`
         INSERT INTO clock_in_records (
           employee_id, company_id, work_date,
-          clock_in_1, clock_out_2,
-          address_in_1, address_out_2,
+          clock_in_1, clock_out_1,
+          address_in_1, address_out_1,
           total_work_hours, notes, status,
           created_at, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
