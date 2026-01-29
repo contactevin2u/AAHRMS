@@ -371,129 +371,72 @@
   font-size: 0.9rem;
 }
 
-.ess-payslip-body {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
+/* Single-column payslip layout (matching admin) */
+.ess-section-block {
   margin-bottom: 25px;
 }
 
-.ess-earnings-section,
-.ess-deductions-section {
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  overflow: hidden;
+.ess-section-heading {
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.ess-earnings-section h3,
-.ess-deductions-section h3 {
-  background: #1e293b;
-  color: white;
-  padding: 12px 16px;
-  margin: 0;
-  font-size: 1rem;
-}
-
-.ess-deductions-section h3 {
-  background: linear-gradient(135deg, #3b82f6 0%, #a86548 100%);
-}
-
-.ess-earnings-section table,
-.ess-deductions-section table {
+.ess-payslip-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
 }
 
-.ess-earnings-section td,
-.ess-deductions-section td {
-  padding: 10px 16px;
-  border-bottom: 1px solid #e2e8f0;
+.ess-payslip-table td {
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
   color: #1e293b;
   font-size: 0.9rem;
 }
 
-.ess-earnings-section td:first-child,
-.ess-deductions-section td:first-child {
-  width: 55%;
-}
-
-.ess-earnings-section td:last-child,
-.ess-deductions-section td:last-child {
-  width: 45%;
-}
-
-.ess-earnings-section .ess-amount,
-.ess-deductions-section .ess-amount {
+.ess-payslip-table .ess-amount {
   text-align: right;
   font-family: monospace;
   font-size: 0.95rem;
   white-space: nowrap;
 }
 
-.ess-earnings-section tfoot td,
-.ess-deductions-section tfoot td {
-  background: #f8fafc;
+.ess-payslip-table tfoot td {
   border-bottom: none;
+  border-top: 2px solid #e2e8f0;
+  padding-top: 12px;
 }
 
 .ess-total-row td {
-  padding: 12px 16px;
+  font-weight: 700;
 }
 
-.ess-employer-section {
-  background: #f8f9fa;
-  padding: 15px 20px;
-  border-radius: 12px;
-  margin-bottom: 25px;
-}
-
-.ess-employer-section h3 {
-  color: #64748b;
-  font-size: 0.9rem;
-  margin: 0 0 12px 0;
-  font-weight: 600;
-}
-
-.ess-employer-grid {
-  display: flex;
-  gap: 30px;
-  flex-wrap: wrap;
-}
-
-.ess-contribution-item {
-  display: flex;
-  gap: 10px;
-  font-size: 0.85rem;
-  color: #1e293b;
-}
-
-.ess-contribution-item span:first-child {
-  color: #64748b;
-}
-
-.ess-net-pay-section {
-  background: #3b82f6;
-  padding: 20px 30px;
-  border-radius: 12px;
-  margin-bottom: 25px;
-}
-
-.ess-net-pay {
+/* Net Pay row */
+.ess-net-pay-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: white;
+  padding: 16px 0;
+  border-top: 2px solid #1e293b;
+  border-bottom: 2px solid #1e293b;
 }
 
-.ess-net-pay span:first-child {
-  font-size: 1.2rem;
+.ess-net-label {
+  font-size: 1rem;
   font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
 }
 
-.ess-net-amount {
-  font-size: 1.8rem;
+.ess-net-value {
+  font-size: 1.4rem;
   font-weight: 700;
+  color: #1976d2;
   font-family: monospace;
 }
 
@@ -586,13 +529,7 @@
     font-size: 1.3rem;
   }
 
-  .ess-net-pay-section {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .ess-earnings-section h3,
-  .ess-deductions-section h3 {
+  .ess-net-pay-row {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -627,19 +564,10 @@
     grid-template-columns: 1fr;
   }
 
-  .ess-payslip-body {
-    grid-template-columns: 1fr;
-  }
-
-  .ess-employer-grid {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .ess-net-pay {
+  .ess-net-pay-row {
     flex-direction: column;
     text-align: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .ess-payslip-actions {

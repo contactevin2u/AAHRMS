@@ -216,175 +216,175 @@ function ESSPayslips() {
               </div>
             </div>
 
-            {/* Earnings and Deductions */}
-            <div className="ess-payslip-body">
-              <div className="ess-earnings-section">
-                <h3>{t('payslip.earnings')}</h3>
-                <table>
-                  <tbody>
-                    {payslipDetail.earnings.basic_salary > 0 && (
-                      <tr>
-                        <td>{t('payslip.basicSalary')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.basic_salary)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.earnings.fixed_allowance > 0 && (
-                      <tr>
-                        <td>{t('payslip.fixedAllowance')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.fixed_allowance)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.earnings.ot_amount > 0 && (
-                      <tr>
-                        <td>{t('payslip.overtimePay')} {payslipDetail.earnings.ot_hours > 0 && `(${payslipDetail.earnings.ot_hours} ${t('payslip.hrs')})`}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.ot_amount)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.earnings.ph_pay > 0 && (
-                      <tr>
-                        <td>{t('payslip.publicHolidayPay')} {payslipDetail.earnings.ph_days_worked > 0 && `(${payslipDetail.earnings.ph_days_worked} ${t('payslip.days')})`}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.ph_pay)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.earnings.commission_amount > 0 && (
-                      <tr>
-                        <td>{t('payslip.commission')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.commission_amount)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.earnings.trade_commission_amount > 0 && (
-                      <tr>
-                        <td>{t('payslip.upsellCommission')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.trade_commission_amount)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.earnings.incentive_amount > 0 && (
-                      <tr>
-                        <td>{t('payslip.incentive')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.incentive_amount)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.earnings.outstation_amount > 0 && (
-                      <tr>
-                        <td>{t('payslip.outstationAllowance')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.outstation_amount)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.earnings.claims_amount > 0 && (
-                      <tr>
-                        <td>{t('payslip.claims')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.claims_amount)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.earnings.bonus > 0 && (
-                      <tr>
-                        <td>{t('payslip.bonus')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.earnings.bonus)}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="ess-total-row">
-                      <td><strong>{t('payslip.grossSalary')}</strong></td>
-                      <td className="ess-amount"><strong>{formatCurrency(payslipDetail.totals.gross_salary)}</strong></td>
+            {/* Earnings */}
+            <div className="ess-section-block">
+              <h3 className="ess-section-heading">{t('payslip.earnings')}</h3>
+              <table className="ess-payslip-table">
+                <tbody>
+                  {payslipDetail.earnings.basic_salary > 0 && (
+                    <tr>
+                      <td>{t('payslip.basicSalary')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.basic_salary)}</td>
                     </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              <div className="ess-deductions-section">
-                <h3>{t('payslip.deductions')}</h3>
-                <table>
-                  <tbody>
-                    {payslipDetail.deductions.epf_employee > 0 && (
-                      <tr>
-                        <td>{t('payslip.epfEmployee')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.epf_employee)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.deductions.socso_employee > 0 && (
-                      <tr>
-                        <td>{t('payslip.socsoEmployee')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.socso_employee)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.deductions.eis_employee > 0 && (
-                      <tr>
-                        <td>{t('payslip.eisEmployee')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.eis_employee)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.deductions.pcb > 0 && (
-                      <tr>
-                        <td>{t('payslip.pcbTax')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.pcb)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.deductions.unpaid_leave_deduction > 0 && (
-                      <tr>
-                        <td>{t('payslip.unpaidLeave')} {payslipDetail.deductions.unpaid_leave_days > 0 && `(${payslipDetail.deductions.unpaid_leave_days} ${t('payslip.days')})`}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.unpaid_leave_deduction)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.deductions.advance_deduction > 0 && (
-                      <tr>
-                        <td>{t('payslip.advanceDeduction')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.advance_deduction)}</td>
-                      </tr>
-                    )}
-                    {payslipDetail.deductions.other_deductions > 0 && (
-                      <tr>
-                        <td>{t('payslip.otherDeductions')}</td>
-                        <td className="ess-amount">{formatCurrency(payslipDetail.deductions.other_deductions)}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="ess-total-row">
-                      <td><strong>{t('payslip.totalDeductions')}</strong></td>
-                      <td className="ess-amount"><strong>{formatCurrency(payslipDetail.totals.total_deductions)}</strong></td>
+                  )}
+                  {payslipDetail.earnings.fixed_allowance > 0 && (
+                    <tr>
+                      <td>{t('payslip.fixedAllowance')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.fixed_allowance)}</td>
                     </tr>
-                  </tfoot>
-                </table>
-              </div>
+                  )}
+                  {payslipDetail.earnings.ot_amount > 0 && (
+                    <tr>
+                      <td>{t('payslip.overtimePay')} {payslipDetail.earnings.ot_hours > 0 && `(${payslipDetail.earnings.ot_hours} ${t('payslip.hrs')})`}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.ot_amount)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.earnings.ph_pay > 0 && (
+                    <tr>
+                      <td>{t('payslip.publicHolidayPay')} {payslipDetail.earnings.ph_days_worked > 0 && `(${payslipDetail.earnings.ph_days_worked} ${t('payslip.days')})`}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.ph_pay)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.earnings.commission_amount > 0 && (
+                    <tr>
+                      <td>{t('payslip.commission')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.commission_amount)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.earnings.trade_commission_amount > 0 && (
+                    <tr>
+                      <td>{t('payslip.upsellCommission')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.trade_commission_amount)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.earnings.incentive_amount > 0 && (
+                    <tr>
+                      <td>{t('payslip.incentive')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.incentive_amount)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.earnings.outstation_amount > 0 && (
+                    <tr>
+                      <td>{t('payslip.outstationAllowance')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.outstation_amount)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.earnings.claims_amount > 0 && (
+                    <tr>
+                      <td>{t('payslip.claims')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.claims_amount)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.earnings.bonus > 0 && (
+                    <tr>
+                      <td>{t('payslip.bonus')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.earnings.bonus)}</td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="ess-total-row">
+                    <td><strong>{t('payslip.grossSalary')}</strong></td>
+                    <td className="ess-amount"><strong>{formatCurrency(payslipDetail.totals.gross_salary)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
 
-            {/* Employer Contributions - only show if any contribution exists */}
-            {(payslipDetail.employer_contributions.epf_employer > 0 ||
-              payslipDetail.employer_contributions.socso_employer > 0 ||
-              payslipDetail.employer_contributions.eis_employer > 0) && (
-              <div className="ess-employer-section">
-                <h3>{t('payslip.employerContributions')}</h3>
-                <div className="ess-employer-grid">
-                  {payslipDetail.employer_contributions.epf_employer > 0 && (
-                    <div className="ess-contribution-item">
-                      <span>{t('payslip.epfEmployer')}:</span>
-                      <span>{formatCurrency(payslipDetail.employer_contributions.epf_employer)}</span>
-                    </div>
+            {/* Deductions */}
+            <div className="ess-section-block">
+              <h3 className="ess-section-heading">{t('payslip.deductions')}</h3>
+              <table className="ess-payslip-table">
+                <tbody>
+                  {payslipDetail.deductions.epf_employee > 0 && (
+                    <tr>
+                      <td>{t('payslip.epfEmployee')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.deductions.epf_employee)}</td>
+                    </tr>
                   )}
-                  {payslipDetail.employer_contributions.socso_employer > 0 && (
-                    <div className="ess-contribution-item">
-                      <span>{t('payslip.socsoEmployer')}:</span>
-                      <span>{formatCurrency(payslipDetail.employer_contributions.socso_employer)}</span>
-                    </div>
+                  {payslipDetail.deductions.socso_employee > 0 && (
+                    <tr>
+                      <td>{t('payslip.socsoEmployee')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.deductions.socso_employee)}</td>
+                    </tr>
                   )}
-                  {payslipDetail.employer_contributions.eis_employer > 0 && (
-                    <div className="ess-contribution-item">
-                      <span>{t('payslip.eisEmployer')}:</span>
-                      <span>{formatCurrency(payslipDetail.employer_contributions.eis_employer)}</span>
-                    </div>
+                  {payslipDetail.deductions.eis_employee > 0 && (
+                    <tr>
+                      <td>{t('payslip.eisEmployee')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.deductions.eis_employee)}</td>
+                    </tr>
                   )}
-                </div>
-              </div>
+                  {payslipDetail.deductions.pcb > 0 && (
+                    <tr>
+                      <td>{t('payslip.pcbTax')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.deductions.pcb)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.deductions.unpaid_leave_deduction > 0 && (
+                    <tr>
+                      <td>{t('payslip.unpaidLeave')} {payslipDetail.deductions.unpaid_leave_days > 0 && `(${payslipDetail.deductions.unpaid_leave_days} ${t('payslip.days')})`}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.deductions.unpaid_leave_deduction)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.deductions.advance_deduction > 0 && (
+                    <tr>
+                      <td>{t('payslip.advanceDeduction')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.deductions.advance_deduction)}</td>
+                    </tr>
+                  )}
+                  {payslipDetail.deductions.other_deductions > 0 && (
+                    <tr>
+                      <td>{t('payslip.otherDeductions')}</td>
+                      <td className="ess-amount">{formatCurrency(payslipDetail.deductions.other_deductions)}</td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="ess-total-row">
+                    <td><strong>{t('payslip.totalDeductions')}</strong></td>
+                    <td className="ess-amount"><strong>{formatCurrency(payslipDetail.totals.total_deductions)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
             )}
 
             {/* Net Pay */}
-            <div className="ess-net-pay-section">
-              <div className="ess-net-pay">
-                <span>{t('payslip.netPay')}</span>
-                <span className="ess-net-amount">{formatCurrency(payslipDetail.totals.net_pay)}</span>
-              </div>
+            <div className="ess-section-block ess-net-pay-row">
+              <span className="ess-net-label">{t('payslip.netPay')}</span>
+              <span className="ess-net-value">{formatCurrency(payslipDetail.totals.net_pay)}</span>
             </div>
+
+            {/* Employer Contributions */}
+            {(payslipDetail.employer_contributions.epf_employer > 0 ||
+              payslipDetail.employer_contributions.socso_employer > 0 ||
+              payslipDetail.employer_contributions.eis_employer > 0) && (
+              <div className="ess-section-block">
+                <h3 className="ess-section-heading">{t('payslip.employerContributions')}</h3>
+                <table className="ess-payslip-table">
+                  <tbody>
+                    {payslipDetail.employer_contributions.epf_employer > 0 && (
+                      <tr>
+                        <td>{t('payslip.epfEmployer')}</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.employer_contributions.epf_employer)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.employer_contributions.socso_employer > 0 && (
+                      <tr>
+                        <td>{t('payslip.socsoEmployer')}</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.employer_contributions.socso_employer)}</td>
+                      </tr>
+                    )}
+                    {payslipDetail.employer_contributions.eis_employer > 0 && (
+                      <tr>
+                        <td>{t('payslip.eisEmployer')}</td>
+                        <td className="ess-amount">{formatCurrency(payslipDetail.employer_contributions.eis_employer)}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Bank Info */}
             {payslipDetail.employee.bank_name && (
