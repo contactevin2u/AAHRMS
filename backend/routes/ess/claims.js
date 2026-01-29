@@ -15,7 +15,7 @@ const { getEmployeeMealAllowance } = require('../../utils/claimsAutomation');
 
 // Get claims history
 router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
-  const { status, year } = req.query;
+  const { status, month, year } = req.query;
 
   let query = `
     SELECT * FROM claims
@@ -30,7 +30,14 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
     params.push(status);
   }
 
-  if (year) {
+  if (month && year) {
+    paramCount++;
+    query += ` AND EXTRACT(MONTH FROM claim_date) = $${paramCount}`;
+    params.push(month);
+    paramCount++;
+    query += ` AND EXTRACT(YEAR FROM claim_date) = $${paramCount}`;
+    params.push(year);
+  } else if (year) {
     paramCount++;
     query += ` AND EXTRACT(YEAR FROM claim_date) = $${paramCount}`;
     params.push(year);

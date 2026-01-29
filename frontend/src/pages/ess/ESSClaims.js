@@ -8,6 +8,9 @@ function ESSClaims({ embedded = false }) {
   const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || '{}');
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitForm, setSubmitForm] = useState({
@@ -27,14 +30,17 @@ function ESSClaims({ embedded = false }) {
 
   useEffect(() => {
     fetchClaims();
-  }, []);
+  }, [selectedMonth, selectedYear]);
 
   const fetchClaims = async () => {
+    setLoading(true);
+    setFetchError('');
     try {
-      const response = await essApi.getClaims();
+      const response = await essApi.getClaims({ month: selectedMonth, year: selectedYear });
       setClaims(response.data || []);
     } catch (error) {
       console.error('Error fetching claims:', error);
+      setFetchError(error.response?.data?.error || 'Failed to load claims. Please try logging out and back in.');
       setClaims([]);
     } finally {
       setLoading(false);
@@ -283,6 +289,28 @@ function ESSClaims({ embedded = false }) {
           </div>
         </div>
 
+        {/* Month/Year Filter */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <select
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(parseInt(e.target.value))}
+            style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', background: 'white' }}
+          >
+            {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+              <option key={i+1} value={i+1}>{m}</option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={e => setSelectedYear(parseInt(e.target.value))}
+            style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '14px', background: 'white' }}
+          >
+            {[2025, 2026, 2027].map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+
         {/* Submit Button */}
         <button
           onClick={() => setShowSubmitModal(true)}
@@ -293,6 +321,11 @@ function ESSClaims({ embedded = false }) {
 
         {/* Claims List */}
         <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>{t('claims.recentClaims')}</h3>
+        {fetchError && (
+          <div style={{ background: '#fee2e2', color: '#dc2626', padding: '12px 16px', borderRadius: '8px', marginBottom: '12px', fontSize: '14px' }}>
+            {fetchError}
+          </div>
+        )}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>{t('common.loading')}</div>
         ) : claims.length === 0 ? (
