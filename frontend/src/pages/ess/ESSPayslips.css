@@ -264,9 +264,7 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   padding: 20px;
   border: 1px solid #e2e8f0;
-  overflow: hidden;
   box-sizing: border-box;
-  max-width: 100%;
 }
 
 /* Letterhead */
@@ -377,8 +375,6 @@
 /* Single-column payslip layout (matching admin) */
 .ess-section-block {
   margin-bottom: 20px;
-  max-width: 100%;
-  overflow: hidden;
 }
 
 .ess-section-heading {
@@ -392,42 +388,39 @@
   border-bottom: 1px solid #e2e8f0;
 }
 
-.ess-payslip-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.ess-payslip-table td {
+.ess-payslip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   padding: 8px 0;
   border-bottom: 1px solid #f1f5f9;
-  color: #1e293b;
   font-size: 0.85rem;
+  color: #1e293b;
 }
 
-.ess-payslip-table td:first-child {
-  width: 60%;
-  padding-right: 8px;
+.ess-payslip-row .ess-row-label {
+  flex: 1;
+  min-width: 0;
 }
 
-.ess-payslip-table td:last-child {
-  width: 40%;
-}
-
-.ess-payslip-table .ess-amount {
+.ess-payslip-row .ess-row-amount {
+  flex-shrink: 0;
   text-align: right;
   font-weight: 500;
+  padding-left: 12px;
   white-space: nowrap;
 }
 
-.ess-payslip-table tfoot td {
-  border-bottom: none;
+.ess-payslip-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10px 0 0 0;
   border-top: 2px solid #e2e8f0;
-  padding-top: 10px;
-}
-
-.ess-total-row td {
+  margin-top: 4px;
+  font-size: 0.85rem;
   font-weight: 700;
+  color: #1e293b;
 }
 
 /* Net Pay row */
