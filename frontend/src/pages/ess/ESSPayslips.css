@@ -489,6 +489,14 @@
     display: none !important;
   }
 
+  /* Override Letters.css "body * { visibility: hidden }" */
+  .ess-payslip-page,
+  .ess-payslip-page *,
+  .ess-payslip-container,
+  .ess-payslip-container * {
+    visibility: visible !important;
+  }
+
   /* Hide ESS layout elements except main content */
   .ess-header,
   .ess-bottom-nav,
@@ -516,12 +524,16 @@
   .ess-payslip-page {
     padding: 0;
     max-width: none;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
   }
 
   .ess-payslip-container {
     box-shadow: none;
     border: none;
-    padding: 0;
+    padding: 10mm;
   }
 
   /* Compact spacing for one-page fit */
