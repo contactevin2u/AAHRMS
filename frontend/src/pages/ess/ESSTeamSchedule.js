@@ -38,7 +38,7 @@ function ESSTeamSchedule({ embedded = false }) {
   });
 
   const isMimix = isMimixCompany(employeeInfo);
-  const canManageSchedules = isSupervisorOrManager(employeeInfo);
+  const canManageSchedules = isSupervisorOrManager(employeeInfo) || employeeInfo?.permissions?.can_manage_schedule;
 
   // Get initials from name
   const getInitials = (name) => {

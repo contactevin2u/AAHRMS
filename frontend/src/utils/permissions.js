@@ -115,10 +115,12 @@ export const hasClockInFeature = (employeeInfo) => {
 
 /**
  * Check if schedule feature is available
- * Only for Mimix (outlet-based companies)
+ * Mimix: always enabled
+ * AA Alive: if clock_in_required is true
  */
 export const hasScheduleFeature = (employeeInfo) => {
-  return isMimixCompany(employeeInfo);
+  if (isMimixCompany(employeeInfo)) return true;
+  return employeeInfo?.clock_in_required === true || employeeInfo?.clock_in_required === 'true' || employeeInfo?.clock_in_required === 1;
 };
 
 /**

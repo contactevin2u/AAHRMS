@@ -87,6 +87,7 @@ function ESSAttendanceContent() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const [facingMode, setFacingMode] = useState('user'); // 'user' = front, 'environment' = back
   const [location, setLocation] = useState(null);
   const [address, setAddress] = useState('');
   const [locationError, setLocationError] = useState('');
@@ -322,7 +323,7 @@ function ESSAttendanceContent() {
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'user',
+          facingMode: facingMode,
           width: { ideal: 640 },
           height: { ideal: 480 }
         },
@@ -400,6 +401,39 @@ function ESSAttendanceContent() {
     } catch (err) {
       console.error('Photo capture error:', err);
       setError('Failed to capture photo. Please try again.');
+    }
+  };
+
+  // Switch camera (front/back)
+  const switchCamera = () => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newMode);
+    if (cameraActive) {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      setCameraActive(false);
+      // Restart with new facing mode after state update
+      setTimeout(async () => {
+        setCameraLoading(true);
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: newMode, width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false
+          });
+          streamRef.current = stream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            try { await videoRef.current.play(); } catch (e) {}
+          }
+          setCameraLoading(false);
+          setCameraActive(true);
+        } catch (err) {
+          setCameraLoading(false);
+          setError('Unable to switch camera.');
+        }
+      }, 100);
     }
   };
 
@@ -725,6 +759,14 @@ function ESSAttendanceContent() {
                     />
                     {cameraActive && !cameraLoading && (
                       <div className="capture-container">
+                        <button
+                          className="switch-camera-btn"
+                          onClick={switchCamera}
+                          title="Switch Camera"
+                          style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer', zIndex: 2 }}
+                        >
+                          &#x1F504;
+                        </button>
                         <button className="capture-btn" onClick={capturePhoto}>
                           <span className="capture-inner"></span>
                         </button>

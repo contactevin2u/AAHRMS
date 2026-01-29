@@ -99,16 +99,16 @@ function ESSLayout({ children }) {
 
   // Check if employee should see schedule/calendar
   // Mimix: always enabled
-  // AA Alive: only for Indoor Sales staff or Indoor Sales Manager
-  const isIndoorSales = employeeInfo?.position === 'Indoor Sales' || employeeInfo?.position === 'Manager';
-  const showCalendar = isMimix || (isIndoorSales && clockInRequired);
+  // AA Alive: any employee with clock_in_required can view their schedule
+  const showCalendar = isMimix || clockInRequired || isDriver;
 
   // Check if employee is supervisor/manager (can see team management features)
   const isSupOrMgr = isSupervisorOrManager(employeeInfo);
-  // AA Alive: Indoor Sales Manager can manage schedules (position 'Manager' OR role 'manager')
+  // AA Alive: Indoor Sales Manager or designated schedule managers can manage schedules
+  const canManageSchedule = employeeInfo?.permissions?.can_manage_schedule;
   const isIndoorSalesManager = !isMimix &&
     (employeeInfo?.position === 'Manager' || employeeInfo?.employee_role === 'manager');
-  const showTeamFeatures = isSupOrMgr || isIndoorSalesManager;
+  const showTeamFeatures = isSupOrMgr || isIndoorSalesManager || canManageSchedule;
 
   // Check if employee is manager level (for Team Overview - manager only, not supervisor)
   const role = employeeInfo?.employee_role;

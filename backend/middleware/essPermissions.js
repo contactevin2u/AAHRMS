@@ -255,6 +255,14 @@ const getManagedOutlets = async (employee) => {
  * - Can be extended with employee_departments table in future
  */
 const getManagedDepartments = async (employee) => {
+  // Check if designated schedule manager (e.g., Rafina) - can manage all departments
+  const isDesignatedManager = await isAAAliveIndoorSalesManager(employee);
+  if (isDesignatedManager && !isSupervisorOrManager(employee)) {
+    // Designated schedule managers can manage all departments in their company
+    const result = await pool.query('SELECT id FROM departments WHERE company_id = $1', [employee.company_id]);
+    return result.rows.map(r => r.id);
+  }
+
   if (!isSupervisorOrManager(employee)) {
     return [];
   }
@@ -354,18 +362,29 @@ const getInitialApprovalLevel = (employee) => {
  */
 const isAAAliveIndoorSalesManager = async (employee) => {
   if (isMimixCompany(employee.company_id)) return false;
-  if (employee.employee_role !== ROLES.MANAGER) return false;
 
-  // Check if employee position is Indoor Sales or Manager with Indoor Sales team
+  // Check if employee has schedule management permission
   const result = await pool.query(
-    `SELECT position FROM employees WHERE id = $1`,
+    `SELECT position, employee_id, employee_role FROM employees WHERE id = $1`,
     [employee.id]
   );
 
   if (result.rows.length === 0) return false;
 
-  const position = result.rows[0].position;
-  return position === 'Indoor Sales' || position === 'Manager';
+  const { position, employee_id, employee_role } = result.rows[0];
+
+  // AA Alive: Indoor Sales Manager or Manager position
+  if (employee_role === ROLES.MANAGER && (position === 'Indoor Sales' || position === 'Manager')) {
+    return true;
+  }
+
+  // Specific AA Alive employees with schedule management access (e.g., Office staff managing schedules)
+  const scheduleManagers = ['RAFINA'];
+  if (scheduleManagers.includes(employee_id)) {
+    return true;
+  }
+
+  return false;
 };
 
 /**

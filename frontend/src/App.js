@@ -71,8 +71,9 @@ function ESSSupervisorProtectedRoute({ children }) {
   const role = employeeInfo?.employee_role;
   const isMimix = parseInt(employeeInfo?.company_id) === 3;
 
-  // Allow supervisor, manager, admin, director roles for Mimix company
-  const hasAccess = isMimix && ['supervisor', 'manager', 'admin', 'director'].includes(role);
+  // Allow supervisor/manager/admin/director for Mimix, or anyone with can_manage_schedule permission
+  const canManageSchedule = employeeInfo?.permissions?.can_manage_schedule;
+  const hasAccess = (isMimix && ['supervisor', 'manager', 'admin', 'director'].includes(role)) || canManageSchedule;
 
   if (!hasAccess) {
     return <Navigate to="/ess/dashboard" replace />;

@@ -15,9 +15,10 @@ function ESSSchedule() {
   // Check if user can see team features
   const isMimix = isMimixCompany(employeeInfo);
   const isSupOrMgr = isSupervisorOrManager(employeeInfo);
+  const canManageSchedule = employeeInfo?.permissions?.can_manage_schedule;
   const isIndoorSalesManager = !isMimix &&
     (employeeInfo?.position === 'Manager' || employeeInfo?.employee_role === 'manager');
-  const showTeamTab = isSupOrMgr || isIndoorSalesManager;
+  const showTeamTab = isSupOrMgr || isIndoorSalesManager || canManageSchedule;
 
   // Get active tab from URL or default to 'my'
   const activeTab = searchParams.get('tab') || 'my';

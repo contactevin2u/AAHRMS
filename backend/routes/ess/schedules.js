@@ -15,8 +15,15 @@ const {
   getTeamEmployeeIds,
   requireSupervisorOrManager,
   requireMimixCompany,
-  isMimixCompany
+  isMimixCompany,
+  isAAAliveIndoorSalesManager
 } = require('../../middleware/essPermissions');
+
+// Check if employee can manage schedules (supervisor/manager OR designated AA Alive schedule manager)
+const canManageSchedules = async (employee) => {
+  if (isSupervisorOrManager(employee)) return true;
+  return await isAAAliveIndoorSalesManager(employee);
+};
 
 // Middleware to verify employee token and load full employee info
 const authenticateEmployee = async (req, res, next) => {
@@ -382,7 +389,7 @@ router.delete('/extra-shift-requests/:id', authenticateEmployee, asyncHandler(as
 
 // Get team employees for scheduling (supervisor/manager only)
 router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -464,7 +471,7 @@ router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res
 
 // Get shift templates for the company (supervisor/manager only)
 router.get('/shift-templates', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -489,7 +496,7 @@ router.get('/shift-templates', authenticateEmployee, asyncHandler(async (req, re
 
 // Get weekly stats for scheduling (supervisor/manager only)
 router.get('/weekly-stats', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -630,7 +637,7 @@ router.get('/weekly-stats', authenticateEmployee, asyncHandler(async (req, res) 
 
 // Get team schedules (supervisor/manager only)
 router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -784,7 +791,7 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
 // Uses shift_template_id to match admin page behavior
 // T+2 rule: Can only create/edit schedules 2+ days in advance
 router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -910,7 +917,7 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
 // Bulk create schedules (supervisor/manager only)
 // Uses shift_template_id to match admin page behavior
 router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -1034,7 +1041,7 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
 
 // Update schedule (supervisor/manager only)
 router.put('/team-schedules/:id', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -1088,7 +1095,7 @@ router.put('/team-schedules/:id', authenticateEmployee, asyncHandler(async (req,
 // Delete schedule (supervisor/manager only)
 // T+2 rule: Can only delete schedules 2+ days in advance
 router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -1151,7 +1158,7 @@ router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (r
 
 // Get pending extra shift requests for approval (supervisor/manager only)
 router.get('/team-extra-shift-requests', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -1181,7 +1188,7 @@ router.get('/team-extra-shift-requests', authenticateEmployee, asyncHandler(asyn
 
 // Approve extra shift request (supervisor/manager only)
 router.post('/team-extra-shift-requests/:id/approve', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
@@ -1233,7 +1240,7 @@ router.post('/team-extra-shift-requests/:id/approve', authenticateEmployee, asyn
 
 // Reject extra shift request (supervisor/manager only)
 router.post('/team-extra-shift-requests/:id/reject', authenticateEmployee, asyncHandler(async (req, res) => {
-  if (!isSupervisorOrManager(req.employee)) {
+  if (!(await canManageSchedules(req.employee))) {
     return res.status(403).json({ error: 'Access denied. Supervisor or Manager role required.' });
   }
 
