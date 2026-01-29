@@ -82,7 +82,7 @@ function Analytics() {
 
   const deptPieData = deptBreakdown?.departments?.map(d => ({
     name: d.departmentName,
-    value: d.totalNet
+    value: d.totalGrossExClaims
   })) || [];
 
   const deptBarData = deptBreakdown?.departments?.map(d => ({
@@ -92,12 +92,12 @@ function Analytics() {
 
   const top10Data = salaryRanking?.top10?.map(e => ({
     name: e.name.length > 18 ? e.name.substring(0, 18) + '...' : e.name,
-    netPay: e.netPay
+    netPay: e.netPayExClaims
   })) || [];
 
   const deptRankData = salaryRanking?.topByDepartment?.map(d => ({
     name: d.department,
-    netPay: d.netPay
+    netPay: d.netPayExClaims
   })).sort((a, b) => b.netPay - a.netPay) || [];
 
   return (
@@ -135,9 +135,9 @@ function Analytics() {
             <div className="stat-value">{formatRM(overview?.avgSalary)}</div>
           </div>
           <div className="analytics-stat-card">
-            <div className="stat-label">Total Gross</div>
-            <div className="stat-value">{formatRM(overview?.totalGross)}</div>
-            <div className="stat-change neutral">Excl. Claims: {formatRM(overview?.totalGrossExClaims)}</div>
+            <div className="stat-label">Total Gross (excl. Claims)</div>
+            <div className="stat-value">{formatRM(overview?.totalGrossExClaims)}</div>
+            <div className="stat-change neutral">Incl. Claims: {formatRM(overview?.totalGross)}</div>
           </div>
         </div>
 
@@ -152,8 +152,8 @@ function Analytics() {
                 <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(v) => formatRM(v)} />
                 <Legend />
-                <Line type="monotone" dataKey="totalGross" stroke="#3b82f6" strokeWidth={2} name="Gross" dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="totalGrossExClaims" stroke="#8b5cf6" strokeWidth={2} name="Gross (excl. Claims)" dot={{ r: 3 }} strokeDasharray="5 5" />
+                <Line type="monotone" dataKey="totalGrossExClaims" stroke="#3b82f6" strokeWidth={2} name="Gross (excl. Claims)" dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="totalGross" stroke="#94a3b8" strokeWidth={1} name="Gross (incl. Claims)" dot={{ r: 2 }} strokeDasharray="5 5" />
                 <Line type="monotone" dataKey="totalNet" stroke="#10b981" strokeWidth={2} name="Net Pay" dot={{ r: 3 }} />
                 <Line type="monotone" dataKey="totalDeductions" stroke="#f59e0b" strokeWidth={2} name="Deductions" dot={{ r: 3 }} />
               </LineChart>
@@ -203,7 +203,7 @@ function Analytics() {
                   <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={75} />
                   <Tooltip formatter={v => formatRM(v)} />
-                  <Bar dataKey="netPay" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Top Net Pay" />
+                  <Bar dataKey="netPay" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Net Pay (excl. Claims)" />
                 </BarChart>
               </ResponsiveContainer>
             ) : <p style={{ color: '#94a3b8' }}>No data</p>}
@@ -217,7 +217,7 @@ function Analytics() {
                   <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={95} />
                   <Tooltip formatter={v => formatRM(v)} />
-                  <Bar dataKey="netPay" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Net Pay" />
+                  <Bar dataKey="netPay" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Net Pay (excl. Claims)" />
                 </BarChart>
               </ResponsiveContainer>
             ) : <p style={{ color: '#94a3b8' }}>No data</p>}
