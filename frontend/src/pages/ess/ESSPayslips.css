@@ -402,6 +402,7 @@
 .ess-deductions-section table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .ess-earnings-section td,
@@ -412,11 +413,22 @@
   font-size: 0.9rem;
 }
 
+.ess-earnings-section td:first-child,
+.ess-deductions-section td:first-child {
+  width: 55%;
+}
+
+.ess-earnings-section td:last-child,
+.ess-deductions-section td:last-child {
+  width: 45%;
+}
+
 .ess-earnings-section .ess-amount,
 .ess-deductions-section .ess-amount {
   text-align: right;
   font-family: monospace;
   font-size: 0.95rem;
+  white-space: nowrap;
 }
 
 .ess-earnings-section tfoot td,
