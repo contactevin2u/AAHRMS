@@ -233,7 +233,13 @@ function ESSTeamSchedule({ embedded = false }) {
   const openAddModal = (date) => {
     setSelectedDate(formatDateKey(date));
     setSelectedEmployees([]);
-    setSelectedShift(null);
+    // Indoor Sales: auto-select the WORK shift
+    if (isIndoorSales) {
+      const workShift = shiftTemplates.find(t => !t.is_off && t.code?.toUpperCase() === 'WORK');
+      setSelectedShift(workShift || null);
+    } else {
+      setSelectedShift(null);
+    }
     setShowModal(true);
   };
 
@@ -291,6 +297,10 @@ function ESSTeamSchedule({ embedded = false }) {
     if (!isMimix && selectedDepartment) return emp.department_id?.toString() === selectedDepartment;
     return true;
   });
+
+  // Indoor Sales: auto-select WORK shift, skip shift selection
+  const selectedDeptObj = departments.find(d => d.id.toString() === selectedDepartment);
+  const isIndoorSales = selectedDeptObj?.name?.toLowerCase().includes('indoor sales');
 
   // Calculate day summary (shift counts)
   const getDaySummary = (daySchedules) => {
@@ -610,36 +620,38 @@ function ESSTeamSchedule({ embedded = false }) {
               </div>
               <div className="ts-modal-date">{formatDisplayDate(selectedDate)}</div>
 
-              {/* Step 1: Select Shift FIRST - Only working shifts (no schedule = off day) */}
-              <div className="ts-assign-section">
-                <label>1. Select Shift</label>
-                <div className="ts-shift-grid">
-                  {shiftTemplates.filter(t => !t.is_off).map(t => {
-                    const isSelected = selectedShift?.id === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        className={`ts-shift-btn ${isSelected ? 'selected' : ''}`}
-                        style={{
-                          backgroundColor: isSelected ? t.color : t.color + '15',
-                          borderColor: t.color,
-                          color: isSelected ? '#fff' : t.color
-                        }}
-                        onClick={() => setSelectedShift(t)}
-                      >
-                        <span className="ts-shift-code-lg">{t.code}</span>
-                        <span className="ts-shift-time-sm">{t.start_time}-{t.end_time}</span>
-                      </button>
-                    );
-                  })}
+              {/* Step 1: Select Shift - hidden for Indoor Sales (always WORK full day) */}
+              {!isIndoorSales && (
+                <div className="ts-assign-section">
+                  <label>1. Select Shift</label>
+                  <div className="ts-shift-grid">
+                    {shiftTemplates.filter(t => !t.is_off).map(t => {
+                      const isSelected = selectedShift?.id === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          className={`ts-shift-btn ${isSelected ? 'selected' : ''}`}
+                          style={{
+                            backgroundColor: isSelected ? t.color : t.color + '15',
+                            borderColor: t.color,
+                            color: isSelected ? '#fff' : t.color
+                          }}
+                          onClick={() => setSelectedShift(t)}
+                        >
+                          <span className="ts-shift-code-lg">{t.code}</span>
+                          <span className="ts-shift-time-sm">{t.start_time}-{t.end_time}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="ts-hint">No schedule = Day Off (don't need to assign)</p>
                 </div>
-                <p className="ts-hint">No schedule = Day Off (don't need to assign)</p>
-              </div>
+              )}
 
-              {/* Step 2: Select Employees (Multi-select) */}
+              {/* Select Employees */}
               <div className="ts-assign-section">
                 <div className="ts-section-header">
-                  <label>2. Select Employees {selectedEmployees.length > 0 && <span className="ts-select-count">({selectedEmployees.length} selected)</span>}</label>
+                  <label>{isIndoorSales ? 'Select Employees' : '2. Select Employees'} {selectedEmployees.length > 0 && <span className="ts-select-count">({selectedEmployees.length} selected)</span>}</label>
                   <div className="ts-quick-actions">
                     <button className="ts-quick-btn" onClick={selectAllUnscheduled}>Select All</button>
                     {selectedEmployees.length > 0 && (
