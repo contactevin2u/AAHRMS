@@ -90,6 +90,33 @@ function Analytics() {
     avgSalary: d.avgSalary
   })) || [];
 
+  // Division ratio: Sales / Operations / Logistics
+  const divisionData = (() => {
+    if (!deptBreakdown?.departments?.length) return [];
+    let sales = 0, operations = 0, logistics = 0;
+    let salesCount = 0, opsCount = 0, logCount = 0;
+    deptBreakdown.departments.forEach(d => {
+      const name = (d.departmentName || '').toLowerCase();
+      if (name.includes('indoor') || name.includes('outdoor')) {
+        sales += d.totalGrossExClaims;
+        salesCount += d.employeeCount;
+      } else if (name.includes('driver')) {
+        logistics += d.totalGrossExClaims;
+        logCount += d.employeeCount;
+      } else {
+        operations += d.totalGrossExClaims;
+        opsCount += d.employeeCount;
+      }
+    });
+    return [
+      { name: 'Sales', value: sales, count: salesCount },
+      { name: 'Operations', value: operations, count: opsCount },
+      { name: 'Logistics', value: logistics, count: logCount },
+    ].filter(d => d.value > 0);
+  })();
+
+  const divisionTotal = divisionData.reduce((s, d) => s + d.value, 0);
+
   const top10Data = salaryRanking?.top10?.map(e => ({
     name: e.name.length > 18 ? e.name.substring(0, 18) + '...' : e.name,
     netPay: e.netPayExClaims
@@ -191,6 +218,47 @@ function Analytics() {
             ) : <p style={{ color: '#94a3b8' }}>No data</p>}
           </div>
         </div>
+
+        {/* Division Salary Ratio: Sales / Operations / Logistics */}
+        {divisionData.length > 0 && (
+          <div className="analytics-two-col">
+            <div className="analytics-chart-card">
+              <h3>Salary Ratio by Division</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie data={divisionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                    <Cell fill="#3b82f6" />
+                    <Cell fill="#f59e0b" />
+                    <Cell fill="#10b981" />
+                  </Pie>
+                  <Tooltip formatter={v => formatRM(v)} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="analytics-chart-card">
+              <h3>Division Breakdown</h3>
+              <div style={{ padding: '8px 0' }}>
+                {divisionData.map((d, i) => (
+                  <div key={d.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: i < divisionData.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 15 }}>{d.name}</div>
+                      <div style={{ color: '#64748b', fontSize: 13 }}>{d.count} employees</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>{formatRM(d.value)}</div>
+                      <div style={{ color: '#64748b', fontSize: 13 }}>{divisionTotal > 0 ? (d.value / divisionTotal * 100).toFixed(1) : 0}% of total</div>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 16px', borderTop: '2px solid #e2e8f0', marginTop: 4 }}>
+                  <div style={{ fontWeight: 600, color: '#64748b' }}>Total</div>
+                  <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>{formatRM(divisionTotal)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Salary Rankings: Dept rank + Top 10 */}
         <div className="analytics-two-col">
