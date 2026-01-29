@@ -74,21 +74,33 @@ function ESSPayslips() {
 
     setDownloading(true);
     try {
-      // Force a fixed width for consistent rendering
-      const originalStyle = element.getAttribute('style') || '';
-      element.style.width = '600px';
-      element.style.padding = '24px';
-      element.style.fontSize = '12px';
+      // Clone element into an off-screen container with fixed A4-like width
+      const clone = element.cloneNode(true);
+      clone.style.cssText = 'position:absolute;left:-9999px;top:0;width:700px;padding:30px;background:#fff;font-size:13px;';
+      // Ensure all tables in clone show amounts properly
+      clone.querySelectorAll('table').forEach(t => {
+        t.style.width = '100%';
+        t.style.tableLayout = 'auto';
+      });
+      clone.querySelectorAll('.ess-amount').forEach(el => {
+        el.style.textAlign = 'right';
+        el.style.whiteSpace = 'nowrap';
+        el.style.paddingLeft = '20px';
+      });
+      document.body.appendChild(clone);
 
-      const canvas = await html2canvas(element, {
+      // Wait for browser to reflow
+      await new Promise(r => setTimeout(r, 100));
+
+      const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        width: 700
       });
 
-      // Restore original style
-      element.setAttribute('style', originalStyle);
+      document.body.removeChild(clone);
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -98,7 +110,7 @@ function ESSPayslips() {
       const maxW = pageWidth - (margin * 2);
       const maxH = pageHeight - (margin * 2);
 
-      // Scale to fit one page
+      // Scale to fit one A4 page
       let imgWidth = maxW;
       let imgHeight = (canvas.height * imgWidth) / canvas.width;
       if (imgHeight > maxH) {
