@@ -115,8 +115,11 @@ function ESSLeave({ embedded = false }) {
   const getBalanceForType = (leaveTypeId) => {
     const balance = leaveBalances.find(b => b.leave_type_id === leaveTypeId);
     if (balance) {
-      const available = (balance.entitled_days || 0) + (balance.carried_forward || 0) - (balance.used_days || 0);
-      return { entitled: balance.entitled_days || 0, used: balance.used_days || 0, available };
+      const entitled = parseFloat(balance.entitled_days) || 0;
+      const cf = parseFloat(balance.carried_forward) || 0;
+      const used = parseFloat(balance.used_days) || 0;
+      const available = entitled + cf - used;
+      return { entitled, used, available };
     }
     return null;
   };
