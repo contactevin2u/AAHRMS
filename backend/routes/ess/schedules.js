@@ -396,7 +396,7 @@ router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res
       return res.json({ employees: [], outlets: [], departments: [] });
     }
 
-    // Get employees in managed outlets
+    // Get employees in managed outlets (plus the manager themselves via employee_outlets)
     const empResult = await pool.query(
       `SELECT e.id, e.employee_id, e.name, e.profile_picture, e.outlet_id, o.name as outlet_name
        FROM employees e
@@ -404,8 +404,17 @@ router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res
        WHERE e.outlet_id = ANY($1)
          AND e.status = 'active'
          AND e.company_id = $2
-       ORDER BY o.name, e.name`,
-      [managedOutlets, req.employee.company_id]
+       UNION
+       SELECT e.id, e.employee_id, e.name, e.profile_picture, eo.outlet_id, o.name as outlet_name
+       FROM employees e
+       JOIN employee_outlets eo ON eo.employee_id = e.id
+       LEFT JOIN outlets o ON eo.outlet_id = o.id
+       WHERE eo.outlet_id = ANY($1)
+         AND e.id = $3
+         AND e.status = 'active'
+         AND e.company_id = $2
+       ORDER BY outlet_name, name`,
+      [managedOutlets, req.employee.company_id, req.employee.id]
     );
 
     // Get outlet info
@@ -815,15 +824,16 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
 
   const targetEmployee = empResult.rows[0];
 
-  // Validate permission based on company type
+  // Validate permission based on company type (managers can always schedule themselves)
+  const isSelf = targetEmployee.id === req.employee.id;
   if (isMimix) {
     const managedOutlets = await getManagedOutlets(req.employee);
-    if (!managedOutlets.includes(targetEmployee.outlet_id)) {
+    if (!isSelf && !managedOutlets.includes(targetEmployee.outlet_id)) {
       throw new ValidationError('You can only create schedules for employees in your outlet(s)');
     }
   } else {
     const managedDepartments = await getManagedDepartments(req.employee);
-    if (!managedDepartments.includes(targetEmployee.department_id)) {
+    if (!isSelf && !managedDepartments.includes(targetEmployee.department_id)) {
       throw new ValidationError('You can only create schedules for employees in your department');
     }
   }
@@ -968,12 +978,13 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
 
       const targetEmployee = empResult.rows[0];
 
-      // Check permission
-      if (isMimix && !managedOutlets.includes(targetEmployee.outlet_id)) {
+      // Check permission (managers can always schedule themselves)
+      const isSelf = targetEmployee.id === req.employee.id;
+      if (isMimix && !isSelf && !managedOutlets.includes(targetEmployee.outlet_id)) {
         errors.push({ employee_id, schedule_date, error: 'Employee not in your outlet' });
         continue;
       }
-      if (!isMimix && !managedDepartments.includes(targetEmployee.department_id)) {
+      if (!isMimix && !isSelf && !managedDepartments.includes(targetEmployee.department_id)) {
         errors.push({ employee_id, schedule_date, error: 'Employee not in your department' });
         continue;
       }

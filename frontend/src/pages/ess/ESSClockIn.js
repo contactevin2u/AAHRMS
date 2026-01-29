@@ -397,6 +397,8 @@ function ESSClockInContent() {
       console.error('Clock action error:', err);
       const errMsg = err.response?.data?.error;
       setError(typeof errMsg === 'string' ? errMsg : (errMsg?.message || 'Failed to record action. Please try again.'));
+      // Refresh status on error too - the action may have succeeded but response failed
+      fetchStatus();
     } finally {
       setSubmitting(false);
     }
