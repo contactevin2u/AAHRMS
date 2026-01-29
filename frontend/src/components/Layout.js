@@ -227,6 +227,11 @@ function Layout({ children }) {
             <span>Dashboard</span>
           </NavLink>
 
+          <NavLink to="/admin/analytics" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+            <span className="nav-icon">📈</span>
+            <span>Analytics</span>
+          </NavLink>
+
           {/* Outlets - Top level for outlet-based companies */}
           {usesOutlets() && (
             <NavLink to="/admin/outlets" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
