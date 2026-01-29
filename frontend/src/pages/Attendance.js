@@ -15,6 +15,7 @@ const Attendance = () => {
   const [summaryData, setSummaryData] = useState(null);
   const [expandedOutlets, setExpandedOutlets] = useState({});
   const [expandedPositions, setExpandedPositions] = useState({});
+  const [filterMode, setFilterMode] = useState('month'); // 'month', 'date', 'range'
   const [filters, setFilters] = useState({
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
@@ -23,7 +24,10 @@ const Attendance = () => {
     outlet_id: '',
     department_id: '',
     employee_id: '',
-    region: ''
+    region: '',
+    specific_date: new Date().toISOString().split('T')[0],
+    start_date: '',
+    end_date: ''
   });
   const [gpsModal, setGpsModal] = useState(null);
   const [photoModal, setPhotoModal] = useState(null);
@@ -61,7 +65,7 @@ const Attendance = () => {
 
   useEffect(() => {
     fetchData();
-  }, [filters]);
+  }, [filters, filterMode]);
 
   useEffect(() => {
     if (activeTab === 'summary') {
@@ -88,8 +92,27 @@ const Attendance = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      // Build query params based on filter mode
+      const params = {
+        status: filters.status,
+        ot_status: filters.ot_status,
+        outlet_id: filters.outlet_id,
+        department_id: filters.department_id,
+        employee_id: filters.employee_id,
+        region: filters.region
+      };
+      if (filterMode === 'date') {
+        params.start_date = filters.specific_date;
+        params.end_date = filters.specific_date;
+      } else if (filterMode === 'range') {
+        if (filters.start_date) params.start_date = filters.start_date;
+        if (filters.end_date) params.end_date = filters.end_date;
+      } else {
+        params.month = filters.month;
+        params.year = filters.year;
+      }
       const [recordsRes, employeesRes, outletsRes, departmentsRes] = await Promise.all([
-        attendanceApi.getAll(filters),
+        attendanceApi.getAll(params),
         employeeApi.getAll(),
         outletsApi.getAll().catch(() => ({ data: [] })),
         departmentApi.getAll().catch(() => ({ data: [] }))
@@ -567,22 +590,54 @@ const Attendance = () => {
 
       <div className="filters-section">
         <div className="filter-group">
-          <label>Month</label>
-          <select name="month" value={filters.month} onChange={handleFilterChange}>
-            {months.map(m => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
+          <label>View By</label>
+          <select value={filterMode} onChange={(e) => setFilterMode(e.target.value)}>
+            <option value="month">Month</option>
+            <option value="date">Specific Date</option>
+            <option value="range">Date Range</option>
           </select>
         </div>
 
-        <div className="filter-group">
-          <label>Year</label>
-          <select name="year" value={filters.year} onChange={handleFilterChange}>
-            {[2024, 2025, 2026].map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        </div>
+        {filterMode === 'month' && (
+          <>
+            <div className="filter-group">
+              <label>Month</label>
+              <select name="month" value={filters.month} onChange={handleFilterChange}>
+                {months.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label>Year</label>
+              <select name="year" value={filters.year} onChange={handleFilterChange}>
+                {[2024, 2025, 2026].map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+
+        {filterMode === 'date' && (
+          <div className="filter-group">
+            <label>Date</label>
+            <input type="date" name="specific_date" value={filters.specific_date} onChange={handleFilterChange} />
+          </div>
+        )}
+
+        {filterMode === 'range' && (
+          <>
+            <div className="filter-group">
+              <label>From</label>
+              <input type="date" name="start_date" value={filters.start_date} onChange={handleFilterChange} />
+            </div>
+            <div className="filter-group">
+              <label>To</label>
+              <input type="date" name="end_date" value={filters.end_date} onChange={handleFilterChange} />
+            </div>
+          </>
+        )}
 
         <div className="filter-group">
           <label>Status</label>
