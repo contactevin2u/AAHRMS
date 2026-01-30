@@ -37,6 +37,7 @@ import Schedules from './pages/Schedules';
 import IndoorSalesSchedule from './pages/IndoorSalesSchedule';
 import IndoorSalesCommission from './pages/IndoorSalesCommission';
 import PublicHolidays from './pages/PublicHolidays';
+import OutstationAllowance from './pages/OutstationAllowance';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -337,6 +338,14 @@ function App() {
           element={
             <ProtectedRoute>
               <PublicHolidays />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/outstation-allowance"
+          element={
+            <ProtectedRoute>
+              <OutstationAllowance />
             </ProtectedRoute>
           }
         />

@@ -331,6 +331,12 @@ function Layout({ children }) {
               <span>Indoor Sales</span>
             </NavLink>
           )}
+          {isAAAlive() && (
+            <NavLink to="/admin/outstation-allowance" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              <span className="nav-icon">🚛</span>
+              <span>Outstation</span>
+            </NavLink>
+          )}
 
           {/* SYSTEM SECTION */}
           {(canManageUsers() || isSuperAdmin()) && (
