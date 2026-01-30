@@ -72,6 +72,7 @@ const INITIAL_FORM_STATE = {
   commission_rate: '',
   per_trip_rate: '',
   ot_rate: '',
+  fixed_ot_amount: '',
   outstation_rate: '',
   default_bonus: '',
   default_incentive: '',
@@ -656,6 +657,21 @@ const EmployeeForm = ({
             placeholder="0.00"
           />
         </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label>Fixed OT Amount (RM)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={form.fixed_ot_amount}
+            onChange={(e) => setForm({ ...form, fixed_ot_amount: e.target.value })}
+            placeholder="0.00"
+          />
+        </div>
+        <div className="form-group"></div>
       </div>
 
       {/* Additional Earnings */}

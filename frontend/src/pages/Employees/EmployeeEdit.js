@@ -128,6 +128,7 @@ function EmployeeEdit() {
         commission_rate: employee.commission_rate || '',
         per_trip_rate: employee.per_trip_rate || '',
         ot_rate: employee.ot_rate || '',
+        fixed_ot_amount: employee.fixed_ot_amount || '',
         outstation_rate: employee.outstation_rate || '',
         default_bonus: employee.default_bonus || '',
         default_incentive: employee.default_incentive || '',

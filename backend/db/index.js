@@ -328,6 +328,9 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='default_other_earnings') THEN
           ALTER TABLE employees ADD COLUMN default_other_earnings DECIMAL(10,2) DEFAULT 0;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='fixed_ot_amount') THEN
+          ALTER TABLE employees ADD COLUMN fixed_ot_amount DECIMAL(10,2) DEFAULT 0;
+        END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='other_earnings_description') THEN
           ALTER TABLE employees ADD COLUMN other_earnings_description VARCHAR(255);
         END IF;

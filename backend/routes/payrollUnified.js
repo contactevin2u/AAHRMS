@@ -688,6 +688,7 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
 
           // Calculate OT if enabled
           let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
+          const fixedOT = parseFloat(emp.fixed_ot_amount) || 0;
           if (features.auto_ot_from_clockin) {
             try {
               const otResult = await calculateOTFromClockIn(
@@ -701,6 +702,10 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
             } catch (e) {
               console.error(`OT calc error for ${emp.name}:`, e.message);
             }
+          }
+          // Use fixed OT amount if no auto OT calculated
+          if (otAmount === 0 && fixedOT > 0) {
+            otAmount = fixedOT;
           }
 
           if (features.auto_ph_pay) {
@@ -1545,6 +1550,7 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
 
       // Calculate OT if enabled
       let otHours = 0, otAmount = 0;
+      const fixedOT = parseFloat(emp.fixed_ot_amount) || 0;
       if (features.auto_ot_from_clockin && basicSalary > 0) {
         try {
           const otResult = await calculateOTFromClockIn(
@@ -1558,6 +1564,10 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
         } catch (e) {
           console.warn(`OT calculation failed for employee ${emp.id}:`, e.message);
         }
+      }
+      // Use fixed OT amount if no auto OT calculated
+      if (otAmount === 0 && fixedOT > 0) {
+        otAmount = fixedOT;
       }
 
       // Calculate PH pay if enabled
@@ -1906,7 +1916,7 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const itemResult = await pool.query(`
       SELECT pi.*, pr.month, pr.year, pr.status as run_status, pr.company_id,
              pr.period_start_date, pr.period_end_date,
-             e.id as emp_id, e.department_id, e.default_basic_salary,
+             e.id as emp_id, e.department_id, e.default_basic_salary, e.fixed_ot_amount,
              e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
              e.residency_status, e.allowance_pcb
       FROM payroll_items pi
@@ -1934,6 +1944,7 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
 
     // Recalculate OT from clock-in records
     let otHours = 0, otAmount = 0;
+    const fixedOT = parseFloat(item.fixed_ot_amount) || 0;
     if (features.auto_ot_from_clockin) {
       try {
         const otResult = await calculateOTFromClockIn(
@@ -1946,6 +1957,10 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
       } catch (e) {
         console.warn('OT calculation failed:', e.message);
       }
+    }
+    // Use fixed OT amount if no auto OT calculated
+    if (otAmount === 0 && fixedOT > 0) {
+      otAmount = fixedOT;
     }
 
     // Get current values
@@ -2091,7 +2106,7 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         // Call the recalculate logic inline (simplified)
         const itemData = await pool.query(`
           SELECT pi.*, pr.month, pr.year, pr.period_start_date, pr.period_end_date,
-                 e.id as emp_id, e.department_id,
+                 e.id as emp_id, e.department_id, e.fixed_ot_amount,
                  e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count
           FROM payroll_items pi
           JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
@@ -2105,6 +2120,7 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
 
         // Recalculate OT
         let otHours = 0, otAmount = 0;
+        const fixedOT = parseFloat(i.fixed_ot_amount) || 0;
         if (features.auto_ot_from_clockin) {
           try {
             const otResult = await calculateOTFromClockIn(
@@ -2115,6 +2131,10 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
             otHours = otResult.total_ot_hours || 0;
             otAmount = otResult.total_ot_amount || 0;
           } catch (e) {}
+        }
+        // Use fixed OT amount if no auto OT calculated
+        if (otAmount === 0 && fixedOT > 0) {
+          otAmount = fixedOT;
         }
 
         // Calculate values
