@@ -141,7 +141,8 @@ function ESSManagerOverview() {
       fetchOverview();
     } catch (err) {
       console.error('Error approving leave:', err);
-      alert(err.response?.data?.error || 'Failed to approve leave');
+      const e = err.response?.data?.error;
+      alert(typeof e === 'string' ? e : e?.message || 'Failed to approve leave');
     } finally {
       setApprovalLoading(prev => ({ ...prev, [`leave_${leaveId}`]: false }));
     }
@@ -163,7 +164,8 @@ function ESSManagerOverview() {
       fetchOverview();
     } catch (err) {
       console.error('Error rejecting leave:', err);
-      alert(err.response?.data?.error || 'Failed to reject leave');
+      const e = err.response?.data?.error;
+      alert(typeof e === 'string' ? e : e?.message || 'Failed to reject leave');
     } finally {
       setApprovalLoading(prev => ({ ...prev, [`leave_${leaveId}`]: false }));
     }

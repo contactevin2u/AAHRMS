@@ -74,6 +74,12 @@ function ESSRequests() {
     }
   };
 
+  const getErrorMessage = (err, fallback) => {
+    const e = err.response?.data?.error;
+    if (!e) return fallback;
+    return typeof e === 'string' ? e : e.message || fallback;
+  };
+
   const handleApproveLeave = async (id) => {
     if (!window.confirm('Approve this leave request?')) return;
     try {
@@ -81,7 +87,7 @@ function ESSRequests() {
       alert('Leave approved successfully');
       fetchPendingLeave();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to approve leave');
+      alert(getErrorMessage(err, 'Failed to approve leave'));
     }
   };
 
@@ -93,7 +99,7 @@ function ESSRequests() {
       alert('Leave rejected');
       fetchPendingLeave();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to reject leave');
+      alert(getErrorMessage(err, 'Failed to reject leave'));
     }
   };
 
