@@ -191,6 +191,7 @@ export const payrollV2Api = {
   getRun: (id) => api.get(`/payroll/runs/${id}`),
   createRun: (data) => api.post('/payroll/runs', data),
   createAllOutlets: (data) => api.post('/payroll/runs/all-outlets', data),
+  createAllDepartments: (data) => api.post('/payroll/runs/all-departments', data),
   deleteRun: (id) => api.delete(`/payroll/runs/${id}`),
   finalizeRun: (id) => api.post(`/payroll/runs/${id}/finalize`),
   getBankFile: (id) => api.get(`/payroll/runs/${id}/bank-file`, { responseType: 'blob' }),

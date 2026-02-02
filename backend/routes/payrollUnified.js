@@ -863,6 +863,308 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
 });
 
 /**
+ * POST /api/payroll/runs/all-departments
+ * Create separate payroll runs for each department (department-based companies)
+ */
+router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { month, year, notes } = req.body;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    if (!month || !year) {
+      return res.status(400).json({ error: 'Month and year are required' });
+    }
+
+    const settings = await getCompanySettings(companyId);
+    const { features, rates, period: periodConfig } = settings;
+
+    // Get all active departments for this company
+    const deptsResult = await pool.query(`
+      SELECT id, name FROM departments
+      WHERE company_id = $1
+      ORDER BY name
+    `, [companyId]);
+
+    const depts = deptsResult.rows;
+    if (depts.length === 0) {
+      return res.status(400).json({ error: 'No departments found for this company' });
+    }
+
+    // Check which departments already have payroll runs
+    const existingResult = await pool.query(`
+      SELECT department_id FROM payroll_runs
+      WHERE month = $1 AND year = $2 AND company_id = $3 AND department_id IS NOT NULL
+    `, [month, year, companyId]);
+
+    const existingDeptIds = new Set(existingResult.rows.map(r => r.department_id));
+    const deptsToCreate = depts.filter(d => !existingDeptIds.has(d.id));
+
+    if (deptsToCreate.length === 0) {
+      return res.status(400).json({
+        error: 'Payroll runs already exist for all departments',
+        existing_departments: depts.map(d => d.name)
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const period = getPayrollPeriod(month, year, periodConfig);
+    const workingDays = rates.standard_work_days || 22;
+
+    // Shared lookups
+    let commissionsMap = {};
+    if (features.flexible_commissions) {
+      const commResult = await client.query(`
+        SELECT ec.employee_id, SUM(ec.amount) as total
+        FROM employee_commissions ec
+        JOIN commission_types ct ON ec.commission_type_id = ct.id
+        WHERE ec.is_active = TRUE AND ct.is_active = TRUE
+        GROUP BY ec.employee_id
+      `);
+      commResult.rows.forEach(r => { commissionsMap[r.employee_id] = parseFloat(r.total) || 0; });
+    }
+
+    let allowancesMap = {};
+    if (features.flexible_allowances) {
+      const allowResult = await client.query(`
+        SELECT ea.employee_id,
+          SUM(ea.amount) as total,
+          SUM(CASE WHEN at.is_taxable THEN ea.amount ELSE 0 END) as taxable,
+          SUM(CASE WHEN NOT at.is_taxable THEN ea.amount ELSE 0 END) as exempt
+        FROM employee_allowances ea
+        JOIN allowance_types at ON ea.allowance_type_id = at.id
+        WHERE ea.is_active = TRUE AND at.is_active = TRUE
+        GROUP BY ea.employee_id
+      `);
+      allowResult.rows.forEach(r => {
+        allowancesMap[r.employee_id] = {
+          total: parseFloat(r.total) || 0,
+          taxable: parseFloat(r.taxable) || 0,
+          exempt: parseFloat(r.exempt) || 0
+        };
+      });
+    }
+
+    let claimsMap = {};
+    if (features.auto_claims_linking) {
+      const claimsResult = await client.query(`
+        SELECT employee_id, SUM(amount) as total_claims
+        FROM claims WHERE status = 'approved' AND linked_payroll_item_id IS NULL
+        GROUP BY employee_id
+      `);
+      claimsResult.rows.forEach(r => { claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0; });
+    }
+
+    let prevPayrollMap = {};
+    if (features.salary_carry_forward) {
+      const prevMonth = month === 1 ? 12 : month - 1;
+      const prevYear = month === 1 ? year - 1 : year;
+      const prevResult = await client.query(`
+        SELECT pi.employee_id, pi.basic_salary, pi.fixed_allowance, pi.net_pay
+        FROM payroll_items pi
+        JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+        WHERE pr.month = $1 AND pr.year = $2 AND pr.company_id = $3
+      `, [prevMonth, prevYear, companyId]);
+      prevResult.rows.forEach(row => { prevPayrollMap[row.employee_id] = row; });
+    }
+
+    let advancesMap = {};
+    try {
+      const advancesResult = await client.query(`
+        SELECT employee_id, SUM(amount) as total_advance_deduction
+        FROM salary_advances
+        WHERE company_id = $1 AND status = 'approved'
+          AND ((expected_deduction_year < $2) OR (expected_deduction_year = $2 AND expected_deduction_month <= $3))
+        GROUP BY employee_id
+      `, [companyId, year, month]);
+      advancesResult.rows.forEach(r => { advancesMap[r.employee_id] = parseFloat(r.total_advance_deduction) || 0; });
+    } catch (e) { /* table might not exist */ }
+
+    const createdRuns = [];
+    const skippedDepts = [];
+
+    for (const dept of deptsToCreate) {
+      try {
+        const runResult = await client.query(`
+          INSERT INTO payroll_runs (
+            month, year, status, notes, department_id, outlet_id, company_id,
+            period_start_date, period_end_date, payment_due_date, period_label
+          ) VALUES ($1, $2, 'draft', $3, $4, NULL, $5, $6, $7, $8, $9)
+          RETURNING *
+        `, [
+          month, year,
+          notes ? `${dept.name} - ${notes}` : dept.name,
+          dept.id, companyId,
+          period.start.toISOString().split('T')[0],
+          period.end.toISOString().split('T')[0],
+          period.paymentDate.toISOString().split('T')[0],
+          period.label
+        ]);
+
+        const runId = runResult.rows[0].id;
+
+        const employees = await client.query(`
+          SELECT e.*,
+                 e.default_basic_salary as basic_salary,
+                 e.default_allowance as fixed_allowance,
+                 d.name as department_name,
+                 d.payroll_structure_code
+          FROM employees e
+          LEFT JOIN departments d ON e.department_id = d.id
+          WHERE e.company_id = $1
+            AND e.department_id = $2
+            AND (e.status = 'active' OR (e.status = 'resigned' AND e.resign_date BETWEEN $3 AND $4))
+        `, [companyId, dept.id, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
+
+        if (employees.rows.length === 0) {
+          skippedDepts.push({ department_name: dept.name, reason: 'No employees' });
+          continue;
+        }
+
+        let totalGross = 0, totalDeductions = 0, totalNet = 0, totalEmployerCost = 0, employeeCount = 0;
+
+        for (const emp of employees.rows) {
+          const isPartTime = emp.work_type === 'part_time' || emp.employment_type === 'part_time';
+          let basicSalary, fixedAllowance;
+
+          if (isPartTime) {
+            const partTimeData = await calculatePartTimeHours(
+              emp.id, period.start.toISOString().split('T')[0],
+              period.end.toISOString().split('T')[0], companyId, rates
+            );
+            basicSalary = partTimeData.grossSalary;
+            fixedAllowance = 0;
+          } else {
+            const prevSalary = prevPayrollMap[emp.id];
+            basicSalary = prevSalary ? parseFloat(prevSalary.basic_salary) : (parseFloat(emp.basic_salary) || 0);
+            fixedAllowance = prevSalary ? parseFloat(prevSalary.fixed_allowance) : (parseFloat(emp.fixed_allowance) || 0);
+          }
+
+          const flexCommissions = commissionsMap[emp.id] || 0;
+          const flexAllowData = allowancesMap[emp.id] || { total: 0, taxable: 0, exempt: 0 };
+          const flexAllowances = flexAllowData.total;
+          const claimsAmount = claimsMap[emp.id] || 0;
+
+          let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
+          const fixedOT = parseFloat(emp.fixed_ot_amount) || 0;
+
+          if (!isPartTime && features.auto_ot_from_clockin) {
+            try {
+              const otResult = await calculateOTFromClockIn(
+                emp.id, companyId, emp.department_id,
+                period.start.toISOString().split('T')[0],
+                period.end.toISOString().split('T')[0], basicSalary
+              );
+              otHours = otResult.total_ot_hours || 0;
+              otAmount = otResult.total_ot_amount || 0;
+            } catch (e) { console.error(`OT calc error for ${emp.name}:`, e.message); }
+          }
+          if (otAmount === 0 && fixedOT > 0) otAmount = fixedOT;
+
+          if (!isPartTime && features.auto_ph_pay) {
+            try {
+              phDaysWorked = await calculatePHDaysWorked(
+                emp.id, companyId,
+                period.start.toISOString().split('T')[0],
+                period.end.toISOString().split('T')[0]
+              );
+              if (phDaysWorked > 0 && basicSalary > 0) {
+                phPay = phDaysWorked * (basicSalary / workingDays) * rates.ph_multiplier;
+              }
+            } catch (e) { console.error(`PH calc error for ${emp.name}:`, e.message); }
+          }
+
+          const totalAllowances = fixedAllowance + flexAllowances;
+          const grossSalary = basicSalary + totalAllowances + otAmount + phPay + flexCommissions + claimsAmount;
+
+          const statutoryBase = basicSalary + flexCommissions;
+          const allowancePcb = emp.allowance_pcb || 'excluded';
+          const fixedAllowanceTaxable = allowancePcb === 'excluded' ? 0 : fixedAllowance;
+          const salaryBreakdown = {
+            basic: basicSalary, allowance: totalAllowances,
+            taxableAllowance: flexAllowData.taxable + fixedAllowanceTaxable,
+            commission: flexCommissions, bonus: 0, ot: otAmount, pcbGross: grossSalary
+          };
+          const statutory = calculateAllStatutory(statutoryBase, emp, month, null, salaryBreakdown);
+
+          const totalDeductionsForEmp = statutory.epf.employee + statutory.socso.employee + statutory.eis.employee + statutory.pcb;
+          const advanceDeduction = advancesMap[emp.id] || 0;
+          const netPay = grossSalary - totalDeductionsForEmp - advanceDeduction;
+          const employerCost = grossSalary + statutory.epf.employer + statutory.socso.employer + statutory.eis.employer;
+
+          await client.query(`
+            INSERT INTO payroll_items (
+              payroll_run_id, employee_id,
+              basic_salary, fixed_allowance, commission_amount, claims_amount,
+              ot_hours, ot_amount, ph_days_worked, ph_pay,
+              gross_salary,
+              epf_employee, epf_employer, socso_employee, socso_employer,
+              eis_employee, eis_employer, pcb,
+              total_deductions, net_pay, employer_total_cost
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+          `, [
+            runId, emp.id, basicSalary, totalAllowances, flexCommissions, claimsAmount,
+            otHours, otAmount, phDaysWorked, phPay, grossSalary,
+            statutory.epf.employee, statutory.epf.employer,
+            statutory.socso.employee, statutory.socso.employer,
+            statutory.eis.employee, statutory.eis.employer, statutory.pcb,
+            totalDeductionsForEmp, netPay, employerCost
+          ]);
+
+          totalGross += grossSalary;
+          totalDeductions += totalDeductionsForEmp;
+          totalNet += netPay;
+          totalEmployerCost += employerCost;
+          employeeCount++;
+        }
+
+        await client.query(`
+          UPDATE payroll_runs SET
+            total_gross = $1, total_deductions = $2, total_net = $3,
+            total_employer_cost = $4, employee_count = $5
+          WHERE id = $6
+        `, [totalGross, totalDeductions, totalNet, totalEmployerCost, employeeCount, runId]);
+
+        createdRuns.push({
+          run_id: runId, department_id: dept.id, department_name: dept.name,
+          employee_count: employeeCount, total_net: totalNet
+        });
+      } catch (deptError) {
+        console.error(`Error creating payroll for dept ${dept.name}:`, deptError.message);
+        skippedDepts.push({ department_name: dept.name, reason: deptError.message });
+      }
+    }
+
+    await client.query('COMMIT');
+
+    const grandTotalNet = createdRuns.reduce((sum, r) => sum + r.total_net, 0);
+    const grandTotalEmployees = createdRuns.reduce((sum, r) => sum + r.employee_count, 0);
+
+    res.status(201).json({
+      message: `Created ${createdRuns.length} payroll runs for ${grandTotalEmployees} employees`,
+      created_runs: createdRuns,
+      skipped_departments: skippedDepts,
+      totals: {
+        runs_created: createdRuns.length,
+        total_employees: grandTotalEmployees,
+        grand_total_net: grandTotalNet
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating all-departments payroll:', error);
+    res.status(500).json({ error: 'Failed to create payroll runs for all departments', details: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * GET /api/payroll/runs/:id
  * Get single payroll run with all items
  */

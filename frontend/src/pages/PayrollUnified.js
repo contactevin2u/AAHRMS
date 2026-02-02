@@ -20,6 +20,8 @@ function PayrollUnified() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAllOutletsModal, setShowAllOutletsModal] = useState(false);
   const [creatingAllOutlets, setCreatingAllOutlets] = useState(false);
+  const [showAllDeptsModal, setShowAllDeptsModal] = useState(false);
+  const [creatingAllDepts, setCreatingAllDepts] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [departments, setDepartments] = useState([]);
@@ -201,6 +203,37 @@ function PayrollUnified() {
       alert(error.response?.data?.error || 'Failed to create payroll runs');
     } finally {
       setCreatingAllOutlets(false);
+    }
+  };
+
+  const handleCreateAllDepts = async (e) => {
+    e.preventDefault();
+    setCreatingAllDepts(true);
+    try {
+      const res = await payrollV2Api.createAllDepartments({
+        month: createForm.month,
+        year: createForm.year
+      });
+      setShowAllDeptsModal(false);
+      fetchRuns();
+
+      let message = `Created ${res.data.totals.runs_created} payroll runs for ${res.data.totals.total_employees} employees.\n`;
+      message += `\nDepartments created:\n`;
+      res.data.created_runs.forEach(run => {
+        message += `- ${run.department_name}: ${run.employee_count} employees (${formatAmount(run.total_net)})\n`;
+      });
+      if (res.data.skipped_departments?.length > 0) {
+        message += `\nSkipped:\n`;
+        res.data.skipped_departments.forEach(skip => {
+          message += `- ${skip.department_name}: ${skip.reason}\n`;
+        });
+      }
+      message += `\nTotal Net: ${formatAmount(res.data.totals.grand_total_net)}`;
+      alert(message);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to create payroll runs');
+    } finally {
+      setCreatingAllDepts(false);
     }
   };
 
@@ -863,9 +896,13 @@ function PayrollUnified() {
           </div>
           {mainTab === 'payroll' && (
             <div className="header-actions">
-              {isMimix && (
+              {isMimix ? (
                 <button onClick={() => setShowAllOutletsModal(true)} className="add-btn outline">
                   Generate All Outlets
+                </button>
+              ) : (
+                <button onClick={() => setShowAllDeptsModal(true)} className="add-btn outline">
+                  Generate All Departments
                 </button>
               )}
               <button onClick={() => setShowCreateModal(true)} className="add-btn">
@@ -1507,6 +1544,50 @@ function PayrollUnified() {
                   </button>
                   <button type="submit" className="save-btn" disabled={creatingAllOutlets}>
                     {creatingAllOutlets ? 'Generating...' : 'Generate All'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        {/* Generate All Departments Modal */}
+        {showAllDeptsModal && (
+          <div className="modal-overlay" onClick={() => setShowAllDeptsModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Generate All Departments Payroll</h2>
+              <p className="modal-description">
+                This will create separate payroll runs for each department.
+                Each department will have its own payroll with separate contributions.
+              </p>
+              <form onSubmit={handleCreateAllDepts}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Month</label>
+                    <select value={createForm.month} onChange={(e) => setCreateForm({ ...createForm, month: parseInt(e.target.value) })}>
+                      {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{new Date(2000, i, 1).toLocaleString('en', { month: 'long' })}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Year</label>
+                    <select value={createForm.year} onChange={(e) => setCreateForm({ ...createForm, year: parseInt(e.target.value) })}>
+                      {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="outlets-info">
+                  <strong>Departments to generate:</strong>
+                  <ul>
+                    {departments.map(dept => (
+                      <li key={dept.id}>{dept.name}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="modal-actions">
+                  <button type="button" onClick={() => setShowAllDeptsModal(false)} className="cancel-btn" disabled={creatingAllDepts}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="save-btn" disabled={creatingAllDepts}>
+                    {creatingAllDepts ? 'Generating...' : 'Generate All'}
                   </button>
                 </div>
               </form>
