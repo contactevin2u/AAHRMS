@@ -1004,7 +1004,7 @@ function PayrollUnified() {
                             <h4>📝 Proposed Changes ({aiAnalysis.preview.length} employees)</h4>
                             {aiAnalysis.impact && (
                               <div className="ai-impact-summary">
-                                <span>Total Increase: <strong>{formatAmount(aiAnalysis.impact.total_gross_increase || 0)}</strong></span>
+                                <span>Total Increase: <strong>{formatAmount(aiAnalysis.preview.reduce((sum, c) => sum + (c.new_value - c.current_value), 0))}</strong></span>
                               </div>
                             )}
                           </div>
@@ -1017,7 +1017,7 @@ function PayrollUnified() {
                                   <th>Current</th>
                                   <th>New Value</th>
                                   <th>Reason</th>
-                                  <th>Net Change</th>
+                                  <th>Gross Change</th>
                                   <th></th>
                                 </tr>
                               </thead>
@@ -1046,8 +1046,8 @@ function PayrollUnified() {
                                       />
                                     </td>
                                     <td className="reason">{change.reason}</td>
-                                    <td className={`net-change ${change.net_difference >= 0 ? 'positive' : 'negative'}`}>
-                                      {change.net_difference >= 0 ? '+' : ''}{formatAmount(change.net_difference)}
+                                    <td className={`net-change ${(change.new_value - change.current_value) >= 0 ? 'positive' : 'negative'}`}>
+                                      {(change.new_value - change.current_value) >= 0 ? '+' : ''}{formatAmount(change.new_value - change.current_value)}
                                     </td>
                                     <td>
                                       <button onClick={() => handleRemoveChange(idx)} className="remove-change-btn">×</button>

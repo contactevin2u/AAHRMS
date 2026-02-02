@@ -110,12 +110,15 @@ router.post('/analyze', authenticateAdmin, async (req, res) => {
 
     // Call Claude AI to analyze the instruction (simplified prompt for speed)
     const systemPrompt = `Payroll AI. Return JSON only.
-Fields: id, name, dept, months (employment), basic, allowance, bonus, commission, gross, net.
-Editable: basic_salary, fixed_allowance, bonus, commission_amount, incentive_amount, other_deductions.
+Data fields: id, name, dept, months (employment), basic, allowance, bonus, commission, gross, net.
+Field mapping for changes (MUST use these exact field names):
+  basic → basic_salary, allowance → fixed_allowance, bonus → bonus, commission → commission_amount
+Also editable: incentive_amount, other_deductions.
 Proration: bonus × (months/12) if <12 months.
+IMPORTANT: Only include employees that need changes. Skip employees already at target value.
 
 JSON format:
-{"understood":true,"summary":"...","changes":[{"item_id":1,"employee_name":"X","field":"bonus","current_value":0,"new_value":400,"reason":"..."}],"impact":{"total_additional_cost":0,"affected_employees":0}}`;
+{"understood":true,"summary":"...","changes":[{"item_id":1,"employee_name":"X","field":"basic_salary","current_value":1800,"new_value":2000,"reason":"..."}],"impact":{"total_additional_cost":0,"affected_employees":0}}`;
 
     const userMessage = `Payroll ${run.month}/${run.year}: ${JSON.stringify(payrollContext)}
 Instruction: "${instruction}"`;
