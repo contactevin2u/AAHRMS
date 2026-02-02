@@ -19,7 +19,7 @@ const { isAAAliveCompany } = require('../middleware/essPermissions');
  * OT = Working hours - 7.5 hours
  */
 
-const STANDARD_WORK_MINUTES_MIMIX = 450; // 7.5 hours (excluding break)
+const STANDARD_WORK_MINUTES_MIMIX = 510; // 8.5 hours (including break)
 const STANDARD_WORK_MINUTES_AA_ALIVE = 540; // 9 hours (break included)
 
 /**
@@ -28,7 +28,8 @@ const STANDARD_WORK_MINUTES_AA_ALIVE = 540; // 9 hours (break included)
  * @returns {Object} - { totalMinutes, breakMinutes, workMinutes, otMinutes }
  */
 function calculateWorkTime(record, companyId) {
-  const standardMinutes = isAAAliveCompany(companyId) ? STANDARD_WORK_MINUTES_AA_ALIVE : STANDARD_WORK_MINUTES_MIMIX;
+  const isAAAlive = isAAAliveCompany(companyId);
+  const standardMinutes = isAAAlive ? STANDARD_WORK_MINUTES_AA_ALIVE : STANDARD_WORK_MINUTES_MIMIX;
   const { clock_in_1, clock_out_1, clock_in_2, clock_out_2 } = record;
 
   let totalMinutes = 0;
@@ -41,43 +42,79 @@ function calculateWorkTime(record, companyId) {
     return parseInt(parts[0]) * 60 + parseInt(parts[1]);
   };
 
-  const t1_in = parseTime(clock_in_1);
+  let t1_in = parseTime(clock_in_1);
   const t1_out = parseTime(clock_out_1);
   const t2_in = parseTime(clock_in_2);
   const t2_out = parseTime(clock_out_2);
 
+  // For Mimix: don't count time before shift_start
+  // If employee clocks in early, use shift_start as effective start time
+  if (!isAAAlive && record.shift_start && t1_in !== null) {
+    const shiftStart = parseTime(record.shift_start);
+    if (shiftStart !== null && t1_in < shiftStart) {
+      t1_in = shiftStart;
+    }
+  }
+
   // Handle overnight: if out time < in time, add 24h (1440 min)
   const diff = (start, end) => end >= start ? end - start : end + 1440 - start;
 
-  // Morning session: clock_in_1 to clock_out_1
-  if (t1_in !== null && t1_out !== null) {
-    totalMinutes += diff(t1_in, t1_out);
+  if (isAAAlive) {
+    // AA Alive: sum work sessions only (break excluded from count)
+    if (t1_in !== null && t1_out !== null) {
+      totalMinutes += diff(t1_in, t1_out);
+    }
+    if (t1_out !== null && t2_in !== null) {
+      breakMinutes = diff(t1_out, t2_in);
+    }
+    if (t2_in !== null && t2_out !== null) {
+      totalMinutes += diff(t2_in, t2_out);
+    }
+    if (t1_in !== null && t2_out !== null && t1_out === null && t2_in === null) {
+      totalMinutes = diff(t1_in, t2_out);
+    }
+
+    const otMinutes = Math.max(0, totalMinutes - standardMinutes);
+    return {
+      totalMinutes,
+      breakMinutes,
+      workMinutes: totalMinutes,
+      otMinutes,
+      totalHours: Math.round(totalMinutes / 60 * 100) / 100,
+      otHours: Math.round(otMinutes / 60 * 100) / 100
+    };
   }
 
-  // Break time: clock_out_1 to clock_in_2
+  // Mimix: calculate gross time (clock_in_1 to last clock_out)
+  // Standard = 8.5 hours INCLUDING break
+  // Break <= 1hr: don't deduct. Break > 1hr: deduct excess only.
+  const lastOut = t2_out !== null ? t2_out : t1_out;
+
+  if (t1_in !== null && lastOut !== null) {
+    totalMinutes = diff(t1_in, lastOut);
+  }
+
+  // Calculate break time
   if (t1_out !== null && t2_in !== null) {
     breakMinutes = diff(t1_out, t2_in);
   }
 
-  // Afternoon session: clock_in_2 to clock_out_2
-  if (t2_in !== null && t2_out !== null) {
-    totalMinutes += diff(t2_in, t2_out);
+  // Only deduct break time exceeding 1 hour
+  let workMinutes = totalMinutes;
+  if (breakMinutes > 60) {
+    workMinutes = totalMinutes - (breakMinutes - 60);
   }
 
-  // If only clock_in_1 and clock_out_2 exist (no break recorded)
-  if (t1_in !== null && t2_out !== null && t1_out === null && t2_in === null) {
-    totalMinutes = diff(t1_in, t2_out);
-  }
-
-  // Calculate OT (anything above 8.5 hours)
-  const otMinutes = Math.max(0, totalMinutes - standardMinutes);
+  // OT must be at least 1 hour, otherwise no OT
+  const rawOtMinutes = Math.max(0, workMinutes - standardMinutes);
+  const otMinutes = rawOtMinutes >= 60 ? rawOtMinutes : 0;
 
   return {
-    totalMinutes,
+    totalMinutes: workMinutes,
     breakMinutes,
-    workMinutes: totalMinutes,
+    workMinutes,
     otMinutes,
-    totalHours: Math.round(totalMinutes / 60 * 100) / 100,
+    totalHours: Math.round(workMinutes / 60 * 100) / 100,
     otHours: Math.round(otMinutes / 60 * 100) / 100
   };
 }
@@ -856,10 +893,13 @@ router.post('/recalculate', authenticateAdmin, async (req, res) => {
     const { month, year } = req.body;
     if (!month || !year) return res.status(400).json({ error: 'month and year required' });
 
-    let query = `SELECT * FROM clock_in_records WHERE EXTRACT(MONTH FROM work_date) = $1 AND EXTRACT(YEAR FROM work_date) = $2`;
+    let query = `SELECT cir.*, s.shift_start
+      FROM clock_in_records cir
+      LEFT JOIN schedules s ON cir.employee_id = s.employee_id AND cir.work_date = s.schedule_date
+      WHERE EXTRACT(MONTH FROM cir.work_date) = $1 AND EXTRACT(YEAR FROM cir.work_date) = $2`;
     const params = [month, year];
     if (companyId !== null) {
-      query += ` AND company_id = $3`;
+      query += ` AND cir.company_id = $3`;
       params.push(companyId);
     }
     const records = await pool.query(query, params);
