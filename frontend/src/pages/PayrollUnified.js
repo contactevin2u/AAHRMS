@@ -596,6 +596,7 @@ function PayrollUnified() {
       trade_commission_amount: item.trade_commission_amount || 0, outstation_amount: item.outstation_amount || 0,
       bonus: item.bonus || 0, other_deductions: item.other_deductions || 0,
       deduction_remarks: item.deduction_remarks || '', notes: item.notes || '',
+      short_hours: item.short_hours || 0, short_hours_deduction: item.short_hours_deduction || 0,
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
       claims_override: '' // Empty means use calculated value, set value to override claims amount
@@ -740,6 +741,7 @@ function PayrollUnified() {
       <tr><td>EIS (Employee)</td><td class="amount">RM ${formatNum(deductions.eis_employee)}</td></tr>
       <tr><td style="padding-left:20px;font-style:italic;color:#666">→ PERKESO Total</td><td class="amount" style="color:#666">RM ${formatNum(perkeso)}</td></tr>
       <tr><td>PCB (Tax)</td><td class="amount">RM ${formatNum(deductions.pcb)}</td></tr>
+      ${deductions.short_hours_deduction > 0 ? `<tr><td>Short Hours (${deductions.short_hours} hrs)</td><td class="amount">RM ${formatNum(deductions.short_hours_deduction)}</td></tr>` : ''}
       ${deductions.advance_deduction > 0 ? `<tr><td>Advance Deduction</td><td class="amount">RM ${formatNum(deductions.advance_deduction)}</td></tr>` : ''}
       ${deductions.other_deductions > 0 ? `<tr><td>Other Deductions</td><td class="amount">RM ${formatNum(deductions.other_deductions)}</td></tr>` : ''}
       <tr class="total-row"><td>TOTAL DEDUCTIONS</td><td class="amount">RM ${formatNum(totals.total_deductions)}</td></tr></table>
@@ -884,6 +886,7 @@ function PayrollUnified() {
       claims: hasValue('claims_amount'),
       comm: items.some(item => (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0) > 0),
       adv: hasValue('advance_deduction'),
+      shortHrs: hasValue('short_hours_deduction'),
     };
   };
 
@@ -1227,6 +1230,7 @@ function PayrollUnified() {
                             {vis.comm && <th>Comm.</th>}
                             <th>Gross</th><th>EPF</th><th>SOCSO</th><th>EIS</th><th>PCB</th>
                             {vis.adv && <th>Adv</th>}
+                            {vis.shortHrs && <th>Deduct</th>}
                             <th>Net</th><th></th>
                           </tr>
                         </thead>
@@ -1249,6 +1253,7 @@ function PayrollUnified() {
                               <td>{formatAmount(item.eis_employee)}</td>
                               {renderCell(item, 'pcb', item.pcb)}
                               {vis.adv && <td>{formatAmount(item.advance_deduction)}</td>}
+                              {vis.shortHrs && <td>{formatAmount(item.short_hours_deduction)}</td>}
                               <td><strong>{formatAmount(item.net_pay)}</strong></td>
                               <td>
                                 {isDraft && (
@@ -1452,6 +1457,21 @@ function PayrollUnified() {
                     <div className="form-group">
                       <label>Bonus</label>
                       <input type="number" step="0.01" value={itemForm.bonus} onChange={(e) => handleStatutoryFieldChange('bonus', parseFloat(e.target.value) || 0)} />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Short Hours</label>
+                      <input type="number" step="0.01" value={itemForm.short_hours} onChange={(e) => {
+                        const hrs = parseFloat(e.target.value) || 0;
+                        const wd = selectedRun?.work_days_per_month || 22;
+                        const deduction = hrs > 0 ? Math.round((itemForm.basic_salary / wd / 8) * hrs * 100) / 100 : 0;
+                        setItemForm({ ...itemForm, short_hours: hrs, short_hours_deduction: deduction });
+                      }} />
+                    </div>
+                    <div className="form-group">
+                      <label>Short Hours Deduction</label>
+                      <input type="number" step="0.01" value={itemForm.short_hours_deduction} onChange={(e) => setItemForm({ ...itemForm, short_hours_deduction: parseFloat(e.target.value) || 0 })} />
                     </div>
                   </div>
                   <div className="form-row">
