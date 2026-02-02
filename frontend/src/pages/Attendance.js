@@ -441,11 +441,10 @@ const Attendance = () => {
 
   const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-MY', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    const d = new Date(date);
+    const day = d.toLocaleDateString('en-MY', { weekday: 'short' });
+    const rest = d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
+    return `${day}, ${rest}`;
   };
 
   const getStatusBadge = (status) => {
