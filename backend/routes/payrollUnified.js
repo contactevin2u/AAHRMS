@@ -576,7 +576,30 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
         const { features, rates, period: periodConfig } = settings;
         const period = getPayrollPeriod(month, year, periodConfig);
 
-        // Create payroll run for this outlet
+        // Check for active employees FIRST — skip outlet entirely if none
+        const employees = await client.query(`
+          SELECT e.*,
+                 e.default_basic_salary as basic_salary,
+                 e.default_allowance as fixed_allowance,
+                 d.name as department_name,
+                 d.payroll_structure_code
+          FROM employees e
+          LEFT JOIN departments d ON e.department_id = d.id
+          WHERE e.company_id = $1
+            AND e.outlet_id = $2
+            AND (
+              e.status = 'active'
+              OR (e.status = 'resigned' AND e.resign_date BETWEEN $3 AND $4)
+            )
+        `, [companyId, outlet.id, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
+
+        if (employees.rows.length === 0) {
+          skippedOutlets.push({ outlet_name: outlet.name, reason: 'No active employees' });
+          await client.query(`ROLLBACK TO SAVEPOINT outlet_${outlet.id}`);
+          continue;
+        }
+
+        // Create payroll run for this outlet (only if employees exist)
         const runResult = await client.query(`
           INSERT INTO payroll_runs (
             month, year, status, notes, department_id, outlet_id, company_id,
@@ -595,28 +618,6 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
         ]);
 
         const runId = runResult.rows[0].id;
-
-        // Get employees for this outlet
-        const employees = await client.query(`
-          SELECT e.*,
-                 e.default_basic_salary as basic_salary,
-                 e.default_allowance as fixed_allowance,
-                 d.name as department_name,
-                 d.payroll_structure_code
-          FROM employees e
-          LEFT JOIN departments d ON e.department_id = d.id
-          WHERE e.company_id = $1
-            AND e.outlet_id = $2
-            AND (
-              e.status = 'active'
-              OR (e.status = 'resigned' AND e.resign_date BETWEEN $3 AND $4)
-            )
-        `, [companyId, outlet.id, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
-
-        if (employees.rows.length === 0) {
-          skippedOutlets.push({ outlet_name: outlet.name, reason: 'No employees' });
-          continue;
-        }
 
         // Get previous month data for carry-forward
         const prevMonth = month === 1 ? 12 : month - 1;
