@@ -1209,8 +1209,11 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
       ORDER BY eo.name NULLS FIRST, e.name
     `, [id]);
 
+    const settings = await getCompanySettings(runResult.rows[0].company_id);
+    const workDaysPerMonth = settings.rates.standard_work_days || 22;
+
     res.json({
-      run: runResult.rows[0],
+      run: { ...runResult.rows[0], work_days_per_month: workDaysPerMonth },
       items: itemsResult.rows
     });
   } catch (error) {

@@ -620,14 +620,16 @@ function PayrollUnified() {
     };
   };
 
-  const calculateOTAmount = (basicSalary, otHours, workingDays = 22) => {
+  const calculateOTAmount = (basicSalary, otHours, workingDays) => {
+    const wd = workingDays || selectedRun?.work_days_per_month || 22;
     if (!basicSalary || !otHours || otHours <= 0) return 0;
-    return Math.round((basicSalary / workingDays / 8) * otHours * 100) / 100;
+    return Math.round((basicSalary / wd / 8) * otHours * 100) / 100;
   };
 
-  const calculatePHPay = (basicSalary, phDaysWorked, workingDays = 22) => {
+  const calculatePHPay = (basicSalary, phDaysWorked, workingDays) => {
+    const wd = workingDays || selectedRun?.work_days_per_month || 22;
     if (!basicSalary || !phDaysWorked || phDaysWorked <= 0) return 0;
-    return Math.round((basicSalary / workingDays) * phDaysWorked * 100) / 100;
+    return Math.round((basicSalary / wd) * phDaysWorked * 100) / 100;
   };
 
   const handleOTHoursChange = (otHours) => {
@@ -987,6 +989,7 @@ function PayrollUnified() {
                   {/* Summary Stats */}
                   <div className="summary-stats">
                     <div className="summary-stat"><span className="stat-label">Employees</span><span className="stat-value">{selectedRun.items?.length || 0}</span></div>
+                    <div className="summary-stat"><span className="stat-label">Working Days</span><span className="stat-value">{selectedRun.work_days_per_month || 22}</span></div>
                     <div className="summary-stat"><span className="stat-label">Gross</span><span className="stat-value">{formatAmount(selectedRun.total_gross)}</span></div>
                     <div className="summary-stat"><span className="stat-label">Deductions</span><span className="stat-value">{formatAmount(selectedRun.total_deductions)}</span></div>
                     <div className="summary-stat highlight"><span className="stat-label">Net</span><span className="stat-value">{formatAmount(selectedRun.total_net)}</span></div>
