@@ -457,7 +457,7 @@ router.patch('/allowance-types/:id/taxable', authenticateAdmin, async (req, res)
 
     const { is_taxable } = req.body;
     const result = await pool.query(
-      'UPDATE allowance_types SET is_taxable = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3 RETURNING *',
+      'UPDATE allowance_types SET is_taxable = $1 WHERE id = $2 AND company_id = $3 RETURNING *',
       [is_taxable, req.params.id, companyId]
     );
 
@@ -479,7 +479,7 @@ router.patch('/commission-types/:id/taxable', authenticateAdmin, async (req, res
 
     const { is_taxable } = req.body;
     const result = await pool.query(
-      'UPDATE commission_types SET is_taxable = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3 RETURNING *',
+      'UPDATE commission_types SET is_taxable = $1 WHERE id = $2 AND company_id = $3 RETURNING *',
       [is_taxable, req.params.id, companyId]
     );
 
