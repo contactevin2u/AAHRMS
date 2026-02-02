@@ -1616,29 +1616,71 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // Short hours calculation: compare actual hours worked vs expected
+      // Short hours calculation: only for outlet-based companies
+      // Compares scheduled working days against actual clock-in hours
+      // Absent days (scheduled but no clock-in) count as full-day deficit
       let shortHours = 0;
       let shortHoursDeduction = 0;
-      if (!isPartTime && basicSalary > 0) {
+      if (!isPartTime && basicSalary > 0 && settings.groupingType === 'outlet') {
         try {
           const expectedHoursPerDay = rates.standard_work_hours || 8;
-          const clockInRecords = await pool.query(`
-            SELECT date, clock_in, clock_out,
-                   EXTRACT(EPOCH FROM (clock_out - clock_in)) / 3600.0 as hours_worked
+          const periodStart = period.start.toISOString().split('T')[0];
+          const periodEnd = period.end.toISOString().split('T')[0];
+
+          // Get clock-in records with actual hours worked
+          const clockInRecords = await client.query(`
+            SELECT work_date, total_work_hours
             FROM clock_in_records
             WHERE employee_id = $1 AND company_id = $2
-              AND date >= $3 AND date <= $4
-              AND clock_in IS NOT NULL AND clock_out IS NOT NULL
-              AND status != 'absent'
-          `, [emp.id, companyId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
+              AND work_date >= $3::date AND work_date <= $4::date
+              AND clock_in_1 IS NOT NULL AND clock_out_1 IS NOT NULL
+          `, [emp.id, companyId, periodStart, periodEnd]);
 
+          // Build a map of date -> hours worked
+          const hoursMap = {};
           for (const rec of clockInRecords.rows) {
-            const hoursWorked = parseFloat(rec.hours_worked) || 0;
-            // Subtract lunch break (1 hour) if worked more than 4 hours
-            const netHours = hoursWorked > 4 ? hoursWorked - 1 : hoursWorked;
-            const deficit = Math.max(0, expectedHoursPerDay - netHours);
-            shortHours += deficit;
+            const dateStr = rec.work_date.toISOString().split('T')[0];
+            hoursMap[dateStr] = parseFloat(rec.total_work_hours) || 0;
           }
+
+          // Get approved leave dates to exclude (already handled by unpaid leave deduction)
+          const leaveResult = await client.query(`
+            SELECT generate_series(
+              GREATEST(lr.start_date, $2::date),
+              LEAST(lr.end_date, $3::date),
+              '1 day'::interval
+            )::date as leave_date
+            FROM leave_requests lr
+            WHERE lr.employee_id = $1
+              AND lr.status = 'approved'
+              AND lr.start_date <= $3::date
+              AND lr.end_date >= $2::date
+          `, [emp.id, periodStart, periodEnd]);
+          const leaveDates = new Set(leaveResult.rows.map(r => r.leave_date.toISOString().split('T')[0]));
+
+          // Get scheduled working days from schedules table
+          // Schedule = source of truth for expected working days
+          const schedResult = await client.query(`
+            SELECT schedule_date FROM schedules
+            WHERE employee_id = $1 AND schedule_date >= $2::date AND schedule_date <= $3::date
+              AND status IN ('scheduled', 'completed')
+          `, [emp.id, periodStart, periodEnd]);
+          const scheduledDates = schedResult.rows.map(r => r.schedule_date.toISOString().split('T')[0]);
+
+          // For each scheduled working day, check attendance
+          for (const dateStr of scheduledDates) {
+            if (leaveDates.has(dateStr)) continue; // Skip leave days (handled by unpaid leave deduction)
+
+            if (hoursMap[dateStr] !== undefined) {
+              // Clocked in — check if short hours
+              const deficit = Math.max(0, expectedHoursPerDay - hoursMap[dateStr]);
+              shortHours += deficit;
+            } else {
+              // Scheduled but no clock record = absent, full day deficit
+              shortHours += expectedHoursPerDay;
+            }
+          }
+
           shortHours = Math.round(shortHours * 100) / 100;
           if (shortHours > 0) {
             const hourlyRate = basicSalary / workingDays / expectedHoursPerDay;
