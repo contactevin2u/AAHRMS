@@ -106,8 +106,11 @@ function calculateWorkTime(record, companyId) {
   }
 
   // OT must be at least 1 hour, otherwise no OT
+  // Round down to 0.5h increments (1.0, 1.5, 2.0, 2.5, ...)
   const rawOtMinutes = Math.max(0, workMinutes - standardMinutes);
-  const otMinutes = rawOtMinutes >= 60 ? rawOtMinutes : 0;
+  const rawOtHours = rawOtMinutes / 60;
+  const otHours = rawOtMinutes >= 60 ? Math.floor(rawOtHours * 2) / 2 : 0;
+  const otMinutes = otHours * 60;
 
   return {
     totalMinutes: workMinutes,
@@ -115,7 +118,7 @@ function calculateWorkTime(record, companyId) {
     workMinutes,
     otMinutes,
     totalHours: Math.round(workMinutes / 60 * 100) / 100,
-    otHours: Math.round(otMinutes / 60 * 100) / 100
+    otHours
   };
 }
 

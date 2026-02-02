@@ -66,8 +66,8 @@ const {
 const { checkWrongShift } = require('../../utils/attendanceDeduction');
 const { getOTApprovalSetting } = require('../../utils/otCalculation');
 
-// Mimix: 7.5 hours = 450 minutes (excluding 1 hour break)
-const STANDARD_WORK_MINUTES_MIMIX = 450;
+// Mimix: 8.5 hours = 510 minutes (including break)
+const STANDARD_WORK_MINUTES_MIMIX = 510;
 // AA Alive: 9 hours = 540 minutes (break included, no separate break clock)
 const STANDARD_WORK_MINUTES_AA_ALIVE = 540;
 
@@ -106,7 +106,8 @@ const authenticateEmployee = async (req, res, next) => {
 // - Round OT to nearest 0.5 hour, rounding DOWN
 // - e.g., 0.9h OT = 0 (below min), 1.2h = 1h, 1.7h = 1.5h
 function calculateWorkTime(record, companyId) {
-  const standardMinutes = isAAAliveCompany(companyId) ? STANDARD_WORK_MINUTES_AA_ALIVE : STANDARD_WORK_MINUTES_MIMIX;
+  const isAAAlive = isAAAliveCompany(companyId);
+  const standardMinutes = isAAAlive ? STANDARD_WORK_MINUTES_AA_ALIVE : STANDARD_WORK_MINUTES_MIMIX;
   const { clock_in_1, clock_out_1, clock_in_2, clock_out_2 } = record;
 
   if (!clock_in_1) return { totalMinutes: 0, otMinutes: 0, rawOtMinutes: 0, totalHours: 0, otHours: 0 };
@@ -117,40 +118,58 @@ function calculateWorkTime(record, companyId) {
   // Handle overnight: if out time < in time, add 24h (1440 min)
   const timeDiff = (start, end) => end >= start ? end - start : end + 1440 - start;
 
-  // Calculate morning session (clock_in_1 to clock_out_1)
-  if (clock_in_1 && clock_out_1) {
-    const start1 = timeToMinutes(clock_in_1);
-    const end1 = timeToMinutes(clock_out_1);
-    totalMinutes += timeDiff(start1, end1);
+  let t1_in = timeToMinutes(clock_in_1);
+
+  // For Mimix: don't count time before shift_start
+  if (!isAAAlive && record.shift_start && t1_in !== null) {
+    const shiftStart = timeToMinutes(record.shift_start);
+    if (shiftStart !== null && t1_in < shiftStart) {
+      t1_in = shiftStart;
+    }
   }
 
-  // Calculate afternoon session (clock_in_2 to clock_out_2)
-  if (clock_in_2 && clock_out_2) {
-    const start2 = timeToMinutes(clock_in_2);
-    const end2 = timeToMinutes(clock_out_2);
-    totalMinutes += timeDiff(start2, end2);
-  }
+  if (isAAAlive) {
+    // AA Alive: sum work sessions only (break excluded from count)
+    if (clock_in_1 && clock_out_1) {
+      totalMinutes += timeDiff(t1_in, timeToMinutes(clock_out_1));
+    }
+    if (clock_out_1 && clock_in_2) {
+      breakMinutes = timeDiff(timeToMinutes(clock_out_1), timeToMinutes(clock_in_2));
+    }
+    if (clock_in_2 && clock_out_2) {
+      totalMinutes += timeDiff(timeToMinutes(clock_in_2), timeToMinutes(clock_out_2));
+    }
+    if (clock_in_1 && clock_out_2 && !clock_out_1 && !clock_in_2) {
+      totalMinutes = timeDiff(t1_in, timeToMinutes(clock_out_2));
+    }
+  } else {
+    // Mimix: calculate gross time (clock_in_1 to last clock_out)
+    // Standard = 8.5 hours INCLUDING break
+    // Break <= 1hr: don't deduct. Break > 1hr: deduct excess only.
+    const lastOut = clock_out_2 ? timeToMinutes(clock_out_2) : (clock_out_1 ? timeToMinutes(clock_out_1) : null);
 
-  // If only clock_in_1 and clock_out_2 (no break recorded)
-  if (clock_in_1 && clock_out_2 && !clock_out_1 && !clock_in_2) {
-    totalMinutes = timeDiff(timeToMinutes(clock_in_1), timeToMinutes(clock_out_2));
-  }
+    if (t1_in !== null && lastOut !== null) {
+      totalMinutes = timeDiff(t1_in, lastOut);
+    }
 
-  // Calculate break time
-  if (clock_out_1 && clock_in_2) {
-    breakMinutes = timeDiff(timeToMinutes(clock_out_1), timeToMinutes(clock_in_2));
+    if (clock_out_1 && clock_in_2) {
+      breakMinutes = timeDiff(timeToMinutes(clock_out_1), timeToMinutes(clock_in_2));
+    }
+
+    // Only deduct break time exceeding 1 hour
+    if (breakMinutes > 60) {
+      totalMinutes = totalMinutes - (breakMinutes - 60);
+    }
   }
 
   // Raw OT minutes (before applying rules)
   const rawOtMinutes = Math.max(0, totalMinutes - standardMinutes);
-  const rawOtHours = rawOtMinutes / 60;
 
-  // Apply OT rules:
+  // Apply OT rules (all companies):
   // 1. Minimum 1 hour required (60 minutes)
   // 2. Round DOWN to nearest 0.5 hour (30 minutes)
   let otMinutes = 0;
   if (rawOtMinutes >= 60) {
-    // Round down to nearest 30 minutes
     otMinutes = Math.floor(rawOtMinutes / 30) * 30;
   }
 
@@ -158,10 +177,10 @@ function calculateWorkTime(record, companyId) {
     totalMinutes,
     breakMinutes,
     workMinutes: totalMinutes,
-    rawOtMinutes,  // Keep raw for reference
-    otMinutes,     // Rounded OT (min 1hr, 0.5hr increments)
+    rawOtMinutes,
+    otMinutes,
     totalHours: Math.round(totalMinutes / 60 * 100) / 100,
-    otHours: otMinutes / 60  // This will be 0, 1, 1.5, 2, etc.
+    otHours: otMinutes / 60
   };
 }
 
