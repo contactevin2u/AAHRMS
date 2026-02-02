@@ -54,15 +54,37 @@ router.post('/analyze', authenticateAdmin, async (req, res) => {
     // Get current items WITH join_date for proration calculation
     const itemsResult = await pool.query(`
       SELECT pi.*, e.name as employee_name, e.employee_id as emp_code,
-             e.join_date, e.position, d.name as department_name
+             e.join_date, e.position, d.name as department_name,
+             e.id as emp_id, ps.code as payroll_structure_code
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN payroll_structures ps ON e.payroll_structure_id = ps.id
       WHERE pi.payroll_run_id = $1
       ORDER BY e.name
     `, [run_id]);
 
     const currentItems = itemsResult.rows;
+
+    // Get allowance types for the company
+    const allowanceTypesResult = await pool.query(
+      'SELECT id, name, is_taxable FROM allowance_types WHERE company_id = $1 AND is_active = TRUE ORDER BY name',
+      [companyId]
+    );
+    const allowanceTypes = allowanceTypesResult.rows;
+
+    // Get current employee allowances for employees in this run
+    const empIds = currentItems.map(i => i.emp_id);
+    let employeeAllowances = [];
+    if (empIds.length > 0) {
+      const eaResult = await pool.query(`
+        SELECT ea.employee_id, ea.allowance_type_id, ea.amount, at.name as type_name, at.is_taxable
+        FROM employee_allowances ea
+        JOIN allowance_types at ON ea.allowance_type_id = at.id
+        WHERE ea.employee_id = ANY($1) AND ea.is_active = TRUE
+      `, [empIds]);
+      employeeAllowances = eaResult.rows;
+    }
 
     // Calculate employment months for each employee (for proration)
     const payrollDate = new Date(run.year, run.month - 1, 1);
@@ -94,31 +116,45 @@ router.post('/analyze', authenticateAdmin, async (req, res) => {
         monthsEmployed = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30.44));
       }
 
+      // Get typed allowances for this employee
+      const empAllowances = employeeAllowances
+        .filter(ea => ea.employee_id === item.emp_id)
+        .map(ea => ({ type_id: ea.allowance_type_id, type_name: ea.type_name, amount: parseFloat(ea.amount) || 0, taxable: ea.is_taxable }));
+
       return {
         id: item.id,
+        emp_id: item.emp_id,
         name: item.employee_name,
         dept: item.department_name,
+        structure: item.payroll_structure_code || null,
         months: monthsEmployed,
         basic: parseFloat(item.basic_salary) || 0,
         allowance: parseFloat(item.fixed_allowance) || 0,
         bonus: parseFloat(item.bonus) || 0,
         commission: parseFloat(item.commission_amount) || 0,
         gross: parseFloat(item.gross_salary) || 0,
-        net: parseFloat(item.net_pay) || 0
+        net: parseFloat(item.net_pay) || 0,
+        typed_allowances: empAllowances
       };
     });
 
     // Call Claude AI to analyze the instruction (simplified prompt for speed)
+    const allowanceTypesList = allowanceTypes.map(at => ({ id: at.id, name: at.name, taxable: at.is_taxable }));
     const systemPrompt = `Payroll AI. Return JSON only.
-Data fields: id, name, dept, months (employment), basic, allowance, bonus, commission, gross, net.
+Data fields: id, emp_id, name, dept, structure, months (employment), basic, allowance, bonus, commission, gross, net, typed_allowances[{type_id,type_name,amount,taxable}].
 Field mapping for changes (MUST use these exact field names):
   basic → basic_salary, allowance → fixed_allowance, bonus → bonus, commission → commission_amount
 Also editable: incentive_amount, other_deductions.
 Proration: bonus × (months/12) if <12 months.
 IMPORTANT: Only include employees that need changes. Skip employees already at target value.
 
+Available allowance types: ${JSON.stringify(allowanceTypesList)}
+For typed allowance assignments (persist on employee), use:
+"allowance_assignments":[{"emp_id":1,"employee_name":"X","allowance_type_id":2,"type_name":"Meal Allowance","amount":200,"reason":"..."}]
+Include in same JSON response alongside "changes" if needed. Do NOT use allowance_assignments for drivers' outstation (use outstation_amount field instead).
+
 JSON format:
-{"understood":true,"summary":"...","changes":[{"item_id":1,"employee_name":"X","field":"basic_salary","current_value":1800,"new_value":2000,"reason":"..."}],"impact":{"total_additional_cost":0,"affected_employees":0}}`;
+{"understood":true,"summary":"...","changes":[{"item_id":1,"employee_name":"X","field":"basic_salary","current_value":1800,"new_value":2000,"reason":"..."}],"allowance_assignments":[],"impact":{"total_additional_cost":0,"affected_employees":0}}`;
 
     const userMessage = `Payroll ${run.month}/${run.year}: ${JSON.stringify(payrollContext)}
 Instruction: "${instruction}"`;
@@ -216,6 +252,24 @@ Instruction: "${instruction}"`;
       };
     }
 
+    // Build allowance assignment preview
+    if (aiResponse.allowance_assignments && aiResponse.allowance_assignments.length > 0) {
+      aiResponse.allowance_preview = aiResponse.allowance_assignments.map(assignment => {
+        const atInfo = allowanceTypes.find(at => at.id === assignment.allowance_type_id);
+        // Find current amount for this type
+        const currentEa = employeeAllowances.find(
+          ea => ea.employee_id === assignment.emp_id && ea.allowance_type_id === assignment.allowance_type_id
+        );
+        return {
+          ...assignment,
+          type_name: atInfo?.name || assignment.type_name,
+          is_taxable: atInfo?.is_taxable ?? true,
+          current_amount: currentEa ? parseFloat(currentEa.amount) || 0 : 0,
+          new_amount: parseFloat(assignment.amount) || 0
+        };
+      });
+    }
+
     res.json({
       run_id,
       instruction,
@@ -243,15 +297,19 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { run_id, changes } = req.body;
+    const { run_id, changes = [], allowance_assignments = [] } = req.body;
     const companyId = req.companyId;
 
     if (!companyId) {
       return res.status(403).json({ error: 'Company context required' });
     }
 
-    if (!run_id || !changes || !Array.isArray(changes)) {
-      return res.status(400).json({ error: 'run_id and changes array required' });
+    if (!run_id || (!Array.isArray(changes) && !Array.isArray(allowance_assignments))) {
+      return res.status(400).json({ error: 'run_id and changes or allowance_assignments required' });
+    }
+
+    if (changes.length === 0 && allowance_assignments.length === 0) {
+      return res.status(400).json({ error: 'No changes or allowance assignments provided' });
     }
 
     // Verify run exists and is draft
@@ -319,8 +377,78 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
       }
     }
 
+    // Process allowance assignments
+    const allowanceResults = [];
+    const allowanceAffectedEmpIds = new Set();
+    for (const assignment of allowance_assignments) {
+      const { emp_id, employee_name, allowance_type_id, amount, reason } = assignment;
+      try {
+        // Upsert employee_allowances
+        await client.query(`
+          INSERT INTO employee_allowances (employee_id, allowance_type_id, amount, is_active, created_at, updated_at)
+          VALUES ($1, $2, $3, TRUE, NOW(), NOW())
+          ON CONFLICT (employee_id, allowance_type_id)
+          DO UPDATE SET amount = $3, is_active = TRUE, updated_at = NOW()
+        `, [emp_id, allowance_type_id, amount]);
+
+        allowanceAffectedEmpIds.add(emp_id);
+        allowanceResults.push({ emp_id, employee_name, allowance_type_id, amount, success: true });
+      } catch (e) {
+        allowanceResults.push({ emp_id, employee_name, allowance_type_id, amount, success: false, error: e.message });
+      }
+    }
+
+    // For allowance-affected employees, recalculate their payroll item's fixed_allowance
+    if (allowanceAffectedEmpIds.size > 0) {
+      for (const empId of allowanceAffectedEmpIds) {
+        // Get flex allowance totals
+        const flexResult = await client.query(`
+          SELECT COALESCE(SUM(ea.amount), 0) as total,
+                 COALESCE(SUM(CASE WHEN at.is_taxable THEN ea.amount ELSE 0 END), 0) as taxable,
+                 COALESCE(SUM(CASE WHEN NOT at.is_taxable THEN ea.amount ELSE 0 END), 0) as exempt
+          FROM employee_allowances ea
+          JOIN allowance_types at ON ea.allowance_type_id = at.id
+          WHERE ea.employee_id = $1 AND ea.is_active = TRUE
+        `, [empId]);
+
+        const flexTotal = parseFloat(flexResult.rows[0].total) || 0;
+
+        // Get employee's default allowance
+        const empResult = await client.query(
+          'SELECT default_allowance FROM employees WHERE id = $1',
+          [empId]
+        );
+        const defaultAllowance = parseFloat(empResult.rows[0]?.default_allowance) || 0;
+
+        // Update fixed_allowance on the payroll item for this run
+        const piResult = await client.query(
+          'SELECT id FROM payroll_items WHERE payroll_run_id = $1 AND employee_id = $2',
+          [run_id, empId]
+        );
+        if (piResult.rows.length > 0) {
+          const piId = piResult.rows[0].id;
+          const newFixedAllowance = defaultAllowance + flexTotal;
+          await client.query(
+            'UPDATE payroll_items SET fixed_allowance = $1, updated_at = NOW() WHERE id = $2',
+            [newFixedAllowance, piId]
+          );
+        }
+      }
+    }
+
     // Recalculate all modified items with full statutory recalculation
-    const itemIds = [...new Set(changes.map(c => c.item_id))];
+    // Include both direct-change items and allowance-affected items
+    const changeItemIds = changes.map(c => c.item_id).filter(Boolean);
+    // Also get payroll_item IDs for allowance-affected employees
+    let allowanceItemIds = [];
+    if (allowanceAffectedEmpIds.size > 0) {
+      const aiResult = await client.query(
+        'SELECT id FROM payroll_items WHERE payroll_run_id = $1 AND employee_id = ANY($2)',
+        [run_id, [...allowanceAffectedEmpIds]]
+      );
+      allowanceItemIds = aiResult.rows.map(r => r.id);
+    }
+    const itemIds = [...new Set([...changeItemIds, ...allowanceItemIds])];
 
     // Track items with explicit PCB overrides (don't recalculate PCB for these)
     const pcbOverrides = {};
@@ -362,8 +490,20 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
       const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
                           commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction;
 
+      // For allowance-affected items, get taxable portion of flex allowances
+      let taxableAllowance = 0;
+      if (allowanceAffectedEmpIds.has(item.employee_id)) {
+        const taxResult = await client.query(`
+          SELECT COALESCE(SUM(CASE WHEN at.is_taxable THEN ea.amount ELSE 0 END), 0) as taxable
+          FROM employee_allowances ea
+          JOIN allowance_types at ON ea.allowance_type_id = at.id
+          WHERE ea.employee_id = $1 AND ea.is_active = TRUE
+        `, [item.employee_id]);
+        taxableAllowance = parseFloat(taxResult.rows[0].taxable) || 0;
+      }
+
       // Calculate statutory base
-      let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
+      let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus + taxableAllowance;
       if (statutory.statutory_on_ot) statutoryBase += otAmount;
       if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
       if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
@@ -418,11 +558,21 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
 
     // Log the AI payroll changes
     const successfulChanges = results.filter(r => r.success);
-    if (successfulChanges.length > 0) {
-      const changeCategories = [...new Set(successfulChanges.map(c => c.field))];
-      const summary = successfulChanges.length === 1
-        ? `Changed ${successfulChanges[0].field} for ${successfulChanges[0].employee_name}`
-        : `Changed ${changeCategories.join(', ')} for ${successfulChanges.length} employees`;
+    const successfulAllowances = allowanceResults.filter(r => r.success);
+    const allSuccessful = [...successfulChanges, ...successfulAllowances];
+    if (allSuccessful.length > 0) {
+      const changeCategories = [...new Set(successfulChanges.map(c => c.field).filter(Boolean))];
+      if (successfulAllowances.length > 0) changeCategories.push('allowance_assignments');
+      const summaryParts = [];
+      if (successfulChanges.length > 0) {
+        summaryParts.push(successfulChanges.length === 1
+          ? `Changed ${successfulChanges[0].field} for ${successfulChanges[0].employee_name}`
+          : `Changed ${changeCategories.filter(c => c !== 'allowance_assignments').join(', ')} for ${successfulChanges.length} employees`);
+      }
+      if (successfulAllowances.length > 0) {
+        summaryParts.push(`Assigned allowances for ${successfulAllowances.length} employee(s)`);
+      }
+      const summary = summaryParts.join('; ');
 
       await pool.query(`
         INSERT INTO ai_change_logs (company_id, change_type, category, summary, changes, affected_employees, payroll_run_id, changed_by, changed_by_name)
@@ -431,8 +581,8 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
         companyId,
         changeCategories.join(', '),
         summary,
-        JSON.stringify(successfulChanges),
-        successfulChanges.length,
+        JSON.stringify(allSuccessful),
+        allSuccessful.length,
         run_id,
         req.adminId,
         req.adminName || 'Admin'
@@ -452,8 +602,10 @@ router.post('/apply', authenticateAdmin, async (req, res) => {
 
     res.json({
       success: true,
-      message: `Applied ${results.filter(r => r.success).length} of ${changes.length} changes`,
+      message: `Applied ${successfulChanges.length} of ${changes.length} changes` +
+        (allowance_assignments.length > 0 ? `, ${successfulAllowances.length} of ${allowance_assignments.length} allowance assignments` : ''),
       results,
+      allowance_results: allowanceResults.length > 0 ? allowanceResults : undefined,
       applied_changes: appliedChanges,
       updated_items: updatedItems.rows.map(item => ({
         id: item.id,
