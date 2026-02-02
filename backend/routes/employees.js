@@ -567,9 +567,9 @@ router.post('/', authenticateAdmin, async (req, res) => {
         default_bonus, default_incentive, hourly_rate, work_type,
         employment_type, probation_months, probation_end_date, probation_status,
         salary_before_confirmation, salary_after_confirmation, increment_amount,
-        company_id, profile_completed, password_hash, must_change_password
+        company_id, profile_completed, password_hash, must_change_password, employee_role
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48)
        RETURNING *`,
       [
         employee_id, toNullable(name), toNullable(email), toNullable(phone), formattedIC, id_type, toNullable(department_id), finalOutletId, toNullable(finalPosition), toNullable(position_id), join_date,
@@ -581,7 +581,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
         default_bonus || 0, default_incentive || 0, finalHourlyRate || 0, finalWorkType,
         empType, probMonths, probation_end_date, empType === 'confirmed' ? 'confirmed' : 'ongoing',
         toNullable(finalSalaryBefore), toNullable(finalSalaryAfter), toNullable(calcIncrement),
-        companyId, false, passwordHash, true
+        companyId, false, passwordHash, true, positionRole
       ]
     );
 

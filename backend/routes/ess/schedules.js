@@ -802,8 +802,8 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
   }
 
   // T+2 rule: Check if the date is at least 2 days in the future
-  // Managers, directors, and designated schedule managers are exempt
-  const isExemptFromT2 = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director' || (await isAAAliveIndoorSalesManager(req.employee));
+  // Only directors and admins are exempt; managers and supervisors must follow T+2
+  const isExemptFromT2 = req.employee.employee_role === 'director' || req.employee.employee_role === 'admin';
 
   if (!isExemptFromT2) {
     const scheduleDate = new Date(schedule_date);
@@ -942,8 +942,8 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
   const templatesMap = {};
   templatesResult.rows.forEach(t => { templatesMap[t.id] = t; });
 
-  // T+2 cutoff date - managers, directors, and designated schedule managers are exempt
-  const isManagerOrAbove = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director' || (await isAAAliveIndoorSalesManager(req.employee));
+  // T+2 cutoff date - only directors and admins are exempt
+  const isManagerOrAbove = req.employee.employee_role === 'director' || req.employee.employee_role === 'admin';
   const twoDaysFromNow = new Date();
   twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
   twoDaysFromNow.setHours(0, 0, 0, 0);
@@ -1121,8 +1121,8 @@ router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (r
   const schedule = existing.rows[0];
 
   // T+2 rule: Check if the date is at least 2 days in the future
-  // Managers, directors, and designated schedule managers are exempt
-  const isExemptFromT2 = req.employee.employee_role === 'manager' || req.employee.employee_role === 'director' || (await isAAAliveIndoorSalesManager(req.employee));
+  // Only directors and admins are exempt; managers and supervisors must follow T+2
+  const isExemptFromT2 = req.employee.employee_role === 'director' || req.employee.employee_role === 'admin';
 
   if (!isExemptFromT2) {
     const scheduleDate = new Date(schedule.schedule_date);
