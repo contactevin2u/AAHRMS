@@ -571,6 +571,7 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
 
     for (const outlet of outletsToCreate) {
       try {
+        await client.query(`SAVEPOINT outlet_${outlet.id}`);
         // Create individual payroll run for this outlet
         const { features, rates, period: periodConfig } = settings;
         const period = getPayrollPeriod(month, year, periodConfig);
@@ -829,6 +830,7 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
           total_net: totalNet
         });
       } catch (outletError) {
+        await client.query(`ROLLBACK TO SAVEPOINT outlet_${outlet.id}`);
         console.error(`Error creating payroll for outlet ${outlet.name}:`, outletError.message);
         skippedOutlets.push({ outlet_name: outlet.name, reason: outletError.message });
       }
@@ -990,6 +992,7 @@ router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
 
     for (const dept of deptsToCreate) {
       try {
+        await client.query(`SAVEPOINT dept_${dept.id}`);
         const runResult = await client.query(`
           INSERT INTO payroll_runs (
             month, year, status, notes, department_id, outlet_id, company_id,
@@ -1135,6 +1138,7 @@ router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
           employee_count: employeeCount, total_net: totalNet
         });
       } catch (deptError) {
+        await client.query(`ROLLBACK TO SAVEPOINT dept_${dept.id}`);
         console.error(`Error creating payroll for dept ${dept.name}:`, deptError.message);
         skippedDepts.push({ department_name: dept.name, reason: deptError.message });
       }

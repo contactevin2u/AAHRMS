@@ -42,7 +42,7 @@ DROP CONSTRAINT IF EXISTS unique_payroll_run_period;
 
 ALTER TABLE payroll_runs
 ADD CONSTRAINT unique_payroll_run_period
-UNIQUE NULLS NOT DISTINCT (company_id, month, year, department_id);
+UNIQUE NULLS NOT DISTINCT (company_id, month, year, department_id, outlet_id);
 
 COMMENT ON CONSTRAINT unique_payroll_run_period ON payroll_runs IS
 'Prevents duplicate payroll runs for the same company/month/year/department combination';
