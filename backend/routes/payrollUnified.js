@@ -1197,6 +1197,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Access denied: payroll run belongs to another company' });
     }
 
+    const run = runResult.rows[0];
     const itemsResult = await pool.query(`
       SELECT pi.*,
              e.employee_id as emp_code,
@@ -1204,20 +1205,26 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
              e.bank_name,
              e.bank_account_no,
              d.name as department_name,
-             eo.name as outlet_name
+             eo.name as outlet_name,
+             (SELECT COUNT(DISTINCT cr.work_date)
+              FROM clock_in_records cr
+              WHERE cr.employee_id = pi.employee_id
+                AND cr.work_date BETWEEN $2 AND $3
+                AND cr.status = 'completed'
+             ) as days_worked
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN outlets eo ON e.outlet_id = eo.id
       WHERE pi.payroll_run_id = $1
       ORDER BY eo.name NULLS FIRST, e.name
-    `, [id]);
+    `, [id, run.period_start_date, run.period_end_date]);
 
-    const settings = await getCompanySettings(runResult.rows[0].company_id);
+    const settings = await getCompanySettings(run.company_id);
     const workDaysPerMonth = settings.rates.standard_work_days || 22;
 
     res.json({
-      run: { ...runResult.rows[0], work_days_per_month: workDaysPerMonth },
+      run: { ...run, work_days_per_month: workDaysPerMonth },
       items: itemsResult.rows
     });
   } catch (error) {
@@ -2137,6 +2144,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
     const shortHours = parseFloat(updates.short_hours ?? item.short_hours) || 0;
     const shortHoursDeduction = parseFloat(updates.short_hours_deduction ?? item.short_hours_deduction) || 0;
+    const absentDays = parseFloat(updates.absent_days ?? item.absent_days) || 0;
+    const absentDayDeduction = parseFloat(updates.absent_day_deduction ?? item.absent_day_deduction) || 0;
 
     // Claims: Allow manual override similar to EPF/PCB
     const claimsAmount = updates.claims_override !== undefined && updates.claims_override !== null && updates.claims_override !== ''
@@ -2145,7 +2154,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
 
     // Gross salary
     const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
-                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction;
+                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
 
     // Statutory base
     let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
@@ -2215,6 +2224,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
         total_deductions = $23, net_pay = $24, employer_total_cost = $25,
         notes = $26, claims_amount = $27,
         short_hours = $29, short_hours_deduction = $30,
+        absent_days = $31, absent_day_deduction = $32,
         updated_at = NOW()
       WHERE id = $28
       RETURNING *
@@ -2232,7 +2242,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       pcb,
       totalDeductions, netPay, employerCost,
       updates.notes, claimsAmount, id,
-      shortHours, shortHoursDeduction
+      shortHours, shortHoursDeduction,
+      absentDays, absentDayDeduction
     ]);
 
     // Update run totals

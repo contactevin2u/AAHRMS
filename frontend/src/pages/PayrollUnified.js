@@ -597,6 +597,7 @@ function PayrollUnified() {
       bonus: item.bonus || 0, other_deductions: item.other_deductions || 0,
       deduction_remarks: item.deduction_remarks || '', notes: item.notes || '',
       short_hours: item.short_hours || 0, short_hours_deduction: item.short_hours_deduction || 0,
+      absent_days: item.absent_days || 0, absent_day_deduction: item.absent_day_deduction || 0,
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
       claims_override: '' // Empty means use calculated value, set value to override claims amount
@@ -1426,6 +1427,11 @@ function PayrollUnified() {
             <div className="modal large" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>Edit - {editingItem.employee_name}</h2>
+                {editingItem.days_worked != null && (
+                  <div style={{fontSize: '0.85rem', color: '#666', marginTop: 4}}>
+                    Days Worked: <strong>{editingItem.days_worked}</strong> / {selectedRun?.work_days_per_month || 22}
+                  </div>
+                )}
               </div>
               <form onSubmit={handleUpdateItem}>
                 <div className="modal-scroll-content">
@@ -1472,6 +1478,22 @@ function PayrollUnified() {
                     <div className="form-group">
                       <label>Short Hours Deduction</label>
                       <input type="number" step="0.01" value={itemForm.short_hours_deduction} onChange={(e) => setItemForm({ ...itemForm, short_hours_deduction: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Absent Days</label>
+                      <input type="number" step="0.5" value={itemForm.absent_days} onChange={(e) => {
+                        const days = parseFloat(e.target.value) || 0;
+                        const wd = selectedRun?.work_days_per_month || 22;
+                        const deduction = days > 0 ? Math.round((itemForm.basic_salary / wd) * days * 100) / 100 : 0;
+                        setItemForm({ ...itemForm, absent_days: days, absent_day_deduction: deduction });
+                      }} />
+                      {editingItem?.days_worked != null && <small style={{color: '#666', fontSize: '0.75rem'}}>{editingItem.days_worked} days worked / {selectedRun?.work_days_per_month || 22} standard</small>}
+                    </div>
+                    <div className="form-group">
+                      <label>Absent Day Deduction</label>
+                      <input type="number" step="0.01" value={itemForm.absent_day_deduction} onChange={(e) => setItemForm({ ...itemForm, absent_day_deduction: parseFloat(e.target.value) || 0 })} />
                     </div>
                   </div>
                   <div className="form-row">
