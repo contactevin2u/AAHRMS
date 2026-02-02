@@ -11,6 +11,17 @@ const pool = require('../../db');
 const API_URL = process.env.AAALIVE_API_URL || 'https://orderops-api-v1.onrender.com/_api/external';
 const API_KEY = process.env.AAALIVE_API_KEY;
 const AA_ALIVE_COMPANY_ID = 1;
+const OT_THRESHOLD = 540; // AA Alive: OT after 9 hours
+
+function calcWorkMinutes(clockIn, clockOut) {
+  if (!clockIn || !clockOut) return null;
+  const [ih, im] = clockIn.split(':').map(Number);
+  const [oh, om] = clockOut.split(':').map(Number);
+  let inMin = ih * 60 + im;
+  let outMin = oh * 60 + om;
+  if (outMin <= inMin) outMin += 24 * 60; // overnight
+  return outMin - inMin;
+}
 
 // Helper function to make HTTPS requests (compatible with all Node versions)
 function httpsGet(url, headers = {}) {
@@ -309,10 +320,19 @@ router.post('/sync', async (req, res) => {
 
           // Update if missing clock out - AA Alive uses single session (clock_in_1 → clock_out_1)
           if (clockOut && !existing.clock_out_1) {
+            const totalMin = calcWorkMinutes(existing.clock_in_1, clockOut);
+            const totalHrs = totalMin ? (totalMin / 60).toFixed(2) : null;
+            const otMin = totalMin ? Math.max(0, totalMin - OT_THRESHOLD) : 0;
+            const otHrs = (otMin / 60).toFixed(2);
+
             await client.query(`
-              UPDATE clock_in_records SET clock_out_1 = $1, status = 'completed', updated_at = NOW()
-              WHERE id = $2
-            `, [clockOut, existing.id]);
+              UPDATE clock_in_records SET
+                clock_out_1 = $1, address_out_1 = $2,
+                total_work_minutes = $3, total_work_hours = $4, total_hours = $4,
+                ot_minutes = $5, ot_hours = $6,
+                attendance_status = 'present', status = 'completed', updated_at = NOW()
+              WHERE id = $7
+            `, [clockOut, clockOutLocation || null, totalMin, totalHrs, otMin, otHrs, existing.id]);
 
             results.success.push({
               employee_id: employee.employee_id,
@@ -330,15 +350,20 @@ router.post('/sync', async (req, res) => {
         } else {
           // Create new record
           const notes = isOutstation ? 'Synced from OrderOps (Outstation)' : 'Synced from OrderOps';
+          const totalMin = calcWorkMinutes(clockIn, clockOut);
+          const totalHrs = totalMin ? (totalMin / 60).toFixed(2) : (totalWorkingHours || null);
+          const otMin = totalMin ? Math.max(0, totalMin - OT_THRESHOLD) : 0;
+          const otHrs = (otMin / 60).toFixed(2);
 
           await client.query(`
             INSERT INTO clock_in_records (
               employee_id, company_id, work_date,
               clock_in_1, clock_out_1,
               address_in_1, address_out_1,
-              total_work_hours,
-              notes, status, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+              total_work_minutes, total_work_hours, total_hours,
+              ot_minutes, ot_hours,
+              attendance_status, notes, status, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $10, $11, 'present', $12, $13, NOW(), NOW())
           `, [
             employee.id,
             AA_ALIVE_COMPANY_ID,
@@ -347,7 +372,10 @@ router.post('/sync', async (req, res) => {
             clockOut || null,
             clockInLocation || null,
             clockOutLocation || null,
-            totalWorkingHours || null,
+            totalMin,
+            totalHrs,
+            otMin,
+            otHrs,
             notes,
             shiftStatus === 'COMPLETED' ? 'completed' : 'clocked_in'
           ]);
