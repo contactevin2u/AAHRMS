@@ -1592,6 +1592,52 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
+      // OT rounding: min 1 hour, round down to nearest 0.5h
+      if (otHours > 0 && otHours < 1) {
+        otHours = 0;
+        otAmount = 0;
+      } else if (otHours >= 1) {
+        otHours = Math.floor(otHours * 2) / 2;
+        // Recalculate OT amount with rounded hours
+        if (basicSalary > 0 && otHours > 0) {
+          const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+          otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+        }
+      }
+
+      // Short hours calculation: compare actual hours worked vs expected
+      let shortHours = 0;
+      let shortHoursDeduction = 0;
+      if (!isPartTime && basicSalary > 0) {
+        try {
+          const expectedHoursPerDay = rates.standard_work_hours || 8;
+          const clockInRecords = await pool.query(`
+            SELECT date, clock_in, clock_out,
+                   EXTRACT(EPOCH FROM (clock_out - clock_in)) / 3600.0 as hours_worked
+            FROM clock_in_records
+            WHERE employee_id = $1 AND company_id = $2
+              AND date >= $3 AND date <= $4
+              AND clock_in IS NOT NULL AND clock_out IS NOT NULL
+              AND status != 'absent'
+          `, [emp.id, companyId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
+
+          for (const rec of clockInRecords.rows) {
+            const hoursWorked = parseFloat(rec.hours_worked) || 0;
+            // Subtract lunch break (1 hour) if worked more than 4 hours
+            const netHours = hoursWorked > 4 ? hoursWorked - 1 : hoursWorked;
+            const deficit = Math.max(0, expectedHoursPerDay - netHours);
+            shortHours += deficit;
+          }
+          shortHours = Math.round(shortHours * 100) / 100;
+          if (shortHours > 0) {
+            const hourlyRate = basicSalary / workingDays / expectedHoursPerDay;
+            shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+          }
+        } catch (e) {
+          console.warn(`Short hours calculation failed for ${emp.name}:`, e.message);
+        }
+      }
+
       // PH pay for full-time (skip for part-time - they get 2x hourly rate on PH already)
       if (features.auto_ph_pay && !isPartTime) {
         try {
@@ -1656,7 +1702,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       // Calculate totals
       const totalAllowances = fixedAllowance + flexAllowance;
       const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount;
-      const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction);
+      const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction);
 
       // Statutory base calculation
       let statutoryBase = basicSalary + commissionAmount;
@@ -1729,6 +1775,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           basic_salary, fixed_allowance, commission_amount, claims_amount,
           ot_hours, ot_amount, ph_days_worked, ph_pay,
           unpaid_leave_days, unpaid_leave_deduction, advance_deduction,
+          short_hours, short_hours_deduction,
           gross_salary, statutory_base,
           epf_employee, epf_employer,
           epf_on_normal, epf_on_additional,
@@ -1739,12 +1786,13 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           sales_amount, salary_calculation_method,
           ytd_gross, ytd_epf, ytd_pcb,
           prev_month_net, variance_amount, variance_percent
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
       `, [
         runId, emp.id,
         basicSalary, totalAllowances, commissionAmount, claimsAmount,
         otHours, otAmount, phDaysWorked, phPay,
         unpaidDays, unpaidDeduction, advanceDeduction,
+        shortHours, shortHoursDeduction,
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer,
         epfOnNormal, epfOnAdditional,
@@ -2083,6 +2131,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const bonus = parseFloat(updates.bonus ?? item.bonus) || 0;
     const otherDeductions = parseFloat(updates.other_deductions ?? item.other_deductions) || 0;
     const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
+    const shortHours = parseFloat(updates.short_hours ?? item.short_hours) || 0;
+    const shortHoursDeduction = parseFloat(updates.short_hours_deduction ?? item.short_hours_deduction) || 0;
 
     // Claims: Allow manual override similar to EPF/PCB
     const claimsAmount = updates.claims_override !== undefined && updates.claims_override !== null && updates.claims_override !== ''
@@ -2091,7 +2141,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
 
     // Gross salary
     const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
-                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction;
+                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction;
 
     // Statutory base
     let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
@@ -2159,7 +2209,9 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
         eis_employee = $20, eis_employer = $21,
         pcb = $22,
         total_deductions = $23, net_pay = $24, employer_total_cost = $25,
-        notes = $26, claims_amount = $27, updated_at = NOW()
+        notes = $26, claims_amount = $27,
+        short_hours = $29, short_hours_deduction = $30,
+        updated_at = NOW()
       WHERE id = $28
       RETURNING *
     `, [
@@ -2175,7 +2227,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       eisEmployee, eisEmployer,
       pcb,
       totalDeductions, netPay, employerCost,
-      updates.notes, claimsAmount, id
+      updates.notes, claimsAmount, id,
+      shortHours, shortHoursDeduction
     ]);
 
     // Update run totals
@@ -2314,6 +2367,19 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
       otAmount = fixedOT;
     }
 
+    // OT rounding: min 1 hour, round down to nearest 0.5h
+    if (otHours > 0 && otHours < 1) {
+      otHours = 0;
+      otAmount = 0;
+    } else if (otHours >= 1) {
+      otHours = Math.floor(otHours * 2) / 2;
+      const basicSalaryForOT = parseFloat(item.basic_salary) || 0;
+      if (basicSalaryForOT > 0 && otHours > 0) {
+        const hourlyRate = basicSalaryForOT / (rates.standard_work_days || 22) / (rates.standard_work_hours || 8);
+        otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+      }
+    }
+
     // Get current values
     const basicSalary = parseFloat(item.basic_salary) || 0;
     const fixedAllowance = parseFloat(item.fixed_allowance) || 0;
@@ -2327,10 +2393,11 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const advanceDeduction = parseFloat(item.advance_deduction) || 0;
     const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
     const otherDeductions = parseFloat(item.other_deductions) || 0;
+    const shortHoursDeduction = parseFloat(item.short_hours_deduction) || 0;
 
     // Calculate gross
     const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
-                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction;
+                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction;
 
     // Statutory base
     let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
@@ -2458,7 +2525,8 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const itemData = await pool.query(`
           SELECT pi.*, pr.month, pr.year, pr.period_start_date, pr.period_end_date,
                  e.id as emp_id, e.department_id, e.fixed_ot_amount,
-                 e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count
+                 e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
+                 e.residency_status, e.allowance_pcb
           FROM payroll_items pi
           JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
           JOIN employees e ON pi.employee_id = e.id
@@ -2467,7 +2535,7 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
 
         const i = itemData.rows[0];
         const settings = await getCompanySettings(companyId);
-        const { statutory, features } = settings;
+        const { rates, statutory, features } = settings;
 
         // Recalculate OT
         let otHours = 0, otAmount = 0;
@@ -2488,6 +2556,19 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
           otAmount = fixedOT;
         }
 
+        // OT rounding: min 1 hour, round down to nearest 0.5h
+        if (otHours > 0 && otHours < 1) {
+          otHours = 0;
+          otAmount = 0;
+        } else if (otHours >= 1) {
+          otHours = Math.floor(otHours * 2) / 2;
+          const basicForOT = parseFloat(i.basic_salary) || 0;
+          if (basicForOT > 0 && otHours > 0) {
+            const hourlyRate = basicForOT / (rates.standard_work_days || 22) / (rates.standard_work_hours || 8);
+            otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+          }
+        }
+
         // Calculate values
         const basicSalary = parseFloat(i.basic_salary) || 0;
         const fixedAllowance = parseFloat(i.fixed_allowance) || 0;
@@ -2501,9 +2582,10 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const advanceDeduction = parseFloat(i.advance_deduction) || 0;
         const unpaidDeduction = parseFloat(i.unpaid_leave_deduction) || 0;
         const otherDeductions = parseFloat(i.other_deductions) || 0;
+        const shortHoursDeduction = parseFloat(i.short_hours_deduction) || 0;
 
         const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
-                          commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction;
+                          commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction;
 
         let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
         if (statutory.statutory_on_ot) statutoryBase += otAmount;
@@ -2864,7 +2946,9 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
         eis_employee: parseFloat(item.eis_employee) || 0,
         pcb: parseFloat(item.pcb) || 0,
         advance_deduction: parseFloat(item.advance_deduction) || 0,
-        other_deductions: parseFloat(item.other_deductions) || 0
+        other_deductions: parseFloat(item.other_deductions) || 0,
+        short_hours: parseFloat(item.short_hours) || 0,
+        short_hours_deduction: parseFloat(item.short_hours_deduction) || 0
       },
       // EPF/PCB breakdown for MyTax entry (Saraan Biasa vs Saraan Tambahan)
       mytax_breakdown: {
