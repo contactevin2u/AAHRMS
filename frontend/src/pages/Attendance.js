@@ -65,6 +65,18 @@ const Attendance = () => {
   const isAAAlive = adminInfo.company_id === 1;
 
   const [syncing, setSyncing] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.employee-search-group')) {
+        setShowEmployeeDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -710,14 +722,69 @@ const Attendance = () => {
           </div>
         )}
 
-        <div className="filter-group">
+        <div className="filter-group employee-search-group">
           <label>Employee</label>
-          <select name="employee_id" value={filters.employee_id} onChange={handleFilterChange}>
-            <option value="">All Employees</option>
-            {employees.map(e => (
-              <option key={e.id} value={e.id}>{e.name}</option>
-            ))}
-          </select>
+          <div className="employee-search-wrapper">
+            <input
+              type="text"
+              className="employee-search-input"
+              placeholder="Search employee..."
+              value={employeeSearch}
+              onChange={(e) => {
+                setEmployeeSearch(e.target.value);
+                setShowEmployeeDropdown(true);
+                if (!e.target.value) {
+                  setFilters(prev => ({ ...prev, employee_id: '' }));
+                }
+              }}
+              onFocus={() => setShowEmployeeDropdown(true)}
+            />
+            {filters.employee_id && (
+              <button
+                className="employee-search-clear"
+                onClick={() => {
+                  setEmployeeSearch('');
+                  setFilters(prev => ({ ...prev, employee_id: '' }));
+                  setShowEmployeeDropdown(false);
+                }}
+              >
+                &times;
+              </button>
+            )}
+            {showEmployeeDropdown && (
+              <div className="employee-search-dropdown">
+                <div
+                  className="employee-search-option"
+                  onClick={() => {
+                    setEmployeeSearch('');
+                    setFilters(prev => ({ ...prev, employee_id: '' }));
+                    setShowEmployeeDropdown(false);
+                  }}
+                >
+                  All Employees
+                </div>
+                {employees
+                  .filter(e => {
+                    const q = employeeSearch.toLowerCase();
+                    return !q || e.name?.toLowerCase().includes(q) || e.employee_id?.toLowerCase().includes(q);
+                  })
+                  .map(e => (
+                    <div
+                      key={e.id}
+                      className={`employee-search-option ${filters.employee_id === String(e.id) ? 'selected' : ''}`}
+                      onClick={() => {
+                        setFilters(prev => ({ ...prev, employee_id: String(e.id) }));
+                        setEmployeeSearch(e.employee_id ? `${e.employee_id} - ${e.name}` : e.name);
+                        setShowEmployeeDropdown(false);
+                      }}
+                    >
+                      {e.employee_id ? `${e.employee_id} - ` : ''}{e.name}
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
         </div>
 
         {selectedRecords.length > 0 && (
@@ -2036,6 +2103,63 @@ const Attendance = () => {
         }
         .btn-primary:hover {
           background: #1565c0;
+        }
+        /* Employee Search */
+        .employee-search-group {
+          position: relative;
+        }
+        .employee-search-wrapper {
+          position: relative;
+        }
+        .employee-search-input {
+          width: 180px;
+          padding: 8px 28px 8px 10px;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          font-size: 13px;
+        }
+        .employee-search-clear {
+          position: absolute;
+          right: 6px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: none;
+          border: none;
+          font-size: 18px;
+          color: #999;
+          cursor: pointer;
+          padding: 0 4px;
+          line-height: 1;
+        }
+        .employee-search-clear:hover {
+          color: #333;
+        }
+        .employee-search-dropdown {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          min-width: 220px;
+          max-height: 250px;
+          overflow-y: auto;
+          background: white;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          z-index: 100;
+          margin-top: 2px;
+        }
+        .employee-search-option {
+          padding: 8px 12px;
+          font-size: 13px;
+          cursor: pointer;
+        }
+        .employee-search-option:hover {
+          background: #e3f2fd;
+        }
+        .employee-search-option.selected {
+          background: #bbdefb;
+          font-weight: 500;
         }
       `}</style>
     </div>
