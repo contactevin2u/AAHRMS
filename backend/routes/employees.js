@@ -293,7 +293,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
 
     if (search) {
       paramCount++;
-      query += ` AND (e.name ILIKE $${paramCount} OR e.employee_id ILIKE $${paramCount})`;
+      query += ` AND (e.name ILIKE $${paramCount} OR e.employee_id ILIKE $${paramCount} OR e.ic_number ILIKE $${paramCount} OR e.position ILIKE $${paramCount} OR e.employee_role ILIKE $${paramCount} OR e.phone ILIKE $${paramCount} OR o.name ILIKE $${paramCount} OR p.name ILIKE $${paramCount} OR d.name ILIKE $${paramCount})`;
       params.push(`%${search}%`);
     }
 
