@@ -589,6 +589,30 @@
   width: 100%;
 }
 
+.history-filter {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.history-filter-select {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fff;
+  color: #1e293b;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.history-filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
 .history-list {
   display: flex;
   flex-direction: column;

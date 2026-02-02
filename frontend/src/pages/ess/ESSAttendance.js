@@ -66,6 +66,8 @@ function ESSAttendanceContent() {
   // History state
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // Team state
   const [teamAttendance, setTeamAttendance] = useState([]);
@@ -165,12 +167,12 @@ function ESSAttendanceContent() {
     }
   }, [hasClockInAccess]);
 
-  // Fetch history when history tab is active
+  // Fetch history when history tab is active or month/year changes
   useEffect(() => {
     if (activeTab === 'history') {
-      fetchHistory();
+      fetchHistory(selectedMonth, selectedYear);
     }
-  }, [activeTab]);
+  }, [activeTab, selectedMonth, selectedYear]);
 
   // Fetch team data when team tab is active
   useEffect(() => {
@@ -229,14 +231,12 @@ function ESSAttendanceContent() {
     };
   }, [stopCamera]);
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (month, year) => {
     setHistoryLoading(true);
     try {
-      const currentDate = new Date();
-      const res = await essApi.getClockInHistory({
-        month: currentDate.getMonth() + 1,
-        year: currentDate.getFullYear()
-      });
+      const m = month || selectedMonth;
+      const y = year || selectedYear;
+      const res = await essApi.getClockInHistory({ month: m, year: y });
       setHistory(res.data.records || []);
     } catch (error) {
       console.error('Error fetching history:', error);
@@ -856,6 +856,41 @@ function ESSAttendanceContent() {
         {/* History Tab */}
         {activeTab === 'history' && (
           <div className="history-section">
+            {/* Month/Year Filter */}
+            <div className="history-filter">
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                className="history-filter-select"
+              >
+                {[
+                  { v: 1, en: 'January', ms: 'Januari' },
+                  { v: 2, en: 'February', ms: 'Februari' },
+                  { v: 3, en: 'March', ms: 'Mac' },
+                  { v: 4, en: 'April', ms: 'April' },
+                  { v: 5, en: 'May', ms: 'Mei' },
+                  { v: 6, en: 'June', ms: 'Jun' },
+                  { v: 7, en: 'July', ms: 'Julai' },
+                  { v: 8, en: 'August', ms: 'Ogos' },
+                  { v: 9, en: 'September', ms: 'September' },
+                  { v: 10, en: 'October', ms: 'Oktober' },
+                  { v: 11, en: 'November', ms: 'November' },
+                  { v: 12, en: 'December', ms: 'Disember' }
+                ].map(m => (
+                  <option key={m.v} value={m.v}>{language === 'ms' ? m.ms : m.en}</option>
+                ))}
+              </select>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="history-filter-select"
+              >
+                {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
             {historyLoading ? (
               <div className="ess-loading">
                 <div className="spinner"></div>
@@ -868,9 +903,9 @@ function ESSAttendanceContent() {
               </div>
             ) : (
               <>
-                {/* Monthly Summary for All Employees */}
+                {/* Monthly Summary */}
                 <div className="driver-summary">
-                    <h3>{language === 'ms' ? 'Ringkasan Bulan Ini' : 'This Month Summary'}</h3>
+                    <h3>{language === 'ms' ? 'Ringkasan Bulan' : 'Monthly Summary'}</h3>
                     <div className="summary-cards">
                       {/* For AA Alive drivers: Only show total OT (no approval needed) */}
                       {isAAAliveDriverOnly ? (
