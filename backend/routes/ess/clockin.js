@@ -479,7 +479,8 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   if (openYesterdayShift) {
     // Check if it's past the cutoff time (1:30 AM)
     // If so, auto clock-out the shift instead of letting them continue
-    if (isPastCutoff()) {
+    // AA Alive employees are exempt from cutoff - they can continue their shift
+    if (!isAAAlive && isPastCutoff()) {
       console.log(`Auto clock-out triggered for employee ${employeeId}: past cutoff time`);
       const autoClosedRecord = await autoClockOutShift(openYesterdayShift);
 
