@@ -437,8 +437,13 @@ router.post('/', authenticateAdmin, async (req, res) => {
     if (!ic_number) {
       return res.status(400).json({ error: 'IC Number is required (for employee login)' });
     }
+    // Managers/supervisors use multi-outlet assignment, so outlet_id can be empty for them
     if (!toNullable(department_id) && !toNullable(outlet_id)) {
-      return res.status(400).json({ error: 'Department or Outlet is required' });
+      // Check if position is manager/supervisor - they don't need outlet_id
+      const isHighLevel = await isHighLevelPosition(toNullable(position_id), position, null);
+      if (!isHighLevel) {
+        return res.status(400).json({ error: 'Department or Outlet is required' });
+      }
     }
     if (!join_date) {
       return res.status(400).json({ error: 'Join Date is required' });
