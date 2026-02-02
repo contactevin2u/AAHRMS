@@ -869,9 +869,10 @@ router.post('/:id/reject', authenticateEmployee, asyncHandler(async (req, res) =
   }
 
   // Update leave request to rejected
+  // Use manager_id (references employees) instead of approver_id (references admin_users)
   await pool.query(
     `UPDATE leave_requests
-     SET status = 'rejected', rejection_reason = $1, approver_id = $2, approved_at = NOW()
+     SET status = 'rejected', rejection_reason = $1, manager_id = $2, manager_approved = false, manager_approved_at = NOW()
      WHERE id = $3`,
     [reason, req.employee.id, id]
   );
