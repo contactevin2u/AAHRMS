@@ -539,7 +539,7 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
     // Get all active outlets for this company
     const outletsResult = await pool.query(`
       SELECT id, name FROM outlets
-      WHERE company_id = $1 AND status = 'active'
+      WHERE company_id = $1
       ORDER BY name
     `, [companyId]);
 
