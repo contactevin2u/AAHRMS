@@ -91,7 +91,7 @@ const DEFAULT_PAYROLL_SETTINGS = {
  */
 async function getCompanySettings(companyId) {
   const result = await pool.query(
-    'SELECT payroll_settings, settings, grouping_type FROM companies WHERE id = $1',
+    'SELECT payroll_settings, settings, grouping_type, payroll_config FROM companies WHERE id = $1',
     [companyId]
   );
 
@@ -102,25 +102,40 @@ async function getCompanySettings(companyId) {
   const payrollSettings = result.rows[0].payroll_settings || {};
   const legacySettings = result.rows[0].settings || {};
   const groupingType = result.rows[0].grouping_type;
+  const payrollConfig = result.rows[0].payroll_config || {};
 
-  // Merge with defaults
+  // Merge with defaults — payroll_config takes highest priority
   return {
-    features: { ...DEFAULT_PAYROLL_SETTINGS.features, ...payrollSettings.features },
+    features: { ...DEFAULT_PAYROLL_SETTINGS.features, ...payrollSettings.features,
+      ot_requires_approval: payrollConfig.ot_requires_approval ?? payrollSettings.features?.ot_requires_approval ?? false
+    },
     rates: {
       ...DEFAULT_PAYROLL_SETTINGS.rates,
       ...payrollSettings.rates,
-      // Legacy settings override
-      indoor_sales_basic: legacySettings.indoor_sales_basic || payrollSettings.rates?.indoor_sales_basic || 4000,
-      indoor_sales_commission_rate: legacySettings.indoor_sales_commission_rate || payrollSettings.rates?.indoor_sales_commission_rate || 6
+      // Legacy settings override, then payroll_config overrides everything
+      indoor_sales_basic: payrollConfig.indoor_sales_basic ?? legacySettings.indoor_sales_basic ?? payrollSettings.rates?.indoor_sales_basic ?? 4000,
+      indoor_sales_commission_rate: payrollConfig.indoor_sales_commission_rate ?? legacySettings.indoor_sales_commission_rate ?? payrollSettings.rates?.indoor_sales_commission_rate ?? 6,
+      standard_work_hours: payrollConfig.work_hours_per_day ?? payrollSettings.rates?.standard_work_hours ?? 8,
+      standard_work_days: payrollConfig.work_days_per_month ?? payrollSettings.rates?.standard_work_days ?? 22,
+      part_time_hourly_rate: payrollConfig.part_time_hourly_rate ?? 8.72,
+      part_time_ph_multiplier: payrollConfig.part_time_ph_multiplier ?? 2.0,
+      outstation_per_day: payrollConfig.outstation_per_day ?? 100,
+      outstation_min_distance_km: payrollConfig.outstation_min_distance_km ?? 180
     },
     period: { ...DEFAULT_PAYROLL_SETTINGS.period, ...payrollSettings.period },
-    statutory: { ...DEFAULT_PAYROLL_SETTINGS.statutory, ...payrollSettings.statutory },
+    statutory: { ...DEFAULT_PAYROLL_SETTINGS.statutory, ...payrollSettings.statutory,
+      statutory_on_allowance: payrollConfig.statutory_on_allowance ?? payrollSettings.statutory?.statutory_on_allowance ?? false,
+      statutory_on_ot: payrollConfig.statutory_on_ot ?? payrollSettings.statutory?.statutory_on_ot ?? false,
+      statutory_on_ph_pay: payrollConfig.statutory_on_ph_pay ?? payrollSettings.statutory?.statutory_on_ph_pay ?? false,
+      statutory_on_incentive: payrollConfig.statutory_on_incentive ?? payrollSettings.statutory?.statutory_on_incentive ?? false,
+      statutory_on_commission: payrollConfig.statutory_on_commission ?? true
+    },
     groupingType // 'department' or 'outlet'
   };
 }
 
 /**
- * Part-time hourly rate (RM)
+ * Part-time hourly rate defaults (RM) - overridden by payroll_config
  */
 const PART_TIME_HOURLY_RATE = 8.72;
 const PART_TIME_PH_MULTIPLIER = 2.0; // Public holiday rate is 2x
@@ -131,8 +146,9 @@ const PART_TIME_PH_MULTIPLIER = 2.0; // Public holiday rate is 2x
  * IMPORTANT: Only counts hours from days where employee has a schedule
  * No schedule = no pay (even if they clocked in)
  * Returns: { totalMinutes, totalHours, normalHours, phHours, grossSalary, normalPay, phPay }
+ * @param {object} ratesOverride - optional { part_time_hourly_rate, part_time_ph_multiplier } from company config
  */
-async function calculatePartTimeHours(employeeId, periodStart, periodEnd, companyId) {
+async function calculatePartTimeHours(employeeId, periodStart, periodEnd, companyId, ratesOverride = {}) {
   // Get clock-in records ONLY for days with a schedule
   // No schedule = no pay (considered absent even if clocked in)
   const result = await pool.query(`
@@ -176,8 +192,10 @@ async function calculatePartTimeHours(employeeId, periodStart, periodEnd, compan
   const phHours = phMinutes / 60;
 
   // Calculate pay: normal rate for normal days, 2x rate for PH
-  const normalPay = Math.round(normalHours * PART_TIME_HOURLY_RATE * 100) / 100;
-  const phPay = Math.round(phHours * PART_TIME_HOURLY_RATE * PART_TIME_PH_MULTIPLIER * 100) / 100;
+  const hourlyRate = ratesOverride.part_time_hourly_rate ?? PART_TIME_HOURLY_RATE;
+  const phMultiplier = ratesOverride.part_time_ph_multiplier ?? PART_TIME_PH_MULTIPLIER;
+  const normalPay = Math.round(normalHours * hourlyRate * 100) / 100;
+  const phPay = Math.round(phHours * hourlyRate * phMultiplier * 100) / 100;
   const grossSalary = Math.round((normalPay + phPay) * 100) / 100;
 
   return {
@@ -1184,7 +1202,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       let basicSalary = prevPayroll?.basic_salary || parseFloat(emp.basic_salary) || 0;
       let fixedAllowance = prevPayroll?.fixed_allowance || parseFloat(emp.fixed_allowance) || 0;
 
-      // Part-time employee: salary = total work hours × RM 8.72 (2x on public holidays)
+      // Part-time employee: salary = total work hours × hourly rate (configurable, default RM 8.72)
       // Part-time employees don't get fixed salary, allowances, or leave
       // Check both work_type and employment_type for part-time status
       let partTimeData = null;
@@ -1194,7 +1212,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           emp.id,
           period.start.toISOString().split('T')[0],
           period.end.toISOString().split('T')[0],
-          companyId
+          companyId,
+          rates
         );
         basicSalary = partTimeData.grossSalary;
         fixedAllowance = 0; // Part-time no fixed allowance

@@ -38,6 +38,7 @@ import IndoorSalesSchedule from './pages/IndoorSalesSchedule';
 import IndoorSalesCommission from './pages/IndoorSalesCommission';
 import PublicHolidays from './pages/PublicHolidays';
 import OutstationAllowance from './pages/OutstationAllowance';
+import PayrollSettings from './pages/PayrollSettings';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -346,6 +347,14 @@ function App() {
           element={
             <ProtectedRoute>
               <OutstationAllowance />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/payroll-settings"
+          element={
+            <ProtectedRoute>
+              <PayrollSettings />
             </ProtectedRoute>
           }
         />

@@ -113,7 +113,7 @@ function Layout({ children }) {
     const path = location.pathname;
     if (path.includes('/employees') || path.includes('/leave') || path.includes('/claims') || path.includes('/attendance') || path.includes('/schedules')) {
       setExpandedSection('people');
-    } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales') || path.includes('/payroll-guide') || path.includes('/ai-change-logs')) {
+    } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales') || path.includes('/payroll-guide') || path.includes('/ai-change-logs') || path.includes('/payroll-settings')) {
       setExpandedSection('payroll');
     } else if (path.includes('/resignations') || path.includes('/letters') || path.includes('/departments') || path.includes('/feedback') || path.includes('/benefits') || path.includes('/public-holidays')) {
       setExpandedSection('hr');
@@ -293,6 +293,9 @@ function Layout({ children }) {
                     Sales Entry
                   </NavLink>
                 )}
+                <NavLink to="/admin/payroll-settings" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Payroll Settings
+                </NavLink>
               </div>
             )}
           </div>

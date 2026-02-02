@@ -7,6 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const https = require('https');
+const pool = require('../../db');
 
 const API_BASE = process.env.ORDEROPS_API_URL || 'https://orderops-api-v1.onrender.com/_api/external/hrms';
 const API_KEY = process.env.ORDEROPS_API_KEY || 'aahrms-orderops-integration-key';
@@ -16,8 +17,9 @@ const WAREHOUSES = {
   KOTA_KINABALU: { lat: 5.9804, lng: 116.0735 }
 };
 
-const ALLOWANCE_PER_DAY = 100;
-const MIN_DISTANCE_KM = 180;
+// Defaults - can be overridden by company payroll_config per request
+const DEFAULT_ALLOWANCE_PER_DAY = 100;
+const DEFAULT_MIN_DISTANCE_KM = 180;
 const OVERNIGHT_TOLERANCE_KM = 0.5;
 const MIN_DELIVERIES_DAY2 = 3;
 
@@ -99,6 +101,19 @@ router.get('/report', async (req, res) => {
       return res.status(400).json({ error: 'start_date and end_date are required (YYYY-MM-DD)' });
     }
 
+    // Read outstation config from company payroll_config (AA Alive = company 1)
+    let allowancePerDay = DEFAULT_ALLOWANCE_PER_DAY;
+    let minDistanceKm = DEFAULT_MIN_DISTANCE_KM;
+    const companyId = req.companyId || 1;
+    try {
+      const cfgResult = await pool.query('SELECT payroll_config FROM companies WHERE id = $1', [companyId]);
+      if (cfgResult.rows.length > 0 && cfgResult.rows[0].payroll_config) {
+        const cfg = cfgResult.rows[0].payroll_config;
+        if (cfg.outstation_per_day) allowancePerDay = cfg.outstation_per_day;
+        if (cfg.outstation_min_distance_km) minDistanceKm = cfg.outstation_min_distance_km;
+      }
+    } catch (e) { /* use defaults */ }
+
     // Fetch shifts from OrderOps
     const shiftParams = { start_date, end_date };
     if (driver_id) shiftParams.driver_id = driver_id;
@@ -153,7 +168,7 @@ router.get('/report', async (req, res) => {
 
         // 1. Distance check: clock_out must be >180km from warehouse
         const distKm = haversineKm(warehouse.lat, warehouse.lng, day1ClockOutLat, day1ClockOutLng);
-        if (distKm < MIN_DISTANCE_KM) continue;
+        if (distKm < minDistanceKm) continue;
 
         // 2. Location check: is_outstation flag AND outside state bounds
         const day1Outstation = day1.is_outstation === true || day1.is_outstation === 'true';
@@ -191,7 +206,7 @@ router.get('/report', async (req, res) => {
           clock_out_location: day1.clock_out_location || day1.location || 'Unknown',
           clock_in_location: day2.clock_in_location || day2.location || 'Unknown',
           orders_delivered_day2: ordersDay2,
-          allowance: ALLOWANCE_PER_DAY
+          allowance: allowancePerDay
         });
       }
 
@@ -201,7 +216,7 @@ router.get('/report', async (req, res) => {
           driver_name: driver.driver_name,
           base_warehouse: driver.base_warehouse,
           qualifying_days: qualifyingDays,
-          total_allowance: qualifyingDays.length * ALLOWANCE_PER_DAY
+          total_allowance: qualifyingDays.length * allowancePerDay
         });
       }
     }

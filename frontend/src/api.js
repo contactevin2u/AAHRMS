@@ -747,6 +747,25 @@ export const essApi = {
   managerQuickAddEmployee: (data) => api.post('/ess/manager-overview/quick-add', data, essApiConfig),
 };
 
+// Payroll Config (Admin Settings Page)
+export const payrollConfigApi = {
+  getConfig: () => api.get('/admin/payroll-config'),
+  updateConfig: (data) => api.put('/admin/payroll-config', data),
+  getOTRules: () => api.get('/admin/payroll-config/ot-rules'),
+  createOTRule: (data) => api.post('/admin/payroll-config/ot-rules', data),
+  updateOTRule: (id, data) => api.put(`/admin/payroll-config/ot-rules/${id}`, data),
+  deleteOTRule: (id) => api.delete(`/admin/payroll-config/ot-rules/${id}`),
+  getEmployeeOverrides: (params) => api.get('/admin/payroll-config/employee-overrides', { params }),
+  updateEmployeeOverride: (id, data) => api.put(`/admin/payroll-config/employee-overrides/${id}`, data),
+  bulkUpdateOverrides: (employee_ids, updates) => api.put('/admin/payroll-config/employee-overrides/bulk', { employee_ids, updates }),
+  getEarningTypes: () => api.get('/admin/payroll-config/earning-types'),
+  updateAllowanceTaxable: (id, is_taxable) => api.patch(`/admin/payroll-config/allowance-types/${id}/taxable`, { is_taxable }),
+  updateCommissionTaxable: (id, is_taxable) => api.patch(`/admin/payroll-config/commission-types/${id}/taxable`, { is_taxable }),
+  getAutomation: () => api.get('/admin/payroll-config/automation'),
+  updateAutomation: (data) => api.put('/admin/payroll-config/automation', data),
+  getStatutoryReference: () => api.get('/admin/payroll-config/statutory-reference'),
+};
+
 export const analyticsApi = {
   getPayrollOverview: () => api.get('/analytics/payroll-overview'),
   getDepartmentBreakdown: () => api.get('/analytics/department-breakdown'),
