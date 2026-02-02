@@ -147,8 +147,8 @@ const calculateEPF = (grossSalary, age = 30, contributionType = 'normal', employ
   };
 };
 
-// SOCSO Contribution Table 2024 (Effective October 2024)
-// Ceiling increased from RM5,000 to RM6,000
+// SOCSO Contribution Table
+// Ceiling: RM5,000
 // Category 1: Employment Injury + Invalidity (age < 60)
 // Category 2: Employment Injury only (age >= 60)
 // Source: https://payroll.my/payroll-software/socso-contribution-table
@@ -225,10 +225,10 @@ const calculateSOCSO = (grossSalary, age = 30) => {
     return { employee: 0, employer: 0 };
   }
 
-  // SOCSO ceiling is RM6000 (effective October 2024)
-  if (grossSalary > 6000) {
-    // Max contribution for salary > RM6000
-    return { employee: 29.75, employer: 104.15 };
+  // SOCSO ceiling is RM5000
+  if (grossSalary > 5000) {
+    // Max contribution for salary > RM5000
+    return { employee: 24.75, employer: 86.65 };
   }
 
   const bracket = SOCSO_TABLE.find(b => grossSalary >= b.min && grossSalary <= b.max);
@@ -248,8 +248,8 @@ const calculateSOCSO = (grossSalary, age = 30) => {
   };
 };
 
-// EIS (Employment Insurance System) Contribution Table 2024
-// Based on official PERKESO EIS contribution table
+// EIS (Employment Insurance System) Contribution Table
+// Ceiling: RM5,000
 const EIS_TABLE = [
   { min: 0, max: 30, ee: 0.05, er: 0.05 },
   { min: 30.01, max: 50, ee: 0.10, er: 0.10 },
@@ -318,7 +318,7 @@ const EIS_TABLE = [
 ];
 
 // EIS (Employment Insurance System)
-// Uses contribution table, ceiling RM6000 (effective October 2024)
+// Uses contribution table, ceiling RM5000
 const calculateEIS = (grossSalary, age = 30) => {
   // No contribution if salary is zero or negative
   if (!grossSalary || grossSalary <= 0) {
@@ -330,10 +330,10 @@ const calculateEIS = (grossSalary, age = 30) => {
     return { employee: 0, employer: 0 };
   }
 
-  // EIS ceiling is RM6000 (effective October 2024)
-  if (grossSalary > 6000) {
-    // Max contribution for salary > RM6000
-    return { employee: 11.90, employer: 11.90 };
+  // EIS ceiling is RM5000
+  if (grossSalary > 5000) {
+    // Max contribution for salary > RM5000
+    return { employee: 9.90, employer: 9.90 };
   }
 
   const bracket = EIS_TABLE.find(b => grossSalary >= b.min && grossSalary <= b.max);
@@ -600,8 +600,8 @@ const calculatePCBFull = (params) => {
   const X = accumulatedPCB;
 
   // Normal STD = [(P - M) × R + B - rebate - (Z + X)] / (n + 1)
-  // LHDN uses standard rounding for tax calculation, then truncates division result
-  const taxBeforeDivide = round2dp((P_normalAdjusted - M) * R + B_adjusted);
+  // LHDN truncates annual tax to 2dp, then truncates division result
+  const taxBeforeDivide = truncate2dp((P_normalAdjusted - M) * R + B_adjusted);
   let normalSTD = truncate2dp((taxBeforeDivide - (Z + X)) / nPlus1);
   normalSTD = Math.max(0, normalSTD);
 
@@ -630,12 +630,11 @@ const calculatePCBFull = (params) => {
 
     // Apply rebate ONLY if chargeable income <= RM 35,000
     const rebate_add = P_withAdditionalAdjusted <= TAX_REBATE_THRESHOLD ? rebateAmount : 0;
-    // LHDN uses standard rounding (round half up) for total tax calculation
-    const totalTax = round2dp((P_withAdditionalAdjusted - M_add) * R_add + B_add - rebate_add);
+    // LHDN truncates total tax to 2dp
+    const totalTax = truncate2dp((P_withAdditionalAdjusted - M_add) * R_add + B_add - rebate_add);
 
     // Additional STD = Total Tax - (Total STD for year + Z)
-    // Use standard rounding for final additionalSTD
-    additionalSTD = round2dp(Math.max(0, totalTax - (totalSTDForYear + Z)));
+    additionalSTD = truncate2dp(Math.max(0, totalTax - (totalSTDForYear + Z)));
   }
 
   // =====================================================
@@ -889,14 +888,17 @@ const calculateAllStatutory = (statutoryBase, employee = {}, month = null, ytdDa
     const bonus = breakdown.bonus || 0;
     const ot = breakdown.ot || 0;
 
-    // LHDN PCB allowance treatment per employee:
-    //   'normal'   = include in Y1 (taxable fixed allowance, e.g. housing)
-    //   'additional' = include in Yt (taxable but variable)
-    //   'excluded'  = non-taxable allowance, excluded from PCB entirely (default)
-    const allowancePcb = employee.allowance_pcb || 'additional';
-    const pcbAllowance = allowancePcb === 'excluded' ? 0 : allowance;
-    normalRemuneration = basic + (allowancePcb === 'normal' ? allowance : 0);
-    additionalRemuneration = (allowancePcb === 'additional' ? allowance : 0) + commission + bonus + ot;
+    // Per-allowance-type taxability: if breakdown provides taxableAllowance (from
+    // allowance_types.is_taxable), use it directly for PCB. Otherwise fall back to
+    // employee-level allowance_pcb setting for backward compatibility.
+    const allowancePcb = employee.allowance_pcb || 'excluded';
+    const taxableAllowance = breakdown.taxableAllowance !== undefined
+      ? breakdown.taxableAllowance
+      : (allowancePcb === 'excluded' ? 0 : allowance);
+
+    // Taxable allowances are fixed monthly amounts → Y1 (normal remuneration)
+    normalRemuneration = basic + taxableAllowance;
+    additionalRemuneration = commission + bonus + ot;
 
     // LHDN assigns ALL monthly EPF to K1, Kt = 0
     actualEPFNormal = epf.employee;

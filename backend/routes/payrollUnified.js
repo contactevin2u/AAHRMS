@@ -654,14 +654,21 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
         let allowancesMap = {};
         if (features.flexible_allowances) {
           const allowResult = await client.query(`
-            SELECT ea.employee_id, SUM(ea.amount) as total
+            SELECT ea.employee_id,
+              SUM(ea.amount) as total,
+              SUM(CASE WHEN at.is_taxable THEN ea.amount ELSE 0 END) as taxable,
+              SUM(CASE WHEN NOT at.is_taxable THEN ea.amount ELSE 0 END) as exempt
             FROM employee_allowances ea
             JOIN allowance_types at ON ea.allowance_type_id = at.id
             WHERE ea.is_active = TRUE AND at.is_active = TRUE
             GROUP BY ea.employee_id
           `);
           allowResult.rows.forEach(r => {
-            allowancesMap[r.employee_id] = parseFloat(r.total) || 0;
+            allowancesMap[r.employee_id] = {
+              total: parseFloat(r.total) || 0,
+              taxable: parseFloat(r.taxable) || 0,
+              exempt: parseFloat(r.exempt) || 0
+            };
           });
         }
 
@@ -701,7 +708,8 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
           const fixedAllowance = prevSalary ? parseFloat(prevSalary.fixed_allowance) : (parseFloat(emp.fixed_allowance) || 0);
 
           const flexCommissions = commissionsMap[emp.id] || 0;
-          const flexAllowances = allowancesMap[emp.id] || 0;
+          const flexAllowData = allowancesMap[emp.id] || { total: 0, taxable: 0, exempt: 0 };
+          const flexAllowances = flexAllowData.total;
           const claimsAmount = claimsMap[emp.id] || 0;
 
           // Calculate OT if enabled
@@ -748,9 +756,14 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
           // Statutory base = basic + commission (excludes allowance/OT unless configured)
           const statutoryBase = basicSalary + flexCommissions;
           // PCB calculation needs full gross including allowance
+          // taxableAllowance: typed flex allowances use per-type is_taxable flag
+          // default_allowance (fixedAllowance) uses employee-level allowance_pcb setting
+          const allowancePcb = emp.allowance_pcb || 'excluded';
+          const fixedAllowanceTaxable = allowancePcb === 'excluded' ? 0 : fixedAllowance;
           const salaryBreakdown = {
             basic: basicSalary,
             allowance: totalAllowances,
+            taxableAllowance: flexAllowData.taxable + fixedAllowanceTaxable,
             commission: flexCommissions,
             bonus: 0,  // No bonus at payroll creation
             ot: otAmount,
@@ -1088,14 +1101,21 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     let allowancesMap = {};
     if (features.flexible_allowances) {
       const allowResult = await client.query(`
-        SELECT ea.employee_id, SUM(ea.amount) as total
+        SELECT ea.employee_id,
+          SUM(ea.amount) as total,
+          SUM(CASE WHEN at.is_taxable THEN ea.amount ELSE 0 END) as taxable,
+          SUM(CASE WHEN NOT at.is_taxable THEN ea.amount ELSE 0 END) as exempt
         FROM employee_allowances ea
         JOIN allowance_types at ON ea.allowance_type_id = at.id
         WHERE ea.is_active = TRUE AND at.is_active = TRUE
         GROUP BY ea.employee_id
       `);
       allowResult.rows.forEach(r => {
-        allowancesMap[r.employee_id] = parseFloat(r.total) || 0;
+        allowancesMap[r.employee_id] = {
+          total: parseFloat(r.total) || 0,
+          taxable: parseFloat(r.taxable) || 0,
+          exempt: parseFloat(r.exempt) || 0
+        };
       });
     }
 
@@ -1221,11 +1241,13 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
       // Flexible earnings
       let commissionAmount = commissionsMap[emp.id] || 0;
-      let flexAllowance = allowancesMap[emp.id] || 0;
+      let flexAllowData = allowancesMap[emp.id] || { total: 0, taxable: 0, exempt: 0 };
+      let flexAllowance = flexAllowData.total;
 
       // Part-time employees don't get flexible allowances
       if (isPartTime) {
         flexAllowance = 0;
+        flexAllowData = { total: 0, taxable: 0, exempt: 0 };
       }
 
       // Indoor Sales logic
@@ -1346,9 +1368,14 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       // Calculate statutory deductions with breakdown for proper PCB calculation
       // EPF/SOCSO/EIS are on statutoryBase (basic + commission, optionally OT/allowance)
       // PCB is on FULL gross (including allowance) per LHDN formula
+      // taxableAllowance: typed flex allowances use per-type is_taxable flag
+      // default_allowance (fixedAllowance) uses employee-level allowance_pcb setting
+      const allowancePcb = emp.allowance_pcb || 'excluded';
+      const fixedAllowanceTaxable = allowancePcb === 'excluded' ? 0 : fixedAllowance;
       const salaryBreakdown = {
         basic: basicSalary,
         allowance: totalAllowances,
+        taxableAllowance: flexAllowData.taxable + fixedAllowanceTaxable,
         commission: commissionAmount,
         bonus: 0,  // No bonus at payroll creation - added via edits
         ot: otAmount,

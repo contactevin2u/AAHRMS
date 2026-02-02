@@ -1438,13 +1438,17 @@ Human Resources Department
 
       -- Insert default allowance types (skip if exists)
       INSERT INTO allowance_types (name, description, is_taxable, company_id) VALUES
-        ('Transport Allowance', 'Monthly transport allowance', TRUE, 1),
-        ('Meal Allowance', 'Daily meal allowance', TRUE, 1),
+        ('Transport Allowance', 'Monthly transport allowance', FALSE, 1),
+        ('Meal Allowance', 'Daily meal allowance', FALSE, 1),
         ('Phone Allowance', 'Mobile phone allowance', TRUE, 1),
-        ('Petrol Allowance', 'Fuel reimbursement', TRUE, 1),
-        ('Parking Allowance', 'Parking fees', TRUE, 1),
+        ('Petrol Allowance', 'Fuel reimbursement', FALSE, 1),
+        ('Parking Allowance', 'Parking fees', FALSE, 1),
         ('Housing Allowance', 'Housing assistance', TRUE, 1)
       ON CONFLICT (name, company_id) DO NOTHING;
+
+      -- Fix existing allowance_types taxability per LHDN rules
+      UPDATE allowance_types SET is_taxable = FALSE WHERE name IN ('Transport Allowance', 'Meal Allowance', 'Petrol Allowance', 'Parking Allowance');
+      UPDATE allowance_types SET is_taxable = TRUE WHERE name IN ('Phone Allowance', 'Housing Allowance');
 
       -- =====================================================
       -- OUTLETS TABLE (for outlet-based companies like Mimix)
