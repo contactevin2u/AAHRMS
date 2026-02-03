@@ -827,27 +827,26 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
                 period.end.toISOString().split('T')[0]
               );
 
-              if (scheduleBasedPay.scheduledDays > 0) {
-                const scheduledDailyRate = basicSalary / scheduleBasedPay.scheduledDays;
-                const scheduledPay = scheduleBasedPay.payableDays * scheduledDailyRate;
-                unpaidDeduction = basicSalary - scheduledPay;
-                unpaidDays = scheduleBasedPay.absentDays;
-                absentDays = scheduleBasedPay.absentDays || 0;
-                absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
-                shortHours = scheduleBasedPay.shortHours || 0;
-                if (shortHours > 0) {
-                  const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
-                  shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
-                }
-                lateDays = scheduleBasedPay.lateDays || 0;
-                // Mimix attendance bonus (full-time only)
-                const totalPenalty = lateDays + absentDays;
-                if (totalPenalty === 0) attendanceBonus = 400;
-                else if (totalPenalty === 1) attendanceBonus = 300;
-                else if (totalPenalty === 2) attendanceBonus = 200;
-                else if (totalPenalty === 3) attendanceBonus = 100;
-                else attendanceBonus = 0;
+              // Absent days = 26 (standard working days) - days actually worked (attended)
+              const daysWorked = scheduleBasedPay.attendedDays || 0;
+              absentDays = Math.max(0, workingDays - daysWorked);
+              absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+
+              // Short hours = only when clocked in but worked < 8h (not absent days)
+              shortHours = scheduleBasedPay.shortHours || 0;
+              if (shortHours > 0) {
+                const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+                shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
               }
+
+              lateDays = scheduleBasedPay.lateDays || 0;
+              // Mimix attendance bonus (full-time only)
+              const totalPenalty = lateDays + absentDays;
+              if (totalPenalty === 0) attendanceBonus = 400;
+              else if (totalPenalty === 1) attendanceBonus = 300;
+              else if (totalPenalty === 2) attendanceBonus = 200;
+              else if (totalPenalty === 3) attendanceBonus = 100;
+              else attendanceBonus = 0;
             } catch (e) {
               console.error(`Schedule-based pay calc error for ${emp.name}:`, e.message);
             }
