@@ -610,16 +610,20 @@ function PayrollUnified() {
   const handleEditItem = (item) => {
     setEditingItem(item);
 
+    // Check if part-time employee
+    const isPartTime = item.work_type === 'part_time' || item.employment_type === 'part_time';
+
     // Auto-calculate absent days if stored value is 0 but we have days_worked data
+    // Skip for part-time employees - they are paid by hours worked, no absent deduction
     const workDays = selectedRun?.work_days_per_month || 26;
     const daysWorked = parseInt(item.days_worked) || 0;
     const storedAbsentDays = parseFloat(item.absent_days) || 0;
     const basicSalary = parseFloat(item.basic_salary) || 0;
 
-    // If absent_days is 0 but employee didn't work full month, auto-fill
+    // If absent_days is 0 but employee didn't work full month, auto-fill (full-time only)
     let absentDays = storedAbsentDays;
     let absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
-    if (storedAbsentDays === 0 && daysWorked < workDays && daysWorked > 0) {
+    if (!isPartTime && storedAbsentDays === 0 && daysWorked < workDays && daysWorked > 0) {
       absentDays = workDays - daysWorked;
       const dailyRate = basicSalary / workDays;
       absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
@@ -1580,7 +1584,8 @@ function PayrollUnified() {
                         }
                         setItemForm({ ...itemForm, absent_days: days, absent_day_deduction: deduction, attendance_bonus: bonus });
                       }} />
-                      {editingItem?.days_worked != null && <small style={{color: '#666', fontSize: '0.75rem'}}>{editingItem.days_worked} days worked / {selectedRun?.work_days_per_month || 22} standard</small>}
+                      {editingItem?.days_worked != null && editingItem?.work_type !== 'part_time' && editingItem?.employment_type !== 'part_time' && <small style={{color: '#666', fontSize: '0.75rem'}}>{editingItem.days_worked} days worked / {selectedRun?.work_days_per_month || 22} standard</small>}
+                      {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time') && <small style={{color: '#666', fontSize: '0.75rem'}}>Part-time: paid by hours worked</small>}
                     </div>
                     <div className="form-group">
                       <label>Absent Day Deduction</label>
