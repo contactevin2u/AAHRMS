@@ -1212,7 +1212,13 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
               WHERE cr.employee_id = pi.employee_id
                 AND cr.work_date BETWEEN $2 AND $3
                 AND cr.status = 'completed'
-             ) as days_worked
+             ) as days_worked,
+             (SELECT COALESCE(SUM(cr.total_work_hours), 0)
+              FROM clock_in_records cr
+              WHERE cr.employee_id = pi.employee_id
+                AND cr.work_date BETWEEN $2 AND $3
+                AND cr.status = 'completed'
+             ) as total_work_hours
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
@@ -1747,6 +1753,52 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
+      // Auto-calculate absent days from clock-in records
+      // Skip for part-time (paid by hours) and outlet-based (schedule-based pay already handles this)
+      let absentDays = 0;
+      let absentDayDeduction = 0;
+      if (!isPartTime && settings.groupingType !== 'outlet') {
+        try {
+          // Count distinct days worked from clock-in records
+          const daysWorkedResult = await client.query(`
+            SELECT COUNT(DISTINCT work_date) as days_worked
+            FROM clock_in_records
+            WHERE employee_id = $1
+              AND work_date BETWEEN $2 AND $3
+              AND status = 'completed'
+          `, [emp.id, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
+          const daysWorked = parseInt(daysWorkedResult.rows[0]?.days_worked) || 0;
+
+          // Count approved paid leave days in the period (these count as "attended")
+          const paidLeaveResult = await client.query(`
+            SELECT COALESCE(SUM(
+              GREATEST(0,
+                (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+                - (SELECT COUNT(*) FROM generate_series(
+                    GREATEST(lr.start_date, $2::date),
+                    LEAST(lr.end_date, $1::date),
+                    '1 day'::interval
+                  ) d WHERE EXTRACT(DOW FROM d) IN (0, 6))
+              )
+            ), 0) as paid_leave_days
+            FROM leave_requests lr
+            JOIN leave_types lt ON lr.leave_type_id = lt.id
+            WHERE lr.employee_id = $3
+              AND lt.is_paid = TRUE
+              AND lr.status = 'approved'
+              AND lr.start_date <= $1
+              AND lr.end_date >= $2
+          `, [period.end.toISOString().split('T')[0], period.start.toISOString().split('T')[0], emp.id]);
+          const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
+
+          // Absent = standard working days - days worked - paid leave - unpaid leave (already deducted)
+          absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
+          absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+        } catch (e) {
+          console.warn(`Absent days calculation failed for ${emp.name}:`, e.message);
+        }
+      }
+
       // Claims (reimbursements - added to pay)
       const claimsAmount = claimsMap[emp.id] || 0;
 
@@ -1756,7 +1808,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       // Calculate totals
       const totalAllowances = fixedAllowance + flexAllowance;
       const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount;
-      const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction);
+      const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
 
       // Statutory base calculation
       let statutoryBase = basicSalary + commissionAmount;
@@ -1810,8 +1862,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const pcbNormal = statutoryResult.pcbBreakdown?.normalSTD || 0;
       const pcbAdditional = statutoryResult.pcbBreakdown?.additionalSTD || 0;
 
-      const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction;
-      const netPay = grossSalary - totalDeductions + unpaidDeduction; // unpaidDeduction already subtracted from gross
+      const totalDeductions = unpaidDeduction + absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction;
+      const netPay = grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction; // unpaidDeduction & absentDayDeduction already subtracted from gross
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       // Variance calculation
@@ -1830,6 +1882,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           ot_hours, ot_amount, ph_days_worked, ph_pay,
           unpaid_leave_days, unpaid_leave_deduction, advance_deduction,
           short_hours, short_hours_deduction,
+          absent_days, absent_day_deduction,
           gross_salary, statutory_base,
           epf_employee, epf_employer,
           epf_on_normal, epf_on_additional,
@@ -1840,13 +1893,14 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           sales_amount, salary_calculation_method,
           ytd_gross, ytd_epf, ytd_pcb,
           prev_month_net, variance_amount, variance_percent
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41)
       `, [
         runId, emp.id,
         basicSalary, totalAllowances, commissionAmount, claimsAmount,
         otHours, otAmount, phDaysWorked, phPay,
         unpaidDays, unpaidDeduction, advanceDeduction,
         shortHours, shortHoursDeduction,
+        absentDays, absentDayDeduction,
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer,
         epfOnNormal, epfOnAdditional,

@@ -1430,6 +1430,9 @@ function PayrollUnified() {
                 {editingItem.days_worked != null && (
                   <div style={{fontSize: '0.85rem', color: '#666', marginTop: 4}}>
                     Days Worked: <strong>{editingItem.days_worked}</strong> / {selectedRun?.work_days_per_month || 22}
+                    {editingItem.total_work_hours != null && (
+                      <span style={{marginLeft: 12}}>Total Hours: <strong>{parseFloat(editingItem.total_work_hours).toFixed(1)}h</strong></span>
+                    )}
                   </div>
                 )}
               </div>
@@ -1449,6 +1452,11 @@ function PayrollUnified() {
                     <div className="form-group">
                       <label>OT Hours</label>
                       <input type="number" step="0.5" value={itemForm.ot_hours} onChange={(e) => handleOTHoursChange(parseFloat(e.target.value) || 0)} />
+                      {itemForm.basic_salary > 0 && (() => {
+                        const wd = selectedRun?.work_days_per_month || 22;
+                        const hourlyRate = itemForm.basic_salary / wd / 8;
+                        return <small style={{color: '#666', fontSize: '0.75rem'}}>Rate: RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
+                      })()}
                     </div>
                     <div className="form-group">
                       <label>OT Amount</label>
