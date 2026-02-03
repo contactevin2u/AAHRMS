@@ -598,6 +598,7 @@ function PayrollUnified() {
       deduction_remarks: item.deduction_remarks || '', notes: item.notes || '',
       short_hours: item.short_hours || 0, short_hours_deduction: item.short_hours_deduction || 0,
       absent_days: item.absent_days || 0, absent_day_deduction: item.absent_day_deduction || 0,
+      attendance_bonus: item.attendance_bonus || 0, late_days: item.late_days || 0,
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
       claims_override: '' // Empty means use calculated value, set value to override claims amount
@@ -734,6 +735,7 @@ function PayrollUnified() {
       ${earnings.outstation_amount > 0 ? `<tr><td>Outstation</td><td class="amount">RM ${formatNum(earnings.outstation_amount)}</td></tr>` : ''}
       ${earnings.claims_amount > 0 ? `<tr><td>Claims</td><td class="amount">RM ${formatNum(earnings.claims_amount)}</td></tr>` : ''}
       ${earnings.bonus > 0 ? `<tr><td>Bonus</td><td class="amount">RM ${formatNum(earnings.bonus)}</td></tr>` : ''}
+      ${earnings.attendance_bonus > 0 ? `<tr><td>Attendance Bonus</td><td class="amount">RM ${formatNum(earnings.attendance_bonus)}</td></tr>` : ''}
       <tr class="total-row"><td>GROSS PAY</td><td class="amount">RM ${formatNum(totals.gross_salary)}</td></tr></table>
       <table><tr class="section-title"><td colspan="2">DEDUCTIONS</td></tr>
       ${deductions.unpaid_leave_deduction > 0 ? `<tr><td>Unpaid Leave (${deductions.unpaid_leave_days} days)</td><td class="amount">RM ${formatNum(deductions.unpaid_leave_deduction)}</td></tr>` : ''}
@@ -884,6 +886,7 @@ function PayrollUnified() {
       ot: hasValue('ot_amount'),
       allow: hasValue('fixed_allowance'),
       bonus: hasValue('bonus'),
+      attendanceBonus: hasValue('attendance_bonus'),
       claims: hasValue('claims_amount'),
       comm: items.some(item => (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0) > 0),
       adv: hasValue('advance_deduction'),
@@ -1227,6 +1230,7 @@ function PayrollUnified() {
                             {vis.ot && <th>OT</th>}
                             {vis.allow && <th>Allow</th>}
                             {vis.bonus && <th>Bonus</th>}
+                            {vis.attendanceBonus && <th>Att. Bonus</th>}
                             {vis.claims && <th>Claims</th>}
                             {vis.comm && <th>Comm.</th>}
                             <th>Gross</th><th>EPF</th><th>SOCSO</th><th>EIS</th><th>PCB</th>
@@ -1246,6 +1250,7 @@ function PayrollUnified() {
                               {vis.ot && renderCell(item, 'ot_amount', item.ot_amount)}
                               {vis.allow && renderCell(item, 'fixed_allowance', item.fixed_allowance)}
                               {vis.bonus && renderCell(item, 'bonus', item.bonus)}
+                              {vis.attendanceBonus && <td>{formatAmount(item.attendance_bonus)}</td>}
                               {vis.claims && <td>{formatAmount(item.claims_amount)}</td>}
                               {vis.comm && renderCell(item, 'commission_amount', (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0))}
                               <td><strong>{formatAmount(item.gross_salary)}</strong></td>
@@ -1425,14 +1430,26 @@ function PayrollUnified() {
         {showItemModal && editingItem && (
           <div className="modal-overlay" onClick={() => setShowItemModal(false)}>
             <div className="modal large" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h2>Edit - {editingItem.employee_name}</h2>
+              <div className="modal-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                <h2 style={{margin: 0}}>Edit - {editingItem.employee_name}</h2>
                 {editingItem.days_worked != null && (
-                  <div style={{fontSize: '0.85rem', color: '#666', marginTop: 4}}>
-                    Days Worked: <strong>{editingItem.days_worked}</strong> / {selectedRun?.work_days_per_month || 22}
-                    {editingItem.total_work_hours != null && (
-                      <span style={{marginLeft: 12}}>Total Hours: <strong>{parseFloat(editingItem.total_work_hours).toFixed(1)}h</strong></span>
-                    )}
+                  <div style={{fontSize: '0.85rem', color: '#666', textAlign: 'right'}}>
+                    <div>Days Worked: <strong>{editingItem.days_worked}</strong> / {selectedRun?.work_days_per_month || 26}</div>
+                    {editingItem.total_work_hours != null && (() => {
+                      const expectedHours = editingItem.days_worked * 8;
+                      const otHours = parseFloat(editingItem.ot_hours) || 0;
+                      const totalHours = parseFloat(editingItem.total_work_hours) || 0;
+                      const baseHours = totalHours - otHours;
+                      const shortHours = expectedHours - baseHours;
+                      return (
+                        <>
+                          <div style={{color: shortHours > 0 ? '#dc3545' : '#28a745'}}>
+                            Short Hours: <strong>{shortHours > 0 ? `-${shortHours.toFixed(1)}h` : '0h'}</strong>
+                          </div>
+                          <div>OT Hours: <strong>{otHours.toFixed(1)}h</strong></div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1500,7 +1517,18 @@ function PayrollUnified() {
                         const days = parseFloat(e.target.value) || 0;
                         const wd = selectedRun?.work_days_per_month || 22;
                         const deduction = days > 0 ? Math.round((itemForm.basic_salary / wd) * days * 100) / 100 : 0;
-                        setItemForm({ ...itemForm, absent_days: days, absent_day_deduction: deduction });
+                        // Recalculate attendance bonus for Mimix
+                        const lateDays = itemForm.late_days || 0;
+                        const totalPenalty = lateDays + days;
+                        let bonus = itemForm.attendance_bonus;
+                        if (selectedRun?.company_id === 3) {
+                          if (totalPenalty === 0) bonus = 400;
+                          else if (totalPenalty === 1) bonus = 300;
+                          else if (totalPenalty === 2) bonus = 200;
+                          else if (totalPenalty === 3) bonus = 100;
+                          else bonus = 0;
+                        }
+                        setItemForm({ ...itemForm, absent_days: days, absent_day_deduction: deduction, attendance_bonus: bonus });
                       }} />
                       {editingItem?.days_worked != null && <small style={{color: '#666', fontSize: '0.75rem'}}>{editingItem.days_worked} days worked / {selectedRun?.work_days_per_month || 22} standard</small>}
                     </div>
@@ -1509,6 +1537,31 @@ function PayrollUnified() {
                       <input type="number" step="0.01" value={itemForm.absent_day_deduction} onChange={(e) => setItemForm({ ...itemForm, absent_day_deduction: parseFloat(e.target.value) || 0 })} />
                     </div>
                   </div>
+                  {/* Mimix Attendance Bonus - only show for Mimix company */}
+                  {selectedRun?.company_id === 3 && (
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Late Days</label>
+                        <input type="number" step="1" value={itemForm.late_days} onChange={(e) => {
+                          const days = parseFloat(e.target.value) || 0;
+                          const absentDays = itemForm.absent_days || 0;
+                          const totalPenalty = days + absentDays;
+                          let bonus = 0;
+                          if (totalPenalty === 0) bonus = 400;
+                          else if (totalPenalty === 1) bonus = 300;
+                          else if (totalPenalty === 2) bonus = 200;
+                          else if (totalPenalty === 3) bonus = 100;
+                          setItemForm({ ...itemForm, late_days: days, attendance_bonus: bonus });
+                        }} />
+                        <small style={{color: '#666', fontSize: '0.75rem'}}>Days clocked in after shift start time</small>
+                      </div>
+                      <div className="form-group">
+                        <label>Attendance Bonus (RM)</label>
+                        <input type="number" step="1" value={itemForm.attendance_bonus} onChange={(e) => setItemForm({ ...itemForm, attendance_bonus: parseFloat(e.target.value) || 0 })} />
+                        <small style={{color: '#666', fontSize: '0.75rem'}}>RM400=0 late/absent, RM300=1, RM200=2, RM100=3, RM0=4+</small>
+                      </div>
+                    </div>
+                  )}
                   <div className="form-row">
                     <div className="form-group">
                       <label>Other Deductions</label>
