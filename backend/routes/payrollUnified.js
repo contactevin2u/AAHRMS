@@ -211,7 +211,8 @@ async function calculatePartTimeHours(employeeId, periodStart, periodEnd, compan
 
 /**
  * Calculate schedule-based payable days for outlet companies (Mimix)
- * Returns: { scheduledDays, attendedDays, payableDays }
+ * Returns: { scheduledDays, attendedDays, payableDays, absentDays, lateDays }
+ * Late = clock_in_1 > shift_start (comparing time only)
  */
 async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
   // Get all schedules for the period with attendance data
@@ -219,6 +220,7 @@ async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
     SELECT
       s.schedule_date,
       s.status as schedule_status,
+      s.shift_start,
       cr.clock_in_1,
       cr.clock_out_1,
       cr.clock_in_2,
@@ -240,6 +242,25 @@ async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
   const scheduledDays = result.rows.length;
   const attendedDays = result.rows.filter(r => r.attended).length;
 
+  // Count late days: attended but clock_in_1 > shift_start
+  let lateDays = 0;
+  for (const row of result.rows) {
+    if (row.attended && row.clock_in_1 && row.shift_start) {
+      // clock_in_1 is timestamp, shift_start is TIME
+      // Extract time from clock_in_1 and compare with shift_start
+      const clockInTime = new Date(row.clock_in_1);
+      const clockInMinutes = clockInTime.getHours() * 60 + clockInTime.getMinutes();
+
+      // shift_start is a time string like "09:00:00"
+      const shiftParts = row.shift_start.split(':');
+      const shiftMinutes = parseInt(shiftParts[0]) * 60 + parseInt(shiftParts[1]);
+
+      if (clockInMinutes > shiftMinutes) {
+        lateDays++;
+      }
+    }
+  }
+
   // Payable days = scheduled AND attended
   // Or if schedule marked as 'completed' (for approved absences)
   const payableDays = result.rows.filter(r =>
@@ -250,8 +271,30 @@ async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
     scheduledDays,
     attendedDays,
     payableDays,
-    absentDays: scheduledDays - payableDays
+    absentDays: scheduledDays - payableDays,
+    lateDays
   };
+}
+
+/**
+ * Calculate Mimix attendance bonus based on late/absent days
+ * Rules:
+ * - RM 400: Full month (26 days work, no late, no absent/MC)
+ * - RM 300: 1 day late OR absent/MC
+ * - RM 200: 2 days late OR absent/MC
+ * - RM 100: 3 days late OR absent/MC
+ * - RM 0: 4+ days late OR absent/MC
+ *
+ * "Late OR absent/MC" means total count of (lateDays + absentDays)
+ */
+function calculateMimixAttendanceBonus(lateDays, absentDays) {
+  const totalPenaltyDays = lateDays + absentDays;
+
+  if (totalPenaltyDays === 0) return 400;
+  if (totalPenaltyDays === 1) return 300;
+  if (totalPenaltyDays === 2) return 200;
+  if (totalPenaltyDays === 3) return 100;
+  return 0; // 4 or more days
 }
 
 /**
@@ -1623,9 +1666,9 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // Short hours calculation: only for outlet-based companies
-      // Compares scheduled working days against actual clock-in hours
-      // Absent days (scheduled but no clock-in) count as full-day deficit
+      // Short hours calculation
+      // For outlet-based: compare scheduled working days against actual clock-in hours
+      // For non-outlet: compare (days worked × 8) against (total hours - OT)
       let shortHours = 0;
       let shortHoursDeduction = 0;
       if (!isPartTime && basicSalary > 0 && settings.groupingType === 'outlet') {
@@ -1753,21 +1796,27 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // Auto-calculate absent days from clock-in records
+      // Auto-calculate absent days and short hours for non-outlet companies
       // Skip for part-time (paid by hours) and outlet-based (schedule-based pay already handles this)
       let absentDays = 0;
       let absentDayDeduction = 0;
       if (!isPartTime && settings.groupingType !== 'outlet') {
         try {
-          // Count distinct days worked from clock-in records
-          const daysWorkedResult = await client.query(`
-            SELECT COUNT(DISTINCT work_date) as days_worked
+          const periodStart = period.start.toISOString().split('T')[0];
+          const periodEnd = period.end.toISOString().split('T')[0];
+          const expectedHoursPerDay = rates.standard_work_hours || 8;
+
+          // Count distinct days worked and total hours from clock-in records
+          const clockInResult = await client.query(`
+            SELECT COUNT(DISTINCT work_date) as days_worked,
+                   COALESCE(SUM(total_work_hours), 0) as total_hours
             FROM clock_in_records
             WHERE employee_id = $1
               AND work_date BETWEEN $2 AND $3
               AND status = 'completed'
-          `, [emp.id, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
-          const daysWorked = parseInt(daysWorkedResult.rows[0]?.days_worked) || 0;
+          `, [emp.id, periodStart, periodEnd]);
+          const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
+          const totalHoursWorked = parseFloat(clockInResult.rows[0]?.total_hours) || 0;
 
           // Count approved paid leave days in the period (these count as "attended")
           const paidLeaveResult = await client.query(`
@@ -1788,14 +1837,26 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
               AND lr.status = 'approved'
               AND lr.start_date <= $1
               AND lr.end_date >= $2
-          `, [period.end.toISOString().split('T')[0], period.start.toISOString().split('T')[0], emp.id]);
+          `, [periodEnd, periodStart, emp.id]);
           const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
 
           // Absent = standard working days - days worked - paid leave - unpaid leave (already deducted)
           absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
           absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+
+          // Short hours = expected hours - actual base hours (excluding OT)
+          // Expected hours = days worked × standard hours per day
+          // Actual base hours = total hours worked - OT hours
+          const expectedHours = daysWorked * expectedHoursPerDay;
+          const actualBaseHours = totalHoursWorked - otHours;
+          const calculatedShortHours = Math.max(0, expectedHours - actualBaseHours);
+          if (calculatedShortHours > 0) {
+            shortHours = Math.round(calculatedShortHours * 100) / 100;
+            const hourlyRate = basicSalary / workingDays / expectedHoursPerDay;
+            shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+          }
         } catch (e) {
-          console.warn(`Absent days calculation failed for ${emp.name}:`, e.message);
+          console.warn(`Absent days/short hours calculation failed for ${emp.name}:`, e.message);
         }
       }
 
@@ -1805,9 +1866,19 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       // Salary advance deductions
       const advanceDeduction = advancesMap[emp.id] || 0;
 
+      // Mimix attendance bonus calculation (outlet-based companies only)
+      // Based on late days and absent days in the period
+      let attendanceBonus = 0;
+      let lateDays = 0;
+      if (settings.groupingType === 'outlet' && !isPartTime && scheduleBasedPay) {
+        lateDays = scheduleBasedPay.lateDays || 0;
+        const absentDaysForBonus = scheduleBasedPay.absentDays || 0;
+        attendanceBonus = calculateMimixAttendanceBonus(lateDays, absentDaysForBonus);
+      }
+
       // Calculate totals
       const totalAllowances = fixedAllowance + flexAllowance;
-      const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount;
+      const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount + attendanceBonus;
       const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
 
       // Statutory base calculation
@@ -1883,6 +1954,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           unpaid_leave_days, unpaid_leave_deduction, advance_deduction,
           short_hours, short_hours_deduction,
           absent_days, absent_day_deduction,
+          attendance_bonus, late_days,
           gross_salary, statutory_base,
           epf_employee, epf_employer,
           epf_on_normal, epf_on_additional,
@@ -1893,7 +1965,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           sales_amount, salary_calculation_method,
           ytd_gross, ytd_epf, ytd_pcb,
           prev_month_net, variance_amount, variance_percent
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43)
       `, [
         runId, emp.id,
         basicSalary, totalAllowances, commissionAmount, claimsAmount,
@@ -1901,6 +1973,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         unpaidDays, unpaidDeduction, advanceDeduction,
         shortHours, shortHoursDeduction,
         absentDays, absentDayDeduction,
+        attendanceBonus, lateDays,
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer,
         epfOnNormal, epfOnAdditional,
@@ -2243,15 +2316,17 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const shortHoursDeduction = parseFloat(updates.short_hours_deduction ?? item.short_hours_deduction) || 0;
     const absentDays = parseFloat(updates.absent_days ?? item.absent_days) || 0;
     const absentDayDeduction = parseFloat(updates.absent_day_deduction ?? item.absent_day_deduction) || 0;
+    const attendanceBonus = parseFloat(updates.attendance_bonus ?? item.attendance_bonus) || 0;
+    const lateDays = parseFloat(updates.late_days ?? item.late_days) || 0;
 
     // Claims: Allow manual override similar to EPF/PCB
     const claimsAmount = updates.claims_override !== undefined && updates.claims_override !== null && updates.claims_override !== ''
       ? parseFloat(updates.claims_override) || 0
       : parseFloat(item.claims_amount) || 0;
 
-    // Gross salary
+    // Gross salary (includes attendance bonus for Mimix)
     const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
-                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
+                        commissionAmount + tradeCommission + outstationAmount + bonus + attendanceBonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
 
     // Statutory base
     let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
@@ -2322,6 +2397,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
         notes = $26, claims_amount = $27,
         short_hours = $29, short_hours_deduction = $30,
         absent_days = $31, absent_day_deduction = $32,
+        attendance_bonus = $33, late_days = $34,
         updated_at = NOW()
       WHERE id = $28
       RETURNING *
@@ -2340,7 +2416,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       totalDeductions, netPay, employerCost,
       updates.notes, claimsAmount, id,
       shortHours, shortHoursDeduction,
-      absentDays, absentDayDeduction
+      absentDays, absentDayDeduction,
+      attendanceBonus, lateDays
     ]);
 
     // Update run totals

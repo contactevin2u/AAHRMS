@@ -1482,6 +1482,11 @@ function PayrollUnified() {
                         const deduction = hrs > 0 ? Math.round((itemForm.basic_salary / wd / 8) * hrs * 100) / 100 : 0;
                         setItemForm({ ...itemForm, short_hours: hrs, short_hours_deduction: deduction });
                       }} />
+                      {editingItem?.days_worked != null && editingItem?.total_work_hours != null && (
+                        <small style={{color: '#666', fontSize: '0.75rem'}}>
+                          Expected: {editingItem.days_worked * 8}h, Actual: {(parseFloat(editingItem.total_work_hours) - (itemForm.ot_hours || 0)).toFixed(1)}h (excl OT)
+                        </small>
+                      )}
                     </div>
                     <div className="form-group">
                       <label>Short Hours Deduction</label>
