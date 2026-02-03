@@ -1717,18 +1717,21 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           `, [emp.id, periodStart, periodEnd]);
           const scheduledDates = schedResult.rows.map(r => r.schedule_date.toISOString().split('T')[0]);
 
-          // For each scheduled working day, check attendance
+          // For each scheduled working day, check if short hours (clocked in but less than 8h)
+          // Absent days are handled separately - don't count them as short hours
           for (const dateStr of scheduledDates) {
-            if (leaveDates.has(dateStr)) continue; // Skip leave days (handled by unpaid leave deduction)
+            if (leaveDates.has(dateStr)) continue; // Skip leave days
 
             if (hoursMap[dateStr] !== undefined) {
-              // Clocked in — check if short hours
-              const deficit = Math.max(0, expectedHoursPerDay - hoursMap[dateStr]);
+              // Clocked in — check if short hours (worked less than expected)
+              const hoursWorked = hoursMap[dateStr];
+              // Subtract OT from hours worked to get base hours
+              // OT is anything over 8 hours, so base hours = min(hoursWorked, 8)
+              const baseHours = Math.min(hoursWorked, expectedHoursPerDay);
+              const deficit = Math.max(0, expectedHoursPerDay - baseHours);
               shortHours += deficit;
-            } else {
-              // Scheduled but no clock record = absent, full day deficit
-              shortHours += expectedHoursPerDay;
             }
+            // If no clock record = absent day, handled by absentDays calculation, not short hours
           }
 
           shortHours = Math.round(shortHours * 100) / 100;
@@ -1797,18 +1800,16 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       }
 
       // Auto-calculate absent days and short hours
+      // Absent = standard working days (26) - days actually worked
+      // Days worked = must have BOTH schedule AND clock-in record
       let absentDays = 0;
       let absentDayDeduction = 0;
 
-      // For outlet-based companies: must have BOTH schedule AND clock-in to be present
+      // For outlet-based companies: count days with BOTH schedule AND clock-in
       if (!isPartTime && settings.groupingType === 'outlet') {
-        if (scheduleBasedPay && scheduleBasedPay.scheduledDays > 0) {
-          // Has schedules - use schedule-based absent days (scheduled but not attended)
-          absentDays = scheduleBasedPay.absentDays || 0;
-        } else {
-          // No schedules at all = absent for full month
-          absentDays = workingDays;
-        }
+        // attendedDays = days with both schedule AND clock-in
+        const daysWorked = scheduleBasedPay?.attendedDays || 0;
+        absentDays = Math.max(0, workingDays - daysWorked);
         absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
       }
 
