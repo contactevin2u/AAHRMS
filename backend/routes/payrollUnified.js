@@ -1800,18 +1800,20 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       let absentDays = 0;
       let absentDayDeduction = 0;
 
-      // For outlet-based companies with schedules, use schedule-based data
-      if (!isPartTime && settings.groupingType === 'outlet' && scheduleBasedPay && scheduleBasedPay.scheduledDays > 0) {
-        absentDays = scheduleBasedPay.absentDays || 0;
+      // For outlet-based companies: must have BOTH schedule AND clock-in to be present
+      if (!isPartTime && settings.groupingType === 'outlet') {
+        if (scheduleBasedPay && scheduleBasedPay.scheduledDays > 0) {
+          // Has schedules - use schedule-based absent days (scheduled but not attended)
+          absentDays = scheduleBasedPay.absentDays || 0;
+        } else {
+          // No schedules at all = absent for full month
+          absentDays = workingDays;
+        }
         absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
       }
 
-      // For non-outlet companies OR outlet companies without schedules, calculate from clock-in records
-      const needsClockInCalc = !isPartTime && (
-        settings.groupingType !== 'outlet' ||
-        (settings.groupingType === 'outlet' && (!scheduleBasedPay || scheduleBasedPay.scheduledDays === 0))
-      );
-      if (needsClockInCalc) {
+      // For non-outlet companies, calculate from clock-in records
+      if (!isPartTime && settings.groupingType !== 'outlet') {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];
