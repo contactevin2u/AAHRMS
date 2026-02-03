@@ -250,14 +250,15 @@ function PayrollUnified() {
   };
 
   const handleDeleteAllDrafts = async () => {
-    const draftCount = runs.filter(r => r.status === 'draft').length;
-    if (draftCount === 0) {
+    const draftRuns = runs.filter(r => r.status === 'draft');
+    if (draftRuns.length === 0) {
       alert('No draft payroll runs to delete.');
       return;
     }
-    const month = createForm.month;
-    const year = createForm.year;
-    if (window.confirm(`Delete ALL ${draftCount} draft payroll runs for ${month}/${year}?`)) {
+    // Get month/year from the first draft run (all runs in the list are same month/year)
+    const month = draftRuns[0].month;
+    const year = draftRuns[0].year;
+    if (window.confirm(`Delete ALL ${draftRuns.length} draft payroll runs for ${month}/${year}?`)) {
       try {
         const res = await payrollV2Api.deleteAllDrafts(month, year);
         setSelectedRun(null);
