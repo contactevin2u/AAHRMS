@@ -1472,26 +1472,26 @@ function PayrollUnified() {
             <div className="modal large" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
                 <h2 style={{margin: 0}}>Edit - {editingItem.employee_name}</h2>
-                {editingItem.days_worked != null && (
-                  <div style={{fontSize: '0.85rem', color: '#666', textAlign: 'right'}}>
-                    <div>Days Worked: <strong>{editingItem.days_worked}</strong> / {selectedRun?.work_days_per_month || 26}</div>
-                    {editingItem.total_work_hours != null && (() => {
-                      const expectedHours = editingItem.days_worked * 8;
-                      const otHours = parseFloat(editingItem.ot_hours) || 0;
-                      const totalHours = parseFloat(editingItem.total_work_hours) || 0;
-                      const baseHours = totalHours - otHours;
-                      const shortHours = expectedHours - baseHours;
-                      return (
-                        <>
-                          <div style={{color: shortHours > 0 ? '#dc3545' : '#28a745'}}>
-                            Short Hours: <strong>{shortHours > 0 ? `-${shortHours.toFixed(1)}h` : '0h'}</strong>
-                          </div>
-                          <div>OT Hours: <strong>{otHours.toFixed(1)}h</strong></div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
+                {editingItem.days_worked != null && (() => {
+                  const daysWorked = parseInt(editingItem.days_worked) || 0;
+                  const standardDays = selectedRun?.work_days_per_month || 26;
+                  const expectedHours = daysWorked * 8;
+                  const otHours = parseFloat(editingItem.ot_hours) || 0;
+                  const totalHours = parseFloat(editingItem.total_work_hours) || 0;
+                  const baseHours = totalHours - otHours;
+                  const shortHours = expectedHours - baseHours;
+                  const absentDays = Math.max(0, standardDays - daysWorked);
+                  return (
+                    <div style={{fontSize: '0.85rem', color: '#666', textAlign: 'right'}}>
+                      <div>Days Worked: <strong>{daysWorked}</strong> / {standardDays} {absentDays > 0 && <span style={{color: '#dc3545'}}>({absentDays} absent)</span>}</div>
+                      <div>Total Hours: <strong>{totalHours.toFixed(1)}h</strong></div>
+                      <div style={{color: shortHours > 0 ? '#dc3545' : '#28a745'}}>
+                        Short Hours: <strong>{shortHours > 0 ? `-${shortHours.toFixed(1)}h` : '0h'}</strong>
+                      </div>
+                      <div>OT Hours: <strong>{otHours.toFixed(1)}h</strong></div>
+                    </div>
+                  );
+                })()}
               </div>
               <form onSubmit={handleUpdateItem}>
                 <div className="modal-scroll-content">
