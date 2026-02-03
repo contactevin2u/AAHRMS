@@ -1954,8 +1954,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const pcbNormal = statutoryResult.pcbBreakdown?.normalSTD || 0;
       const pcbAdditional = statutoryResult.pcbBreakdown?.additionalSTD || 0;
 
-      const totalDeductions = unpaidDeduction + absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction;
-      const netPay = grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction; // unpaidDeduction & absentDayDeduction already subtracted from gross
+      const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction;
+      const netPay = grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction + shortHoursDeduction; // these already subtracted from gross
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       // Variance calculation
