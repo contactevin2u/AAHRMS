@@ -1812,8 +1812,9 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
       }
 
-      // For non-outlet companies, calculate from clock-in records
-      if (!isPartTime && settings.groupingType !== 'outlet') {
+      // For non-outlet companies (or any company without schedule-based absent days),
+      // calculate absent days from clock-in records
+      if (!isPartTime) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];
@@ -1831,42 +1832,48 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
           const totalHoursWorked = parseFloat(clockInResult.rows[0]?.total_hours) || 0;
 
-          // Count approved paid leave days in the period (these count as "attended")
-          const paidLeaveResult = await client.query(`
-            SELECT COALESCE(SUM(
-              GREATEST(0,
-                (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
-                - (SELECT COUNT(*) FROM generate_series(
-                    GREATEST(lr.start_date, $2::date),
-                    LEAST(lr.end_date, $1::date),
-                    '1 day'::interval
-                  ) d WHERE EXTRACT(DOW FROM d) IN (0, 6))
-              )
-            ), 0) as paid_leave_days
-            FROM leave_requests lr
-            JOIN leave_types lt ON lr.leave_type_id = lt.id
-            WHERE lr.employee_id = $3
-              AND lt.is_paid = TRUE
-              AND lr.status = 'approved'
-              AND lr.start_date <= $1
-              AND lr.end_date >= $2
-          `, [periodEnd, periodStart, emp.id]);
-          const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
+          // Only calculate absent days if not already set by outlet/schedule logic
+          if (absentDays === 0 && daysWorked < workingDays) {
+            // Count approved paid leave days in the period (these count as "attended")
+            const paidLeaveResult = await client.query(`
+              SELECT COALESCE(SUM(
+                GREATEST(0,
+                  (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+                  - (SELECT COUNT(*) FROM generate_series(
+                      GREATEST(lr.start_date, $2::date),
+                      LEAST(lr.end_date, $1::date),
+                      '1 day'::interval
+                    ) d WHERE EXTRACT(DOW FROM d) IN (0, 6))
+                )
+              ), 0) as paid_leave_days
+              FROM leave_requests lr
+              JOIN leave_types lt ON lr.leave_type_id = lt.id
+              WHERE lr.employee_id = $3
+                AND lt.is_paid = TRUE
+                AND lr.status = 'approved'
+                AND lr.start_date <= $1
+                AND lr.end_date >= $2
+            `, [periodEnd, periodStart, emp.id]);
+            const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
 
-          // Absent = standard working days - days worked - paid leave - unpaid leave (already deducted)
-          absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
-          absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+            // Absent = standard working days - days worked - paid leave - unpaid leave (already deducted)
+            absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
+            absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+          }
 
-          // Short hours = expected hours - actual base hours (excluding OT)
-          // Expected hours = days worked × standard hours per day
-          // Actual base hours = total hours worked - OT hours
-          const expectedHours = daysWorked * expectedHoursPerDay;
-          const actualBaseHours = totalHoursWorked - otHours;
-          const calculatedShortHours = Math.max(0, expectedHours - actualBaseHours);
-          if (calculatedShortHours > 0) {
-            shortHours = Math.round(calculatedShortHours * 100) / 100;
-            const hourlyRate = basicSalary / workingDays / expectedHoursPerDay;
-            shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+          // Short hours calculation for non-outlet companies only
+          if (settings.groupingType !== 'outlet') {
+            // Short hours = expected hours - actual base hours (excluding OT)
+            // Expected hours = days worked × standard hours per day
+            // Actual base hours = total hours worked - OT hours
+            const expectedHours = daysWorked * expectedHoursPerDay;
+            const actualBaseHours = totalHoursWorked - otHours;
+            const calculatedShortHours = Math.max(0, expectedHours - actualBaseHours);
+            if (calculatedShortHours > 0) {
+              shortHours = Math.round(calculatedShortHours * 100) / 100;
+              const hourlyRate = basicSalary / workingDays / expectedHoursPerDay;
+              shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+            }
           }
         } catch (e) {
           console.warn(`Absent days/short hours calculation failed for ${emp.name}:`, e.message);
