@@ -3014,6 +3014,34 @@ router.post('/runs/:id/approve', authenticateAdmin, async (req, res) => {
 });
 
 /**
+ * DELETE /api/payroll/runs/drafts/:year/:month
+ * Delete ALL draft payroll runs for a specific month/year
+ */
+router.delete('/runs/drafts/:year/:month', authenticateAdmin, async (req, res) => {
+  try {
+    const { year, month } = req.params;
+    const companyId = req.companyId;
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Delete all draft runs for this company, month, year
+    const result = await pool.query(
+      "DELETE FROM payroll_runs WHERE status = 'draft' AND company_id = $1 AND month = $2 AND year = $3 RETURNING id",
+      [companyId, parseInt(month), parseInt(year)]
+    );
+
+    res.json({
+      message: `Deleted ${result.rowCount} draft payroll runs`,
+      deleted: result.rowCount
+    });
+  } catch (error) {
+    console.error('Error deleting all draft payroll runs:', error);
+    res.status(500).json({ error: 'Failed to delete draft payroll runs' });
+  }
+});
+
+/**
  * DELETE /api/payroll/runs/:id
  * Delete a draft payroll run
  */

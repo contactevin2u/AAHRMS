@@ -249,6 +249,24 @@ function PayrollUnified() {
     }
   };
 
+  const handleDeleteAllDrafts = async () => {
+    const draftCount = runs.filter(r => r.status === 'draft').length;
+    if (draftCount === 0) {
+      alert('No draft payroll runs to delete.');
+      return;
+    }
+    if (window.confirm(`Delete ALL ${draftCount} draft payroll runs for ${selectedMonth}/${selectedYear}?`)) {
+      try {
+        const res = await payrollV2Api.deleteAllDrafts(selectedMonth, selectedYear);
+        setSelectedRun(null);
+        fetchRuns();
+        alert(`Deleted ${res.data.deleted} draft payroll runs.`);
+      } catch (error) {
+        alert(error.response?.data?.error || 'Failed to delete drafts');
+      }
+    }
+  };
+
   const handleRecalculateAll = async (id) => {
     if (window.confirm('Recalculate OT and statutory deductions?')) {
       try {
@@ -905,6 +923,9 @@ function PayrollUnified() {
           </div>
           {mainTab === 'payroll' && (
             <div className="header-actions">
+              <button onClick={handleDeleteAllDrafts} className="add-btn outline" style={{color: '#dc3545', borderColor: '#dc3545'}}>
+                Delete All Drafts
+              </button>
               {isMimix ? (
                 <button onClick={() => setShowAllOutletsModal(true)} className="add-btn outline">
                   Generate All Outlets
