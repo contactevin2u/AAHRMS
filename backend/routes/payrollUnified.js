@@ -2396,8 +2396,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       ? parseFloat(updates.pcb_override) || 0
       : (statutory.pcb_enabled ? statutoryResult.pcb : 0);
 
-    const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + otherDeductions;
-    const netPay = grossSalary + unpaidDeduction - totalDeductions;
+    const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + otherDeductions;
+    const netPay = grossSalary + unpaidDeduction + absentDayDeduction + shortHoursDeduction - totalDeductions;
     const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
     // Update item
@@ -2604,10 +2604,11 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
     const otherDeductions = parseFloat(item.other_deductions) || 0;
     const shortHoursDeduction = parseFloat(item.short_hours_deduction) || 0;
+    const absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
 
     // Calculate gross
     const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
-                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction;
+                        commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
 
     // Statutory base
     let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
@@ -2642,8 +2643,8 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
     const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
 
-    const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
-    const netPay = grossSalary + unpaidDeduction - totalDeductions;
+    const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
+    const netPay = grossSalary + unpaidDeduction + absentDayDeduction + shortHoursDeduction - totalDeductions;
     const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
     // Update item
