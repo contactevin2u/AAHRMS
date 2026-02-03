@@ -795,8 +795,49 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
             }
           }
 
+          // Calculate schedule-based pay and absent days for outlet companies
+          const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
+          let unpaidDeduction = 0, unpaidDays = 0;
+          let absentDays = 0, absentDayDeduction = 0;
+          let shortHours = 0, shortHoursDeduction = 0;
+          let lateDays = 0, attendanceBonus = 0;
+          let scheduleBasedPay = null;
+
+          try {
+            scheduleBasedPay = await calculateScheduleBasedPay(
+              emp.id,
+              period.start.toISOString().split('T')[0],
+              period.end.toISOString().split('T')[0]
+            );
+
+            if (scheduleBasedPay.scheduledDays > 0) {
+              const scheduledDailyRate = basicSalary / scheduleBasedPay.scheduledDays;
+              const scheduledPay = scheduleBasedPay.payableDays * scheduledDailyRate;
+              unpaidDeduction = basicSalary - scheduledPay;
+              unpaidDays = scheduleBasedPay.absentDays;
+              absentDays = scheduleBasedPay.absentDays || 0;
+              absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+              shortHours = scheduleBasedPay.shortHours || 0;
+              if (shortHours > 0) {
+                const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+                shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+              }
+              lateDays = scheduleBasedPay.lateDays || 0;
+              // Mimix attendance bonus
+              const totalPenalty = lateDays + absentDays;
+              if (totalPenalty === 0) attendanceBonus = 400;
+              else if (totalPenalty === 1) attendanceBonus = 300;
+              else if (totalPenalty === 2) attendanceBonus = 200;
+              else if (totalPenalty === 3) attendanceBonus = 100;
+              else attendanceBonus = 0;
+            }
+          } catch (e) {
+            console.error(`Schedule-based pay calc error for ${emp.name}:`, e.message);
+          }
+
           const totalAllowances = fixedAllowance + flexAllowances;
-          const grossSalary = basicSalary + totalAllowances + otAmount + phPay + flexCommissions + claimsAmount;
+          const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + flexCommissions + claimsAmount + attendanceBonus;
+          const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
 
           // Statutory base = basic + commission (excludes allowance/OT unless configured)
           const statutoryBase = basicSalary + flexCommissions;
@@ -817,13 +858,14 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
           const statutory = calculateAllStatutory(statutoryBase, emp, month, null, salaryBreakdown);
 
           const totalDeductionsForEmp = (
+            unpaidDeduction + absentDayDeduction + shortHoursDeduction +
             statutory.epf.employee +
             statutory.socso.employee +
             statutory.eis.employee +
             statutory.pcb
           );
 
-          const netPay = grossSalary - totalDeductionsForEmp;
+          const netPay = grossSalary - totalDeductionsForEmp + unpaidDeduction + absentDayDeduction + shortHoursDeduction;
           const employerCost = grossSalary + statutory.epf.employer + statutory.socso.employer + statutory.eis.employer;
 
           // Insert payroll item
@@ -832,17 +874,25 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
               payroll_run_id, employee_id,
               basic_salary, fixed_allowance, commission_amount, claims_amount,
               ot_hours, ot_amount, ph_days_worked, ph_pay,
+              unpaid_leave_days, unpaid_leave_deduction,
+              short_hours, short_hours_deduction,
+              absent_days, absent_day_deduction,
+              attendance_bonus, late_days,
               gross_salary,
               epf_employee, epf_employer,
               socso_employee, socso_employer,
               eis_employee, eis_employer,
               pcb,
               total_deductions, net_pay, employer_total_cost
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
           `, [
             runId, emp.id,
             basicSalary, totalAllowances, flexCommissions, claimsAmount,
             otHours, otAmount, phDaysWorked, phPay,
+            unpaidDays, unpaidDeduction,
+            shortHours, shortHoursDeduction,
+            absentDays, absentDayDeduction,
+            attendanceBonus, lateDays,
             grossSalary,
             statutory.epf.employee, statutory.epf.employer,
             statutory.socso.employee, statutory.socso.employer,
