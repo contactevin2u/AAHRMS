@@ -255,9 +255,11 @@ function PayrollUnified() {
       alert('No draft payroll runs to delete.');
       return;
     }
-    if (window.confirm(`Delete ALL ${draftCount} draft payroll runs for ${selectedMonth}/${selectedYear}?`)) {
+    const month = createForm.month;
+    const year = createForm.year;
+    if (window.confirm(`Delete ALL ${draftCount} draft payroll runs for ${month}/${year}?`)) {
       try {
-        const res = await payrollV2Api.deleteAllDrafts(selectedMonth, selectedYear);
+        const res = await payrollV2Api.deleteAllDrafts(month, year);
         setSelectedRun(null);
         fetchRuns();
         alert(`Deleted ${res.data.deleted} draft payroll runs.`);
