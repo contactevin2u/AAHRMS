@@ -609,6 +609,22 @@ function PayrollUnified() {
 
   const handleEditItem = (item) => {
     setEditingItem(item);
+
+    // Auto-calculate absent days if stored value is 0 but we have days_worked data
+    const workDays = selectedRun?.work_days_per_month || 26;
+    const daysWorked = parseInt(item.days_worked) || 0;
+    const storedAbsentDays = parseFloat(item.absent_days) || 0;
+    const basicSalary = parseFloat(item.basic_salary) || 0;
+
+    // If absent_days is 0 but employee didn't work full month, auto-fill
+    let absentDays = storedAbsentDays;
+    let absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
+    if (storedAbsentDays === 0 && daysWorked < workDays && daysWorked > 0) {
+      absentDays = workDays - daysWorked;
+      const dailyRate = basicSalary / workDays;
+      absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+    }
+
     setItemForm({
       basic_salary: item.basic_salary || 0, fixed_allowance: item.fixed_allowance || 0,
       ot_hours: item.ot_hours || 0, ot_amount: item.ot_amount || 0,
@@ -618,7 +634,7 @@ function PayrollUnified() {
       bonus: item.bonus || 0, other_deductions: item.other_deductions || 0,
       deduction_remarks: item.deduction_remarks || '', notes: item.notes || '',
       short_hours: item.short_hours || 0, short_hours_deduction: item.short_hours_deduction || 0,
-      absent_days: item.absent_days || 0, absent_day_deduction: item.absent_day_deduction || 0,
+      absent_days: absentDays, absent_day_deduction: absentDayDeduction,
       attendance_bonus: item.attendance_bonus || 0, late_days: item.late_days || 0,
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
