@@ -1796,11 +1796,22 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // Auto-calculate absent days and short hours for non-outlet companies
-      // Skip for part-time (paid by hours) and outlet-based (schedule-based pay already handles this)
+      // Auto-calculate absent days and short hours
       let absentDays = 0;
       let absentDayDeduction = 0;
-      if (!isPartTime && settings.groupingType !== 'outlet') {
+
+      // For outlet-based companies with schedules, use schedule-based data
+      if (!isPartTime && settings.groupingType === 'outlet' && scheduleBasedPay && scheduleBasedPay.scheduledDays > 0) {
+        absentDays = scheduleBasedPay.absentDays || 0;
+        absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+      }
+
+      // For non-outlet companies OR outlet companies without schedules, calculate from clock-in records
+      const needsClockInCalc = !isPartTime && (
+        settings.groupingType !== 'outlet' ||
+        (settings.groupingType === 'outlet' && (!scheduleBasedPay || scheduleBasedPay.scheduledDays === 0))
+      );
+      if (needsClockInCalc) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];
