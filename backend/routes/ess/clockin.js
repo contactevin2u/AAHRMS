@@ -490,16 +490,23 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   const departmentName = empCompanyResult.rows[0]?.department_name || '';
   const isAAAlive = isAAAliveCompany(companyId);
   const isIndoorSales = isAAAlive && departmentName.toLowerCase().includes('indoor sales');
+  const isDriver = isAAAlive && departmentName.toLowerCase() === 'driver';
 
   // First, check if there's an open shift from yesterday that needs to be closed
   // This handles night shift workers who clock out after midnight
   let openYesterdayShift = await getOpenShiftFromYesterday(employeeId);
 
   if (openYesterdayShift) {
+    // For AA Alive: clock_out_1 means session ended (not break), so if clock_out_1 is filled
+    // but clock_in_2 hasn't started, the shift is complete — don't treat it as open
+    if (isAAAlive && openYesterdayShift.clock_out_1 && !openYesterdayShift.clock_in_2) {
+      openYesterdayShift = null;
+    }
+
     // Check if it's past the cutoff time (1:30 AM)
     // If so, auto clock-out the shift instead of letting them continue
     // AA Alive employees are exempt from cutoff - they can continue their shift
-    if (!isAAAlive && isPastCutoff()) {
+    if (openYesterdayShift && !isAAAlive && isPastCutoff()) {
       console.log(`Auto clock-out triggered for employee ${employeeId}: past cutoff time`);
       const autoClosedRecord = await autoClockOutShift(openYesterdayShift);
 
@@ -509,7 +516,7 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
         openYesterdayShift = null; // Clear so we continue to check today's records
         console.log(`Shift ${autoClosedRecord.id} auto-closed at cutoff time`);
       }
-    } else {
+    } else if (openYesterdayShift) {
       // Before cutoff - allow them to continue their shift
       let status = 'working';
       let nextAction = null;
@@ -517,7 +524,7 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
       if (openYesterdayShift.clock_in_1 && !openYesterdayShift.clock_out_1) {
         nextAction = 'clock_out_1';
       } else if (openYesterdayShift.clock_out_1 && !openYesterdayShift.clock_in_2) {
-        status = 'on_break';
+        status = isAAAlive ? 'session_ended' : 'on_break';
         nextAction = 'clock_in_2';
       } else if (openYesterdayShift.clock_in_2 && !openYesterdayShift.clock_out_2) {
         nextAction = 'clock_out_2';
@@ -529,6 +536,7 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
         is_yesterday_shift: true,
         is_aa_alive: isAAAlive,
         is_indoor_sales: isIndoorSales,
+        is_driver: isDriver,
         record: {
           ...openYesterdayShift,
           total_hours: openYesterdayShift.total_work_minutes ? (openYesterdayShift.total_work_minutes / 60).toFixed(2) : null,
@@ -560,6 +568,7 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
       next_action: 'clock_in_1',
       is_aa_alive: isAAAlive,
       is_indoor_sales: isIndoorSales,
+        is_driver: isDriver,
       record: null
     });
   }
@@ -598,6 +607,7 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
     next_action_optional: nextActionOptional,
     is_aa_alive: isAAAlive,
     is_indoor_sales: isIndoorSales,
+        is_driver: isDriver,
     record: {
       ...record,
       total_hours: record.total_work_minutes ? (record.total_work_minutes / 60).toFixed(2) : null,

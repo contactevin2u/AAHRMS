@@ -100,8 +100,9 @@ function ESSLayout({ children }) {
 
   // Check if employee should see schedule/calendar
   // Mimix: always enabled
-  // AA Alive: any employee with clock_in_required, or designated schedule managers
-  const showCalendar = isMimix || clockInRequired || isDriver || canManageScheduleFlag;
+  // AA Alive: indoor sales (clock_in_required) or designated schedule managers — NOT drivers
+  const isAAAliveDriver = !isMimix && isDriver;
+  const showCalendar = !isAAAliveDriver && (isMimix || clockInRequired || isDriver || canManageScheduleFlag);
 
   // Check if employee is supervisor/manager (can see team management features)
   const isSupOrMgr = isSupervisorOrManager(employeeInfo);

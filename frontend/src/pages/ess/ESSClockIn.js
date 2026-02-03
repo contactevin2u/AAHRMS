@@ -645,16 +645,16 @@ function ESSClockInContent() {
           </span>
         </div>
 
-        {/* No Schedule Info - Still allow clock-in */}
-        {noScheduleToday && (
+        {/* No Schedule Info - hide for AA Alive drivers (they don't use schedules) */}
+        {noScheduleToday && !status?.is_driver && (
           <div className="schedule-info no-schedule-info">
             <span className="schedule-icon">&#x1F4C5;</span>
             <span>{t('attendance.noShiftToday')}</span>
           </div>
         )}
 
-        {/* Today's Schedule Info */}
-        {scheduleStatus?.has_schedule && scheduleStatus?.schedule && (
+        {/* Today's Schedule Info - hide for AA Alive drivers */}
+        {!status?.is_driver && scheduleStatus?.has_schedule && scheduleStatus?.schedule && (
           <div className="schedule-info">
             <span className="schedule-icon">&#x1F4C5;</span>
             <span>{t('attendance.todayShift')}: {scheduleStatus.schedule.shift_start} - {scheduleStatus.schedule.shift_end}</span>
@@ -701,7 +701,7 @@ function ESSClockInContent() {
           </div>
         )}
 
-        {/* AA Alive info note - no break tracking */}
+        {/* Company-specific info note */}
         {status?.is_aa_alive && (
           <div className="aa-alive-note">
             <span>&#x1F4DD;</span>
@@ -709,6 +709,17 @@ function ESSClockInContent() {
               {language === 'ms'
                 ? 'Tiada perlu clock untuk rehat. Clock In dan Clock Out sahaja. Clock In 2 / Clock Out 2 adalah untuk sesi kedua (pilihan).'
                 : 'No need to clock for break. Clock In and Clock Out only. Clock In 2 / Clock Out 2 is for second session (optional).'}
+            </span>
+          </div>
+        )}
+        {/* Mimix info note - break tracking required */}
+        {status && !status.is_aa_alive && (
+          <div className="aa-alive-note">
+            <span>&#x1F4DD;</span>
+            <span>
+              {language === 'ms'
+                ? 'Sila clock keluar untuk rehat dan clock masuk semula selepas rehat. Rehat akan direkodkan.'
+                : 'Please clock out for break and clock back in after break. Break will be recorded.'}
             </span>
           </div>
         )}
