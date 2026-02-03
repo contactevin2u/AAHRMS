@@ -3125,7 +3125,9 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
         trade_commission_amount: parseFloat(item.trade_commission_amount) || 0,
         outstation_amount: parseFloat(item.outstation_amount) || 0,
         claims_amount: parseFloat(item.claims_amount) || 0,
-        bonus: parseFloat(item.bonus) || 0
+        bonus: parseFloat(item.bonus) || 0,
+        attendance_bonus: parseFloat(item.attendance_bonus) || 0,
+        late_days: parseFloat(item.late_days) || 0
       },
       deductions: {
         unpaid_leave_days: parseFloat(item.unpaid_leave_days) || 0,
