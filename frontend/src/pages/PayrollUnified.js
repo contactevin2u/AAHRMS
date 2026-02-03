@@ -1266,7 +1266,7 @@ function PayrollUnified() {
                       <table>
                         <thead>
                           <tr>
-                            <th>Employee</th><th>Basic</th>
+                            <th>Employee</th><th>Basic</th><th>Deduct</th>
                             {vis.ot && <th>OT</th>}
                             {vis.allow && <th>Allow</th>}
                             {vis.bonus && <th>Bonus</th>}
@@ -1287,6 +1287,15 @@ function PayrollUnified() {
                                 {expandedEmployee === item.id && <div style={{ fontSize: '0.8rem', color: '#555', marginTop: '2px' }}>{item.employee_name}</div>}
                               </td>
                               {renderCell(item, 'basic_salary', item.basic_salary)}
+                              <td style={{color: '#dc3545'}}>
+                                {(() => {
+                                  const absentDed = parseFloat(item.absent_day_deduction) || 0;
+                                  const shortHrsDed = parseFloat(item.short_hours_deduction) || 0;
+                                  const unpaidDed = parseFloat(item.unpaid_leave_deduction) || 0;
+                                  const totalDed = absentDed + shortHrsDed + unpaidDed;
+                                  return totalDed > 0 ? `-${formatAmount(totalDed)}` : '-';
+                                })()}
+                              </td>
                               {vis.ot && renderCell(item, 'ot_amount', item.ot_amount)}
                               {vis.allow && renderCell(item, 'fixed_allowance', item.fixed_allowance)}
                               {vis.bonus && renderCell(item, 'bonus', item.bonus)}
