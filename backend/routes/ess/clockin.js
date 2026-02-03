@@ -71,10 +71,14 @@ const STANDARD_WORK_MINUTES_MIMIX = 510;
 // AA Alive: 9 hours = 540 minutes (break included, no separate break clock)
 const STANDARD_WORK_MINUTES_AA_ALIVE = 540;
 
-// Night shift cutoff time (2:00 AM) - actions before this time are treated as previous day
-// This applies to companies with night shifts (like Mimix)
-const NIGHT_SHIFT_CUTOFF_HOUR = 2;
-const NIGHT_SHIFT_CUTOFF_MINUTE = 0;
+// Night shift cutoff times
+// Standard cutoff: 1:45 AM - after this, clock-in = new day (for Mimix, and AA Alive who already clocked out)
+// AA Alive extended cutoff: 4:00 AM - for drivers still working (no clock_out_1 yet)
+// Auto clock-out leaves time blank for both
+const STANDARD_CUTOFF_HOUR = 1;
+const STANDARD_CUTOFF_MINUTE = 45;
+const AA_ALIVE_EXTENDED_CUTOFF_HOUR = 4;
+const AA_ALIVE_EXTENDED_CUTOFF_MINUTE = 0;
 
 // Maximum allowed photo size (200KB as per storage minimization policy)
 const MAX_PHOTO_SIZE_KB = 200;
@@ -207,41 +211,27 @@ function getCurrentDate() {
 }
 
 /**
- * Get the effective work date considering night shift cutoff
- * If current time is after midnight but before cutoff (e.g., 1:30 AM),
- * return yesterday's date for shift continuation
+ * Check if current time is past the standard cutoff (1:45 AM)
  */
-function getEffectiveWorkDate() {
+function isPastStandardCutoff() {
   const malaysiaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
   const hour = malaysiaTime.getHours();
   const minute = malaysiaTime.getMinutes();
 
-  // Check if we're in the "after midnight but before cutoff" window
-  const isBeforeCutoff = hour < NIGHT_SHIFT_CUTOFF_HOUR ||
-    (hour === NIGHT_SHIFT_CUTOFF_HOUR && minute < NIGHT_SHIFT_CUTOFF_MINUTE);
-
-  if (isBeforeCutoff) {
-    // Return yesterday's date
-    malaysiaTime.setDate(malaysiaTime.getDate() - 1);
-  }
-
-  const year = malaysiaTime.getFullYear();
-  const month = String(malaysiaTime.getMonth() + 1).padStart(2, '0');
-  const day = String(malaysiaTime.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return hour > STANDARD_CUTOFF_HOUR ||
+    (hour === STANDARD_CUTOFF_HOUR && minute >= STANDARD_CUTOFF_MINUTE);
 }
 
 /**
- * Check if current time is past the night shift cutoff
+ * Check if current time is past the extended cutoff (4:00 AM) for AA Alive drivers still working
  */
-function isPastCutoff() {
+function isPastExtendedCutoff() {
   const malaysiaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
   const hour = malaysiaTime.getHours();
   const minute = malaysiaTime.getMinutes();
 
-  // Past cutoff if hour > cutoff hour, or hour == cutoff hour and minute >= cutoff minute
-  return hour > NIGHT_SHIFT_CUTOFF_HOUR ||
-    (hour === NIGHT_SHIFT_CUTOFF_HOUR && minute >= NIGHT_SHIFT_CUTOFF_MINUTE);
+  return hour > AA_ALIVE_EXTENDED_CUTOFF_HOUR ||
+    (hour === AA_ALIVE_EXTENDED_CUTOFF_HOUR && minute >= AA_ALIVE_EXTENDED_CUTOFF_MINUTE);
 }
 
 /**
@@ -275,84 +265,58 @@ async function getOpenShiftFromYesterday(employeeId) {
 /**
  * Auto clock-out an open shift at the cutoff time
  * This is called when an employee has an open shift from yesterday and it's past the cutoff
- * The shift will be auto-closed at 1:30 AM with a system note
+ * For Mimix: fills in clock_out time with cutoff time (1:45 AM)
+ * For AA Alive: leaves clock_out blank, just marks status as completed
+ * @param {object} record - The clock-in record to auto-close
+ * @param {boolean} isAAAlive - Whether this is an AA Alive company
  */
-async function autoClockOutShift(record) {
-  const cutoffTime = `${String(NIGHT_SHIFT_CUTOFF_HOUR).padStart(2, '0')}:${String(NIGHT_SHIFT_CUTOFF_MINUTE).padStart(2, '0')}:00`;
-
-  // Determine which field to update based on current state
-  let updateField = null;
-  if (record.clock_in_1 && !record.clock_out_1) {
-    // Was working, never took break - auto clock out at clock_out_2 (end of day)
-    updateField = 'clock_out_2';
-  } else if (record.clock_out_1 && !record.clock_in_2) {
-    // Was on break - auto clock out at clock_out_2
-    updateField = 'clock_out_2';
-  } else if (record.clock_in_2 && !record.clock_out_2) {
-    // Returned from break but didn't clock out - auto clock out at clock_out_2
-    updateField = 'clock_out_2';
-  }
-
-  if (!updateField) {
-    return null; // Nothing to update
-  }
-
-  // Calculate work time for the auto clock-out
-  const updatedRecord = { ...record };
-  updatedRecord[updateField] = cutoffTime;
-
-  // Simple calculation for total work time
-  const parseTime = (timeStr) => {
-    if (!timeStr) return null;
-    const [h, m] = timeStr.split(':').map(Number);
-    return h * 60 + m;
-  };
+async function autoClockOutShift(record, isAAAlive = false) {
+  // For both Mimix and AA Alive: leave clock_out blank, just mark as completed
+  // AA Alive: flat 8 hours, no OT
+  // Mimix: calculate hours from clock_in_1 to clock_out_1 (break) only, no OT
+  const cutoffLabel = isAAAlive ? '4:00 AM' : '1:45 AM';
 
   let totalMinutes = 0;
-  const clockIn1 = parseTime(record.clock_in_1);
-  const clockOut1 = parseTime(record.clock_out_1);
-  const clockIn2 = parseTime(record.clock_in_2);
-  const cutoffMinutes = NIGHT_SHIFT_CUTOFF_HOUR * 60 + NIGHT_SHIFT_CUTOFF_MINUTE + (24 * 60); // Add 24 hours since it's next day
+  let totalWorkHours = 0;
 
-  if (clockIn1) {
-    if (clockOut1 && clockIn2) {
-      // Full shift with break: (clock_out_1 - clock_in_1) + (cutoff - clock_in_2)
-      totalMinutes = (clockOut1 - clockIn1) + (cutoffMinutes - (clockIn2 + 24 * 60));
-    } else if (clockOut1) {
-      // Only morning session
-      totalMinutes = clockOut1 - clockIn1;
-    } else {
-      // No break taken, straight through
-      totalMinutes = cutoffMinutes - clockIn1;
+  if (isAAAlive) {
+    // AA Alive: flat 8 hours
+    totalMinutes = 480; // 8 hours
+    totalWorkHours = 8;
+  } else {
+    // Mimix: calculate hours from clock_in_1 to clock_out_1 only
+    if (record.clock_in_1 && record.clock_out_1) {
+      const parseTime = (timeStr) => {
+        if (!timeStr) return null;
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+      };
+      const clockIn1 = parseTime(record.clock_in_1);
+      const clockOut1 = parseTime(record.clock_out_1);
+      if (clockIn1 !== null && clockOut1 !== null) {
+        // Handle overnight: if clock_out_1 < clock_in_1, add 24 hours
+        totalMinutes = clockOut1 >= clockIn1 ? (clockOut1 - clockIn1) : (clockOut1 + 1440 - clockIn1);
+      }
     }
+    // Cap at reasonable maximum (16 hours)
+    totalMinutes = Math.max(0, Math.min(totalMinutes, 960));
+    totalWorkHours = Math.round(totalMinutes / 6) / 10; // Round to 1 decimal
   }
 
-  // Cap at reasonable maximum (16 hours = 960 minutes)
-  totalMinutes = Math.max(0, Math.min(totalMinutes, 960));
-
-  // OT calculation (over 8.5 hours = 510 minutes)
-  const otMinutes = Math.max(0, totalMinutes - 510);
-
-  // Calculate hours in JavaScript to avoid PostgreSQL type inference issues
-  const totalWorkHours = Math.round(totalMinutes / 6) / 10;  // Round to 1 decimal
-  const otHoursCalc = Math.round(otMinutes / 6) / 10;  // Round to 1 decimal
-
-  // Update the record
   const result = await pool.query(
     `UPDATE clock_in_records SET
-       ${updateField} = $1,
-       total_work_minutes = $2,
-       ot_minutes = $3,
-       total_work_hours = $5,
-       ot_hours = $6,
        status = 'completed',
-       notes = COALESCE(notes, '') || ' [Auto clock-out at cutoff time 01:30 AM]'
+       total_work_minutes = $1,
+       total_work_hours = $2,
+       ot_minutes = 0,
+       ot_hours = 0,
+       notes = COALESCE(notes, '') || $3
      WHERE id = $4
      RETURNING *`,
-    [cutoffTime, totalMinutes, otMinutes, record.id, totalWorkHours, otHoursCalc]
+    [totalMinutes, totalWorkHours, ` [Auto-closed at ${cutoffLabel} - no clock-out recorded]`, record.id]
   );
 
-  console.log(`Auto clock-out for employee shift ${record.id}: ${updateField} at ${cutoffTime}`);
+  console.log(`Auto clock-out for employee shift ${record.id}: marked completed with ${totalWorkHours}h (no OT)`);
 
   return result.rows[0];
 }
@@ -497,18 +461,26 @@ router.get('/status', authenticateEmployee, asyncHandler(async (req, res) => {
   let openYesterdayShift = await getOpenShiftFromYesterday(employeeId);
 
   if (openYesterdayShift) {
-    // For AA Alive: clock_out_1 means session ended (not break), so if clock_out_1 is filled
-    // but clock_in_2 hasn't started, the shift is complete — don't treat it as open
-    if (isAAAlive && openYesterdayShift.clock_out_1 && !openYesterdayShift.clock_in_2) {
+    // Determine which cutoff applies:
+    // - AA Alive with clock_out_1 already done: use standard cutoff (1:45am) - session ended, new clock-in = new day
+    // - AA Alive without clock_out_1 (still working): use extended cutoff (4:00am) - can continue shift
+    // - Mimix: always use standard cutoff (1:45am)
+    const hasClockOut1 = !!openYesterdayShift.clock_out_1;
+    const useExtendedCutoff = isAAAlive && !hasClockOut1;
+
+    // For AA Alive with clock_out_1: if past standard cutoff, treat shift as done (new clock-in = new day)
+    if (isAAAlive && hasClockOut1 && !openYesterdayShift.clock_in_2 && isPastStandardCutoff()) {
       openYesterdayShift = null;
     }
 
-    // Check if it's past the cutoff time (1:30 AM)
-    // If so, auto clock-out the shift instead of letting them continue
-    // AA Alive employees are exempt from cutoff - they can continue their shift
-    if (openYesterdayShift && !isAAAlive && isPastCutoff()) {
-      console.log(`Auto clock-out triggered for employee ${employeeId}: past cutoff time`);
-      const autoClosedRecord = await autoClockOutShift(openYesterdayShift);
+    // Check if it's past the cutoff time - auto-close the shift
+    // Extended cutoff (4am) for AA Alive still working, standard (1:45am) for all others
+    const pastCutoff = useExtendedCutoff ? isPastExtendedCutoff() : isPastStandardCutoff();
+
+    if (openYesterdayShift && pastCutoff) {
+      const cutoffLabel = useExtendedCutoff ? '4:00 AM' : '1:45 AM';
+      console.log(`Auto clock-out triggered for employee ${employeeId}: past ${cutoffLabel} cutoff`);
+      const autoClosedRecord = await autoClockOutShift(openYesterdayShift, isAAAlive);
 
       if (autoClosedRecord) {
         // Shift has been auto-closed, return completed status
@@ -647,20 +619,7 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError(validationErrors.join('. '));
   }
 
-  // Check if there's an open shift from yesterday that needs to be closed
-  // This handles night shift workers clocking out after midnight
-  const openYesterdayShift = await getOpenShiftFromYesterday(employeeId);
-  let useYesterdayShift = false;
-
-  if (openYesterdayShift && action !== 'clock_in_1') {
-    // There's an open shift from yesterday and this is not a new clock-in
-    // Use yesterday's date for this action
-    useYesterdayShift = true;
-    workDate = openYesterdayShift.work_date;
-    console.log(`Night shift continuation: Using yesterday's shift (${workDate}) for ${action}`);
-  }
-
-  // Get employee info
+  // Get employee info first (needed for cutoff logic)
   const empResult = await pool.query(
     `SELECT e.company_id, e.outlet_id, c.grouping_type
      FROM employees e
@@ -674,6 +633,29 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
   }
 
   const { company_id, outlet_id, grouping_type } = empResult.rows[0];
+  const isAAAlive = isAAAliveCompany(company_id);
+
+  // Check if there's an open shift from yesterday that needs to be continued or closed
+  // This handles night shift workers clocking out after midnight
+  const openYesterdayShift = await getOpenShiftFromYesterday(employeeId);
+  let useYesterdayShift = false;
+
+  if (openYesterdayShift && action !== 'clock_in_1') {
+    // There's an open shift from yesterday and this is not a new clock-in
+    // Determine if we should use yesterday's shift based on cutoff rules
+    const hasClockOut1 = !!openYesterdayShift.clock_out_1;
+    const useExtendedCutoff = isAAAlive && !hasClockOut1;
+    const pastCutoff = useExtendedCutoff ? isPastExtendedCutoff() : isPastStandardCutoff();
+
+    if (!pastCutoff) {
+      // Before cutoff - use yesterday's shift for this action
+      useYesterdayShift = true;
+      workDate = openYesterdayShift.work_date;
+      console.log(`Night shift continuation: Using yesterday's shift (${workDate}) for ${action}`);
+    }
+    // If past cutoff, the /status endpoint should have already auto-closed the shift
+    // and we'll create a new record for today
+  }
 
   // Fire photo AI warning notification (non-blocking, fire-and-forget)
   if (photo_ai_warning) {
