@@ -743,17 +743,32 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
 
         // Process each employee for this outlet
         for (const emp of employees.rows) {
-          // Skip part-time employees - they are processed separately
-          if (emp.employee_type === 'part_time') {
-            continue;
+          const prevSalary = prevPayrollMap[emp.id];
+          const isPartTime = emp.work_type === 'part_time' || emp.employment_type === 'part_time' || emp.employee_type === 'part_time';
+
+          let basicSalary = 0;
+          let fixedAllowance = 0;
+          let partTimeData = null;
+
+          if (isPartTime) {
+            // Part-time: salary = working hours × hourly rate
+            partTimeData = await calculatePartTimeHours(
+              emp.id,
+              period.start.toISOString().split('T')[0],
+              period.end.toISOString().split('T')[0],
+              companyId,
+              rates
+            );
+            basicSalary = partTimeData.grossSalary;
+            fixedAllowance = 0; // Part-time no fixed allowance
+          } else {
+            // Full-time: use basic salary
+            basicSalary = prevSalary ? parseFloat(prevSalary.basic_salary) : (parseFloat(emp.basic_salary) || 0);
+            fixedAllowance = prevSalary ? parseFloat(prevSalary.fixed_allowance) : (parseFloat(emp.fixed_allowance) || 0);
           }
 
-          const prevSalary = prevPayrollMap[emp.id];
-          let basicSalary = prevSalary ? parseFloat(prevSalary.basic_salary) : (parseFloat(emp.basic_salary) || 0);
-          const fixedAllowance = prevSalary ? parseFloat(prevSalary.fixed_allowance) : (parseFloat(emp.fixed_allowance) || 0);
-
-          const flexCommissions = commissionsMap[emp.id] || 0;
-          const flexAllowData = allowancesMap[emp.id] || { total: 0, taxable: 0, exempt: 0 };
+          const flexCommissions = isPartTime ? 0 : (commissionsMap[emp.id] || 0);
+          const flexAllowData = isPartTime ? { total: 0, taxable: 0, exempt: 0 } : (allowancesMap[emp.id] || { total: 0, taxable: 0, exempt: 0 });
           const flexAllowances = flexAllowData.total;
           const claimsAmount = claimsMap[emp.id] || 0;
 
@@ -795,7 +810,8 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
             }
           }
 
-          // Calculate schedule-based pay and absent days for outlet companies
+          // Calculate schedule-based pay and absent days for outlet companies (full-time only)
+          // Part-time employees are paid by hours worked, no absent deduction
           const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
           let unpaidDeduction = 0, unpaidDays = 0;
           let absentDays = 0, absentDayDeduction = 0;
@@ -803,36 +819,38 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
           let lateDays = 0, attendanceBonus = 0;
           let scheduleBasedPay = null;
 
-          try {
-            scheduleBasedPay = await calculateScheduleBasedPay(
-              emp.id,
-              period.start.toISOString().split('T')[0],
-              period.end.toISOString().split('T')[0]
-            );
+          if (!isPartTime) {
+            try {
+              scheduleBasedPay = await calculateScheduleBasedPay(
+                emp.id,
+                period.start.toISOString().split('T')[0],
+                period.end.toISOString().split('T')[0]
+              );
 
-            if (scheduleBasedPay.scheduledDays > 0) {
-              const scheduledDailyRate = basicSalary / scheduleBasedPay.scheduledDays;
-              const scheduledPay = scheduleBasedPay.payableDays * scheduledDailyRate;
-              unpaidDeduction = basicSalary - scheduledPay;
-              unpaidDays = scheduleBasedPay.absentDays;
-              absentDays = scheduleBasedPay.absentDays || 0;
-              absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
-              shortHours = scheduleBasedPay.shortHours || 0;
-              if (shortHours > 0) {
-                const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
-                shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+              if (scheduleBasedPay.scheduledDays > 0) {
+                const scheduledDailyRate = basicSalary / scheduleBasedPay.scheduledDays;
+                const scheduledPay = scheduleBasedPay.payableDays * scheduledDailyRate;
+                unpaidDeduction = basicSalary - scheduledPay;
+                unpaidDays = scheduleBasedPay.absentDays;
+                absentDays = scheduleBasedPay.absentDays || 0;
+                absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+                shortHours = scheduleBasedPay.shortHours || 0;
+                if (shortHours > 0) {
+                  const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+                  shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+                }
+                lateDays = scheduleBasedPay.lateDays || 0;
+                // Mimix attendance bonus (full-time only)
+                const totalPenalty = lateDays + absentDays;
+                if (totalPenalty === 0) attendanceBonus = 400;
+                else if (totalPenalty === 1) attendanceBonus = 300;
+                else if (totalPenalty === 2) attendanceBonus = 200;
+                else if (totalPenalty === 3) attendanceBonus = 100;
+                else attendanceBonus = 0;
               }
-              lateDays = scheduleBasedPay.lateDays || 0;
-              // Mimix attendance bonus
-              const totalPenalty = lateDays + absentDays;
-              if (totalPenalty === 0) attendanceBonus = 400;
-              else if (totalPenalty === 1) attendanceBonus = 300;
-              else if (totalPenalty === 2) attendanceBonus = 200;
-              else if (totalPenalty === 3) attendanceBonus = 100;
-              else attendanceBonus = 0;
+            } catch (e) {
+              console.error(`Schedule-based pay calc error for ${emp.name}:`, e.message);
             }
-          } catch (e) {
-            console.error(`Schedule-based pay calc error for ${emp.name}:`, e.message);
           }
 
           const totalAllowances = fixedAllowance + flexAllowances;
