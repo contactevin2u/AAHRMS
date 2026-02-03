@@ -1292,7 +1292,8 @@ function PayrollUnified() {
                                   const absentDed = parseFloat(item.absent_day_deduction) || 0;
                                   const shortHrsDed = parseFloat(item.short_hours_deduction) || 0;
                                   const unpaidDed = parseFloat(item.unpaid_leave_deduction) || 0;
-                                  const totalDed = absentDed + shortHrsDed + unpaidDed;
+                                  const otherDed = parseFloat(item.other_deductions) || 0;
+                                  const totalDed = absentDed + shortHrsDed + unpaidDed + otherDed;
                                   return totalDed > 0 ? `-${formatAmount(totalDed)}` : '-';
                                 })()}
                               </td>

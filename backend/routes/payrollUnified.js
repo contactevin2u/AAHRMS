@@ -2603,8 +2603,73 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const advanceDeduction = parseFloat(item.advance_deduction) || 0;
     const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
     const otherDeductions = parseFloat(item.other_deductions) || 0;
-    const shortHoursDeduction = parseFloat(item.short_hours_deduction) || 0;
-    const absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
+    let shortHoursDeduction = parseFloat(item.short_hours_deduction) || 0;
+    let shortHours = parseFloat(item.short_hours) || 0;
+
+    // Recalculate absent days from clock-in records
+    const workingDays = rates.standard_work_days || 26;
+    const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
+    let absentDays = parseFloat(item.absent_days) || 0;
+    let absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
+
+    try {
+      const periodStart = item.period_start_date;
+      const periodEnd = item.period_end_date;
+
+      // Count days worked
+      const clockInResult = await pool.query(`
+        SELECT COUNT(DISTINCT work_date) as days_worked,
+               COALESCE(SUM(total_work_hours), 0) as total_hours
+        FROM clock_in_records
+        WHERE employee_id = $1
+          AND work_date BETWEEN $2 AND $3
+          AND status = 'completed'
+      `, [item.emp_id, periodStart, periodEnd]);
+      const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
+      const totalHoursWorked = parseFloat(clockInResult.rows[0]?.total_hours) || 0;
+
+      // Count paid leave days
+      const paidLeaveResult = await pool.query(`
+        SELECT COALESCE(SUM(
+          GREATEST(0,
+            (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+            - (SELECT COUNT(*) FROM generate_series(
+                GREATEST(lr.start_date, $2::date),
+                LEAST(lr.end_date, $1::date),
+                '1 day'::interval
+              ) d WHERE EXTRACT(DOW FROM d) IN (0, 6))
+          )
+        ), 0) as paid_leave_days
+        FROM leave_requests lr
+        JOIN leave_types lt ON lr.leave_type_id = lt.id
+        WHERE lr.employee_id = $3
+          AND lt.is_paid = TRUE
+          AND lr.status = 'approved'
+          AND lr.start_date <= $1
+          AND lr.end_date >= $2
+      `, [periodEnd, periodStart, item.emp_id]);
+      const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
+
+      // Calculate absent days
+      const unpaidDays = parseFloat(item.unpaid_leave_days) || 0;
+      absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
+      absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+
+      // Calculate short hours for non-outlet companies
+      if (settings.groupingType !== 'outlet') {
+        const expectedHoursPerDay = rates.standard_work_hours || 8;
+        const expectedHours = daysWorked * expectedHoursPerDay;
+        const actualBaseHours = totalHoursWorked - otHours;
+        const calculatedShortHours = Math.max(0, expectedHours - actualBaseHours);
+        if (calculatedShortHours > 0) {
+          shortHours = Math.round(calculatedShortHours * 100) / 100;
+          const hourlyRate = basicSalary / workingDays / expectedHoursPerDay;
+          shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+        }
+      }
+    } catch (e) {
+      console.warn(`Absent days recalculation failed for item ${id}:`, e.message);
+    }
 
     // Calculate gross
     const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
@@ -2657,6 +2722,8 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
         eis_employee = $9, eis_employer = $10,
         pcb = $11,
         total_deductions = $12, net_pay = $13, employer_total_cost = $14,
+        absent_days = $16, absent_day_deduction = $17,
+        short_hours = $18, short_hours_deduction = $19,
         updated_at = NOW()
       WHERE id = $15
       RETURNING *
@@ -2668,7 +2735,9 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
       eisEmployee, eisEmployer,
       pcb,
       totalDeductions, netPay, employerCost,
-      id
+      id,
+      absentDays, absentDayDeduction,
+      shortHours, shortHoursDeduction
     ]);
 
     // Update run totals
@@ -2679,6 +2748,10 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
       recalculated: {
         ot_hours: otHours,
         ot_amount: otAmount,
+        absent_days: absentDays,
+        absent_day_deduction: absentDayDeduction,
+        short_hours: shortHours,
+        short_hours_deduction: shortHoursDeduction,
         statutory_base: statutoryBase,
         epf_employee: epfEmployee,
         socso_employee: socsoEmployee,
