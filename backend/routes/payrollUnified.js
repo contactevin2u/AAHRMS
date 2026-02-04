@@ -856,8 +856,10 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
           const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + flexCommissions + claimsAmount + attendanceBonus;
           const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
 
-          // Statutory base = basic + commission (excludes allowance/OT unless configured)
-          const statutoryBase = basicSalary + flexCommissions;
+          // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
+          // This ensures statutory contributions are proportional to actual work done
+          const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+          const statutoryBase = actualBasicPay + flexCommissions;
           // PCB calculation needs full gross including allowance
           // taxableAllowance: typed flex allowances use per-type is_taxable flag
           // default_allowance (fixedAllowance) uses employee-level allowance_pcb setting
