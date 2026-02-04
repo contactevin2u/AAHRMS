@@ -649,9 +649,17 @@ function PayrollUnified() {
       absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
     }
 
+    // Recalculate OT Amount with correct 1.5x formula
+    const otHours = parseFloat(item.ot_hours) || 0;
+    let otAmount = parseFloat(item.ot_amount) || 0;
+    if (otHours > 0 && basicSalary > 0) {
+      const hourlyRate = basicSalary / workDays / 8;
+      otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+    }
+
     setItemForm({
       basic_salary: item.basic_salary || 0, fixed_allowance: item.fixed_allowance || 0,
-      ot_hours: item.ot_hours || 0, ot_amount: item.ot_amount || 0,
+      ot_hours: otHours, ot_amount: otAmount,
       ph_days_worked: item.ph_days_worked || 0, ph_pay: item.ph_pay || 0,
       incentive_amount: item.incentive_amount || 0, commission_amount: item.commission_amount || 0,
       trade_commission_amount: item.trade_commission_amount || 0, outstation_amount: item.outstation_amount || 0,
