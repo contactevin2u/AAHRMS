@@ -27,11 +27,6 @@ const formatters = {
     generate: (payrollItems, options = {}) => {
       const lines = [];
 
-      // Generate reference numbers
-      const refNum = Math.floor(Math.random() * 900000) + 100000;
-      const monthNames = ['', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-      const monthAbbr = monthNames[parseInt(options.month)] || 'SAL';
-
       // Format crediting date as DD/MM/YYYY
       let creditDate = options.creditingDate;
       if (!creditDate) {
@@ -44,22 +39,13 @@ const formatters = {
       // Header section (6 rows)
       lines.push('Employer Info :,,,,,,,');
       lines.push(`Crediting Date (eg. dd/MM/yyyy),${creditDate},,,,,,`);
-      lines.push(`Payment Reference,MBPREF${refNum},,,,,,`);
-      lines.push(`Payment Description,MBP${monthAbbr}${refNum},,,,,,`);
+      lines.push('Payment Reference,,,,,,,');
+      lines.push('Payment Description,,,,,,,');
       lines.push('Bulk Payment Type,Salary,,,,,,');
       lines.push(',,,,,,,');
 
       // Column headers
       lines.push('Beneficiary Name,Beneficiary Bank,Beneficiary Account No,ID Type,ID Number,Payment Amount,Payment Reference,Payment Description');
-
-      // Generate unique transaction reference for this batch
-      const now = new Date();
-      const dateStr = String(now.getDate()).padStart(2, '0') +
-                      String(now.getMonth() + 1).padStart(2, '0') +
-                      String(now.getFullYear()).slice(-2);
-      const batchRef = Math.floor(Math.random() * 900000000) + 100000000;
-      const paymentRef = `PRE${dateStr}${batchRef}`;
-      const paymentDesc = `PDC${dateStr}${batchRef}`;
 
       // Data rows
       payrollItems.forEach(item => {
@@ -76,8 +62,8 @@ const formatters = {
           'NRIC',
           icNumber,
           (parseFloat(item.net_pay) || 0).toFixed(2),
-          paymentRef,
-          paymentDesc
+          '',  // Payment Reference - left blank
+          ''   // Payment Description - left blank
         ].join(',');
 
         lines.push(line);
