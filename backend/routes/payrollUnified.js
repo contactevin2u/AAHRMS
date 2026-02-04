@@ -1972,7 +1972,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
 
       // Statutory base calculation
-      let statutoryBase = basicSalary + commissionAmount;
+      // EPF/SOCSO/EIS should be based on actual pay received (after absent/unpaid/short hours deductions)
+      // This ensures statutory contributions are proportional to actual work done
+      const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+      let statutoryBase = actualBasicPay + commissionAmount;
       if (statutory.statutory_on_ot) statutoryBase += otAmount;
       if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
       if (statutory.statutory_on_allowance) statutoryBase += totalAllowances;
@@ -2418,8 +2421,9 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
                         commissionAmount + tradeCommission + outstationAmount + bonus + attendanceBonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
 
-    // Statutory base
-    let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
+    // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
+    const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+    let statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
     if (statutory.statutory_on_ot) statutoryBase += otAmount;
     if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
     if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
@@ -2744,8 +2748,9 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
                         commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
 
-    // Statutory base
-    let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
+    // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
+    const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+    let statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
     if (statutory.statutory_on_ot) statutoryBase += otAmount;
     if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
     if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
@@ -2940,7 +2945,9 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
                           commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction;
 
-        let statutoryBase = basicSalary + commissionAmount + tradeCommission + bonus;
+        // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
+        const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction);
+        let statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
         if (statutory.statutory_on_ot) statutoryBase += otAmount;
         if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
         if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
