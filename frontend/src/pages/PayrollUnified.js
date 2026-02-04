@@ -1911,33 +1911,37 @@ function PayrollUnified() {
                     shortHoursMap[d.date] = d.short_hours;
                   });
                   return (
-                    <table className="data-table" style={{width: 'auto', minWidth: '520px'}}>
+                    <table className="data-table" style={{width: 'auto', minWidth: '580px'}}>
                       <thead>
                         <tr>
-                          <th style={{width: '110px'}}>Date</th>
-                          <th style={{width: '70px', textAlign: 'center'}}>Clock In</th>
-                          <th style={{width: '70px', textAlign: 'center'}}>Clock Out</th>
-                          <th style={{width: '60px', textAlign: 'center'}}>Hours</th>
-                          <th style={{width: '60px', textAlign: 'center'}}>Short</th>
-                          <th style={{width: '60px', textAlign: 'center'}}>OT</th>
+                          <th style={{width: '100px'}}>Date</th>
+                          <th style={{width: '140px', textAlign: 'center'}}>Session 1</th>
+                          <th style={{width: '140px', textAlign: 'center'}}>Session 2</th>
+                          <th style={{width: '50px', textAlign: 'center'}}>Hours</th>
+                          <th style={{width: '50px', textAlign: 'center'}}>Short</th>
+                          <th style={{width: '50px', textAlign: 'center'}}>OT</th>
                         </tr>
                       </thead>
                       <tbody>
                         {(attendanceDetails.details?.days_worked || []).map((day, i) => {
                           const formatTime = (timeVal) => {
-                            if (!timeVal) return '-';
+                            if (!timeVal) return null;
                             if (typeof timeVal === 'string' && timeVal.match(/^\d{2}:\d{2}/)) {
                               return timeVal.substring(0, 5);
                             }
                             const d = new Date(timeVal);
-                            return isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'});
+                            return isNaN(d.getTime()) ? null : d.toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'});
                           };
                           const shortHrs = shortHoursMap[day.date] || 0;
+                          const in1 = formatTime(day.clock_in);
+                          const out1 = formatTime(day.clock_out);
+                          const in2 = formatTime(day.clock_in_2);
+                          const out2 = formatTime(day.clock_out_2);
                           return (
                             <tr key={i}>
                               <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
-                              <td style={{textAlign: 'center'}}>{formatTime(day.clock_in)}</td>
-                              <td style={{textAlign: 'center'}}>{formatTime(day.clock_out)}</td>
+                              <td style={{textAlign: 'center', fontSize: '0.85rem'}}>{in1 && out1 ? `${in1} - ${out1}` : (in1 || '-')}</td>
+                              <td style={{textAlign: 'center', fontSize: '0.85rem', color: in2 ? '#333' : '#ccc'}}>{in2 && out2 ? `${in2} - ${out2}` : (in2 ? `${in2} - ?` : '-')}</td>
                               <td style={{textAlign: 'center'}}>{day.total_hours?.toFixed(1) || 0}h</td>
                               <td style={{textAlign: 'center', color: shortHrs > 0 ? '#dc3545' : '#999', fontWeight: shortHrs > 0 ? '600' : 'normal'}}>{shortHrs > 0 ? `-${shortHrs.toFixed(2)}h` : '-'}</td>
                               <td style={{textAlign: 'center', color: day.ot_hours > 0 ? '#28a745' : '#999', fontWeight: day.ot_hours > 0 ? '600' : 'normal'}}>{day.ot_hours > 0 ? `+${day.ot_hours?.toFixed(1)}h` : '-'}</td>
