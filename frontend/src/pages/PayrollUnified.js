@@ -1857,14 +1857,14 @@ function PayrollUnified() {
 
               <div className="modal-scroll-content" style={{maxHeight: '400px', overflowY: 'auto', padding: '0 20px 20px'}}>
                 {attendanceDetailsTab === 'days_worked' && (
-                  <table className="data-table" style={{width: '100%'}}>
+                  <table className="data-table" style={{width: 'auto', minWidth: '450px'}}>
                     <thead>
                       <tr>
-                        <th>Date</th>
-                        <th>Clock In</th>
-                        <th>Clock Out</th>
-                        <th>Hours</th>
-                        <th>OT</th>
+                        <th style={{width: '110px'}}>Date</th>
+                        <th style={{width: '70px', textAlign: 'center'}}>Clock In</th>
+                        <th style={{width: '70px', textAlign: 'center'}}>Clock Out</th>
+                        <th style={{width: '60px', textAlign: 'center'}}>Hours</th>
+                        <th style={{width: '60px', textAlign: 'center'}}>OT</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1883,10 +1883,10 @@ function PayrollUnified() {
                         return (
                           <tr key={i}>
                             <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
-                            <td>{formatTime(day.clock_in)}</td>
-                            <td>{formatTime(day.clock_out)}</td>
-                            <td>{day.total_hours?.toFixed(1) || 0}h</td>
-                            <td style={{color: day.ot_hours > 0 ? '#28a745' : '#999'}}>{day.ot_hours > 0 ? `+${day.ot_hours?.toFixed(1)}h` : '-'}</td>
+                            <td style={{textAlign: 'center'}}>{formatTime(day.clock_in)}</td>
+                            <td style={{textAlign: 'center'}}>{formatTime(day.clock_out)}</td>
+                            <td style={{textAlign: 'center'}}>{day.total_hours?.toFixed(1) || 0}h</td>
+                            <td style={{textAlign: 'center', color: day.ot_hours > 0 ? '#28a745' : '#999', fontWeight: day.ot_hours > 0 ? '600' : 'normal'}}>{day.ot_hours > 0 ? `+${day.ot_hours?.toFixed(1)}h` : '-'}</td>
                           </tr>
                         );
                       })}
@@ -1922,22 +1922,22 @@ function PayrollUnified() {
                 )}
 
                 {attendanceDetailsTab === 'short_hours' && (
-                  <table className="data-table" style={{width: '100%'}}>
+                  <table className="data-table" style={{width: 'auto', minWidth: '400px'}}>
                     <thead>
                       <tr>
-                        <th>Date</th>
-                        <th>Expected</th>
-                        <th>Worked</th>
-                        <th>Short</th>
+                        <th style={{width: '120px'}}>Date</th>
+                        <th style={{width: '80px', textAlign: 'center'}}>Expected</th>
+                        <th style={{width: '80px', textAlign: 'center'}}>Worked</th>
+                        <th style={{width: '80px', textAlign: 'center'}}>Short</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(attendanceDetails.details?.short_hours_days || []).map((day, i) => (
                         <tr key={i}>
                           <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
-                          <td>{day.expected_hours}h</td>
-                          <td>{day.worked_hours}h</td>
-                          <td style={{color: '#dc3545'}}>-{day.short_hours}h</td>
+                          <td style={{textAlign: 'center'}}>{day.expected_hours}h</td>
+                          <td style={{textAlign: 'center'}}>{day.worked_hours}h</td>
+                          <td style={{color: '#dc3545', fontWeight: '600', textAlign: 'center'}}>-{day.short_hours}h</td>
                         </tr>
                       ))}
                       {(attendanceDetails.details?.short_hours_days || []).length === 0 && (
