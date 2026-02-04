@@ -83,6 +83,9 @@ const formatters = {
         lines.push(line);
       });
 
+      // Add empty line at end (required by Maybank format)
+      lines.push('');
+
       return lines.join('\r\n');
     }
   },
