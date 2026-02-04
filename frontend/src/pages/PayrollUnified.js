@@ -1655,6 +1655,21 @@ function PayrollUnified() {
                   </div>
                   <div className="form-row">
                     <div className="form-group">
+                      <label>PH Days Worked (Double Pay)</label>
+                      <input type="number" step="0.5" value={itemForm.ph_days_worked} onChange={(e) => handlePHDaysChange(parseFloat(e.target.value) || 0)} />
+                      {itemForm.basic_salary > 0 && (
+                        <small style={{color: '#666', fontSize: '0.75rem'}}>
+                          Daily rate: RM {(parseFloat(itemForm.basic_salary) / (selectedRun?.work_days_per_month || 22)).toFixed(2)} x 2 = RM {((parseFloat(itemForm.basic_salary) / (selectedRun?.work_days_per_month || 22)) * 2).toFixed(2)}/day
+                        </small>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label>PH Pay (2x)</label>
+                      <input type="number" step="0.01" value={itemForm.ph_pay} onChange={(e) => setItemForm({ ...itemForm, ph_pay: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
                       <label>Commission</label>
                       <input type="number" step="0.01" value={itemForm.commission_amount} onChange={(e) => handleStatutoryFieldChange('commission_amount', parseFloat(e.target.value) || 0)} />
                     </div>
