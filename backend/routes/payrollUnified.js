@@ -1474,6 +1474,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
              e.bank_account_no,
              e.work_type,
              e.employment_type,
+             e.hourly_rate,
              d.name as department_name,
              eo.name as outlet_name,
              (SELECT COUNT(DISTINCT cr.work_date)
