@@ -650,8 +650,10 @@ function PayrollUnified() {
     const otAmount = parseFloat(item.ot_amount) || 0;
 
     // For part-time: calculate normal hours (rounded to 0.5)
-    const rawHours = parseFloat(item.total_work_hours) || 0;
-    const partTimeHours = Math.floor(rawHours * 2) / 2;
+    // total_work_hours INCLUDES OT, so subtract OT to get normal hours
+    const rawTotalHours = parseFloat(item.total_work_hours) || 0;
+    const rawNormalHours = rawTotalHours - otHours; // Subtract OT
+    const partTimeHours = Math.floor(Math.max(0, rawNormalHours) * 2) / 2;
 
     setItemForm({
       basic_salary: item.basic_salary || 0, fixed_allowance: item.fixed_allowance || 0,

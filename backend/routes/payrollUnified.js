@@ -693,6 +693,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
       const fixedOT = parseFloat(emp.fixed_ot_amount) || 0;
 
+      // Auto-calculate OT from clock-in records (works for both full-time and part-time)
       if (features.auto_ot_from_clockin) {
         try {
           const otResult = await calculateOTFromClockIn(
@@ -709,10 +710,11 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       else if (otHours >= 1) {
         otHours = Math.floor(otHours * 2) / 2;
         if (isPartTime) {
-          // Part-time: OT hours paid at 1.5x hourly rate
+          // Part-time: OT at 1.5x hourly rate
           const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
           otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
         } else if (basicSalary > 0 && otHours > 0) {
+          // Full-time: OT at 1.5x calculated hourly rate
           const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
           otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
         }
@@ -1917,7 +1919,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // OT calculation
+      // OT calculation (works for both full-time and part-time)
       let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
 
       if (features.auto_ot_from_clockin) {
@@ -1943,7 +1945,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         otHours = Math.floor(otHours * 2) / 2;
         // Recalculate OT amount with rounded hours
         if (isPartTime) {
-          // Part-time: OT hours paid at 1.5x hourly rate
+          // Part-time: OT at 1.5x hourly rate
           const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
           otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
         } else if (basicSalary > 0 && otHours > 0) {
@@ -2438,8 +2440,9 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
       }
 
       const totalAllowances = fixedAllowance;
+      const isPartTime = emp.work_type === 'part_time' || emp.employment_type === 'part_time';
 
-      // Calculate OT if enabled
+      // Calculate OT if enabled (works for both full-time and part-time)
       let otHours = 0, otAmount = 0;
       const fixedOT = parseFloat(emp.fixed_ot_amount) || 0;
       if (features.auto_ot_from_clockin && basicSalary > 0) {
