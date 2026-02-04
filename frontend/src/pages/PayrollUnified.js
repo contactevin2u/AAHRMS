@@ -1561,6 +1561,44 @@ function PayrollUnified() {
               </div>
               <form onSubmit={handleUpdateItem}>
                 <div className="modal-scroll-content">
+                  {/* Part-time salary breakdown */}
+                  {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time' || editingItem?.work_type === 'PART TIMER') && (
+                    <div style={{
+                      background: 'linear-gradient(135deg, #e0f2fe, #f0f9ff)',
+                      border: '1px solid #7dd3fc',
+                      borderRadius: '8px',
+                      padding: '15px',
+                      marginBottom: '15px'
+                    }}>
+                      <div style={{fontWeight: '600', color: '#0369a1', marginBottom: '10px', fontSize: '0.9rem'}}>
+                        Part-Time Salary Breakdown
+                      </div>
+                      <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', textAlign: 'center'}}>
+                        <div>
+                          <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '4px'}}>Hours Worked</div>
+                          <div style={{fontSize: '1.2rem', fontWeight: '600', color: '#0f172a'}}>
+                            {parseFloat(editingItem?.total_work_hours || 0).toFixed(1)}h
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '4px'}}>Hourly Rate</div>
+                          <div style={{fontSize: '1.2rem', fontWeight: '600', color: '#0f172a'}}>
+                            RM {parseFloat(editingItem?.hourly_rate || 0).toFixed(2)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '4px'}}>Total Salary</div>
+                          <div style={{fontSize: '1.2rem', fontWeight: '600', color: '#059669'}}>
+                            RM {(parseFloat(editingItem?.total_work_hours || 0) * parseFloat(editingItem?.hourly_rate || 0)).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{fontSize: '0.75rem', color: '#64748b', marginTop: '10px', textAlign: 'center'}}>
+                        {parseFloat(editingItem?.total_work_hours || 0).toFixed(1)}h × RM {parseFloat(editingItem?.hourly_rate || 0).toFixed(2)}/hr = RM {(parseFloat(editingItem?.total_work_hours || 0) * parseFloat(editingItem?.hourly_rate || 0)).toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="form-row">
                     <div className="form-group">
                       <label>Basic Salary</label>
