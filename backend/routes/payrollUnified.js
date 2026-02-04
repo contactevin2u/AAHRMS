@@ -3845,6 +3845,8 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
       },
       earnings: {
         basic_salary: parseFloat(item.basic_salary) || 0,
+        wages: parseFloat(item.wages) || 0, // Part-time wages
+        part_time_hours: parseFloat(item.part_time_hours) || 0,
         fixed_allowance: parseFloat(item.fixed_allowance) || 0,
         ot_hours: parseFloat(item.ot_hours) || 0,
         ot_amount: parseFloat(item.ot_amount) || 0,
@@ -3860,6 +3862,10 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
         late_days: parseFloat(item.late_days) || 0
       },
       deductions: {
+        absent_days: parseFloat(item.absent_days) || 0,
+        absent_day_deduction: parseFloat(item.absent_day_deduction) || 0,
+        short_hours: parseFloat(item.short_hours) || 0,
+        short_hours_deduction: parseFloat(item.short_hours_deduction) || 0,
         unpaid_leave_days: parseFloat(item.unpaid_leave_days) || 0,
         unpaid_leave_deduction: parseFloat(item.unpaid_leave_deduction) || 0,
         epf_employee: parseFloat(item.epf_employee) || 0,
@@ -3867,9 +3873,7 @@ router.get('/items/:id/payslip', authenticateAdmin, async (req, res) => {
         eis_employee: parseFloat(item.eis_employee) || 0,
         pcb: parseFloat(item.pcb) || 0,
         advance_deduction: parseFloat(item.advance_deduction) || 0,
-        other_deductions: parseFloat(item.other_deductions) || 0,
-        short_hours: parseFloat(item.short_hours) || 0,
-        short_hours_deduction: parseFloat(item.short_hours_deduction) || 0
+        other_deductions: parseFloat(item.other_deductions) || 0
       },
       // EPF/PCB breakdown for MyTax entry (Saraan Biasa vs Saraan Tambahan)
       mytax_breakdown: {

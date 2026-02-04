@@ -185,6 +185,12 @@ function Payslip() {
                       <td className="amount">{formatCurrency(payslip.earnings.basic_salary)}</td>
                     </tr>
                   )}
+                  {payslip.earnings.wages > 0 && (
+                    <tr>
+                      <td>Wages {payslip.earnings.part_time_hours > 0 && `(${payslip.earnings.part_time_hours} hrs)`}</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.wages)}</td>
+                    </tr>
+                  )}
                   {(payslip.earnings.allowance > 0 || payslip.earnings.fixed_allowance > 0) && (
                     <tr>
                       <td>Allowance</td>
@@ -245,6 +251,12 @@ function Payslip() {
                       <td className="amount">{formatCurrency(payslip.earnings.bonus)}</td>
                     </tr>
                   )}
+                  {payslip.earnings.attendance_bonus > 0 && (
+                    <tr>
+                      <td>Attendance Bonus</td>
+                      <td className="amount">{formatCurrency(payslip.earnings.attendance_bonus)}</td>
+                    </tr>
+                  )}
                 </tbody>
                 <tfoot>
                   <tr className="total-row">
@@ -281,6 +293,18 @@ function Payslip() {
                     <tr>
                       <td>PCB (Income Tax)</td>
                       <td className="amount">{formatCurrency(payslip.deductions.pcb)}</td>
+                    </tr>
+                  )}
+                  {payslip.deductions.absent_day_deduction > 0 && (
+                    <tr>
+                      <td>Absent Days {payslip.deductions.absent_days > 0 && `(${payslip.deductions.absent_days} days)`}</td>
+                      <td className="amount">{formatCurrency(payslip.deductions.absent_day_deduction)}</td>
+                    </tr>
+                  )}
+                  {payslip.deductions.short_hours_deduction > 0 && (
+                    <tr>
+                      <td>Short Hours {payslip.deductions.short_hours > 0 && `(${parseFloat(payslip.deductions.short_hours).toFixed(1)} hrs)`}</td>
+                      <td className="amount">{formatCurrency(payslip.deductions.short_hours_deduction)}</td>
                     </tr>
                   )}
                   {payslip.deductions.unpaid_leave_deduction > 0 && (
