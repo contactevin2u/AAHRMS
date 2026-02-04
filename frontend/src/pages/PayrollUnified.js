@@ -1554,18 +1554,29 @@ function PayrollUnified() {
                     const normalHours = parseFloat(itemForm.part_time_hours) || 0;
                     const otHours = parseFloat(itemForm.ot_hours) || 0;
                     const hourlyRate = parseFloat(editingItem?.hourly_rate || 0);
-                    // For part-time: OT is just extra hours at same rate (no 1.5x multiplier)
-                    const totalHours = normalHours + otHours;
-                    const totalSalary = totalHours * hourlyRate;
+                    // For part-time: OT is 1.5x hourly rate
+                    const normalPay = normalHours * hourlyRate;
+                    const otPay = otHours * hourlyRate * 1.5;
+                    const totalSalary = normalPay + otPay;
 
                     const handlePartTimeHoursChange = (newHours) => {
                       const hours = Math.floor(newHours * 2) / 2; // Round to 0.5
                       const newBasicSalary = Math.round(hours * hourlyRate * 100) / 100;
-                      const newOtAmount = Math.round(otHours * hourlyRate * 100) / 100;
+                      const newOtAmount = Math.round(otHours * hourlyRate * 1.5 * 100) / 100;
                       setItemForm({
                         ...itemForm,
                         part_time_hours: hours,
                         basic_salary: newBasicSalary,
+                        ot_amount: newOtAmount
+                      });
+                    };
+
+                    const handlePartTimeOTHoursChange = (newOTHours) => {
+                      const hours = Math.floor(newOTHours * 2) / 2; // Round to 0.5
+                      const newOtAmount = Math.round(hours * hourlyRate * 1.5 * 100) / 100;
+                      setItemForm({
+                        ...itemForm,
+                        ot_hours: hours,
                         ot_amount: newOtAmount
                       });
                     };
@@ -1602,10 +1613,23 @@ function PayrollUnified() {
                             />
                           </div>
                           <div>
-                            <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>+ Extra Hours</div>
-                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#0f172a', padding: '6px 0'}}>
-                              {otHours.toFixed(1)}h
-                            </div>
+                            <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>OT Hours (1.5x)</div>
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={otHours}
+                              onChange={(e) => handlePartTimeOTHoursChange(parseFloat(e.target.value) || 0)}
+                              style={{
+                                width: '70px',
+                                padding: '6px 8px',
+                                border: '1px solid #7dd3fc',
+                                borderRadius: '4px',
+                                fontSize: '1rem',
+                                fontWeight: '600',
+                                textAlign: 'center',
+                                background: 'white'
+                              }}
+                            />
                           </div>
                           <div>
                             <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>Hourly Rate</div>
@@ -1621,7 +1645,7 @@ function PayrollUnified() {
                           </div>
                         </div>
                         <div style={{fontSize: '0.75rem', color: '#64748b', marginTop: '10px', textAlign: 'center'}}>
-                          ({normalHours.toFixed(1)}h + {otHours.toFixed(1)}h) × RM {hourlyRate.toFixed(2)}/hr = <strong>RM {totalSalary.toFixed(2)}</strong>
+                          ({normalHours.toFixed(1)}h × RM {hourlyRate.toFixed(2)}) + ({otHours.toFixed(1)}h × RM {hourlyRate.toFixed(2)} × 1.5) = <strong>RM {totalSalary.toFixed(2)}</strong>
                         </div>
                       </div>
                     );
