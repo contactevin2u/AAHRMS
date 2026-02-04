@@ -1873,12 +1873,6 @@ function PayrollUnified() {
                     Absent ({attendanceDetails.summary?.days_absent || 0})
                   </button>
                   <button
-                    className={`tab-btn ${attendanceDetailsTab === 'short_hours' ? 'active' : ''}`}
-                    onClick={() => setAttendanceDetailsTab('short_hours')}
-                  >
-                    Short Hours ({attendanceDetails.details?.short_hours_days?.length || 0})
-                  </button>
-                  <button
                     className={`tab-btn ${attendanceDetailsTab === 'ot_hours' ? 'active' : ''}`}
                     onClick={() => setAttendanceDetailsTab('ot_hours')}
                   >
@@ -1910,46 +1904,53 @@ function PayrollUnified() {
               </div>
 
               <div className="modal-scroll-content" style={{maxHeight: '400px', overflowY: 'auto', padding: '0 20px 20px'}}>
-                {attendanceDetailsTab === 'days_worked' && (
-                  <table className="data-table" style={{width: 'auto', minWidth: '450px'}}>
-                    <thead>
-                      <tr>
-                        <th style={{width: '110px'}}>Date</th>
-                        <th style={{width: '70px', textAlign: 'center'}}>Clock In</th>
-                        <th style={{width: '70px', textAlign: 'center'}}>Clock Out</th>
-                        <th style={{width: '60px', textAlign: 'center'}}>Hours</th>
-                        <th style={{width: '60px', textAlign: 'center'}}>OT</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(attendanceDetails.details?.days_worked || []).map((day, i) => {
-                        // Format time - handle both TIME strings (HH:MM:SS) and full timestamps
-                        const formatTime = (timeVal) => {
-                          if (!timeVal) return '-';
-                          // If it's just a time string like "09:00:00", display it directly
-                          if (typeof timeVal === 'string' && timeVal.match(/^\d{2}:\d{2}/)) {
-                            return timeVal.substring(0, 5); // Return HH:MM
-                          }
-                          // Otherwise try to parse as Date
-                          const d = new Date(timeVal);
-                          return isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'});
-                        };
-                        return (
-                          <tr key={i}>
-                            <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
-                            <td style={{textAlign: 'center'}}>{formatTime(day.clock_in)}</td>
-                            <td style={{textAlign: 'center'}}>{formatTime(day.clock_out)}</td>
-                            <td style={{textAlign: 'center'}}>{day.total_hours?.toFixed(1) || 0}h</td>
-                            <td style={{textAlign: 'center', color: day.ot_hours > 0 ? '#28a745' : '#999', fontWeight: day.ot_hours > 0 ? '600' : 'normal'}}>{day.ot_hours > 0 ? `+${day.ot_hours?.toFixed(1)}h` : '-'}</td>
-                          </tr>
-                        );
-                      })}
-                      {(attendanceDetails.details?.days_worked || []).length === 0 && (
-                        <tr><td colSpan="5" style={{textAlign: 'center', color: '#999'}}>No records</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                )}
+                {attendanceDetailsTab === 'days_worked' && (() => {
+                  // Create lookup for short hours by date
+                  const shortHoursMap = {};
+                  (attendanceDetails.details?.short_hours_days || []).forEach(d => {
+                    shortHoursMap[d.date] = d.short_hours;
+                  });
+                  return (
+                    <table className="data-table" style={{width: 'auto', minWidth: '520px'}}>
+                      <thead>
+                        <tr>
+                          <th style={{width: '110px'}}>Date</th>
+                          <th style={{width: '70px', textAlign: 'center'}}>Clock In</th>
+                          <th style={{width: '70px', textAlign: 'center'}}>Clock Out</th>
+                          <th style={{width: '60px', textAlign: 'center'}}>Hours</th>
+                          <th style={{width: '60px', textAlign: 'center'}}>Short</th>
+                          <th style={{width: '60px', textAlign: 'center'}}>OT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(attendanceDetails.details?.days_worked || []).map((day, i) => {
+                          const formatTime = (timeVal) => {
+                            if (!timeVal) return '-';
+                            if (typeof timeVal === 'string' && timeVal.match(/^\d{2}:\d{2}/)) {
+                              return timeVal.substring(0, 5);
+                            }
+                            const d = new Date(timeVal);
+                            return isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'});
+                          };
+                          const shortHrs = shortHoursMap[day.date] || 0;
+                          return (
+                            <tr key={i}>
+                              <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
+                              <td style={{textAlign: 'center'}}>{formatTime(day.clock_in)}</td>
+                              <td style={{textAlign: 'center'}}>{formatTime(day.clock_out)}</td>
+                              <td style={{textAlign: 'center'}}>{day.total_hours?.toFixed(1) || 0}h</td>
+                              <td style={{textAlign: 'center', color: shortHrs > 0 ? '#dc3545' : '#999', fontWeight: shortHrs > 0 ? '600' : 'normal'}}>{shortHrs > 0 ? `-${shortHrs.toFixed(2)}h` : '-'}</td>
+                              <td style={{textAlign: 'center', color: day.ot_hours > 0 ? '#28a745' : '#999', fontWeight: day.ot_hours > 0 ? '600' : 'normal'}}>{day.ot_hours > 0 ? `+${day.ot_hours?.toFixed(1)}h` : '-'}</td>
+                            </tr>
+                          );
+                        })}
+                        {(attendanceDetails.details?.days_worked || []).length === 0 && (
+                          <tr><td colSpan="6" style={{textAlign: 'center', color: '#999'}}>No records</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  );
+                })()}
 
                 {attendanceDetailsTab === 'absent' && (
                   <table className="data-table" style={{width: '100%'}}>
@@ -1970,32 +1971,6 @@ function PayrollUnified() {
                       ))}
                       {(attendanceDetails.details?.absent_days || []).length === 0 && (
                         <tr><td colSpan="3" style={{textAlign: 'center', color: '#999'}}>No absent days</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                )}
-
-                {attendanceDetailsTab === 'short_hours' && (
-                  <table className="data-table" style={{width: 'auto', minWidth: '400px'}}>
-                    <thead>
-                      <tr>
-                        <th style={{width: '120px'}}>Date</th>
-                        <th style={{width: '80px', textAlign: 'center'}}>Expected</th>
-                        <th style={{width: '80px', textAlign: 'center'}}>Worked</th>
-                        <th style={{width: '80px', textAlign: 'center'}}>Short</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(attendanceDetails.details?.short_hours_days || []).map((day, i) => (
-                        <tr key={i}>
-                          <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
-                          <td style={{textAlign: 'center'}}>{day.expected_hours}h</td>
-                          <td style={{textAlign: 'center'}}>{day.worked_hours}h</td>
-                          <td style={{color: '#dc3545', fontWeight: '600', textAlign: 'center'}}>-{day.short_hours}h</td>
-                        </tr>
-                      ))}
-                      {(attendanceDetails.details?.short_hours_days || []).length === 0 && (
-                        <tr><td colSpan="4" style={{textAlign: 'center', color: '#999'}}>No short hours</td></tr>
                       )}
                     </tbody>
                   </table>
