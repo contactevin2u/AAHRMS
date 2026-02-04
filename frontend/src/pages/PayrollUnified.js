@@ -1672,29 +1672,25 @@ function PayrollUnified() {
                       <input type="number" step="0.01" value={itemForm.fixed_allowance} onChange={(e) => setItemForm({ ...itemForm, fixed_allowance: parseFloat(e.target.value) || 0 })} />
                     </div>
                   </div>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>OT Hours</label>
-                      <input type="number" step="0.5" value={itemForm.ot_hours} onChange={(e) => handleOTHoursChange(parseFloat(e.target.value) || 0)} />
-                      {(() => {
-                        const isPartTime = editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time';
-                        if (isPartTime) {
-                          const hourlyRate = parseFloat(editingItem?.hourly_rate) || 8.72;
-                          return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {hourlyRate.toFixed(2)} × 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
-                        } else if (itemForm.basic_salary > 0) {
+                  {/* OT row - hidden for part-time since they have it in the blue breakdown box */}
+                  {!(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time') && (
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>OT Hours</label>
+                        <input type="number" step="0.5" value={itemForm.ot_hours} onChange={(e) => handleOTHoursChange(parseFloat(e.target.value) || 0)} />
+                        {itemForm.basic_salary > 0 && (() => {
                           const wd = selectedRun?.work_days_per_month || 22;
                           const basic = parseFloat(itemForm.basic_salary) || 0;
                           const hourlyRate = basic / wd / 8;
                           return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {basic.toFixed(0)} / {wd} days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
-                        }
-                        return null;
-                      })()}
+                        })()}
+                      </div>
+                      <div className="form-group">
+                        <label>OT Amount</label>
+                        <input type="number" step="0.01" value={itemForm.ot_amount} onChange={(e) => setItemForm({ ...itemForm, ot_amount: parseFloat(e.target.value) || 0 })} />
+                      </div>
                     </div>
-                    <div className="form-group">
-                      <label>OT Amount</label>
-                      <input type="number" step="0.01" value={itemForm.ot_amount} onChange={(e) => setItemForm({ ...itemForm, ot_amount: parseFloat(e.target.value) || 0 })} />
-                    </div>
-                  </div>
+                  )}
                   <div className="form-row">
                     <div className="form-group">
                       <label>PH Days Worked (Double Pay)</label>
