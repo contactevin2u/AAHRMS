@@ -46,6 +46,10 @@ const Attendance = () => {
   const [editingCell, setEditingCell] = useState(null); // { recordId, field }
   const [editValue, setEditValue] = useState('');
 
+  // Clock time editing state (AA Alive only)
+  const [editingClockTime, setEditingClockTime] = useState(null); // { recordId, field }
+  const [clockTimeValue, setClockTimeValue] = useState('');
+
   // Assign schedule modal state
   const [showAssignScheduleModal, setShowAssignScheduleModal] = useState(false);
   const [assignScheduleRecord, setAssignScheduleRecord] = useState(null);
@@ -417,6 +421,76 @@ const Attendance = () => {
   // Check if cell is being edited
   const isEditing = (recordId, field) => {
     return editingCell?.recordId === recordId && editingCell?.field === field;
+  };
+
+  // Clock time editing functions (AA Alive only)
+  const startClockTimeEdit = (recordId, field, currentValue) => {
+    setEditingClockTime({ recordId, field });
+    // Convert HH:MM:SS to HH:MM for input
+    const timeValue = currentValue ? currentValue.substring(0, 5) : '';
+    setClockTimeValue(timeValue);
+  };
+
+  const saveClockTimeEdit = async () => {
+    if (!editingClockTime) return;
+
+    try {
+      const data = { [editingClockTime.field]: clockTimeValue };
+      await attendanceApi.editHours(editingClockTime.recordId, data);
+      toast.success('Clock time updated and hours recalculated');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to update clock time');
+    }
+    setEditingClockTime(null);
+    setClockTimeValue('');
+  };
+
+  const cancelClockTimeEdit = () => {
+    setEditingClockTime(null);
+    setClockTimeValue('');
+  };
+
+  const handleClockTimeKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      saveClockTimeEdit();
+    } else if (e.key === 'Escape') {
+      cancelClockTimeEdit();
+    }
+  };
+
+  const isEditingClockTime = (recordId, field) => {
+    return editingClockTime?.recordId === recordId && editingClockTime?.field === field;
+  };
+
+  // Render editable clock time (AA Alive only)
+  const renderEditableClockTime = (record, field, value) => {
+    if (isEditingClockTime(record.id, field)) {
+      return (
+        <input
+          type="time"
+          value={clockTimeValue}
+          onChange={(e) => setClockTimeValue(e.target.value)}
+          onBlur={saveClockTimeEdit}
+          onKeyDown={handleClockTimeKeyPress}
+          autoFocus
+          className="inline-edit-time"
+          style={{ width: '90px', padding: '2px 4px' }}
+        />
+      );
+    }
+
+    const displayValue = value ? formatTime(value) : '-';
+
+    return (
+      <span
+        className="editable-clock-time"
+        onClick={() => startClockTimeEdit(record.id, field, value)}
+        title="Click to edit clock time"
+      >
+        {displayValue}
+      </span>
+    );
   };
 
   // Sync driver attendance from OrderOps (AA Alive only)
@@ -1106,10 +1180,10 @@ const Attendance = () => {
                         <td colSpan={colCount}>
                           <div className="detail-grid">
                             <div className="detail-section">
-                              <h4>Clock Times</h4>
+                              <h4>Clock Times {isAAAlive && <span className="edit-hint">(click to edit)</span>}</h4>
                               <div className="detail-items">
-                                <span><strong>In 1:</strong> {formatTime(record.clock_in_1)}</span>
-                                <span><strong>Out 1:</strong> {formatTime(record.clock_out_1)}</span>
+                                <span><strong>In 1:</strong> {isAAAlive ? renderEditableClockTime(record, 'clock_in_1', record.clock_in_1) : formatTime(record.clock_in_1)}</span>
+                                <span><strong>Out 1:</strong> {isAAAlive ? renderEditableClockTime(record, 'clock_out_1', record.clock_out_1) : formatTime(record.clock_out_1)}</span>
                                 <span><strong>In 2:</strong> {formatTime(record.clock_in_2)}</span>
                                 <span><strong>Out 2:</strong> {formatTime(record.clock_out_2)}</span>
                               </div>
@@ -1166,7 +1240,7 @@ const Attendance = () => {
           <span className="legend-value">{isAAAlive ? 'Hours above 8h @ 1.0x' : 'Hours above 7.5h @ 1.5x'}</span>
         </div>
         <div className="legend-item">
-          <span className="legend-hint">Click on hours to edit</span>
+          <span className="legend-hint">Click on hours to edit{isAAAlive && ' | Expand row to edit clock times'}</span>
         </div>
       </div>
 
@@ -1618,6 +1692,28 @@ const Attendance = () => {
           border: 1px solid #1976d2;
           border-radius: 4px;
           font-size: 13px;
+        }
+        .inline-edit-time {
+          border: 1px solid #16a34a;
+          border-radius: 4px;
+          font-size: 13px;
+        }
+        .editable-clock-time {
+          cursor: pointer;
+          padding: 2px 6px;
+          border-radius: 4px;
+          transition: background-color 0.2s;
+          color: #1976d2;
+          font-weight: 500;
+        }
+        .editable-clock-time:hover {
+          background-color: #e8f5e9;
+        }
+        .edit-hint {
+          font-size: 11px;
+          color: #888;
+          font-weight: normal;
+          font-style: italic;
         }
         .manual-modal .form-row {
           display: flex;

@@ -651,13 +651,90 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
 });
 
 // Edit attendance hours (admin can edit total_work_hours and ot_hours)
+// For AA Alive: can also edit clock_in_1, clock_out_1 and recalculate
 router.patch('/:id/hours', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { total_work_hours, ot_hours, notes } = req.body;
+    const { total_work_hours, ot_hours, notes, clock_in_1, clock_out_1 } = req.body;
     const companyId = getCompanyFilter(req);
 
-    // Build update query
+    // Check if editing clock times (AA Alive only feature)
+    const editingClockTimes = clock_in_1 !== undefined || clock_out_1 !== undefined;
+
+    if (editingClockTimes) {
+      // Verify this is AA Alive company
+      const recordCheck = await pool.query('SELECT company_id FROM clock_in_records WHERE id = $1', [id]);
+      if (recordCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Attendance record not found' });
+      }
+      if (!isAAAliveCompany(recordCheck.rows[0].company_id)) {
+        return res.status(403).json({ error: 'Clock time editing is only available for AA Alive company' });
+      }
+
+      // Update clock times and recalculate
+      const updates = [];
+      const values = [];
+      let paramCount = 0;
+
+      if (clock_in_1 !== undefined) {
+        paramCount++;
+        // Format time to HH:MM:SS
+        const formattedIn = clock_in_1.length === 5 ? `${clock_in_1}:00` : clock_in_1;
+        updates.push(`clock_in_1 = $${paramCount}`);
+        values.push(formattedIn);
+      }
+
+      if (clock_out_1 !== undefined) {
+        paramCount++;
+        // Format time to HH:MM:SS
+        const formattedOut = clock_out_1.length === 5 ? `${clock_out_1}:00` : clock_out_1;
+        updates.push(`clock_out_1 = $${paramCount}`);
+        values.push(formattedOut);
+      }
+
+      if (notes !== undefined) {
+        paramCount++;
+        updates.push(`notes = $${paramCount}`);
+        values.push(notes);
+      }
+
+      updates.push('updated_at = NOW()');
+      paramCount++;
+      values.push(id);
+
+      let query = `UPDATE clock_in_records SET ${updates.join(', ')} WHERE id = $${paramCount}`;
+      if (companyId !== null) {
+        paramCount++;
+        query += ` AND company_id = $${paramCount}`;
+        values.push(companyId);
+      }
+      query += ' RETURNING *';
+
+      const result = await pool.query(query, values);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Attendance record not found' });
+      }
+
+      // Recalculate work minutes based on new clock times
+      const record = result.rows[0];
+      const calc = calculateWorkTime(record, record.company_id);
+
+      await pool.query(`
+        UPDATE clock_in_records SET
+          total_work_minutes = $1,
+          total_break_minutes = $2,
+          ot_minutes = $3,
+          total_work_hours = $4,
+          ot_hours = $5
+        WHERE id = $6
+      `, [calc.workMinutes, calc.breakMinutes, calc.otMinutes, calc.totalHours, calc.otHours, record.id]);
+
+      // Return updated record
+      const updated = await pool.query('SELECT * FROM clock_in_records WHERE id = $1', [record.id]);
+      return res.json(updated.rows[0]);
+    }
+
+    // Original logic for editing hours directly
     const updates = [];
     const values = [];
     let paramCount = 0;
