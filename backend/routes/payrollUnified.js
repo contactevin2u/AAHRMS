@@ -227,6 +227,7 @@ async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
       cr.clock_out_1,
       cr.clock_in_2,
       cr.clock_out_2,
+      cr.total_work_hours,
       CASE
         WHEN cr.clock_out_2 IS NOT NULL OR cr.clock_out_1 IS NOT NULL THEN true
         ELSE false
@@ -246,22 +247,43 @@ async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
 
   // Count late days: attended but clock_in_1 > shift_start
   let lateDays = 0;
+  // Calculate short hours: attended but worked less than 8 hours
+  let shortHours = 0;
+  const expectedHoursPerDay = 8;
+
   for (const row of result.rows) {
-    if (row.attended && row.clock_in_1 && row.shift_start) {
-      // clock_in_1 is timestamp, shift_start is TIME
-      // Extract time from clock_in_1 and compare with shift_start
-      const clockInTime = new Date(row.clock_in_1);
-      const clockInMinutes = clockInTime.getHours() * 60 + clockInTime.getMinutes();
+    if (row.attended) {
+      // Check for late
+      if (row.clock_in_1 && row.shift_start) {
+        // clock_in_1 is timestamp, shift_start is TIME
+        // Extract time from clock_in_1 and compare with shift_start
+        const clockInTime = new Date(row.clock_in_1);
+        const clockInMinutes = clockInTime.getHours() * 60 + clockInTime.getMinutes();
 
-      // shift_start is a time string like "09:00:00"
-      const shiftParts = row.shift_start.split(':');
-      const shiftMinutes = parseInt(shiftParts[0]) * 60 + parseInt(shiftParts[1]);
+        // shift_start is a time string like "09:00:00"
+        const shiftParts = row.shift_start.split(':');
+        const shiftMinutes = parseInt(shiftParts[0]) * 60 + parseInt(shiftParts[1]);
 
-      if (clockInMinutes > shiftMinutes) {
-        lateDays++;
+        if (clockInMinutes > shiftMinutes) {
+          lateDays++;
+        }
+      }
+
+      // Check for short hours (worked less than expected)
+      if (row.total_work_hours !== null && row.total_work_hours !== undefined) {
+        const hoursWorked = parseFloat(row.total_work_hours) || 0;
+        // Only count base hours (cap at expected hours, OT doesn't count)
+        const baseHours = Math.min(hoursWorked, expectedHoursPerDay);
+        const deficit = expectedHoursPerDay - baseHours;
+        if (deficit > 0) {
+          shortHours += deficit;
+        }
       }
     }
   }
+
+  // Round short hours to 2 decimal places
+  shortHours = Math.round(shortHours * 100) / 100;
 
   // Payable days = scheduled AND attended
   // Or if schedule marked as 'completed' (for approved absences)
@@ -274,7 +296,8 @@ async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
     attendedDays,
     payableDays,
     absentDays: scheduledDays - payableDays,
-    lateDays
+    lateDays,
+    shortHours
   };
 }
 
@@ -719,24 +742,48 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let shortHours = 0, shortHoursDeduction = 0;
       let lateDays = 0, attendanceBonus = 0;
 
-      // Schedule-based calculations (outlet companies only, full-time only)
-      // Used for short hours and late days only - absent days uses clock-in records
-      if (!isPartTime && settings.groupingType === 'outlet') {
+      // Short hours calculation for ALL companies (full-time only)
+      if (!isPartTime && basicSalary > 0) {
         try {
-          const scheduleBasedPay = await calculateScheduleBasedPay(
-            emp.id, period.start.toISOString().split('T')[0],
-            period.end.toISOString().split('T')[0]
-          );
+          const periodStart = period.start.toISOString().split('T')[0];
+          const periodEnd = period.end.toISOString().split('T')[0];
+          const expectedHoursPerDay = rates.standard_work_hours || 8;
 
-          // Short hours from schedule-based calculation
-          shortHours = scheduleBasedPay.shortHours || 0;
-          if (shortHours > 0) {
-            const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
-            shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+          if (settings.groupingType === 'outlet') {
+            // Outlet companies: Use schedule-based calculation
+            const scheduleBasedPay = await calculateScheduleBasedPay(
+              emp.id, periodStart, periodEnd
+            );
+            shortHours = scheduleBasedPay.shortHours || 0;
+            lateDays = scheduleBasedPay.lateDays || 0;
+          } else {
+            // Non-outlet companies: Calculate from clock-in records directly
+            const clockInResult = await client.query(`
+              SELECT work_date, total_work_hours
+              FROM clock_in_records
+              WHERE employee_id = $1 AND company_id = $2
+                AND work_date >= $3::date AND work_date <= $4::date
+                AND clock_in_1 IS NOT NULL AND clock_out_1 IS NOT NULL
+            `, [emp.id, companyId, periodStart, periodEnd]);
+
+            for (const rec of clockInResult.rows) {
+              const hoursWorked = parseFloat(rec.total_work_hours) || 0;
+              // Only count base hours (cap at expected, OT doesn't count)
+              const baseHours = Math.min(hoursWorked, expectedHoursPerDay);
+              const deficit = expectedHoursPerDay - baseHours;
+              if (deficit > 0) {
+                shortHours += deficit;
+              }
+            }
+            shortHours = Math.round(shortHours * 100) / 100;
           }
 
-          lateDays = scheduleBasedPay.lateDays || 0;
-        } catch (e) { console.warn(`Schedule calc failed for ${emp.name}:`, e.message); }
+          // Calculate deduction if short hours exist
+          if (shortHours > 0) {
+            const hourlyRate = basicSalary / workingDays / expectedHoursPerDay;
+            shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+          }
+        } catch (e) { console.warn(`Short hours calc failed for ${emp.name}:`, e.message); }
       }
 
       // Calculate absent days from clock-in records (ALL companies including outlet)
@@ -1906,12 +1953,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // Short hours calculation
-      // For outlet-based: compare scheduled working days against actual clock-in hours
-      // For non-outlet: compare (days worked × 8) against (total hours - OT)
+      // Short hours calculation for ALL companies (full-time only)
       let shortHours = 0;
       let shortHoursDeduction = 0;
-      if (!isPartTime && basicSalary > 0 && settings.groupingType === 'outlet') {
+      if (!isPartTime && basicSalary > 0) {
         try {
           const expectedHoursPerDay = rates.standard_work_hours || 8;
           const periodStart = period.start.toISOString().split('T')[0];
@@ -1926,52 +1971,58 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
               AND clock_in_1 IS NOT NULL AND clock_out_1 IS NOT NULL
           `, [emp.id, companyId, periodStart, periodEnd]);
 
-          // Build a map of date -> hours worked
-          const hoursMap = {};
-          for (const rec of clockInRecords.rows) {
-            const dateStr = rec.work_date.toISOString().split('T')[0];
-            hoursMap[dateStr] = parseFloat(rec.total_work_hours) || 0;
-          }
-
-          // Get approved leave dates to exclude (already handled by unpaid leave deduction)
-          const leaveResult = await client.query(`
-            SELECT generate_series(
-              GREATEST(lr.start_date, $2::date),
-              LEAST(lr.end_date, $3::date),
-              '1 day'::interval
-            )::date as leave_date
-            FROM leave_requests lr
-            WHERE lr.employee_id = $1
-              AND lr.status = 'approved'
-              AND lr.start_date <= $3::date
-              AND lr.end_date >= $2::date
-          `, [emp.id, periodStart, periodEnd]);
-          const leaveDates = new Set(leaveResult.rows.map(r => r.leave_date.toISOString().split('T')[0]));
-
-          // Get scheduled working days from schedules table
-          // Schedule = source of truth for expected working days
-          const schedResult = await client.query(`
-            SELECT schedule_date FROM schedules
-            WHERE employee_id = $1 AND schedule_date >= $2::date AND schedule_date <= $3::date
-              AND status IN ('scheduled', 'completed', 'confirmed')
-          `, [emp.id, periodStart, periodEnd]);
-          const scheduledDates = schedResult.rows.map(r => r.schedule_date.toISOString().split('T')[0]);
-
-          // For each scheduled working day, check if short hours (clocked in but less than 8h)
-          // Absent days are handled separately - don't count them as short hours
-          for (const dateStr of scheduledDates) {
-            if (leaveDates.has(dateStr)) continue; // Skip leave days
-
-            if (hoursMap[dateStr] !== undefined) {
-              // Clocked in — check if short hours (worked less than expected)
-              const hoursWorked = hoursMap[dateStr];
-              // Subtract OT from hours worked to get base hours
-              // OT is anything over 8 hours, so base hours = min(hoursWorked, 8)
-              const baseHours = Math.min(hoursWorked, expectedHoursPerDay);
-              const deficit = Math.max(0, expectedHoursPerDay - baseHours);
-              shortHours += deficit;
+          if (settings.groupingType === 'outlet') {
+            // Outlet companies: Use schedules to determine expected work days
+            // Build a map of date -> hours worked
+            const hoursMap = {};
+            for (const rec of clockInRecords.rows) {
+              const dateStr = rec.work_date.toISOString().split('T')[0];
+              hoursMap[dateStr] = parseFloat(rec.total_work_hours) || 0;
             }
-            // If no clock record = absent day, handled by absentDays calculation, not short hours
+
+            // Get approved leave dates to exclude
+            const leaveResult = await client.query(`
+              SELECT generate_series(
+                GREATEST(lr.start_date, $2::date),
+                LEAST(lr.end_date, $3::date),
+                '1 day'::interval
+              )::date as leave_date
+              FROM leave_requests lr
+              WHERE lr.employee_id = $1
+                AND lr.status = 'approved'
+                AND lr.start_date <= $3::date
+                AND lr.end_date >= $2::date
+            `, [emp.id, periodStart, periodEnd]);
+            const leaveDates = new Set(leaveResult.rows.map(r => r.leave_date.toISOString().split('T')[0]));
+
+            // Get scheduled working days from schedules table
+            const schedResult = await client.query(`
+              SELECT schedule_date FROM schedules
+              WHERE employee_id = $1 AND schedule_date >= $2::date AND schedule_date <= $3::date
+                AND status IN ('scheduled', 'completed', 'confirmed')
+            `, [emp.id, periodStart, periodEnd]);
+            const scheduledDates = schedResult.rows.map(r => r.schedule_date.toISOString().split('T')[0]);
+
+            // For each scheduled working day, check if short hours
+            for (const dateStr of scheduledDates) {
+              if (leaveDates.has(dateStr)) continue; // Skip leave days
+              if (hoursMap[dateStr] !== undefined) {
+                const hoursWorked = hoursMap[dateStr];
+                const baseHours = Math.min(hoursWorked, expectedHoursPerDay);
+                const deficit = Math.max(0, expectedHoursPerDay - baseHours);
+                shortHours += deficit;
+              }
+            }
+          } else {
+            // Non-outlet companies: Calculate directly from clock-in records
+            for (const rec of clockInRecords.rows) {
+              const hoursWorked = parseFloat(rec.total_work_hours) || 0;
+              const baseHours = Math.min(hoursWorked, expectedHoursPerDay);
+              const deficit = expectedHoursPerDay - baseHours;
+              if (deficit > 0) {
+                shortHours += deficit;
+              }
+            }
           }
 
           shortHours = Math.round(shortHours * 100) / 100;

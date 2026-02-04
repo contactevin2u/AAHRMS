@@ -665,6 +665,8 @@ function PayrollUnified() {
     const statutoryBase = (parseFloat(item.basic_salary) || 0) + (parseFloat(item.commission_amount) || 0) +
       (parseFloat(item.trade_commission_amount) || 0) + (parseFloat(item.bonus) || 0);
     fetchStatutoryPreview(item.employee_id, statutoryBase);
+    // Auto-fetch attendance details for accurate data display
+    fetchAttendanceDetails(item.id);
   };
 
   const getDepartmentFields = (deptName) => {
@@ -1711,9 +1713,9 @@ function PayrollUnified() {
                         const deduction = hrs > 0 ? Math.round((itemForm.basic_salary / wd / 8) * hrs * 100) / 100 : 0;
                         setItemForm({ ...itemForm, short_hours: hrs, short_hours_deduction: deduction });
                       }} />
-                      {editingItem?.days_worked != null && editingItem?.total_work_hours != null && (
+                      {attendanceDetails?.summary && (
                         <small style={{color: '#666', fontSize: '0.75rem'}}>
-                          Expected: {editingItem.days_worked * 8}h, Actual: {(parseFloat(editingItem.total_work_hours) - (itemForm.ot_hours || 0)).toFixed(1)}h (excl OT)
+                          Expected: {(attendanceDetails.summary.days_worked || 0) * 8}h, Actual: {parseFloat(attendanceDetails.summary.total_hours || 0).toFixed(1)}h, Short: {parseFloat(attendanceDetails.summary.total_short_hours || 0).toFixed(2)}h
                         </small>
                       )}
                     </div>
