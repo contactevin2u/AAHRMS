@@ -531,6 +531,9 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       empParams.push(employeeIds);
     }
 
+    // First get ALL potential employees (before exclusion filter)
+    const allPotentialEmployees = await client.query(employeeQuery, empParams);
+
     // Exclude employees with NO schedule AND NO clock-in for the entire period (considered inactive)
     // They must have at least one schedule OR one clock-in record to be included
     employeeQuery += `
@@ -542,9 +545,16 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
 
     const employees = await client.query(employeeQuery, empParams);
 
+    // Find excluded employees (no schedule AND no clock-in)
+    const includedIds = new Set(employees.rows.map(e => e.id));
+    const excludedEmployees = allPotentialEmployees.rows
+      .filter(e => !includedIds.has(e.id))
+      .map(e => ({ id: e.id, name: e.name, employee_id: e.employee_id }));
+
     if (employees.rows.length === 0) {
       await client.query('ROLLBACK');
-      throw new Error('No active employees found for this period');
+      throw new Error('No active employees found for this period' +
+        (excludedEmployees.length > 0 ? `. ${excludedEmployees.length} employee(s) excluded due to no schedule/attendance.` : ''));
     }
 
     // Get previous month data for carry-forward
@@ -921,17 +931,19 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       if (basicSalary === 0) warnings.push(`${emp.name} has no basic salary set`);
     }
 
-    // Update run totals
+    // Update run totals and save excluded employees
     await client.query(`
       UPDATE payroll_runs SET
         total_gross = $1, total_deductions = $2, total_net = $3,
-        total_employer_cost = $4, employee_count = $5, has_variance_warning = $6
+        total_employer_cost = $4, employee_count = $5, has_variance_warning = $6,
+        excluded_employees = $8
       WHERE id = $7
-    `, [stats.totalGross, stats.totalDeductions, stats.totalNet, stats.totalEmployerCost, stats.created, warnings.length > 0, runId]);
+    `, [stats.totalGross, stats.totalDeductions, stats.totalNet, stats.totalEmployerCost, stats.created, warnings.length > 0, runId,
+        excludedEmployees.length > 0 ? JSON.stringify(excludedEmployees) : null]);
 
     await client.query('COMMIT');
 
-    return { run: runResult.rows[0], stats, warnings };
+    return { run: runResult.rows[0], stats, warnings, excludedEmployees };
 
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1172,7 +1184,8 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
           outlet_id: outlet.id,
           outlet_name: outlet.name,
           employee_count: result.stats.created,
-          total_net: result.stats.totalNet
+          total_net: result.stats.totalNet,
+          excludedEmployees: result.excludedEmployees || []
         });
       } catch (outletError) {
         console.error(`Error creating payroll for outlet ${outlet.name}:`, outletError.message);
@@ -1350,6 +1363,7 @@ router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
 
         const runId = runResult.rows[0].id;
 
+        // For department-based companies: no exclusion filter (they don't use schedule/clock-in)
         const employees = await client.query(`
           SELECT e.*,
                  e.default_basic_salary as basic_salary,
@@ -1712,15 +1726,34 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       employeeParams.push(employee_ids);
     }
 
-    // Exclude employees with NO schedule AND NO clock-in for the entire period (considered inactive)
-    employeeQuery += `
-      AND (
-        EXISTS (SELECT 1 FROM schedules s WHERE s.employee_id = e.id AND s.schedule_date BETWEEN $2 AND $3)
-        OR EXISTS (SELECT 1 FROM clock_in_records cr WHERE cr.employee_id = e.id AND cr.work_date BETWEEN $2 AND $3)
-      )
-    `;
+    // For outlet-based companies (Mimix): exclude employees with NO schedule AND NO clock-in
+    // Other companies don't use schedule/clock-in so no exclusion needed
+    let excludedEmployees = [];
+    let employees;
 
-    const employees = await client.query(employeeQuery, employeeParams);
+    if (isOutletBased) {
+      // First get ALL potential employees (before exclusion filter)
+      const allPotentialEmployees = await client.query(employeeQuery, employeeParams);
+
+      // Exclude employees with NO schedule AND NO clock-in for the entire period (considered inactive)
+      employeeQuery += `
+        AND (
+          EXISTS (SELECT 1 FROM schedules s WHERE s.employee_id = e.id AND s.schedule_date BETWEEN $2 AND $3)
+          OR EXISTS (SELECT 1 FROM clock_in_records cr WHERE cr.employee_id = e.id AND cr.work_date BETWEEN $2 AND $3)
+        )
+      `;
+
+      employees = await client.query(employeeQuery, employeeParams);
+
+      // Find excluded employees (no schedule AND no clock-in)
+      const includedIds = new Set(employees.rows.map(e => e.id));
+      excludedEmployees = allPotentialEmployees.rows
+        .filter(e => !includedIds.has(e.id))
+        .map(e => ({ id: e.id, name: e.name, employee_id: e.employee_id }));
+    } else {
+      // Non-outlet companies: no exclusion filter
+      employees = await client.query(employeeQuery, employeeParams);
+    }
 
     // Get previous month data for carry-forward and variance
     const prevMonth = month === 1 ? 12 : month - 1;
@@ -2340,14 +2373,15 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       }
     }
 
-    // Update run totals
+    // Update run totals and store excluded employees
     await client.query(`
       UPDATE payroll_runs SET
         total_gross = $1, total_deductions = $2, total_net = $3,
         total_employer_cost = $4, employee_count = $5,
-        has_variance_warning = $6
+        has_variance_warning = $6, excluded_employees = $8
       WHERE id = $7
-    `, [stats.totalGross, stats.totalDeductions, stats.totalNet, stats.totalEmployerCost, stats.created, warnings.length > 0, runId]);
+    `, [stats.totalGross, stats.totalDeductions, stats.totalNet, stats.totalEmployerCost, stats.created, warnings.length > 0, runId,
+        excludedEmployees.length > 0 ? JSON.stringify(excludedEmployees) : null]);
 
     await client.query('COMMIT');
 
@@ -2355,7 +2389,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       message: `Payroll run created with ${stats.created} employees`,
       run: runResult.rows[0],
       stats,
-      warnings: warnings.length > 0 ? warnings : undefined
+      warnings: warnings.length > 0 ? warnings : undefined,
+      excludedEmployees: excludedEmployees.length > 0 ? excludedEmployees : undefined,
+      employee_count: stats.created,
+      carried_forward_count: 0
     });
 
   } catch (error) {

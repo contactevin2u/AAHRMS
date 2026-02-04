@@ -189,7 +189,11 @@ function PayrollUnified() {
       if (res.data.warning) {
         message += `\n\n⚠️ ${res.data.warning}`;
       }
-      if (res.data.carried_forward_count > 0 || res.data.warning) {
+      if (res.data.excludedEmployees && res.data.excludedEmployees.length > 0) {
+        message += `\n\n⚠️ ${res.data.excludedEmployees.length} employee(s) excluded (no schedule/attendance):\n`;
+        message += res.data.excludedEmployees.map(e => `- ${e.name}`).join('\n');
+      }
+      if (res.data.carried_forward_count > 0 || res.data.warning || (res.data.excludedEmployees && res.data.excludedEmployees.length > 0)) {
         alert(message);
       }
     } catch (error) {
@@ -217,6 +221,14 @@ function PayrollUnified() {
         message += `\nSkipped:\n`;
         res.data.skipped_outlets.forEach(skip => {
           message += `- ${skip.outlet_name}: ${skip.reason}\n`;
+        });
+      }
+      // Show excluded employees from all outlets
+      const allExcluded = res.data.created_runs?.flatMap(run => run.excludedEmployees || []) || [];
+      if (allExcluded.length > 0) {
+        message += `\n⚠️ ${allExcluded.length} employee(s) excluded (no schedule/attendance):\n`;
+        allExcluded.forEach(emp => {
+          message += `- ${emp.name}\n`;
         });
       }
       message += `\nTotal Net: ${formatAmount(res.data.totals.grand_total_net)}`;
@@ -1431,6 +1443,33 @@ function PayrollUnified() {
                     </div>
                     );
                   })()}
+
+                  {/* Excluded Employees Warning */}
+                  {selectedRun.excluded_employees && selectedRun.excluded_employees.length > 0 && (
+                    <div style={{
+                      marginTop: '20px',
+                      padding: '12px 16px',
+                      background: '#fef3c7',
+                      border: '1px solid #f59e0b',
+                      borderRadius: '8px',
+                      fontSize: '0.9rem'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                        <strong style={{ color: '#92400e' }}>
+                          {selectedRun.excluded_employees.length} employee(s) excluded from payroll
+                        </strong>
+                      </div>
+                      <div style={{ color: '#78350f', fontSize: '0.85rem' }}>
+                        The following employees were excluded because they had no schedule AND no clock-in records for this period:
+                      </div>
+                      <ul style={{ margin: '8px 0 0 20px', color: '#78350f', fontSize: '0.85rem' }}>
+                        {selectedRun.excluded_employees.map((emp, idx) => (
+                          <li key={idx}>{emp.name} ({emp.employee_id})</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="no-selection"><p>Select a payroll run</p></div>
