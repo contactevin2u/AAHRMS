@@ -1569,8 +1569,9 @@ function PayrollUnified() {
                       <input type="number" step="0.5" value={itemForm.ot_hours} onChange={(e) => handleOTHoursChange(parseFloat(e.target.value) || 0)} />
                       {itemForm.basic_salary > 0 && (() => {
                         const wd = selectedRun?.work_days_per_month || 22;
-                        const hourlyRate = itemForm.basic_salary / wd / 8;
-                        return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {itemForm.basic_salary.toFixed(0)} / {wd} days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
+                        const basic = parseFloat(itemForm.basic_salary) || 0;
+                        const hourlyRate = basic / wd / 8;
+                        return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {basic.toFixed(0)} / {wd} days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
                       })()}
                     </div>
                     <div className="form-group">
