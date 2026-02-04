@@ -581,75 +581,85 @@ function PayrollUnified() {
         doc.setFontSize(10);
         doc.text(`Status: FINALIZED | Generated: ${new Date().toLocaleDateString('en-MY')}`, pageWidth / 2, 28, { align: 'center' });
 
-        // Table data
-        const tableData = data.employees.map((emp, idx) => [
-          idx + 1,
-          emp.emp_code || '',
-          emp.employee_name,
-          parseFloat(emp.basic_salary || 0).toFixed(2),
-          parseFloat(emp.fixed_allowance || 0).toFixed(2),
-          parseFloat(emp.ot_amount || 0).toFixed(2),
-          parseFloat(emp.commission_amount || 0).toFixed(2),
-          parseFloat(emp.bonus || 0).toFixed(2),
-          parseFloat(emp.gross_salary || 0).toFixed(2),
-          parseFloat(emp.epf_employee || 0).toFixed(2),
-          parseFloat(emp.socso_employee || 0).toFixed(2),
-          parseFloat(emp.eis_employee || 0).toFixed(2),
-          parseFloat(emp.pcb || 0).toFixed(2),
-          parseFloat(emp.total_deductions || 0).toFixed(2),
-          parseFloat(emp.net_pay || 0).toFixed(2),
-          emp.bank_name || '',
-          emp.bank_account_no || ''
-        ]);
+        // Determine which optional columns have data
+        const hasValue = (field) => data.employees.some(emp => parseFloat(emp[field]) > 0);
+        const showAllow = hasValue('fixed_allowance');
+        const showOT = hasValue('ot_amount');
+        const showComm = hasValue('commission_amount');
+        const showBonus = hasValue('bonus');
+        const showEPF = hasValue('epf_employee');
+        const showSOCSO = hasValue('socso_employee');
+        const showEIS = hasValue('eis_employee');
+        const showPCB = hasValue('pcb');
 
-        // Add totals row
-        tableData.push([
-          '', '', 'TOTAL',
-          data.totals.basic_salary.toFixed(2),
-          data.totals.fixed_allowance.toFixed(2),
-          data.totals.ot_amount.toFixed(2),
-          data.totals.commission_amount.toFixed(2),
-          data.totals.bonus.toFixed(2),
-          data.totals.gross_salary.toFixed(2),
-          data.totals.epf_employee.toFixed(2),
-          data.totals.socso_employee.toFixed(2),
-          data.totals.eis_employee.toFixed(2),
-          data.totals.pcb.toFixed(2),
-          data.totals.total_deductions.toFixed(2),
-          data.totals.net_pay.toFixed(2),
-          '', ''
-        ]);
+        // Build dynamic headers
+        const headers = ['#', 'Code', 'Name', 'Basic'];
+        if (showAllow) headers.push('Allow');
+        if (showOT) headers.push('OT');
+        if (showComm) headers.push('Comm');
+        if (showBonus) headers.push('Bonus');
+        headers.push('Gross');
+        if (showEPF) headers.push('EPF');
+        if (showSOCSO) headers.push('SOCSO');
+        if (showEIS) headers.push('EIS');
+        if (showPCB) headers.push('PCB');
+        headers.push('Ded', 'Net', 'Bank', 'Account');
+
+        // Table data with dynamic columns
+        const tableData = data.employees.map((emp, idx) => {
+          const row = [
+            idx + 1,
+            emp.emp_code || '',
+            emp.employee_name,
+            parseFloat(emp.basic_salary || 0).toFixed(2)
+          ];
+          if (showAllow) row.push(parseFloat(emp.fixed_allowance || 0).toFixed(2));
+          if (showOT) row.push(parseFloat(emp.ot_amount || 0).toFixed(2));
+          if (showComm) row.push(parseFloat(emp.commission_amount || 0).toFixed(2));
+          if (showBonus) row.push(parseFloat(emp.bonus || 0).toFixed(2));
+          row.push(parseFloat(emp.gross_salary || 0).toFixed(2));
+          if (showEPF) row.push(parseFloat(emp.epf_employee || 0).toFixed(2));
+          if (showSOCSO) row.push(parseFloat(emp.socso_employee || 0).toFixed(2));
+          if (showEIS) row.push(parseFloat(emp.eis_employee || 0).toFixed(2));
+          if (showPCB) row.push(parseFloat(emp.pcb || 0).toFixed(2));
+          row.push(
+            parseFloat(emp.total_deductions || 0).toFixed(2),
+            parseFloat(emp.net_pay || 0).toFixed(2),
+            emp.bank_name || '',
+            emp.bank_account_no || ''
+          );
+          return row;
+        });
+
+        // Add totals row with dynamic columns
+        const totalsRow = ['', '', 'TOTAL', data.totals.basic_salary.toFixed(2)];
+        if (showAllow) totalsRow.push(data.totals.fixed_allowance.toFixed(2));
+        if (showOT) totalsRow.push(data.totals.ot_amount.toFixed(2));
+        if (showComm) totalsRow.push(data.totals.commission_amount.toFixed(2));
+        if (showBonus) totalsRow.push(data.totals.bonus.toFixed(2));
+        totalsRow.push(data.totals.gross_salary.toFixed(2));
+        if (showEPF) totalsRow.push(data.totals.epf_employee.toFixed(2));
+        if (showSOCSO) totalsRow.push(data.totals.socso_employee.toFixed(2));
+        if (showEIS) totalsRow.push(data.totals.eis_employee.toFixed(2));
+        if (showPCB) totalsRow.push(data.totals.pcb.toFixed(2));
+        totalsRow.push(data.totals.total_deductions.toFixed(2), data.totals.net_pay.toFixed(2), '', '');
+        tableData.push(totalsRow);
 
         autoTable(doc, {
           startY: 35,
-          head: [['#', 'Code', 'Name', 'Basic', 'Allow', 'OT', 'Comm', 'Bonus', 'Gross', 'EPF', 'SOCSO', 'EIS', 'PCB', 'Ded', 'Net', 'Bank', 'Account']],
+          head: [headers],
           body: tableData,
           styles: { fontSize: 7, cellPadding: 1 },
           headStyles: { fillColor: [30, 41, 59], fontSize: 7 },
-          columnStyles: {
-            0: { cellWidth: 8 },
-            1: { cellWidth: 15 },
-            2: { cellWidth: 30 },
-            3: { cellWidth: 18, halign: 'right' },
-            4: { cellWidth: 15, halign: 'right' },
-            5: { cellWidth: 15, halign: 'right' },
-            6: { cellWidth: 15, halign: 'right' },
-            7: { cellWidth: 15, halign: 'right' },
-            8: { cellWidth: 18, halign: 'right' },
-            9: { cellWidth: 15, halign: 'right' },
-            10: { cellWidth: 15, halign: 'right' },
-            11: { cellWidth: 12, halign: 'right' },
-            12: { cellWidth: 15, halign: 'right' },
-            13: { cellWidth: 15, halign: 'right' },
-            14: { cellWidth: 18, halign: 'right' },
-            15: { cellWidth: 25 },
-            16: { cellWidth: 25 }
-          },
           didParseCell: function(data) {
             // Bold the totals row
             if (data.row.index === tableData.length - 1) {
               data.cell.styles.fontStyle = 'bold';
               data.cell.styles.fillColor = [241, 245, 249];
+            }
+            // Right-align numeric columns (skip first 3 columns: #, Code, Name)
+            if (data.column.index >= 3 && data.column.index < headers.length - 2) {
+              data.cell.styles.halign = 'right';
             }
           }
         });
@@ -987,6 +997,10 @@ function PayrollUnified() {
       comm: items.some(item => (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0) > 0),
       adv: hasValue('advance_deduction'),
       shortHrs: hasValue('short_hours_deduction'),
+      epf: hasValue('epf_employee'),
+      socso: hasValue('socso_employee'),
+      eis: hasValue('eis_employee'),
+      pcb: hasValue('pcb'),
     };
   };
 
@@ -1335,7 +1349,7 @@ function PayrollUnified() {
                             {vis.attendanceBonus && <th>Att. Bonus</th>}
                             {vis.claims && <th>Claims</th>}
                             {vis.comm && <th>Comm.</th>}
-                            <th>Gross</th><th>EPF</th><th>SOCSO</th><th>EIS</th><th>PCB</th>
+                            <th>Gross</th>{vis.epf && <th>EPF</th>}{vis.socso && <th>SOCSO</th>}{vis.eis && <th>EIS</th>}{vis.pcb && <th>PCB</th>}
                             {vis.adv && <th>Adv</th>}
                             {vis.shortHrs && <th>Deduct</th>}
                             <th>Net</th><th></th>
@@ -1366,10 +1380,10 @@ function PayrollUnified() {
                               {vis.claims && <td>{formatAmount(item.claims_amount)}</td>}
                               {vis.comm && renderCell(item, 'commission_amount', (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0))}
                               <td><strong>{formatAmount(item.gross_salary)}</strong></td>
-                              <td>{formatAmount(item.epf_employee)}</td>
-                              <td>{formatAmount(item.socso_employee)}</td>
-                              <td>{formatAmount(item.eis_employee)}</td>
-                              {renderCell(item, 'pcb', item.pcb)}
+                              {vis.epf && <td>{formatAmount(item.epf_employee)}</td>}
+                              {vis.socso && <td>{formatAmount(item.socso_employee)}</td>}
+                              {vis.eis && <td>{formatAmount(item.eis_employee)}</td>}
+                              {vis.pcb && renderCell(item, 'pcb', item.pcb)}
                               {vis.adv && <td>{formatAmount(item.advance_deduction)}</td>}
                               {vis.shortHrs && <td>{formatAmount(item.short_hours_deduction)}</td>}
                               <td><strong>{formatAmount(item.net_pay)}</strong></td>
