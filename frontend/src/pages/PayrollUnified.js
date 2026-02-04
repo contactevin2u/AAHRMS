@@ -1570,7 +1570,7 @@ function PayrollUnified() {
                       {itemForm.basic_salary > 0 && (() => {
                         const wd = selectedRun?.work_days_per_month || 22;
                         const hourlyRate = itemForm.basic_salary / wd / 8;
-                        return <small style={{color: '#666', fontSize: '0.75rem'}}>Rate: RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
+                        return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {itemForm.basic_salary.toFixed(0)} / {wd} days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
                       })()}
                     </div>
                     <div className="form-group">
