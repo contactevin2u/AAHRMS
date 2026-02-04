@@ -3979,4 +3979,214 @@ router.get('/ot-summary/:year/:month', authenticateAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/payroll/items/:id/attendance-details
+ * Get detailed attendance breakdown for a payroll item
+ * Returns: days worked, absent days, hours per day, short hours, OT hours
+ */
+router.get('/items/:id/attendance-details', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Get payroll item with period dates
+    const itemResult = await pool.query(`
+      SELECT pi.*, pr.period_start_date, pr.period_end_date, pr.month, pr.year,
+             e.name as employee_name, e.employee_id as employee_code
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pi.id = $1 AND pr.company_id = $2
+    `, [id, companyId]);
+
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll item not found' });
+    }
+
+    const item = itemResult.rows[0];
+    const periodStart = item.period_start_date;
+    const periodEnd = item.period_end_date;
+
+    // Get all clock-in records for the period
+    const clockInsResult = await pool.query(`
+      SELECT
+        work_date,
+        clock_in_1,
+        clock_out_1,
+        clock_in_2,
+        clock_out_2,
+        total_work_minutes,
+        total_work_hours,
+        ot_minutes,
+        status,
+        CASE WHEN ot_approved = true THEN 'approved'
+             WHEN ot_minutes > 0 THEN 'pending'
+             ELSE null END as ot_status
+      FROM clock_in_records
+      WHERE employee_id = $1
+        AND work_date BETWEEN $2 AND $3
+      ORDER BY work_date
+    `, [item.employee_id, periodStart, periodEnd]);
+
+    // Get schedules for the period
+    const schedulesResult = await pool.query(`
+      SELECT schedule_date, shift_start, shift_end, status
+      FROM schedules
+      WHERE employee_id = $1
+        AND schedule_date BETWEEN $2 AND $3
+        AND status IN ('scheduled', 'completed', 'confirmed')
+      ORDER BY schedule_date
+    `, [item.employee_id, periodStart, periodEnd]);
+
+    // Get approved leave for the period
+    const leaveResult = await pool.query(`
+      SELECT lr.start_date, lr.end_date, lt.name as leave_type, lt.is_paid
+      FROM leave_requests lr
+      JOIN leave_types lt ON lr.leave_type_id = lt.id
+      WHERE lr.employee_id = $1
+        AND lr.status = 'approved'
+        AND lr.start_date <= $2
+        AND lr.end_date >= $3
+    `, [item.employee_id, periodEnd, periodStart]);
+
+    // Build days worked list
+    const daysWorked = clockInsResult.rows
+      .filter(r => r.status === 'completed')
+      .map(r => ({
+        date: r.work_date,
+        clock_in: r.clock_in_1,
+        clock_out: r.clock_out_1,
+        clock_in_2: r.clock_in_2,
+        clock_out_2: r.clock_out_2,
+        total_hours: parseFloat(r.total_work_hours) || (parseFloat(r.total_work_minutes) || 0) / 60,
+        ot_hours: (parseFloat(r.ot_minutes) || 0) / 60,
+        ot_status: r.ot_status
+      }));
+
+    // Build scheduled dates set
+    const scheduledDates = new Set(schedulesResult.rows.map(r =>
+      r.schedule_date.toISOString().split('T')[0]
+    ));
+
+    // Build worked dates set
+    const workedDates = new Set(daysWorked.map(d =>
+      new Date(d.date).toISOString().split('T')[0]
+    ));
+
+    // Build leave dates
+    const leaveDays = [];
+    for (const leave of leaveResult.rows) {
+      let current = new Date(leave.start_date);
+      const end = new Date(leave.end_date);
+      while (current <= end) {
+        const dateStr = current.toISOString().split('T')[0];
+        if (dateStr >= periodStart.toISOString().split('T')[0] &&
+            dateStr <= periodEnd.toISOString().split('T')[0]) {
+          const dayOfWeek = current.getDay();
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip weekends
+            leaveDays.push({
+              date: dateStr,
+              leave_type: leave.leave_type,
+              is_paid: leave.is_paid
+            });
+          }
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    }
+    const leaveDatesSet = new Set(leaveDays.map(l => l.date));
+
+    // Calculate absent days (scheduled but not worked and not on leave)
+    const absentDays = [];
+    for (const sched of schedulesResult.rows) {
+      const dateStr = sched.schedule_date.toISOString().split('T')[0];
+      if (!workedDates.has(dateStr) && !leaveDatesSet.has(dateStr)) {
+        absentDays.push({
+          date: sched.schedule_date,
+          scheduled_start: sched.shift_start,
+          scheduled_end: sched.shift_end
+        });
+      }
+    }
+
+    // Calculate short hours (worked but less than expected)
+    const settings = await getCompanySettings(companyId);
+    const expectedHoursPerDay = settings.rates.standard_work_hours || 8;
+
+    const shortHoursDays = daysWorked
+      .filter(d => d.total_hours < expectedHoursPerDay && d.total_hours > 0)
+      .map(d => ({
+        date: d.date,
+        worked_hours: Math.round(d.total_hours * 100) / 100,
+        expected_hours: expectedHoursPerDay,
+        short_hours: Math.round((expectedHoursPerDay - d.total_hours) * 100) / 100
+      }));
+
+    // OT breakdown
+    const otDays = daysWorked
+      .filter(d => d.ot_hours > 0)
+      .map(d => ({
+        date: d.date,
+        ot_hours: Math.round(d.ot_hours * 100) / 100,
+        status: d.ot_status
+      }));
+
+    // Summary
+    const totalHoursWorked = daysWorked.reduce((sum, d) => sum + d.total_hours, 0);
+    const totalOTHours = daysWorked.reduce((sum, d) => sum + d.ot_hours, 0);
+    const totalShortHours = shortHoursDays.reduce((sum, d) => sum + d.short_hours, 0);
+
+    res.json({
+      employee: {
+        id: item.employee_id,
+        name: item.employee_name,
+        code: item.employee_code
+      },
+      period: {
+        start: periodStart,
+        end: periodEnd,
+        month: item.month,
+        year: item.year
+      },
+      summary: {
+        days_worked: daysWorked.length,
+        days_scheduled: schedulesResult.rows.length,
+        days_absent: absentDays.length,
+        days_on_leave: leaveDays.length,
+        total_hours: Math.round(totalHoursWorked * 100) / 100,
+        total_short_hours: Math.round(totalShortHours * 100) / 100,
+        total_ot_hours: Math.round(totalOTHours * 100) / 100
+      },
+      details: {
+        days_worked: daysWorked.map(d => ({
+          ...d,
+          date: new Date(d.date).toISOString().split('T')[0],
+          total_hours: Math.round(d.total_hours * 100) / 100,
+          ot_hours: Math.round(d.ot_hours * 100) / 100
+        })),
+        absent_days: absentDays.map(d => ({
+          ...d,
+          date: new Date(d.date).toISOString().split('T')[0]
+        })),
+        leave_days: leaveDays,
+        short_hours_days: shortHoursDays.map(d => ({
+          ...d,
+          date: new Date(d.date).toISOString().split('T')[0]
+        })),
+        ot_days: otDays.map(d => ({
+          ...d,
+          date: new Date(d.date).toISOString().split('T')[0]
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching attendance details:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance details' });
+  }
+});
+
 module.exports = router;
