@@ -499,20 +499,28 @@ function PayrollUnified() {
     }
   };
 
-  const handleDownloadBankFile = async (id) => {
+  const handleDownloadBankFile = async (id, format = 'csv') => {
     try {
-      const res = await payrollV2Api.getBankFile(id);
+      const res = await payrollV2Api.getBankFile(id, format);
       const blob = new Blob([res.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `bank_transfer_${selectedRun?.month}_${selectedRun?.year}.csv`;
+      const outletName = selectedRun?.outlet_name || selectedRun?.department_name || '';
+      const monthNames = ['', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const monthAbbr = monthNames[selectedRun?.month] || '';
+      if (format === 'maybankBulk') {
+        const shortName = outletName.substring(0, 4).toUpperCase().replace(/\s/g, '');
+        a.download = `${shortName} ${monthAbbr}${String(selectedRun?.year).slice(-2)} SAL.csv`;
+      } else {
+        a.download = `bank_transfer_${selectedRun?.month}_${selectedRun?.year}.csv`;
+      }
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      alert('Failed to download');
+      alert('Failed to download: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -1043,6 +1051,7 @@ function PayrollUnified() {
                       {selectedRun.status === 'draft' && (
                         <>
                           <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'csv')} className="download-btn">Download Excel</button>
+                          <button onClick={() => handleDownloadBankFile(selectedRun.id, 'maybankBulk')} className="download-btn" style={{marginLeft: '8px'}}>Maybank CSV</button>
                           <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate OT</button>
                           <button onClick={() => handleFinalizeRun(selectedRun.id)} className="finalize-btn">Finalize</button>
                           <button onClick={() => handleDeleteRun(selectedRun.id)} className="delete-btn">Delete</button>
@@ -1667,11 +1676,18 @@ function PayrollUnified() {
                     <div className="form-group">
                       <label>OT Hours</label>
                       <input type="number" step="0.5" value={itemForm.ot_hours} onChange={(e) => handleOTHoursChange(parseFloat(e.target.value) || 0)} />
-                      {itemForm.basic_salary > 0 && (() => {
-                        const wd = selectedRun?.work_days_per_month || 22;
-                        const basic = parseFloat(itemForm.basic_salary) || 0;
-                        const hourlyRate = basic / wd / 8;
-                        return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {basic.toFixed(0)} / {wd} days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
+                      {(() => {
+                        const isPartTime = editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time';
+                        if (isPartTime) {
+                          const hourlyRate = parseFloat(editingItem?.hourly_rate) || 8.72;
+                          return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {hourlyRate.toFixed(2)} × 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
+                        } else if (itemForm.basic_salary > 0) {
+                          const wd = selectedRun?.work_days_per_month || 22;
+                          const basic = parseFloat(itemForm.basic_salary) || 0;
+                          const hourlyRate = basic / wd / 8;
+                          return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {basic.toFixed(0)} / {wd} days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
+                        }
+                        return null;
                       })()}
                     </div>
                     <div className="form-group">
