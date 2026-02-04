@@ -3268,10 +3268,30 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
           }
         }
 
+        // Calculate wages for part-time employees
+        let wages = parseFloat(i.wages) || 0;
+        let partTimeHoursWorked = parseFloat(i.part_time_hours) || 0;
+        let phPay = parseFloat(i.ph_pay) || 0;
+
+        if (isPartTime) {
+          try {
+            const partTimeData = await calculatePartTimeHours(
+              i.emp_id,
+              i.period_start_date,
+              i.period_end_date,
+              companyId, rates
+            );
+            wages = partTimeData.normalPay || 0;
+            partTimeHoursWorked = partTimeData.normalHours || 0;
+            phPay = partTimeData.phPay || 0;
+          } catch (e) {
+            console.warn('Part-time hours calculation failed:', e.message);
+          }
+        }
+
         // Calculate values
-        const basicSalary = parseFloat(i.basic_salary) || 0;
+        const basicSalary = isPartTime ? 0 : (parseFloat(i.basic_salary) || 0);
         const fixedAllowance = parseFloat(i.fixed_allowance) || 0;
-        const phPay = parseFloat(i.ph_pay) || 0;
         const incentiveAmount = parseFloat(i.incentive_amount) || 0;
         const commissionAmount = parseFloat(i.commission_amount) || 0;
         const tradeCommission = parseFloat(i.trade_commission_amount) || 0;
@@ -3283,11 +3303,11 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const otherDeductions = parseFloat(i.other_deductions) || 0;
         const shortHoursDeduction = parseFloat(i.short_hours_deduction) || 0;
 
-        const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
+        const grossSalary = basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
                           commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction;
 
         // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
-        const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction);
+        const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction);
         let statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
         if (statutory.statutory_on_ot) statutoryBase += otAmount;
         if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
@@ -3302,7 +3322,7 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         // Calculate statutory with breakdown for proper PCB calculation
         // EPF/SOCSO/EIS on statutoryBase, PCB on full gross
         const salaryBreakdown = {
-          basic: basicSalary,
+          basic: basicSalary + wages,  // Include wages for part-time
           allowance: fixedAllowance + outstationAmount + incentiveAmount,
           commission: commissionAmount + tradeCommission,
           bonus: bonus,
@@ -3325,20 +3345,22 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
 
         await pool.query(`
           UPDATE payroll_items SET
-            ot_hours = $1, ot_amount = $2,
-            gross_salary = $3, statutory_base = $4,
-            epf_employee = $5, epf_employer = $6,
-            socso_employee = $7, socso_employer = $8,
-            eis_employee = $9, eis_employer = $10,
-            pcb = $11,
-            total_deductions = $12, net_pay = $13, employer_total_cost = $14,
+            basic_salary = $1, wages = $16, part_time_hours = $17, ph_pay = $18,
+            ot_hours = $2, ot_amount = $3,
+            gross_salary = $4, statutory_base = $5,
+            epf_employee = $6, epf_employer = $7,
+            socso_employee = $8, socso_employer = $9,
+            eis_employee = $10, eis_employer = $11,
+            pcb = $12,
+            total_deductions = $13, net_pay = $14, employer_total_cost = $15,
             updated_at = NOW()
-          WHERE id = $15
+          WHERE id = $19
         `, [
-          otHours, otAmount, grossSalary, statutoryBase,
+          basicSalary, otHours, otAmount, grossSalary, statutoryBase,
           epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
           eisEmployee, eisEmployer, pcb,
-          totalDeductions, netPay, employerCost, item.id
+          totalDeductions, netPay, employerCost,
+          wages, partTimeHoursWorked, phPay, item.id
         ]);
 
         recalculatedCount++;
