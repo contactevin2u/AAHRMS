@@ -3592,12 +3592,27 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
     `, [id]);
     const totals = totalsResult.rows[0];
 
+    // Remove added employees from excluded_employees list
+    const addedIds = addedEmployees.map(e => e.id);
+    let updatedExcluded = null;
+    if (run.excluded_employees) {
+      const currentExcluded = typeof run.excluded_employees === 'string'
+        ? JSON.parse(run.excluded_employees)
+        : run.excluded_employees;
+      updatedExcluded = currentExcluded.filter(e => !addedIds.includes(e.id));
+    }
+
     await client.query(`
       UPDATE payroll_runs SET
         employee_count = $1, total_gross = $2, total_deductions = $3,
-        total_net = $4, total_employer_cost = $5
+        total_net = $4, total_employer_cost = $5,
+        excluded_employees = $7
       WHERE id = $6
-    `, [totals.count, totals.total_gross, totals.total_deductions, totals.total_net, totals.total_employer_cost, id]);
+    `, [
+      totals.count, totals.total_gross, totals.total_deductions,
+      totals.total_net, totals.total_employer_cost, id,
+      updatedExcluded && updatedExcluded.length > 0 ? JSON.stringify(updatedExcluded) : null
+    ]);
 
     await client.query('COMMIT');
 
