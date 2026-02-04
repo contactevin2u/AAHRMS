@@ -730,8 +730,6 @@ function PayrollUnified() {
     const statutoryBase = (parseFloat(item.basic_salary) || 0) + (parseFloat(item.commission_amount) || 0) +
       (parseFloat(item.trade_commission_amount) || 0) + (parseFloat(item.bonus) || 0);
     fetchStatutoryPreview(item.employee_id, statutoryBase);
-    // Auto-fetch attendance details for accurate data display
-    fetchAttendanceDetails(item.id);
   };
 
   const getDepartmentFields = (deptName) => {
