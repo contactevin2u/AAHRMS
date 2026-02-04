@@ -683,13 +683,17 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
 
       const isPartTime = emp.work_type === 'part_time' || emp.employment_type === 'part_time';
       let partTimeData = null;
+      let wages = 0, partTimeHoursWorked = 0, partTimePhPay = 0;
 
       if (isPartTime) {
         partTimeData = await calculatePartTimeHours(
           emp.id, period.start.toISOString().split('T')[0],
           period.end.toISOString().split('T')[0], companyId, rates
         );
-        basicSalary = partTimeData.grossSalary;
+        wages = partTimeData.normalPay || 0; // Normal hours × rate only
+        partTimeHoursWorked = partTimeData.normalHours || 0;
+        partTimePhPay = partTimeData.phPay || 0; // PH hours × rate × 2
+        basicSalary = 0; // Part-time uses wages, not basic_salary
         fixedAllowance = 0;
       }
 
@@ -747,7 +751,10 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       if (otAmount === 0 && fixedOT > 0) otAmount = fixedOT;
 
       // PH pay calculation
-      if (features.auto_ph_pay && !isPartTime && basicSalary > 0) {
+      if (isPartTime) {
+        // Part-time: PH pay already calculated in calculatePartTimeHours
+        phPay = partTimePhPay;
+      } else if (features.auto_ph_pay && basicSalary > 0) {
         try {
           phDaysWorked = await calculatePHDaysWorked(
             emp.id, companyId,
@@ -857,11 +864,11 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       const advanceDeduction = advancesMap[emp.id] || 0;
 
       const totalAllowances = fixedAllowance + flexAllowance;
-      const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount + attendanceBonus;
+      const grossBeforeDeductions = basicSalary + wages + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount + attendanceBonus;
       const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
 
       // Statutory base - EPF/SOCSO/EIS based on actual pay received
-      const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+      const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
       let statutoryBase = actualBasicPay + commissionAmount;
       if (statutory.statutory_on_ot) statutoryBase += otAmount;
       if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
@@ -898,7 +905,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       await client.query(`
         INSERT INTO payroll_items (
           payroll_run_id, employee_id,
-          basic_salary, fixed_allowance, commission_amount, claims_amount,
+          basic_salary, wages, part_time_hours, fixed_allowance, commission_amount, claims_amount,
           ot_hours, ot_amount, ph_days_worked, ph_pay,
           unpaid_leave_days, unpaid_leave_deduction, advance_deduction,
           short_hours, short_hours_deduction, absent_days, absent_day_deduction,
@@ -908,9 +915,9 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
           eis_employee, eis_employer, pcb,
           total_deductions, net_pay, employer_total_cost,
           sales_amount, salary_calculation_method
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
       `, [
-        runId, emp.id, basicSalary, totalAllowances, commissionAmount, claimsAmount,
+        runId, emp.id, basicSalary, wages, partTimeHoursWorked, totalAllowances, commissionAmount, claimsAmount,
         otHours, otAmount, phDaysWorked, phPay,
         unpaidDays, unpaidDeduction, advanceDeduction,
         shortHours, shortHoursDeduction, absentDays, absentDayDeduction,
@@ -928,7 +935,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       stats.totalDeductions += totalDeductions;
       stats.totalEmployerCost += employerCost;
 
-      if (basicSalary === 0) warnings.push(`${emp.name} has no basic salary set`);
+      // Only warn for full-time employees without basic salary
+      if (!isPartTime && basicSalary === 0) warnings.push(`${emp.name} has no basic salary set`);
     }
 
     // Update run totals and save excluded employees
@@ -2685,6 +2693,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
 
     // Calculate new values
     const basicSalary = parseFloat(updates.basic_salary ?? item.basic_salary) || 0;
+    const wages = parseFloat(updates.wages ?? item.wages) || 0; // Part-time wages
+    const partTimeHours = parseFloat(updates.part_time_hours ?? item.part_time_hours) || 0;
     const fixedAllowance = parseFloat(updates.fixed_allowance ?? item.fixed_allowance) || 0;
     const otHours = parseFloat(updates.ot_hours ?? item.ot_hours) || 0;
     const otAmount = parseFloat(updates.ot_amount ?? item.ot_amount) || 0;
@@ -2709,12 +2719,12 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       ? parseFloat(updates.claims_override) || 0
       : parseFloat(item.claims_amount) || 0;
 
-    // Gross salary (includes attendance bonus for Mimix)
-    const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
+    // Gross salary (includes wages for part-time and attendance bonus for Mimix)
+    const grossSalary = basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
                         commissionAmount + tradeCommission + outstationAmount + bonus + attendanceBonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
 
     // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
-    const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+    const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
     let statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
     if (statutory.statutory_on_ot) statutoryBase += otAmount;
     if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
@@ -2730,7 +2740,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     // Recalculate statutory with breakdown for proper PCB calculation
     // EPF/SOCSO/EIS on statutoryBase, PCB on full gross
     const salaryBreakdown = {
-      basic: basicSalary,
+      basic: basicSalary + wages,  // Include wages for part-time
       allowance: fixedAllowance + outstationAmount + incentiveAmount,  // All allowance-type items
       commission: commissionAmount + tradeCommission,
       bonus: bonus,
@@ -2768,7 +2778,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     // Update item
     const result = await pool.query(`
       UPDATE payroll_items SET
-        basic_salary = $1, fixed_allowance = $2,
+        basic_salary = $1, wages = $35, part_time_hours = $36, fixed_allowance = $2,
         ot_hours = $3, ot_amount = $4,
         ph_days_worked = $5, ph_pay = $6,
         incentive_amount = $7, commission_amount = $8,
@@ -2803,7 +2813,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       updates.notes, claimsAmount, id,
       shortHours, shortHoursDeduction,
       absentDays, absentDayDeduction,
-      attendanceBonus, lateDays
+      attendanceBonus, lateDays,
+      wages, partTimeHours
     ]);
 
     // Update run totals
@@ -2962,10 +2973,27 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
       }
     }
 
+    // Calculate wages for part-time employees
+    let wages = 0, partTimeHoursWorked = 0, phPay = parseFloat(item.ph_pay) || 0;
+    if (isPartTime) {
+      try {
+        const partTimeData = await calculatePartTimeHours(
+          item.emp_id,
+          item.period_start_date,
+          item.period_end_date,
+          companyId, rates
+        );
+        wages = partTimeData.normalPay || 0;
+        partTimeHoursWorked = partTimeData.normalHours || 0;
+        phPay = partTimeData.phPay || 0; // Part-time PH pay from calculation
+      } catch (e) {
+        console.warn('Part-time hours calculation failed:', e.message);
+      }
+    }
+
     // Get current values
-    const basicSalary = parseFloat(item.basic_salary) || 0;
+    const basicSalary = isPartTime ? 0 : (parseFloat(item.basic_salary) || 0);
     const fixedAllowance = parseFloat(item.fixed_allowance) || 0;
-    const phPay = parseFloat(item.ph_pay) || 0;
     const incentiveAmount = parseFloat(item.incentive_amount) || 0;
     const commissionAmount = parseFloat(item.commission_amount) || 0;
     const tradeCommission = parseFloat(item.trade_commission_amount) || 0;
@@ -3043,12 +3071,12 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
       console.warn(`Absent days recalculation failed for item ${id}:`, e.message);
     }
 
-    // Calculate gross
-    const grossSalary = basicSalary + fixedAllowance + otAmount + phPay + incentiveAmount +
+    // Calculate gross (include wages for part-time)
+    const grossSalary = basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
                         commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
 
     // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
-    const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+    const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
     let statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
     if (statutory.statutory_on_ot) statutoryBase += otAmount;
     if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
@@ -3064,7 +3092,7 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     // Recalculate statutory with breakdown for proper PCB calculation
     // EPF/SOCSO/EIS on statutoryBase, PCB on full gross
     const salaryBreakdown = {
-      basic: basicSalary,
+      basic: basicSalary + wages, // Include wages for part-time
       allowance: fixedAllowance + outstationAmount + incentiveAmount,
       commission: commissionAmount + tradeCommission,
       bonus: bonus,
@@ -3097,6 +3125,8 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
         total_deductions = $12, net_pay = $13, employer_total_cost = $14,
         absent_days = $16, absent_day_deduction = $17,
         short_hours = $18, short_hours_deduction = $19,
+        wages = $20, part_time_hours = $21, ph_pay = $22,
+        basic_salary = $23,
         updated_at = NOW()
       WHERE id = $15
       RETURNING *
@@ -3110,7 +3140,9 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
       totalDeductions, netPay, employerCost,
       id,
       absentDays, absentDayDeduction,
-      shortHours, shortHoursDeduction
+      shortHours, shortHoursDeduction,
+      wages, partTimeHoursWorked, phPay,
+      basicSalary
     ]);
 
     // Update run totals
@@ -3125,6 +3157,9 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
         absent_day_deduction: absentDayDeduction,
         short_hours: shortHours,
         short_hours_deduction: shortHoursDeduction,
+        wages: wages,
+        part_time_hours: partTimeHoursWorked,
+        ph_pay: phPay,
         statutory_base: statutoryBase,
         epf_employee: epfEmployee,
         socso_employee: socsoEmployee,

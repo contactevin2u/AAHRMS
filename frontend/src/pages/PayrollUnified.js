@@ -59,7 +59,7 @@ function PayrollUnified() {
 
   // Item edit form
   const [itemForm, setItemForm] = useState({
-    basic_salary: 0, fixed_allowance: 0, ot_hours: 0, ot_amount: 0,
+    basic_salary: 0, wages: 0, fixed_allowance: 0, ot_hours: 0, ot_amount: 0,
     ph_days_worked: 0, ph_pay: 0, incentive_amount: 0, commission_amount: 0,
     trade_commission_amount: 0, outstation_amount: 0, bonus: 0,
     other_deductions: 0, deduction_remarks: '', notes: '',
@@ -716,14 +716,14 @@ function PayrollUnified() {
     const otHours = parseFloat(item.ot_hours) || 0;
     const otAmount = parseFloat(item.ot_amount) || 0;
 
-    // For part-time: calculate normal hours (rounded to 0.5)
-    // total_work_hours INCLUDES OT, so subtract OT to get normal hours
-    const rawTotalHours = parseFloat(item.total_work_hours) || 0;
-    const rawNormalHours = rawTotalHours - otHours; // Subtract OT
-    const partTimeHours = Math.floor(Math.max(0, rawNormalHours) * 2) / 2;
+    // For part-time: use wages from database, or calculate from hours
+    const partTimeHours = parseFloat(item.part_time_hours) || 0;
+    const wages = parseFloat(item.wages) || 0;
 
     setItemForm({
-      basic_salary: item.basic_salary || 0, fixed_allowance: item.fixed_allowance || 0,
+      basic_salary: item.basic_salary || 0,
+      wages: wages, // Part-time wages (hours × rate)
+      fixed_allowance: item.fixed_allowance || 0,
       ot_hours: otHours, ot_amount: otAmount,
       ph_days_worked: item.ph_days_worked || 0, ph_pay: item.ph_pay || 0,
       incentive_amount: item.incentive_amount || 0, commission_amount: item.commission_amount || 0,
@@ -736,10 +736,10 @@ function PayrollUnified() {
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
       claims_override: '', // Empty means use calculated value, set value to override claims amount
-      part_time_hours: partTimeHours // For part-time: editable normal hours
+      part_time_hours: partTimeHours // For part-time: hours worked
     });
     setShowItemModal(true);
-    const statutoryBase = (parseFloat(item.basic_salary) || 0) + (parseFloat(item.commission_amount) || 0) +
+    const statutoryBase = (parseFloat(item.basic_salary) || 0) + wages + (parseFloat(item.commission_amount) || 0) +
       (parseFloat(item.trade_commission_amount) || 0) + (parseFloat(item.bonus) || 0);
     fetchStatutoryPreview(item.employee_id, statutoryBase);
   };
@@ -1019,6 +1019,7 @@ function PayrollUnified() {
     if (!items || items.length === 0) return {};
     const hasValue = (field) => items.some(item => parseFloat(item[field]) > 0);
     return {
+      wages: hasValue('wages'), // Part-time wages (hours × rate)
       ot: hasValue('ot_amount'),
       ph: hasValue('ph_pay'),
       allow: hasValue('fixed_allowance'),
@@ -1375,7 +1376,7 @@ function PayrollUnified() {
                       <table>
                         <thead>
                           <tr>
-                            <th>Employee</th><th>Basic</th><th>Deduct</th>
+                            <th>Employee</th><th>Basic</th>{vis.wages && <th>Wages</th>}<th>Deduct</th>
                             {vis.ot && <th>OT</th>}
                             {vis.ph && <th>PH Pay</th>}
                             {vis.allow && <th>Allow</th>}
@@ -1399,6 +1400,7 @@ function PayrollUnified() {
                                 {expandedEmployee === item.id && <div style={{ fontSize: '0.8rem', color: '#555', marginTop: '2px' }}>{item.employee_name}</div>}
                               </td>
                               {renderCell(item, 'basic_salary', item.basic_salary)}
+                              {vis.wages && <td>{formatAmount(item.wages)}</td>}
                               <td style={{color: '#dc3545'}}>
                                 {(() => {
                                   const absentDed = parseFloat(item.absent_day_deduction) || 0;
@@ -1677,16 +1679,17 @@ function PayrollUnified() {
                     // For part-time: OT is 1.5x hourly rate
                     const normalPay = normalHours * hourlyRate;
                     const otPay = otHours * hourlyRate * 1.5;
-                    const totalSalary = normalPay + otPay;
+                    const phPay = parseFloat(itemForm.ph_pay) || 0;
+                    const totalSalary = normalPay + phPay + otPay;
 
                     const handlePartTimeHoursChange = (newHours) => {
                       const hours = Math.floor(newHours * 2) / 2; // Round to 0.5
-                      const newBasicSalary = Math.round(hours * hourlyRate * 100) / 100;
+                      const newWages = Math.round(hours * hourlyRate * 100) / 100;
                       const newOtAmount = Math.round(otHours * hourlyRate * 1.5 * 100) / 100;
                       setItemForm({
                         ...itemForm,
                         part_time_hours: hours,
-                        basic_salary: newBasicSalary,
+                        wages: newWages, // Update wages, not basic_salary
                         ot_amount: newOtAmount
                       });
                     };
@@ -1765,7 +1768,7 @@ function PayrollUnified() {
                           </div>
                         </div>
                         <div style={{fontSize: '0.75rem', color: '#64748b', marginTop: '10px', textAlign: 'center'}}>
-                          ({normalHours.toFixed(1)}h × RM {hourlyRate.toFixed(2)}) + ({otHours.toFixed(1)}h × RM {hourlyRate.toFixed(2)} × 1.5) = <strong>RM {totalSalary.toFixed(2)}</strong>
+                          Wages: RM {normalPay.toFixed(2)} {phPay > 0 && `+ PH: RM ${phPay.toFixed(2)}`} {otPay > 0 && `+ OT: RM ${otPay.toFixed(2)}`} = <strong>RM {totalSalary.toFixed(2)}</strong>
                         </div>
                       </div>
                     );
