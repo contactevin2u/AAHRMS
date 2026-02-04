@@ -211,6 +211,7 @@ export const payrollV2Api = {
   getItemPayslip: (id) => api.get(`/payroll/items/${id}/payslip`),
   recalculateItem: (id) => api.post(`/payroll/items/${id}/recalculate`),
   recalculateAll: (runId) => api.post(`/payroll/runs/${runId}/recalculate-all`),
+  getAttendanceDetails: (id) => api.get(`/payroll/items/${id}/attendance-details`),
 
   // AI Payroll Assistant
   aiAnalyze: (data) => api.post('/payroll/ai/analyze', data),

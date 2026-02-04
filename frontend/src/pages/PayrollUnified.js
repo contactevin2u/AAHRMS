@@ -32,6 +32,12 @@ function PayrollUnified() {
   const [loadingOtSummary, setLoadingOtSummary] = useState(false);
   const [showOtDetails, setShowOtDetails] = useState(false);
 
+  // Attendance Details popup state
+  const [showAttendanceDetails, setShowAttendanceDetails] = useState(false);
+  const [attendanceDetails, setAttendanceDetails] = useState(null);
+  const [loadingAttendanceDetails, setLoadingAttendanceDetails] = useState(false);
+  const [attendanceDetailsTab, setAttendanceDetailsTab] = useState('days_worked');
+
   // AI Assistant state
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [aiInstruction, setAiInstruction] = useState('');
@@ -142,6 +148,21 @@ function PayrollUnified() {
       setOtSummary(null);
     } finally {
       setLoadingOtSummary(false);
+    }
+  };
+
+  // Fetch attendance details for payroll item
+  const fetchAttendanceDetails = async (payrollItemId) => {
+    setLoadingAttendanceDetails(true);
+    try {
+      const res = await payrollV2Api.getAttendanceDetails(payrollItemId);
+      setAttendanceDetails(res.data);
+      setShowAttendanceDetails(true);
+    } catch (error) {
+      console.error('Error fetching attendance details:', error);
+      alert('Failed to load attendance details');
+    } finally {
+      setLoadingAttendanceDetails(false);
     }
   };
 
@@ -1495,14 +1516,37 @@ function PayrollUnified() {
                   const baseHours = totalHours - otHours;
                   const shortHours = expectedHours - baseHours;
                   const absentDays = Math.max(0, standardDays - daysWorked);
+                  const clickableStyle = { cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' };
                   return (
                     <div style={{fontSize: '0.85rem', color: '#666', textAlign: 'right'}}>
-                      <div>Days Worked: <strong>{daysWorked}</strong> / {standardDays} {absentDays > 0 && <span style={{color: '#dc3545'}}>({absentDays} absent)</span>}</div>
-                      <div>Total Hours: <strong>{totalHours.toFixed(1)}h</strong></div>
-                      <div style={{color: shortHours > 0 ? '#dc3545' : '#28a745'}}>
+                      <div
+                        style={clickableStyle}
+                        onClick={() => { fetchAttendanceDetails(editingItem.id); setAttendanceDetailsTab('days_worked'); }}
+                        title="Click to see details"
+                      >
+                        Days Worked: <strong>{daysWorked}</strong> / {standardDays} {absentDays > 0 && <span style={{color: '#dc3545'}}>({absentDays} absent)</span>}
+                      </div>
+                      <div
+                        style={clickableStyle}
+                        onClick={() => { fetchAttendanceDetails(editingItem.id); setAttendanceDetailsTab('days_worked'); }}
+                        title="Click to see details"
+                      >
+                        Total Hours: <strong>{totalHours.toFixed(1)}h</strong>
+                      </div>
+                      <div
+                        style={{...clickableStyle, color: shortHours > 0 ? '#dc3545' : '#28a745'}}
+                        onClick={() => { fetchAttendanceDetails(editingItem.id); setAttendanceDetailsTab('short_hours'); }}
+                        title="Click to see details"
+                      >
                         Short Hours: <strong>{shortHours > 0 ? `-${shortHours.toFixed(1)}h` : '0h'}</strong>
                       </div>
-                      <div>OT Hours: <strong>{otHours.toFixed(1)}h</strong></div>
+                      <div
+                        style={clickableStyle}
+                        onClick={() => { fetchAttendanceDetails(editingItem.id); setAttendanceDetailsTab('ot_hours'); }}
+                        title="Click to see details"
+                      >
+                        OT Hours: <strong>{otHours.toFixed(1)}h</strong>
+                      </div>
                     </div>
                   );
                 })()}
@@ -1757,6 +1801,197 @@ function PayrollUnified() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Attendance Details Modal */}
+        {showAttendanceDetails && attendanceDetails && (
+          <div className="modal-overlay" onClick={() => setShowAttendanceDetails(false)}>
+            <div className="modal large" onClick={(e) => e.stopPropagation()} style={{maxWidth: '800px'}}>
+              <div className="modal-header">
+                <h2>Attendance Details - {attendanceDetails.employee?.name}</h2>
+                <button className="close-btn" onClick={() => setShowAttendanceDetails(false)}>&times;</button>
+              </div>
+              <div style={{padding: '0 20px'}}>
+                <div style={{display: 'flex', gap: '10px', marginBottom: '15px', flexWrap: 'wrap'}}>
+                  <button
+                    className={`tab-btn ${attendanceDetailsTab === 'days_worked' ? 'active' : ''}`}
+                    onClick={() => setAttendanceDetailsTab('days_worked')}
+                  >
+                    Days Worked ({attendanceDetails.summary?.days_worked || 0})
+                  </button>
+                  <button
+                    className={`tab-btn ${attendanceDetailsTab === 'absent' ? 'active' : ''}`}
+                    onClick={() => setAttendanceDetailsTab('absent')}
+                  >
+                    Absent ({attendanceDetails.summary?.days_absent || 0})
+                  </button>
+                  <button
+                    className={`tab-btn ${attendanceDetailsTab === 'short_hours' ? 'active' : ''}`}
+                    onClick={() => setAttendanceDetailsTab('short_hours')}
+                  >
+                    Short Hours ({attendanceDetails.details?.short_hours_days?.length || 0})
+                  </button>
+                  <button
+                    className={`tab-btn ${attendanceDetailsTab === 'ot_hours' ? 'active' : ''}`}
+                    onClick={() => setAttendanceDetailsTab('ot_hours')}
+                  >
+                    OT ({attendanceDetails.details?.ot_days?.length || 0})
+                  </button>
+                  <button
+                    className={`tab-btn ${attendanceDetailsTab === 'leave' ? 'active' : ''}`}
+                    onClick={() => setAttendanceDetailsTab('leave')}
+                  >
+                    Leave ({attendanceDetails.summary?.days_on_leave || 0})
+                  </button>
+                </div>
+
+                {/* Summary Row */}
+                <div style={{background: '#f8f9fa', padding: '10px 15px', borderRadius: '6px', marginBottom: '15px', display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '0.9rem'}}>
+                  <span>Total Hours: <strong>{attendanceDetails.summary?.total_hours || 0}h</strong></span>
+                  <span>Short Hours: <strong style={{color: '#dc3545'}}>{attendanceDetails.summary?.total_short_hours || 0}h</strong></span>
+                  <span>OT Hours: <strong style={{color: '#28a745'}}>{attendanceDetails.summary?.total_ot_hours || 0}h</strong></span>
+                </div>
+              </div>
+
+              <div className="modal-scroll-content" style={{maxHeight: '400px', overflowY: 'auto', padding: '0 20px 20px'}}>
+                {attendanceDetailsTab === 'days_worked' && (
+                  <table className="data-table" style={{width: '100%'}}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Clock In</th>
+                        <th>Clock Out</th>
+                        <th>Hours</th>
+                        <th>OT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(attendanceDetails.details?.days_worked || []).map((day, i) => (
+                        <tr key={i}>
+                          <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
+                          <td>{day.clock_in ? new Date(day.clock_in).toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'}) : '-'}</td>
+                          <td>{day.clock_out ? new Date(day.clock_out).toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'}) : '-'}</td>
+                          <td>{day.total_hours?.toFixed(1) || 0}h</td>
+                          <td style={{color: day.ot_hours > 0 ? '#28a745' : '#999'}}>{day.ot_hours > 0 ? `+${day.ot_hours?.toFixed(1)}h` : '-'}</td>
+                        </tr>
+                      ))}
+                      {(attendanceDetails.details?.days_worked || []).length === 0 && (
+                        <tr><td colSpan="5" style={{textAlign: 'center', color: '#999'}}>No records</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+
+                {attendanceDetailsTab === 'absent' && (
+                  <table className="data-table" style={{width: '100%'}}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Scheduled Start</th>
+                        <th>Scheduled End</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(attendanceDetails.details?.absent_days || []).map((day, i) => (
+                        <tr key={i}>
+                          <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
+                          <td>{day.scheduled_start || '-'}</td>
+                          <td>{day.scheduled_end || '-'}</td>
+                        </tr>
+                      ))}
+                      {(attendanceDetails.details?.absent_days || []).length === 0 && (
+                        <tr><td colSpan="3" style={{textAlign: 'center', color: '#999'}}>No absent days</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+
+                {attendanceDetailsTab === 'short_hours' && (
+                  <table className="data-table" style={{width: '100%'}}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Expected</th>
+                        <th>Worked</th>
+                        <th>Short</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(attendanceDetails.details?.short_hours_days || []).map((day, i) => (
+                        <tr key={i}>
+                          <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
+                          <td>{day.expected_hours}h</td>
+                          <td>{day.worked_hours}h</td>
+                          <td style={{color: '#dc3545'}}>-{day.short_hours}h</td>
+                        </tr>
+                      ))}
+                      {(attendanceDetails.details?.short_hours_days || []).length === 0 && (
+                        <tr><td colSpan="4" style={{textAlign: 'center', color: '#999'}}>No short hours</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+
+                {attendanceDetailsTab === 'ot_hours' && (
+                  <table className="data-table" style={{width: '100%'}}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>OT Hours</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(attendanceDetails.details?.ot_days || []).map((day, i) => (
+                        <tr key={i}>
+                          <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
+                          <td style={{color: '#28a745'}}>+{day.ot_hours}h</td>
+                          <td>
+                            <span className={`status-badge ${day.status || 'pending'}`}>
+                              {day.status || 'pending'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {(attendanceDetails.details?.ot_days || []).length === 0 && (
+                        <tr><td colSpan="3" style={{textAlign: 'center', color: '#999'}}>No OT records</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+
+                {attendanceDetailsTab === 'leave' && (
+                  <table className="data-table" style={{width: '100%'}}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Leave Type</th>
+                        <th>Paid</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(attendanceDetails.details?.leave_days || []).map((day, i) => (
+                        <tr key={i}>
+                          <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
+                          <td>{day.leave_type}</td>
+                          <td>{day.is_paid ? 'Yes' : 'No'}</td>
+                        </tr>
+                      ))}
+                      {(attendanceDetails.details?.leave_days || []).length === 0 && (
+                        <tr><td colSpan="3" style={{textAlign: 'center', color: '#999'}}>No leave records</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowAttendanceDetails(false)} className="btn-secondary">
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}
