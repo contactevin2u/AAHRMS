@@ -110,7 +110,7 @@ async function getClockRecords(employeeId, startDate, endDate, onlyApprovedOT = 
     FROM clock_in_records cr
     INNER JOIN schedules s ON cr.employee_id = s.employee_id
       AND cr.work_date = s.schedule_date
-      AND s.status IN ('scheduled', 'completed')
+      AND s.status IN ('scheduled', 'completed', 'confirmed')
     WHERE cr.employee_id = $1
       AND cr.work_date >= $2::date
       AND cr.work_date <= $3::date

@@ -81,7 +81,7 @@ async function sendPublicHolidayNotifications(daysAhead = 3) {
           JOIN employees e ON s.employee_id = e.id
           WHERE e.department_id = $1
             AND s.schedule_date = $2
-            AND s.status IN ('scheduled', 'completed')
+            AND s.status IN ('scheduled', 'completed', 'confirmed')
         `, [dept.id, holiday.date]);
 
         const hasSchedules = parseInt(deptSchedules.rows[0].count) > 0;
@@ -117,7 +117,7 @@ async function sendPublicHolidayNotifications(daysAhead = 3) {
         // Check if employee has individual schedule
         const empSchedule = await pool.query(`
           SELECT COUNT(*) as count FROM schedules
-          WHERE employee_id = $1 AND schedule_date = $2 AND status IN ('scheduled', 'completed')
+          WHERE employee_id = $1 AND schedule_date = $2 AND status IN ('scheduled', 'completed', 'confirmed')
         `, [employee.id, holiday.date]);
 
         if (parseInt(empSchedule.rows[0].count) === 0) {

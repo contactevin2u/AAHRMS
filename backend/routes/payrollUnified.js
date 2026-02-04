@@ -156,7 +156,7 @@ async function calculatePartTimeHours(employeeId, periodStart, periodEnd, compan
     FROM clock_in_records cr
     INNER JOIN schedules s ON cr.employee_id = s.employee_id
       AND cr.work_date = s.schedule_date
-      AND s.status IN ('scheduled', 'completed')
+      AND s.status IN ('scheduled', 'completed', 'confirmed')
     WHERE cr.employee_id = $1
       AND cr.work_date BETWEEN $2 AND $3
       AND cr.status = 'completed'
@@ -235,7 +235,7 @@ async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
       AND s.schedule_date = cr.work_date
     WHERE s.employee_id = $1
       AND s.schedule_date BETWEEN $2 AND $3
-      AND s.status IN ('scheduled', 'completed')
+      AND s.status IN ('scheduled', 'completed', 'confirmed')
     ORDER BY s.schedule_date
   `, [employeeId, periodStart, periodEnd]);
 
@@ -1937,7 +1937,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           const schedResult = await client.query(`
             SELECT schedule_date FROM schedules
             WHERE employee_id = $1 AND schedule_date >= $2::date AND schedule_date <= $3::date
-              AND status IN ('scheduled', 'completed')
+              AND status IN ('scheduled', 'completed', 'confirmed')
           `, [emp.id, periodStart, periodEnd]);
           const scheduledDates = schedResult.rows.map(r => r.schedule_date.toISOString().split('T')[0]);
 
