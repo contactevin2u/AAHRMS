@@ -3264,6 +3264,196 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
 });
 
 /**
+ * POST /api/payroll/runs/:id/add-employees
+ * Add missing employees to an existing payroll run
+ */
+router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+    const { employee_ids } = req.body; // Array of employee IDs to add
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    if (!employee_ids || !Array.isArray(employee_ids) || employee_ids.length === 0) {
+      return res.status(400).json({ error: 'employee_ids array required' });
+    }
+
+    // Get run
+    const runResult = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [id]);
+    if (runResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll run not found' });
+    }
+
+    const run = runResult.rows[0];
+    if (run.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (run.status === 'finalized') {
+      return res.status(400).json({ error: 'Cannot add to finalized payroll' });
+    }
+
+    // Check which employees are already in the run
+    const existingResult = await pool.query(
+      'SELECT employee_id FROM payroll_items WHERE payroll_run_id = $1',
+      [id]
+    );
+    const existingIds = new Set(existingResult.rows.map(r => r.employee_id));
+    const newEmployeeIds = employee_ids.filter(eid => !existingIds.has(eid));
+
+    if (newEmployeeIds.length === 0) {
+      return res.json({ message: 'All employees already in payroll', added: 0 });
+    }
+
+    // Get company settings
+    const settings = await getCompanySettings(companyId);
+    const { features, rates, statutory } = settings;
+    const period = {
+      start: new Date(run.period_start_date),
+      end: new Date(run.period_end_date)
+    };
+    const workingDays = rates.standard_work_days || 26;
+
+    await client.query('BEGIN');
+
+    let addedCount = 0;
+    const addedEmployees = [];
+
+    // Get employees to add
+    const empResult = await client.query(`
+      SELECT e.*, e.default_basic_salary as basic_salary, e.default_allowance as fixed_allowance
+      FROM employees e
+      WHERE e.id = ANY($1) AND e.company_id = $2
+    `, [newEmployeeIds, companyId]);
+
+    for (const emp of empResult.rows) {
+      const isPartTime = emp.work_type === 'part_time' || emp.employment_type === 'part_time';
+      let basicSalary = parseFloat(emp.basic_salary) || 0;
+      let fixedAllowance = parseFloat(emp.fixed_allowance) || 0;
+
+      // Part-time: calculate from hours worked
+      if (isPartTime) {
+        const partTimeData = await calculatePartTimeHours(
+          emp.id, period.start.toISOString().split('T')[0],
+          period.end.toISOString().split('T')[0], companyId, rates
+        );
+        basicSalary = partTimeData.grossSalary;
+        fixedAllowance = 0;
+      }
+
+      // OT calculation
+      let otHours = 0, otAmount = 0;
+      if (features.auto_ot_from_clockin) {
+        try {
+          const otResult = await calculateOTFromClockIn(
+            emp.id, companyId, emp.department_id,
+            period.start.toISOString().split('T')[0],
+            period.end.toISOString().split('T')[0], basicSalary
+          );
+          otHours = otResult.total_ot_hours || 0;
+          otAmount = otResult.total_ot_amount || 0;
+        } catch (e) { console.warn(`OT calc failed for ${emp.name}:`, e.message); }
+      }
+
+      // Round OT
+      if (otHours > 0 && otHours < 1) { otHours = 0; otAmount = 0; }
+      else if (otHours >= 1) {
+        otHours = Math.floor(otHours * 2) / 2;
+        if (isPartTime) {
+          const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
+          otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
+        } else if (basicSalary > 0) {
+          const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+          otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+        }
+      }
+
+      // Calculate gross and statutory
+      const grossSalary = basicSalary + fixedAllowance + otAmount;
+      const statutoryBase = basicSalary + otAmount;
+
+      // Calculate statutory deductions
+      const statutoryResult = await calculateAllStatutory({
+        basicSalary: statutoryBase, grossSalary, icNumber: emp.ic_number,
+        dateOfBirth: emp.date_of_birth, maritalStatus: emp.marital_status,
+        spouseWorking: emp.spouse_working, childrenCount: emp.children_count,
+        residencyStatus: emp.residency_status, allowancePcb: emp.allowance_pcb
+      }, statutory, rates, companyId);
+
+      const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
+      const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
+      const socsoEmployee = statutory.socso_enabled ? statutoryResult.socso.employee : 0;
+      const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
+      const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
+      const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
+      const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+
+      const totalDeductions = epfEmployee + socsoEmployee + eisEmployee + pcb;
+      const netPay = grossSalary - totalDeductions;
+      const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
+
+      // Insert payroll item
+      await client.query(`
+        INSERT INTO payroll_items (
+          payroll_run_id, employee_id,
+          basic_salary, fixed_allowance, ot_hours, ot_amount,
+          gross_salary, statutory_base,
+          epf_employee, epf_employer, socso_employee, socso_employer,
+          eis_employee, eis_employer, pcb,
+          total_deductions, net_pay, employer_total_cost
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      `, [
+        id, emp.id, basicSalary, fixedAllowance, otHours, otAmount,
+        grossSalary, statutoryBase,
+        epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
+        eisEmployee, eisEmployer, pcb,
+        totalDeductions, netPay, employerCost
+      ]);
+
+      addedCount++;
+      addedEmployees.push({ id: emp.id, name: emp.name, net_pay: netPay });
+    }
+
+    // Update run totals
+    const totalsResult = await client.query(`
+      SELECT COUNT(*) as count,
+             COALESCE(SUM(gross_salary), 0) as total_gross,
+             COALESCE(SUM(total_deductions), 0) as total_deductions,
+             COALESCE(SUM(net_pay), 0) as total_net,
+             COALESCE(SUM(employer_total_cost), 0) as total_employer_cost
+      FROM payroll_items WHERE payroll_run_id = $1
+    `, [id]);
+    const totals = totalsResult.rows[0];
+
+    await client.query(`
+      UPDATE payroll_runs SET
+        employee_count = $1, total_gross = $2, total_deductions = $3,
+        total_net = $4, total_employer_cost = $5
+      WHERE id = $6
+    `, [totals.count, totals.total_gross, totals.total_deductions, totals.total_net, totals.total_employer_cost, id]);
+
+    await client.query('COMMIT');
+
+    res.json({
+      message: `Added ${addedCount} employee(s) to payroll`,
+      added: addedCount,
+      employees: addedEmployees
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error adding employees to payroll:', error);
+    res.status(500).json({ error: 'Failed to add employees: ' + error.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * POST /api/payroll/runs/:id/finalize
  * Finalize a payroll run
  */

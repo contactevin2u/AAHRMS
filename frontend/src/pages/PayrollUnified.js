@@ -314,6 +314,31 @@ function PayrollUnified() {
     }
   };
 
+  const handleAddMissingEmployees = async () => {
+    if (!selectedRun) return;
+    const employeeId = window.prompt('Enter Employee ID to add (or comma-separated IDs):');
+    if (!employeeId) return;
+
+    const ids = employeeId.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+    if (ids.length === 0) {
+      alert('Invalid employee ID(s)');
+      return;
+    }
+
+    try {
+      const res = await payrollV2Api.addEmployees(selectedRun.id, ids);
+      fetchRunDetails(selectedRun.id);
+      fetchRuns();
+      if (res.data.added > 0) {
+        alert(`Added ${res.data.added} employee(s):\n${res.data.employees.map(e => `${e.name}: RM ${e.net_pay.toFixed(2)}`).join('\n')}`);
+      } else {
+        alert(res.data.message || 'No employees added');
+      }
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to add employees');
+    }
+  };
+
   // AI functions
   const handleAIAnalyze = async (instructionParam) => {
     const instruction = typeof instructionParam === 'string' ? instructionParam : aiInstruction;
@@ -1055,6 +1080,7 @@ function PayrollUnified() {
                           <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'csv')} className="download-btn">Download Excel</button>
                           <button onClick={() => handleDownloadBankFile(selectedRun.id, 'maybankBulk')} className="download-btn" style={{marginLeft: '8px'}}>Maybank CSV</button>
                           <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate OT</button>
+                          <button onClick={handleAddMissingEmployees} className="recalculate-btn" style={{marginLeft: '8px'}}>+ Add Employee</button>
                           <button onClick={() => handleFinalizeRun(selectedRun.id)} className="finalize-btn">Finalize</button>
                           <button onClick={() => handleDeleteRun(selectedRun.id)} className="delete-btn">Delete</button>
                         </>
