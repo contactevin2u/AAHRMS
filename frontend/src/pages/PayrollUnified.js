@@ -327,28 +327,20 @@ function PayrollUnified() {
     }
   };
 
-  const handleAddMissingEmployees = async () => {
-    if (!selectedRun) return;
-    const employeeId = window.prompt('Enter Employee ID to add (or comma-separated IDs):');
-    if (!employeeId) return;
-
-    const ids = employeeId.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
-    if (ids.length === 0) {
-      alert('Invalid employee ID(s)');
-      return;
-    }
+  const handleAddEmployee = async (employeeId, employeeName) => {
+    if (!selectedRun || !employeeId) return;
 
     try {
-      const res = await payrollV2Api.addEmployees(selectedRun.id, ids);
+      const res = await payrollV2Api.addEmployees(selectedRun.id, [employeeId]);
       fetchRunDetails(selectedRun.id);
       fetchRuns();
       if (res.data.added > 0) {
-        alert(`Added ${res.data.added} employee(s):\n${res.data.employees.map(e => `${e.name}: RM ${e.net_pay.toFixed(2)}`).join('\n')}`);
+        alert(`Added ${employeeName}:\nNet Pay: RM ${res.data.employees[0]?.net_pay?.toFixed(2) || '0.00'}`);
       } else {
-        alert(res.data.message || 'No employees added');
+        alert(res.data.message || 'Employee not added');
       }
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to add employees');
+      alert(error.response?.data?.error || 'Failed to add employee');
     }
   };
 
@@ -1139,7 +1131,6 @@ function PayrollUnified() {
                           <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'csv')} className="download-btn">Download Excel</button>
                           <button onClick={() => handleDownloadBankFile(selectedRun.id, 'maybankBulk')} className="download-btn" style={{marginLeft: '8px'}}>Maybank CSV</button>
                           <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate OT</button>
-                          <button onClick={handleAddMissingEmployees} className="recalculate-btn" style={{marginLeft: '8px'}}>+ Add Employee</button>
                           <button onClick={() => handleFinalizeRun(selectedRun.id)} className="finalize-btn">Finalize</button>
                           <button onClick={() => handleDeleteRun(selectedRun.id)} className="delete-btn">Delete</button>
                         </>
@@ -1475,14 +1466,33 @@ function PayrollUnified() {
                           {selectedRun.excluded_employees.length} employee(s) excluded from payroll
                         </strong>
                       </div>
-                      <div style={{ color: '#78350f', fontSize: '0.85rem' }}>
-                        The following employees were excluded because they had no schedule AND no clock-in records for this period:
+                      <div style={{ color: '#78350f', fontSize: '0.85rem', marginBottom: '8px' }}>
+                        The following employees were excluded because they had no schedule AND no clock-in records for this period.
+                        {selectedRun.status === 'draft' && ' Click + to add to payroll:'}
                       </div>
-                      <ul style={{ margin: '8px 0 0 20px', color: '#78350f', fontSize: '0.85rem' }}>
+                      <div style={{ color: '#78350f', fontSize: '0.85rem' }}>
                         {selectedRun.excluded_employees.map((emp, idx) => (
-                          <li key={idx}>{emp.name} ({emp.employee_id})</li>
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            {selectedRun.status === 'draft' && (
+                              <span
+                                onClick={() => handleAddEmployee(emp.id, emp.name)}
+                                style={{
+                                  cursor: 'pointer',
+                                  fontSize: '1.1rem',
+                                  color: '#059669',
+                                  fontWeight: 'bold',
+                                  width: '20px',
+                                  textAlign: 'center'
+                                }}
+                                title={`Add ${emp.name} to payroll`}
+                              >
+                                +
+                              </span>
+                            )}
+                            <span>{emp.name} ({emp.employee_id})</span>
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   )}
                 </>
