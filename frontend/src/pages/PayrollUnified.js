@@ -634,28 +634,11 @@ function PayrollUnified() {
     // Check if part-time employee
     const isPartTime = item.work_type === 'part_time' || item.employment_type === 'part_time';
 
-    // Calculate absent days from days_worked for full-time employees
-    // Skip for part-time employees - they are paid by hours worked, no absent deduction
-    const workDays = selectedRun?.work_days_per_month || 26;
-    const daysWorked = parseInt(item.days_worked) || 0;
-    const basicSalary = parseFloat(item.basic_salary) || 0;
-
-    // Always calculate absent days from days_worked (full-time only)
-    let absentDays = parseFloat(item.absent_days) || 0;
-    let absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
-    if (!isPartTime && daysWorked > 0) {
-      absentDays = Math.max(0, workDays - daysWorked);
-      const dailyRate = basicSalary / workDays;
-      absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
-    }
-
-    // Recalculate OT Amount with correct 1.5x formula
+    // Use backend-calculated values - no frontend recalculation
+    const absentDays = parseFloat(item.absent_days) || 0;
+    const absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
     const otHours = parseFloat(item.ot_hours) || 0;
-    let otAmount = parseFloat(item.ot_amount) || 0;
-    if (otHours > 0 && basicSalary > 0) {
-      const hourlyRate = basicSalary / workDays / 8;
-      otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
-    }
+    const otAmount = parseFloat(item.ot_amount) || 0;
 
     setItemForm({
       basic_salary: item.basic_salary || 0, fixed_allowance: item.fixed_allowance || 0,
@@ -1516,14 +1499,13 @@ function PayrollUnified() {
               <div className="modal-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
                 <h2 style={{margin: 0}}>Edit - {editingItem.employee_name}</h2>
                 {editingItem.days_worked != null && (() => {
+                  // Use backend-calculated values - no frontend recalculation
                   const daysWorked = parseInt(editingItem.days_worked) || 0;
                   const standardDays = selectedRun?.work_days_per_month || 26;
-                  const expectedHours = daysWorked * 8;
-                  const otHours = parseFloat(editingItem.ot_hours) || 0;
+                  const absentDays = parseFloat(editingItem.absent_days) || 0;
+                  const shortHours = parseFloat(editingItem.short_hours) || 0;
                   const totalHours = parseFloat(editingItem.total_work_hours) || 0;
-                  const baseHours = totalHours - otHours;
-                  const shortHours = expectedHours - baseHours;
-                  const absentDays = Math.max(0, standardDays - daysWorked);
+                  const otHours = parseFloat(editingItem.ot_hours) || 0;
                   const clickableStyle = { cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' };
                   return (
                     <div style={{fontSize: '0.85rem', color: '#666', textAlign: 'right'}}>
