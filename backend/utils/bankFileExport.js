@@ -21,7 +21,7 @@ const formatters = {
    * Maybank Bulk Transfer CSV Format
    * For Maybank2u/M2U Biz bulk salary payment upload
    */
-  maybankBulk: {
+  maybankbulk: {
     name: 'Maybank Bulk Transfer',
     extension: 'csv',
     generate: (payrollItems, options = {}) => {
