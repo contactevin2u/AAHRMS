@@ -3533,21 +3533,27 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
       const grossSalary = basicSalary + fixedAllowance + otAmount;
       const statutoryBase = basicSalary + otAmount;
 
-      // Calculate statutory deductions
-      const statutoryResult = await calculateAllStatutory({
-        basicSalary: statutoryBase, grossSalary, icNumber: emp.ic_number,
-        dateOfBirth: emp.date_of_birth, maritalStatus: emp.marital_status,
-        spouseWorking: emp.spouse_working, childrenCount: emp.children_count,
-        residencyStatus: emp.residency_status, allowancePcb: emp.allowance_pcb
-      }, statutory, rates, companyId);
+      // Build salary breakdown for PCB calculation
+      const salaryBreakdown = {
+        basic: basicSalary,
+        allowance: fixedAllowance,
+        taxableAllowance: 0,
+        commission: 0,
+        bonus: 0,
+        ot: otAmount,
+        pcbGross: grossSalary
+      };
 
-      const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
-      const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
-      const socsoEmployee = statutory.socso_enabled ? statutoryResult.socso.employee : 0;
-      const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
-      const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
-      const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
-      const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+      // Calculate statutory deductions (correct function signature)
+      const statutoryResult = calculateAllStatutory(statutoryBase, emp, run.month, null, salaryBreakdown);
+
+      const epfEmployee = statutory.epf_enabled ? (statutoryResult.epf?.employee || 0) : 0;
+      const epfEmployer = statutory.epf_enabled ? (statutoryResult.epf?.employer || 0) : 0;
+      const socsoEmployee = statutory.socso_enabled ? (statutoryResult.socso?.employee || 0) : 0;
+      const socsoEmployer = statutory.socso_enabled ? (statutoryResult.socso?.employer || 0) : 0;
+      const eisEmployee = statutory.eis_enabled ? (statutoryResult.eis?.employee || 0) : 0;
+      const eisEmployer = statutory.eis_enabled ? (statutoryResult.eis?.employer || 0) : 0;
+      const pcb = statutory.pcb_enabled ? (statutoryResult.pcb || 0) : 0;
 
       const totalDeductions = epfEmployee + socsoEmployee + eisEmployee + pcb;
       const netPay = grossSalary - totalDeductions;
