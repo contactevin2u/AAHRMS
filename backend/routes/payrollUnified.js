@@ -516,7 +516,12 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
 
     if (groupingId) {
       paramIdx++;
-      employeeQuery += ` AND e.${groupingColumn} = $${paramIdx}`;
+      if (isOutletBased) {
+        // For outlets: include employees with outlet_id OR linked via employee_outlets (managers)
+        employeeQuery += ` AND (e.outlet_id = $${paramIdx} OR e.id IN (SELECT employee_id FROM employee_outlets WHERE outlet_id = $${paramIdx}))`;
+      } else {
+        employeeQuery += ` AND e.${groupingColumn} = $${paramIdx}`;
+      }
       empParams.push(groupingId);
     }
 
@@ -1685,7 +1690,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
     // Filter by grouping (department or outlet)
     if (isOutletBased && outlet_id) {
-      employeeQuery += ` AND e.outlet_id = $${employeeParams.length + 1}`;
+      // Include employees with outlet_id OR linked via employee_outlets (managers)
+      employeeQuery += ` AND (e.outlet_id = $${employeeParams.length + 1} OR e.id IN (SELECT employee_id FROM employee_outlets WHERE outlet_id = $${employeeParams.length + 1}))`;
       employeeParams.push(outlet_id);
     } else if (!isOutletBased && department_id) {
       employeeQuery += ` AND e.department_id = $${employeeParams.length + 1}`;
@@ -2390,7 +2396,8 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
     let employeeParams = [companyId];
 
     if (isOutletBased && outlet_id) {
-      employeeQuery += ` AND e.outlet_id = $${employeeParams.length + 1}`;
+      // Include employees with outlet_id OR linked via employee_outlets (managers)
+      employeeQuery += ` AND (e.outlet_id = $${employeeParams.length + 1} OR e.id IN (SELECT employee_id FROM employee_outlets WHERE outlet_id = $${employeeParams.length + 1}))`;
       employeeParams.push(outlet_id);
     } else if (!isOutletBased && department_id) {
       employeeQuery += ` AND e.department_id = $${employeeParams.length + 1}`;
