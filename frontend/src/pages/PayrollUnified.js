@@ -1908,6 +1908,15 @@ function PayrollUnified() {
                   >
                     Leave ({attendanceDetails.summary?.days_on_leave || 0})
                   </button>
+                  {attendanceDetails.summary?.is_outlet_based && (
+                    <button
+                      className={`tab-btn ${attendanceDetailsTab === 'unscheduled' ? 'active' : ''}`}
+                      onClick={() => setAttendanceDetailsTab('unscheduled')}
+                      style={{background: attendanceDetailsTab === 'unscheduled' ? '#ff9800' : '', color: attendanceDetailsTab === 'unscheduled' ? '#fff' : '#ff9800', borderColor: '#ff9800'}}
+                    >
+                      No Schedule ({attendanceDetails.summary?.days_unscheduled || 0})
+                    </button>
+                  )}
                 </div>
 
                 {/* Summary Row */}
@@ -2060,6 +2069,47 @@ function PayrollUnified() {
                       )}
                     </tbody>
                   </table>
+                )}
+
+                {attendanceDetailsTab === 'unscheduled' && (
+                  <>
+                    <div style={{background: '#fff3cd', padding: '10px 15px', borderRadius: '6px', marginBottom: '15px', color: '#856404', fontSize: '0.85rem'}}>
+                      <strong>Note:</strong> These days have clock-in records but NO schedule assigned. They will NOT be paid unless admin adds a schedule.
+                    </div>
+                    <table className="data-table" style={{width: 'auto', minWidth: '450px'}}>
+                      <thead>
+                        <tr>
+                          <th style={{width: '110px'}}>Date</th>
+                          <th style={{width: '70px', textAlign: 'center'}}>Clock In</th>
+                          <th style={{width: '70px', textAlign: 'center'}}>Clock Out</th>
+                          <th style={{width: '60px', textAlign: 'center'}}>Hours</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(attendanceDetails.details?.unscheduled_days || []).map((day, i) => {
+                          const formatTime = (timeVal) => {
+                            if (!timeVal) return '-';
+                            if (typeof timeVal === 'string' && timeVal.match(/^\d{2}:\d{2}/)) {
+                              return timeVal.substring(0, 5);
+                            }
+                            const d = new Date(timeVal);
+                            return isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'});
+                          };
+                          return (
+                            <tr key={i} style={{background: '#fff3cd'}}>
+                              <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
+                              <td style={{textAlign: 'center'}}>{formatTime(day.clock_in)}</td>
+                              <td style={{textAlign: 'center'}}>{formatTime(day.clock_out)}</td>
+                              <td style={{textAlign: 'center', color: '#856404'}}>{day.total_hours?.toFixed(1) || 0}h (unpaid)</td>
+                            </tr>
+                          );
+                        })}
+                        {(attendanceDetails.details?.unscheduled_days || []).length === 0 && (
+                          <tr><td colSpan="4" style={{textAlign: 'center', color: '#999'}}>No unscheduled work days</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </>
                 )}
               </div>
 

@@ -4077,24 +4077,44 @@ router.get('/items/:id/attendance-details', authenticateAdmin, async (req, res) 
         AND lr.end_date >= $3
     `, [item.employee_id, periodEnd, periodStart]);
 
+    // Build scheduled dates set
+    const scheduledDates = new Set(schedulesResult.rows.map(r =>
+      r.schedule_date.toISOString().split('T')[0]
+    ));
+
+    // Get company settings to check if outlet-based
+    const settings = await getCompanySettings(companyId);
+    const isOutletBased = settings.groupingType === 'outlet';
+
     // Build days worked list
-    const daysWorked = clockInsResult.rows
+    // For outlet-based companies: only count days with BOTH schedule AND clock-in
+    const allClockIns = clockInsResult.rows
       .filter(r => r.status === 'completed')
       .map(r => ({
         date: r.work_date,
+        dateStr: r.work_date.toISOString().split('T')[0],
         clock_in: r.clock_in_1,
         clock_out: r.clock_out_1,
         clock_in_2: r.clock_in_2,
         clock_out_2: r.clock_out_2,
         total_hours: parseFloat(r.total_work_hours) || (parseFloat(r.total_work_minutes) || 0) / 60,
         ot_hours: (parseFloat(r.ot_minutes) || 0) / 60,
-        ot_status: r.ot_status
+        ot_status: r.ot_status,
+        has_schedule: scheduledDates.has(r.work_date.toISOString().split('T')[0])
       }));
 
-    // Build scheduled dates set
-    const scheduledDates = new Set(schedulesResult.rows.map(r =>
-      r.schedule_date.toISOString().split('T')[0]
-    ));
+    // For outlet-based: split into scheduled work vs unscheduled work
+    let daysWorked, unscheduledDays;
+    if (isOutletBased) {
+      // Days worked = has BOTH schedule AND clock-in
+      daysWorked = allClockIns.filter(d => d.has_schedule);
+      // Unscheduled = clock-in but NO schedule (won't be paid)
+      unscheduledDays = allClockIns.filter(d => !d.has_schedule);
+    } else {
+      // For non-outlet companies: all clock-ins count as days worked
+      daysWorked = allClockIns;
+      unscheduledDays = [];
+    }
 
     // Build worked dates set
     const workedDates = new Set(daysWorked.map(d =>
@@ -4138,7 +4158,7 @@ router.get('/items/:id/attendance-details', authenticateAdmin, async (req, res) 
     }
 
     // Calculate short hours (worked but less than expected)
-    const settings = await getCompanySettings(companyId);
+    // settings already fetched above for outlet-based check
     const expectedHoursPerDay = settings.rates.standard_work_hours || 8;
 
     const shortHoursDays = daysWorked
@@ -4181,9 +4201,11 @@ router.get('/items/:id/attendance-details', authenticateAdmin, async (req, res) 
         days_scheduled: schedulesResult.rows.length,
         days_absent: absentDays.length,
         days_on_leave: leaveDays.length,
+        days_unscheduled: unscheduledDays.length,
         total_hours: Math.round(totalHoursWorked * 100) / 100,
         total_short_hours: Math.round(totalShortHours * 100) / 100,
-        total_ot_hours: Math.round(totalOTHours * 100) / 100
+        total_ot_hours: Math.round(totalOTHours * 100) / 100,
+        is_outlet_based: isOutletBased
       },
       details: {
         days_worked: daysWorked.map(d => ({
@@ -4204,6 +4226,14 @@ router.get('/items/:id/attendance-details', authenticateAdmin, async (req, res) 
         ot_days: otDays.map(d => ({
           ...d,
           date: new Date(d.date).toISOString().split('T')[0]
+        })),
+        unscheduled_days: unscheduledDays.map(d => ({
+          date: new Date(d.date).toISOString().split('T')[0],
+          clock_in: d.clock_in,
+          clock_out: d.clock_out,
+          clock_in_2: d.clock_in_2,
+          clock_out_2: d.clock_out_2,
+          total_hours: Math.round(d.total_hours * 100) / 100
         }))
       }
     });
