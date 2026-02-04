@@ -3917,6 +3917,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
         pi.incentive_amount,
         pi.outstation_amount,
         pi.bonus,
+        pi.attendance_bonus,
         pi.claims_amount,
         pi.gross_salary,
         pi.epf_employee,
@@ -3944,7 +3945,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
     const totals = {
       basic_salary: 0, fixed_allowance: 0, ot_amount: 0, ph_pay: 0,
       commission_amount: 0, incentive_amount: 0, outstation_amount: 0, claims_amount: 0,
-      bonus: 0, gross_salary: 0,
+      bonus: 0, attendance_bonus: 0, gross_salary: 0,
       epf_employee: 0, socso_employee: 0, eis_employee: 0, pcb: 0,
       total_deductions: 0, net_pay: 0,
       epf_employer: 0, socso_employer: 0, eis_employer: 0, employer_total_cost: 0
@@ -3960,6 +3961,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
       totals.outstation_amount += parseFloat(row.outstation_amount) || 0;
       totals.claims_amount += parseFloat(row.claims_amount) || 0;
       totals.bonus += parseFloat(row.bonus) || 0;
+      totals.attendance_bonus += parseFloat(row.attendance_bonus) || 0;
       totals.gross_salary += parseFloat(row.gross_salary) || 0;
       totals.epf_employee += parseFloat(row.epf_employee) || 0;
       totals.socso_employee += parseFloat(row.socso_employee) || 0;
