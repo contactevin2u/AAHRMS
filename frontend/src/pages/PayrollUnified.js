@@ -62,7 +62,8 @@ function PayrollUnified() {
     basic_salary: 0, fixed_allowance: 0, ot_hours: 0, ot_amount: 0,
     ph_days_worked: 0, ph_pay: 0, incentive_amount: 0, commission_amount: 0,
     trade_commission_amount: 0, outstation_amount: 0, bonus: 0,
-    other_deductions: 0, deduction_remarks: '', notes: ''
+    other_deductions: 0, deduction_remarks: '', notes: '',
+    part_time_hours: 0 // For part-time employees: editable normal hours
   });
 
   // Statutory preview state
@@ -640,6 +641,10 @@ function PayrollUnified() {
     const otHours = parseFloat(item.ot_hours) || 0;
     const otAmount = parseFloat(item.ot_amount) || 0;
 
+    // For part-time: calculate normal hours (rounded to 0.5)
+    const rawHours = parseFloat(item.total_work_hours) || 0;
+    const partTimeHours = Math.floor(rawHours * 2) / 2;
+
     setItemForm({
       basic_salary: item.basic_salary || 0, fixed_allowance: item.fixed_allowance || 0,
       ot_hours: otHours, ot_amount: otAmount,
@@ -653,7 +658,8 @@ function PayrollUnified() {
       attendance_bonus: item.attendance_bonus || 0, late_days: item.late_days || 0,
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
-      claims_override: '' // Empty means use calculated value, set value to override claims amount
+      claims_override: '', // Empty means use calculated value, set value to override claims amount
+      part_time_hours: partTimeHours // For part-time: editable normal hours
     });
     setShowItemModal(true);
     const statutoryBase = (parseFloat(item.basic_salary) || 0) + (parseFloat(item.commission_amount) || 0) +
@@ -1545,14 +1551,25 @@ function PayrollUnified() {
                 <div className="modal-scroll-content">
                   {/* Part-time salary breakdown */}
                   {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time' || editingItem?.work_type === 'PART TIMER') && (() => {
-                    const rawNormalHours = parseFloat(editingItem?.total_work_hours || 0);
-                    const otHours = parseFloat(editingItem?.ot_hours || 0);
-                    // Round down to nearest 0.5 hour (same as payroll calculation)
-                    const normalHours = Math.floor(rawNormalHours * 2) / 2;
+                    const normalHours = parseFloat(itemForm.part_time_hours) || 0;
+                    const otHours = parseFloat(itemForm.ot_hours) || 0;
+                    const hourlyRate = parseFloat(editingItem?.hourly_rate || 0);
                     // For part-time: OT is just extra hours at same rate (no 1.5x multiplier)
                     const totalHours = normalHours + otHours;
-                    const hourlyRate = parseFloat(editingItem?.hourly_rate || 0);
                     const totalSalary = totalHours * hourlyRate;
+
+                    const handlePartTimeHoursChange = (newHours) => {
+                      const hours = Math.floor(newHours * 2) / 2; // Round to 0.5
+                      const newBasicSalary = Math.round(hours * hourlyRate * 100) / 100;
+                      const newOtAmount = Math.round(otHours * hourlyRate * 100) / 100;
+                      setItemForm({
+                        ...itemForm,
+                        part_time_hours: hours,
+                        basic_salary: newBasicSalary,
+                        ot_amount: newOtAmount
+                      });
+                    };
+
                     return (
                       <div style={{
                         background: 'linear-gradient(135deg, #e0f2fe, #f0f9ff)',
@@ -1564,28 +1581,41 @@ function PayrollUnified() {
                         <div style={{fontWeight: '600', color: '#0369a1', marginBottom: '10px', fontSize: '0.9rem'}}>
                           Part-Time Salary Breakdown
                         </div>
-                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', textAlign: 'center'}}>
+                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', textAlign: 'center', alignItems: 'end'}}>
                           <div>
                             <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>Normal Hours</div>
-                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#0f172a'}}>
-                              {normalHours.toFixed(1)}h
-                            </div>
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={normalHours}
+                              onChange={(e) => handlePartTimeHoursChange(parseFloat(e.target.value) || 0)}
+                              style={{
+                                width: '70px',
+                                padding: '6px 8px',
+                                border: '1px solid #7dd3fc',
+                                borderRadius: '4px',
+                                fontSize: '1rem',
+                                fontWeight: '600',
+                                textAlign: 'center',
+                                background: 'white'
+                              }}
+                            />
                           </div>
                           <div>
                             <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>+ Extra Hours</div>
-                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#0f172a'}}>
+                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#0f172a', padding: '6px 0'}}>
                               {otHours.toFixed(1)}h
                             </div>
                           </div>
                           <div>
                             <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>Hourly Rate</div>
-                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#0f172a'}}>
+                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#0f172a', padding: '6px 0'}}>
                               RM {hourlyRate.toFixed(2)}
                             </div>
                           </div>
                           <div>
                             <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>Total Salary</div>
-                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#059669'}}>
+                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#059669', padding: '6px 0'}}>
                               RM {totalSalary.toFixed(2)}
                             </div>
                           </div>
