@@ -967,15 +967,27 @@ function Employees() {
         )}
 
         <div className="filters-row">
-          <select
-            value={filter.outlet_id}
-            onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value })}
-          >
-            <option value="">All Outlets</option>
-            {outlets.map(o => (
-              <option key={o.id} value={o.id}>{o.name}</option>
-            ))}
-          </select>
+          {isMimix ? (
+            <select
+              value={filter.outlet_id}
+              onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value })}
+            >
+              <option value="">All Outlets</option>
+              {outlets.map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={filter.department_id}
+              onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}
+            >
+              <option value="">All Departments</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          )}
           <select
             value={filter.status}
             onChange={(e) => setFilter({ ...filter, status: e.target.value })}
