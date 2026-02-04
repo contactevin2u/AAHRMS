@@ -686,9 +686,9 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       else if (otHours >= 1) {
         otHours = Math.floor(otHours * 2) / 2;
         if (isPartTime) {
-          // Part-time: OT hours paid at same hourly rate (no 1.5x multiplier)
+          // Part-time: OT hours paid at 1.5x hourly rate
           const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
-          otAmount = Math.round(partTimeHourlyRate * otHours * 100) / 100;
+          otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
         } else if (basicSalary > 0 && otHours > 0) {
           const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
           otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
@@ -720,6 +720,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let lateDays = 0, attendanceBonus = 0;
 
       // Schedule-based calculations (outlet companies only, full-time only)
+      // Used for short hours and late days only - absent days uses clock-in records
       if (!isPartTime && settings.groupingType === 'outlet') {
         try {
           const scheduleBasedPay = await calculateScheduleBasedPay(
@@ -727,10 +728,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
             period.end.toISOString().split('T')[0]
           );
 
-          const daysWorked = scheduleBasedPay.attendedDays || 0;
-          absentDays = Math.max(0, workingDays - daysWorked);
-          absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
-
+          // Short hours from schedule-based calculation
           shortHours = scheduleBasedPay.shortHours || 0;
           if (shortHours > 0) {
             const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
@@ -738,15 +736,11 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
           }
 
           lateDays = scheduleBasedPay.lateDays || 0;
-          // Mimix attendance bonus
-          const totalPenalty = lateDays + absentDays;
-          if (totalPenalty === 0) attendanceBonus = 400;
-          else if (totalPenalty === 1) attendanceBonus = 300;
-          else if (totalPenalty === 2) attendanceBonus = 200;
-          else if (totalPenalty === 3) attendanceBonus = 100;
-          else attendanceBonus = 0;
         } catch (e) { console.warn(`Schedule calc failed for ${emp.name}:`, e.message); }
-      } else if (!isPartTime && settings.groupingType !== 'outlet') {
+      }
+
+      // Calculate absent days from clock-in records (ALL companies including outlet)
+      if (!isPartTime) {
         // Non-outlet: calculate absent days from clock-in records
         try {
           const periodStart = period.start.toISOString().split('T')[0];
@@ -774,6 +768,16 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
             absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
           }
         } catch (e) { console.warn(`Absent calc failed for ${emp.name}:`, e.message); }
+      }
+
+      // Mimix attendance bonus (outlet-based companies only)
+      if (!isPartTime && settings.groupingType === 'outlet') {
+        const totalPenalty = lateDays + absentDays;
+        if (totalPenalty === 0) attendanceBonus = 400;
+        else if (totalPenalty === 1) attendanceBonus = 300;
+        else if (totalPenalty === 2) attendanceBonus = 200;
+        else if (totalPenalty === 3) attendanceBonus = 100;
+        else attendanceBonus = 0;
       }
 
       const claimsAmount = claimsMap[emp.id] || 0;
@@ -1892,9 +1896,9 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         otHours = Math.floor(otHours * 2) / 2;
         // Recalculate OT amount with rounded hours
         if (isPartTime) {
-          // Part-time: OT hours paid at same hourly rate (no 1.5x multiplier)
+          // Part-time: OT hours paid at 1.5x hourly rate
           const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
-          otAmount = Math.round(partTimeHourlyRate * otHours * 100) / 100;
+          otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
         } else if (basicSalary > 0 && otHours > 0) {
           // Full-time: OT at 1.5x rate
           const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
@@ -2041,13 +2045,9 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       let absentDays = 0;
       let absentDayDeduction = 0;
 
-      // For outlet-based companies: count days with BOTH schedule AND clock-in
-      if (!isPartTime && settings.groupingType === 'outlet') {
-        // attendedDays = days with both schedule AND clock-in
-        const daysWorked = scheduleBasedPay?.attendedDays || 0;
-        absentDays = Math.max(0, workingDays - daysWorked);
-        absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
-      }
+      // For outlet-based companies: absent days = 26 - total clock-in days
+      // (The "schedule requirement" affects short hours deduction and "No Schedule" display, not absent days)
+      // We still use scheduleBasedPay for late days, short hours, attendance bonus calculation
 
       // For non-outlet companies (or any company without schedule-based absent days),
       // calculate absent days from clock-in records
@@ -2069,8 +2069,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
           const totalHoursWorked = parseFloat(clockInResult.rows[0]?.total_hours) || 0;
 
-          // Only calculate absent days if not already set by outlet/schedule logic
-          if (absentDays === 0 && daysWorked < workingDays) {
+          // Calculate absent days from clock-in records (all companies)
+          if (daysWorked < workingDays) {
             // Count approved paid leave days in the period (these count as "attended")
             const paidLeaveResult = await client.query(`
               SELECT COALESCE(SUM(
@@ -2124,13 +2124,13 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const advanceDeduction = advancesMap[emp.id] || 0;
 
       // Mimix attendance bonus calculation (outlet-based companies only)
-      // Based on late days and absent days in the period
+      // Based on late days and absent days (from clock-in records) in the period
       let attendanceBonus = 0;
       let lateDays = 0;
-      if (settings.groupingType === 'outlet' && !isPartTime && scheduleBasedPay) {
-        lateDays = scheduleBasedPay.lateDays || 0;
-        const absentDaysForBonus = scheduleBasedPay.absentDays || 0;
-        attendanceBonus = calculateMimixAttendanceBonus(lateDays, absentDaysForBonus);
+      if (settings.groupingType === 'outlet' && !isPartTime) {
+        lateDays = scheduleBasedPay?.lateDays || 0;
+        // Use absentDays calculated from clock-in records (not schedule-based)
+        attendanceBonus = calculateMimixAttendanceBonus(lateDays, absentDays);
       }
 
       // Calculate totals
@@ -2825,9 +2825,9 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     } else if (otHours >= 1) {
       otHours = Math.floor(otHours * 2) / 2;
       if (isPartTime) {
-        // Part-time: OT hours paid at same hourly rate (no 1.5x multiplier)
+        // Part-time: OT hours paid at 1.5x hourly rate
         const partTimeHourlyRate = parseFloat(item.hourly_rate) || rates.part_time_hourly_rate || 8.72;
-        otAmount = Math.round(partTimeHourlyRate * otHours * 100) / 100;
+        otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
       } else {
         const basicSalaryForOT = parseFloat(item.basic_salary) || 0;
         if (basicSalaryForOT > 0 && otHours > 0) {
@@ -3096,9 +3096,9 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         } else if (otHours >= 1) {
           otHours = Math.floor(otHours * 2) / 2;
           if (isPartTime) {
-            // Part-time: OT hours paid at same hourly rate (no 1.5x multiplier)
+            // Part-time: OT hours paid at 1.5x hourly rate
             const partTimeHourlyRate = parseFloat(i.hourly_rate) || rates.part_time_hourly_rate || 8.72;
-            otAmount = Math.round(partTimeHourlyRate * otHours * 100) / 100;
+            otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
           } else {
             const basicForOT = parseFloat(i.basic_salary) || 0;
             if (basicForOT > 0 && otHours > 0) {
