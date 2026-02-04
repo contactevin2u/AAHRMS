@@ -1034,6 +1034,13 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='pcb_additional') THEN
           ALTER TABLE payroll_items ADD COLUMN pcb_additional DECIMAL(10,2) DEFAULT 0;
         END IF;
+        -- Mimix attendance bonus tracking
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='attendance_bonus') THEN
+          ALTER TABLE payroll_items ADD COLUMN attendance_bonus DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='late_days') THEN
+          ALTER TABLE payroll_items ADD COLUMN late_days DECIMAL(5,2) DEFAULT 0;
+        END IF;
       END $$;
 
       -- Resignations / Employment Status History
