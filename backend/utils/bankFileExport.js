@@ -18,6 +18,76 @@ const pool = require('../db');
  */
 const formatters = {
   /**
+   * Maybank Bulk Transfer CSV Format
+   * For Maybank2u/M2U Biz bulk salary payment upload
+   */
+  maybankBulk: {
+    name: 'Maybank Bulk Transfer',
+    extension: 'csv',
+    generate: (payrollItems, options = {}) => {
+      const lines = [];
+
+      // Generate reference numbers
+      const refNum = Math.floor(Math.random() * 900000) + 100000;
+      const monthNames = ['', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const monthAbbr = monthNames[parseInt(options.month)] || 'SAL';
+
+      // Format crediting date as DD/MM/YYYY
+      let creditDate = options.creditingDate;
+      if (!creditDate) {
+        // Default to 5th of next month
+        const nextMonth = parseInt(options.month) === 12 ? 1 : parseInt(options.month) + 1;
+        const creditYear = parseInt(options.month) === 12 ? parseInt(options.year) + 1 : parseInt(options.year);
+        creditDate = `05/${String(nextMonth).padStart(2, '0')}/${creditYear}`;
+      }
+
+      // Header section (6 rows)
+      lines.push('Employer Info :,,,,,,,');
+      lines.push(`Crediting Date (eg. dd/MM/yyyy),${creditDate},,,,,,`);
+      lines.push(`Payment Reference,MBPREF${refNum},,,,,,`);
+      lines.push(`Payment Description,MBP${monthAbbr}${refNum},,,,,,`);
+      lines.push('Bulk Payment Type,Salary,,,,,,');
+      lines.push(',,,,,,,');
+
+      // Column headers
+      lines.push('Beneficiary Name,Beneficiary Bank,Beneficiary Account No,ID Type,ID Number,Payment Amount,Payment Reference,Payment Description');
+
+      // Generate unique transaction reference for this batch
+      const now = new Date();
+      const dateStr = String(now.getDate()).padStart(2, '0') +
+                      String(now.getMonth() + 1).padStart(2, '0') +
+                      String(now.getFullYear()).slice(-2);
+      const batchRef = Math.floor(Math.random() * 900000000) + 100000000;
+      const paymentRef = `PRE${dateStr}${batchRef}`;
+      const paymentDesc = `PDC${dateStr}${batchRef}`;
+
+      // Data rows
+      payrollItems.forEach(item => {
+        const bankName = getMaybankBulkBankName(item.bank_name);
+        // Strip dashes from IC number (e.g., 061009-14-1125 -> 061009141125)
+        const icNumber = (item.ic_number || '').replace(/-/g, '');
+        // Clean name - remove commas to avoid CSV issues
+        const cleanName = (item.employee_name || '').toUpperCase().replace(/,/g, '');
+
+        const line = [
+          cleanName,
+          bankName,
+          item.bank_account_no || '',
+          'NRIC',
+          icNumber,
+          (parseFloat(item.net_pay) || 0).toFixed(2),
+          paymentRef,
+          paymentDesc
+        ].join(',');
+
+        lines.push(line);
+      });
+
+      return lines.join('\r\n');
+    }
+  },
+
+  /**
    * Maybank IBG (Interbank GIRO) Format
    * Fixed-width text file format
    */
@@ -268,6 +338,49 @@ function escapeCsv(str) {
   return escaped.includes(',') || escaped.includes('"') || escaped.includes('\n')
     ? `"${escaped}"`
     : escaped;
+}
+
+/**
+ * Get bank name for Maybank Bulk Transfer format
+ * Returns the exact bank name as expected by Maybank's bulk payment system
+ */
+function getMaybankBulkBankName(bankName) {
+  if (!bankName) return '';
+
+  const bankNameMap = {
+    'maybank': 'MAYBANK',
+    'malayan banking': 'MAYBANK',
+    'cimb': 'CIMB',
+    'public bank': 'PUBLIC BANK',
+    'publicbank': 'PUBLIC BANK',
+    'rhb': 'RHB',
+    'hong leong': 'HONG LEONG',
+    'hlb': 'HONG LEONG',
+    'ambank': 'AMBANK',
+    'bank islam': 'BANK ISLAM',
+    'bimb': 'BANK ISLAM',
+    'bank rakyat': 'BANK RAKYAT',
+    'affin': 'AFFIN BANK',
+    'alliance': 'ALLIANCE BANK',
+    'standard chartered': 'STANDARD CHARTERED',
+    'hsbc': 'HSBC',
+    'ocbc': 'OCBC',
+    'uob': 'UOB',
+    'bsn': 'BSN',
+    'bank simpanan nasional': 'BSN',
+    'agro bank': 'AGRO BANK',
+    'agrobank': 'AGRO BANK'
+  };
+
+  const normalizedName = bankName.toLowerCase().trim();
+  for (const [key, name] of Object.entries(bankNameMap)) {
+    if (normalizedName.includes(key)) {
+      return name;
+    }
+  }
+
+  // Return original name uppercase if no match found
+  return bankName.toUpperCase();
 }
 
 /**
