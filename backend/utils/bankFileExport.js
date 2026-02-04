@@ -363,6 +363,8 @@ function getMaybankBulkBankName(bankName) {
     'bank islam': 'BANK ISLAM',
     'bimb': 'BANK ISLAM',
     'bank rakyat': 'BANK RAKYAT',
+    'bank muamalat': 'MUAMALAT',
+    'muamalat': 'MUAMALAT',
     'affin': 'AFFIN BANK',
     'alliance': 'ALLIANCE BANK',
     'standard chartered': 'STANDARD CHARTERED',
