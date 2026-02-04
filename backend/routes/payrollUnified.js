@@ -531,6 +531,15 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       empParams.push(employeeIds);
     }
 
+    // Exclude employees with NO schedule AND NO clock-in for the entire period (considered inactive)
+    // They must have at least one schedule OR one clock-in record to be included
+    employeeQuery += `
+      AND (
+        EXISTS (SELECT 1 FROM schedules s WHERE s.employee_id = e.id AND s.schedule_date BETWEEN $2 AND $3)
+        OR EXISTS (SELECT 1 FROM clock_in_records cr WHERE cr.employee_id = e.id AND cr.work_date BETWEEN $2 AND $3)
+      )
+    `;
+
     const employees = await client.query(employeeQuery, empParams);
 
     if (employees.rows.length === 0) {
@@ -1703,6 +1712,14 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       employeeParams.push(employee_ids);
     }
 
+    // Exclude employees with NO schedule AND NO clock-in for the entire period (considered inactive)
+    employeeQuery += `
+      AND (
+        EXISTS (SELECT 1 FROM schedules s WHERE s.employee_id = e.id AND s.schedule_date BETWEEN $2 AND $3)
+        OR EXISTS (SELECT 1 FROM clock_in_records cr WHERE cr.employee_id = e.id AND cr.work_date BETWEEN $2 AND $3)
+      )
+    `;
+
     const employees = await client.query(employeeQuery, employeeParams);
 
     // Get previous month data for carry-forward and variance
@@ -2382,6 +2399,9 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
     const workingDays = rates.standard_work_days || getWorkingDaysInMonth(year, month);
 
     // Build employee query
+    const periodStart = period.start.toISOString().split('T')[0];
+    const periodEnd = period.end.toISOString().split('T')[0];
+
     let employeeQuery = `
       SELECT e.*,
              e.default_basic_salary as basic_salary,
@@ -2408,6 +2428,13 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
       employeeQuery += ` AND e.id = ANY($${employeeParams.length + 1})`;
       employeeParams.push(employee_ids);
     }
+
+    // Exclude employees with NO schedule AND NO clock-in for the entire period (considered inactive)
+    employeeQuery += ` AND (
+      EXISTS (SELECT 1 FROM schedules s WHERE s.employee_id = e.id AND s.schedule_date BETWEEN $${employeeParams.length + 1} AND $${employeeParams.length + 2})
+      OR EXISTS (SELECT 1 FROM clock_in_records cr WHERE cr.employee_id = e.id AND cr.work_date BETWEEN $${employeeParams.length + 1} AND $${employeeParams.length + 2})
+    )`;
+    employeeParams.push(periodStart, periodEnd);
 
     const employees = await pool.query(employeeQuery, employeeParams);
 
