@@ -688,7 +688,8 @@ function PayrollUnified() {
   const calculateOTAmount = (basicSalary, otHours, workingDays) => {
     const wd = workingDays || selectedRun?.work_days_per_month || 22;
     if (!basicSalary || !otHours || otHours <= 0) return 0;
-    return Math.round((basicSalary / wd / 8) * otHours * 100) / 100;
+    // OT rate = hourly rate x 1.5
+    return Math.round((basicSalary / wd / 8) * 1.5 * otHours * 100) / 100;
   };
 
   const calculatePHPay = (basicSalary, phDaysWorked, workingDays) => {
