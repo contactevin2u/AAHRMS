@@ -1559,6 +1559,9 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
     }
 
     const run = runResult.rows[0];
+    const settings = await getCompanySettings(run.company_id);
+    const isOutletBased = settings.groupingType === 'outlet';
+
     const itemsResult = await pool.query(`
       SELECT pi.*,
              e.employee_id as emp_code,
@@ -1570,27 +1573,60 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
              e.hourly_rate,
              d.name as department_name,
              eo.name as outlet_name,
+             -- Days worked: for outlet-based (Mimix), only count days WITH schedule
+             -- For other companies, count all clock-in days
              (SELECT COUNT(DISTINCT cr.work_date)
               FROM clock_in_records cr
               WHERE cr.employee_id = pi.employee_id
                 AND cr.work_date BETWEEN $2 AND $3
                 AND cr.status = 'completed'
+                AND (
+                  NOT $4  -- If not outlet-based, count all days
+                  OR EXISTS (
+                    SELECT 1 FROM schedules s
+                    WHERE s.employee_id = cr.employee_id
+                      AND s.schedule_date = cr.work_date
+                      AND s.status IN ('scheduled', 'completed', 'confirmed')
+                  )
+                )
              ) as days_worked,
+             -- Total work hours: for outlet-based, only count hours from days WITH schedule
              (SELECT COALESCE(SUM(cr.total_work_hours), 0)
               FROM clock_in_records cr
               WHERE cr.employee_id = pi.employee_id
                 AND cr.work_date BETWEEN $2 AND $3
                 AND cr.status = 'completed'
-             ) as total_work_hours
+                AND (
+                  NOT $4
+                  OR EXISTS (
+                    SELECT 1 FROM schedules s
+                    WHERE s.employee_id = cr.employee_id
+                      AND s.schedule_date = cr.work_date
+                      AND s.status IN ('scheduled', 'completed', 'confirmed')
+                  )
+                )
+             ) as total_work_hours,
+             -- No schedule days: clock-in days WITHOUT schedule (unpaid, for Mimix only)
+             (SELECT COUNT(DISTINCT cr.work_date)
+              FROM clock_in_records cr
+              WHERE cr.employee_id = pi.employee_id
+                AND cr.work_date BETWEEN $2 AND $3
+                AND cr.status = 'completed'
+                AND NOT EXISTS (
+                  SELECT 1 FROM schedules s
+                  WHERE s.employee_id = cr.employee_id
+                    AND s.schedule_date = cr.work_date
+                    AND s.status IN ('scheduled', 'completed', 'confirmed')
+                )
+             ) as no_schedule_days
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN outlets eo ON e.outlet_id = eo.id
       WHERE pi.payroll_run_id = $1
       ORDER BY eo.name NULLS FIRST, e.name
-    `, [id, run.period_start_date, run.period_end_date]);
+    `, [id, run.period_start_date, run.period_end_date, isOutletBased]);
 
-    const settings = await getCompanySettings(run.company_id);
     const workDaysPerMonth = settings.rates.standard_work_days || 22;
 
     res.json({

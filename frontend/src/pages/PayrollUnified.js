@@ -1647,6 +1647,7 @@ function PayrollUnified() {
                   const shortHours = parseFloat(editingItem.short_hours) || 0;
                   const totalHours = parseFloat(editingItem.total_work_hours) || 0;
                   const otHours = parseFloat(editingItem.ot_hours) || 0;
+                  const noScheduleDays = parseInt(editingItem.no_schedule_days) || 0;
                   const clickableStyle = { cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' };
                   return (
                     <div style={{fontSize: '0.85rem', color: '#666', textAlign: 'right'}}>
@@ -1657,6 +1658,15 @@ function PayrollUnified() {
                       >
                         Days Worked: <strong>{daysWorked}</strong> / {standardDays} {absentDays > 0 && <span style={{color: '#dc3545'}}>({absentDays} absent)</span>}
                       </div>
+                      {noScheduleDays > 0 && (
+                        <div
+                          style={{...clickableStyle, color: '#f59e0b'}}
+                          onClick={() => { fetchAttendanceDetails(editingItem.id); setAttendanceDetailsTab('no_schedule'); }}
+                          title="Click to see details - Unpaid days without schedule"
+                        >
+                          No Schedule: <strong>{noScheduleDays} day(s)</strong> <span style={{fontSize: '0.75rem'}}>(unpaid)</span>
+                        </div>
+                      )}
                       <div
                         style={clickableStyle}
                         onClick={() => { fetchAttendanceDetails(editingItem.id); setAttendanceDetailsTab('days_worked'); }}
