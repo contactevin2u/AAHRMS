@@ -670,7 +670,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
       const fixedOT = parseFloat(emp.fixed_ot_amount) || 0;
 
-      if (features.auto_ot_from_clockin && !isPartTime && basicSalary > 0) {
+      if (features.auto_ot_from_clockin) {
         try {
           const otResult = await calculateOTFromClockIn(
             emp.id, companyId, emp.department_id,
@@ -685,7 +685,11 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       if (otHours > 0 && otHours < 1) { otHours = 0; otAmount = 0; }
       else if (otHours >= 1) {
         otHours = Math.floor(otHours * 2) / 2;
-        if (basicSalary > 0 && otHours > 0) {
+        if (isPartTime) {
+          // Part-time: OT hours paid at same hourly rate (no 1.5x multiplier)
+          const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
+          otAmount = Math.round(partTimeHourlyRate * otHours * 100) / 100;
+        } else if (basicSalary > 0 && otHours > 0) {
           const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
           otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
         }
@@ -1862,10 +1866,10 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // OT calculation (skip for part-time - they're paid by actual hours worked)
+      // OT calculation
       let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
 
-      if (features.auto_ot_from_clockin && !isPartTime) {
+      if (features.auto_ot_from_clockin) {
         try {
           const otResult = await calculateOTFromClockIn(
             emp.id, companyId, emp.department_id,
@@ -1887,7 +1891,12 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       } else if (otHours >= 1) {
         otHours = Math.floor(otHours * 2) / 2;
         // Recalculate OT amount with rounded hours
-        if (basicSalary > 0 && otHours > 0) {
+        if (isPartTime) {
+          // Part-time: OT hours paid at same hourly rate (no 1.5x multiplier)
+          const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
+          otAmount = Math.round(partTimeHourlyRate * otHours * 100) / 100;
+        } else if (basicSalary > 0 && otHours > 0) {
+          // Full-time: OT at 1.5x rate
           const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
           otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
         }
@@ -2763,7 +2772,7 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
              pr.period_start_date, pr.period_end_date,
              e.id as emp_id, e.department_id, e.default_basic_salary, e.fixed_ot_amount,
              e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
-             e.residency_status, e.allowance_pcb
+             e.residency_status, e.allowance_pcb, e.work_type, e.employment_type, e.hourly_rate
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       JOIN employees e ON pi.employee_id = e.id
@@ -2809,15 +2818,22 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     }
 
     // OT rounding: min 1 hour, round down to nearest 0.5h
+    const isPartTime = item.work_type === 'part_time' || item.employment_type === 'part_time';
     if (otHours > 0 && otHours < 1) {
       otHours = 0;
       otAmount = 0;
     } else if (otHours >= 1) {
       otHours = Math.floor(otHours * 2) / 2;
-      const basicSalaryForOT = parseFloat(item.basic_salary) || 0;
-      if (basicSalaryForOT > 0 && otHours > 0) {
-        const hourlyRate = basicSalaryForOT / (rates.standard_work_days || 22) / (rates.standard_work_hours || 8);
-        otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+      if (isPartTime) {
+        // Part-time: OT hours paid at same hourly rate (no 1.5x multiplier)
+        const partTimeHourlyRate = parseFloat(item.hourly_rate) || rates.part_time_hourly_rate || 8.72;
+        otAmount = Math.round(partTimeHourlyRate * otHours * 100) / 100;
+      } else {
+        const basicSalaryForOT = parseFloat(item.basic_salary) || 0;
+        if (basicSalaryForOT > 0 && otHours > 0) {
+          const hourlyRate = basicSalaryForOT / (rates.standard_work_days || 22) / (rates.standard_work_hours || 8);
+          otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+        }
       }
     }
 
@@ -3042,7 +3058,7 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
           SELECT pi.*, pr.month, pr.year, pr.period_start_date, pr.period_end_date,
                  e.id as emp_id, e.department_id, e.fixed_ot_amount,
                  e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
-                 e.residency_status, e.allowance_pcb
+                 e.residency_status, e.allowance_pcb, e.work_type, e.employment_type, e.hourly_rate
           FROM payroll_items pi
           JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
           JOIN employees e ON pi.employee_id = e.id
@@ -3073,15 +3089,22 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         }
 
         // OT rounding: min 1 hour, round down to nearest 0.5h
+        const isPartTime = i.work_type === 'part_time' || i.employment_type === 'part_time';
         if (otHours > 0 && otHours < 1) {
           otHours = 0;
           otAmount = 0;
         } else if (otHours >= 1) {
           otHours = Math.floor(otHours * 2) / 2;
-          const basicForOT = parseFloat(i.basic_salary) || 0;
-          if (basicForOT > 0 && otHours > 0) {
-            const hourlyRate = basicForOT / (rates.standard_work_days || 22) / (rates.standard_work_hours || 8);
-            otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+          if (isPartTime) {
+            // Part-time: OT hours paid at same hourly rate (no 1.5x multiplier)
+            const partTimeHourlyRate = parseFloat(i.hourly_rate) || rates.part_time_hourly_rate || 8.72;
+            otAmount = Math.round(partTimeHourlyRate * otHours * 100) / 100;
+          } else {
+            const basicForOT = parseFloat(i.basic_salary) || 0;
+            if (basicForOT > 0 && otHours > 0) {
+              const hourlyRate = basicForOT / (rates.standard_work_days || 22) / (rates.standard_work_hours || 8);
+              otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+            }
           }
         }
 
