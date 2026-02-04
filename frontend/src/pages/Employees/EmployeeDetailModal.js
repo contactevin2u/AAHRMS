@@ -247,6 +247,14 @@ const EmployeeDetailModal = ({ employee, onClose, onEdit }) => {
             <div className="detail-section">
               <h4>Salary & Earnings</h4>
               <div className="detail-grid">
+                {data.hourly_rate > 0 && (
+                  <div className="detail-item">
+                    <label>Wages Per Hour</label>
+                    <span style={{ color: '#059669', fontWeight: '600' }}>
+                      {formatCurrency(data.hourly_rate)}/hr
+                    </span>
+                  </div>
+                )}
                 <div className="detail-item">
                   <label>Basic Salary</label>
                   <span style={{ color: '#059669', fontWeight: '600' }}>
