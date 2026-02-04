@@ -400,6 +400,475 @@ async function updateRunTotals(runId) {
 }
 
 // =============================================================================
+// CORE PAYROLL GENERATION FUNCTION
+// =============================================================================
+
+/**
+ * Generate a single payroll run for an outlet or department
+ * This is the core function used by both POST /runs and POST /runs/all-outlets
+ * to ensure consistent calculation logic across all payroll generation.
+ *
+ * @param {Object} params
+ * @param {number} params.companyId - Company ID
+ * @param {number} params.month - Payroll month (1-12)
+ * @param {number} params.year - Payroll year
+ * @param {number} [params.outletId] - Outlet ID (for outlet-based companies)
+ * @param {number} [params.departmentId] - Department ID (for dept-based companies)
+ * @param {string} [params.notes] - Notes for the payroll run
+ * @param {Array} [params.employeeIds] - Specific employee IDs (optional filter)
+ * @returns {Promise<{run: Object, stats: Object, warnings: Array}>}
+ */
+async function generatePayrollRunInternal({ companyId, month, year, outletId, departmentId, notes, employeeIds }) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Get company settings
+    const settings = await getCompanySettings(companyId);
+    const { features, rates, period: periodConfig, statutory } = settings;
+    const isOutletBased = settings.groupingType === 'outlet';
+
+    // Determine the grouping ID
+    const groupingId = isOutletBased ? outletId : departmentId;
+    const groupingColumn = isOutletBased ? 'outlet_id' : 'department_id';
+
+    // Check if run already exists
+    let existingQuery = 'SELECT id FROM payroll_runs WHERE month = $1 AND year = $2 AND company_id = $3';
+    let existingParams = [month, year, companyId];
+
+    if (groupingId) {
+      existingQuery += ` AND ${groupingColumn} = $4`;
+      existingParams.push(groupingId);
+    } else {
+      existingQuery += ` AND ${groupingColumn} IS NULL`;
+    }
+
+    const existing = await client.query(existingQuery, existingParams);
+    if (existing.rows.length > 0) {
+      await client.query('ROLLBACK');
+      throw new Error('Payroll run already exists for this period');
+    }
+
+    // Get period dates
+    const period = getPayrollPeriod(month, year, periodConfig);
+    const workingDays = rates.standard_work_days || getWorkingDaysInMonth(year, month);
+
+    // Create payroll run
+    const runResult = await client.query(`
+      INSERT INTO payroll_runs (
+        month, year, status, notes, department_id, outlet_id, company_id,
+        period_start_date, period_end_date, payment_due_date, period_label
+      ) VALUES ($1, $2, 'draft', $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING *
+    `, [
+      month, year, notes,
+      isOutletBased ? null : (departmentId || null),
+      isOutletBased ? (outletId || null) : null,
+      companyId,
+      period.start.toISOString().split('T')[0],
+      period.end.toISOString().split('T')[0],
+      period.paymentDate.toISOString().split('T')[0],
+      period.label
+    ]);
+
+    const runId = runResult.rows[0].id;
+
+    // Get employees
+    let employeeQuery = `
+      SELECT e.*,
+             e.default_basic_salary as basic_salary,
+             e.default_allowance as fixed_allowance,
+             d.name as department_name,
+             d.payroll_structure_code
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE e.company_id = $1
+        AND (e.status = 'active' OR (e.status = 'resigned' AND e.resign_date BETWEEN $2 AND $3))
+    `;
+    let empParams = [companyId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]];
+    let paramIdx = 3;
+
+    if (groupingId) {
+      paramIdx++;
+      employeeQuery += ` AND e.${groupingColumn} = $${paramIdx}`;
+      empParams.push(groupingId);
+    }
+
+    if (employeeIds && employeeIds.length > 0) {
+      paramIdx++;
+      employeeQuery += ` AND e.id = ANY($${paramIdx})`;
+      empParams.push(employeeIds);
+    }
+
+    const employees = await client.query(employeeQuery, empParams);
+
+    if (employees.rows.length === 0) {
+      await client.query('ROLLBACK');
+      throw new Error('No active employees found for this period');
+    }
+
+    // Get previous month data for carry-forward
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    let prevPayrollMap = {};
+
+    if (features.salary_carry_forward) {
+      const prevResult = await client.query(`
+        SELECT pi.employee_id, pi.basic_salary, pi.fixed_allowance, pi.net_pay
+        FROM payroll_items pi
+        JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+        WHERE pr.month = $1 AND pr.year = $2 AND pr.company_id = $3
+      `, [prevMonth, prevYear, companyId]);
+
+      prevResult.rows.forEach(row => {
+        prevPayrollMap[row.employee_id] = row;
+      });
+    }
+
+    // Get sales data (for Indoor Sales)
+    let salesMap = {};
+    if (features.indoor_sales_logic) {
+      const salesResult = await client.query(`
+        SELECT employee_id, SUM(total_sales) as total_sales
+        FROM sales_records WHERE month = $1 AND year = $2 AND company_id = $3
+        GROUP BY employee_id
+      `, [month, year, companyId]);
+      salesResult.rows.forEach(r => { salesMap[r.employee_id] = parseFloat(r.total_sales) || 0; });
+    }
+
+    // Get flexible commissions
+    let commissionsMap = {};
+    if (features.flexible_commissions) {
+      const commResult = await client.query(`
+        SELECT ec.employee_id, SUM(ec.amount) as total
+        FROM employee_commissions ec
+        JOIN commission_types ct ON ec.commission_type_id = ct.id
+        WHERE ec.is_active = TRUE AND ct.is_active = TRUE
+        GROUP BY ec.employee_id
+      `);
+      commResult.rows.forEach(r => { commissionsMap[r.employee_id] = parseFloat(r.total) || 0; });
+    }
+
+    // Get flexible allowances
+    let allowancesMap = {};
+    if (features.flexible_allowances) {
+      const allowResult = await client.query(`
+        SELECT ea.employee_id,
+          SUM(ea.amount) as total,
+          SUM(CASE WHEN at.is_taxable THEN ea.amount ELSE 0 END) as taxable,
+          SUM(CASE WHEN NOT at.is_taxable THEN ea.amount ELSE 0 END) as exempt
+        FROM employee_allowances ea
+        JOIN allowance_types at ON ea.allowance_type_id = at.id
+        WHERE ea.is_active = TRUE AND at.is_active = TRUE
+        GROUP BY ea.employee_id
+      `);
+      allowResult.rows.forEach(r => {
+        allowancesMap[r.employee_id] = {
+          total: parseFloat(r.total) || 0,
+          taxable: parseFloat(r.taxable) || 0,
+          exempt: parseFloat(r.exempt) || 0
+        };
+      });
+    }
+
+    // Get unpaid leave
+    let unpaidLeaveMap = {};
+    if (features.unpaid_leave_deduction) {
+      const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
+      const endOfMonth = new Date(year, month, 0).toISOString().split('T')[0];
+
+      const unpaidResult = await client.query(`
+        SELECT lr.employee_id,
+          SUM(GREATEST(0,
+            (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+            - (SELECT COUNT(*) FROM generate_series(
+                GREATEST(lr.start_date, $2::date), LEAST(lr.end_date, $1::date), '1 day'::interval
+              ) d WHERE EXTRACT(DOW FROM d) IN (0, 6))
+          )) as unpaid_days
+        FROM leave_requests lr
+        JOIN leave_types lt ON lr.leave_type_id = lt.id
+        WHERE lt.is_paid = FALSE AND lr.status = 'approved'
+          AND lr.start_date <= $1 AND lr.end_date >= $2
+        GROUP BY lr.employee_id
+      `, [endOfMonth, startOfMonth]);
+      unpaidResult.rows.forEach(r => { unpaidLeaveMap[r.employee_id] = parseFloat(r.unpaid_days) || 0; });
+    }
+
+    // Get claims
+    let claimsMap = {};
+    if (features.auto_claims_linking) {
+      const claimsResult = await client.query(`
+        SELECT employee_id, SUM(amount) as total_claims
+        FROM claims WHERE status = 'approved' AND linked_payroll_item_id IS NULL
+        GROUP BY employee_id
+      `);
+      claimsResult.rows.forEach(r => { claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0; });
+    }
+
+    // Get advances
+    let advancesMap = {};
+    try {
+      const advancesResult = await client.query(`
+        SELECT employee_id, SUM(
+          CASE WHEN deduction_method = 'full' THEN remaining_balance
+               WHEN deduction_method = 'installment' THEN LEAST(installment_amount, remaining_balance)
+               ELSE remaining_balance END
+        ) as total_advance_deduction
+        FROM salary_advances
+        WHERE company_id = $1 AND status = 'active' AND remaining_balance > 0
+          AND ((expected_deduction_year < $2) OR (expected_deduction_year = $2 AND expected_deduction_month <= $3))
+        GROUP BY employee_id
+      `, [companyId, year, month]);
+      advancesResult.rows.forEach(r => { advancesMap[r.employee_id] = parseFloat(r.total_advance_deduction) || 0; });
+    } catch (e) { /* table might not exist */ }
+
+    // Process each employee
+    let stats = { created: 0, totalGross: 0, totalNet: 0, totalDeductions: 0, totalEmployerCost: 0 };
+    let warnings = [];
+
+    for (const emp of employees.rows) {
+      const prevPayroll = prevPayrollMap[emp.id];
+      let basicSalary = prevPayroll?.basic_salary || parseFloat(emp.basic_salary) || 0;
+      let fixedAllowance = prevPayroll?.fixed_allowance || parseFloat(emp.fixed_allowance) || 0;
+
+      const isPartTime = emp.work_type === 'part_time' || emp.employment_type === 'part_time';
+      let partTimeData = null;
+
+      if (isPartTime) {
+        partTimeData = await calculatePartTimeHours(
+          emp.id, period.start.toISOString().split('T')[0],
+          period.end.toISOString().split('T')[0], companyId, rates
+        );
+        basicSalary = partTimeData.grossSalary;
+        fixedAllowance = 0;
+      }
+
+      let commissionAmount = isPartTime ? 0 : (commissionsMap[emp.id] || 0);
+      let flexAllowData = isPartTime ? { total: 0, taxable: 0, exempt: 0 } : (allowancesMap[emp.id] || { total: 0, taxable: 0, exempt: 0 });
+      let flexAllowance = flexAllowData.total;
+
+      // Indoor Sales logic
+      let salesAmount = 0, salaryCalculationMethod = null;
+      if (features.indoor_sales_logic && emp.payroll_structure_code === 'indoor_sales') {
+        salesAmount = salesMap[emp.id] || 0;
+        const calculatedCommission = salesAmount * (rates.indoor_sales_commission_rate / 100);
+        if (calculatedCommission >= rates.indoor_sales_basic) {
+          basicSalary = calculatedCommission;
+          commissionAmount = 0;
+          salaryCalculationMethod = 'commission';
+        } else {
+          basicSalary = rates.indoor_sales_basic;
+          commissionAmount = 0;
+          salaryCalculationMethod = 'basic';
+        }
+      }
+
+      // OT calculation
+      let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
+      const fixedOT = parseFloat(emp.fixed_ot_amount) || 0;
+
+      if (features.auto_ot_from_clockin && !isPartTime && basicSalary > 0) {
+        try {
+          const otResult = await calculateOTFromClockIn(
+            emp.id, companyId, emp.department_id,
+            period.start.toISOString().split('T')[0],
+            period.end.toISOString().split('T')[0], basicSalary
+          );
+          otHours = otResult.total_ot_hours || 0;
+          otAmount = otResult.total_ot_amount || 0;
+        } catch (e) { console.warn(`OT calculation failed for ${emp.name}:`, e.message); }
+      }
+
+      if (otHours > 0 && otHours < 1) { otHours = 0; otAmount = 0; }
+      else if (otHours >= 1) {
+        otHours = Math.floor(otHours * 2) / 2;
+        if (basicSalary > 0 && otHours > 0) {
+          const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+          otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+        }
+      }
+
+      if (otAmount === 0 && fixedOT > 0) otAmount = fixedOT;
+
+      // PH pay calculation
+      if (features.auto_ph_pay && !isPartTime && basicSalary > 0) {
+        try {
+          phDaysWorked = await calculatePHDaysWorked(
+            emp.id, companyId,
+            period.start.toISOString().split('T')[0],
+            period.end.toISOString().split('T')[0]
+          );
+          if (phDaysWorked > 0) {
+            phPay = Math.round(phDaysWorked * (basicSalary / workingDays) * rates.ph_multiplier * 100) / 100;
+          }
+        } catch (e) { console.warn(`PH calculation failed for ${emp.name}:`, e.message); }
+      }
+
+      // Deductions
+      const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
+      let unpaidDays = unpaidLeaveMap[emp.id] || 0;
+      let unpaidDeduction = Math.round(dailyRate * unpaidDays * 100) / 100;
+      let absentDays = 0, absentDayDeduction = 0;
+      let shortHours = 0, shortHoursDeduction = 0;
+      let lateDays = 0, attendanceBonus = 0;
+
+      // Schedule-based calculations (outlet companies only, full-time only)
+      if (!isPartTime && settings.groupingType === 'outlet') {
+        try {
+          const scheduleBasedPay = await calculateScheduleBasedPay(
+            emp.id, period.start.toISOString().split('T')[0],
+            period.end.toISOString().split('T')[0]
+          );
+
+          const daysWorked = scheduleBasedPay.attendedDays || 0;
+          absentDays = Math.max(0, workingDays - daysWorked);
+          absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+
+          shortHours = scheduleBasedPay.shortHours || 0;
+          if (shortHours > 0) {
+            const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+            shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+          }
+
+          lateDays = scheduleBasedPay.lateDays || 0;
+          // Mimix attendance bonus
+          const totalPenalty = lateDays + absentDays;
+          if (totalPenalty === 0) attendanceBonus = 400;
+          else if (totalPenalty === 1) attendanceBonus = 300;
+          else if (totalPenalty === 2) attendanceBonus = 200;
+          else if (totalPenalty === 3) attendanceBonus = 100;
+          else attendanceBonus = 0;
+        } catch (e) { console.warn(`Schedule calc failed for ${emp.name}:`, e.message); }
+      } else if (!isPartTime && settings.groupingType !== 'outlet') {
+        // Non-outlet: calculate absent days from clock-in records
+        try {
+          const periodStart = period.start.toISOString().split('T')[0];
+          const periodEnd = period.end.toISOString().split('T')[0];
+          const clockInResult = await client.query(`
+            SELECT COUNT(DISTINCT work_date) as days_worked
+            FROM clock_in_records WHERE employee_id = $1 AND company_id = $2
+            AND work_date >= $3::date AND work_date <= $4::date AND status = 'completed'
+          `, [emp.id, companyId, periodStart, periodEnd]);
+          const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
+
+          if (daysWorked < workingDays) {
+            const paidLeaveResult = await client.query(`
+              SELECT COALESCE(SUM(GREATEST(0,
+                (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+                - (SELECT COUNT(*) FROM generate_series(GREATEST(lr.start_date, $2::date),
+                    LEAST(lr.end_date, $1::date), '1 day'::interval) d WHERE EXTRACT(DOW FROM d) IN (0, 6))
+              )), 0) as paid_leave_days
+              FROM leave_requests lr JOIN leave_types lt ON lr.leave_type_id = lt.id
+              WHERE lr.employee_id = $3 AND lt.is_paid = TRUE AND lr.status = 'approved'
+                AND lr.start_date <= $1 AND lr.end_date >= $2
+            `, [periodEnd, periodStart, emp.id]);
+            const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
+            absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
+            absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+          }
+        } catch (e) { console.warn(`Absent calc failed for ${emp.name}:`, e.message); }
+      }
+
+      const claimsAmount = claimsMap[emp.id] || 0;
+      const advanceDeduction = advancesMap[emp.id] || 0;
+
+      const totalAllowances = fixedAllowance + flexAllowance;
+      const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount + attendanceBonus;
+      const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+
+      // Statutory base - EPF/SOCSO/EIS based on actual pay received
+      const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+      let statutoryBase = actualBasicPay + commissionAmount;
+      if (statutory.statutory_on_ot) statutoryBase += otAmount;
+      if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
+      if (statutory.statutory_on_allowance) statutoryBase += totalAllowances;
+
+      // Get YTD data for PCB
+      let ytdData = null;
+      if (features.ytd_pcb_calculation) {
+        ytdData = await getYTDData(emp.id, year, month);
+      }
+
+      const allowancePcb = emp.allowance_pcb || 'excluded';
+      const fixedAllowanceTaxable = allowancePcb === 'excluded' ? 0 : fixedAllowance;
+      const salaryBreakdown = {
+        basic: basicSalary, allowance: totalAllowances,
+        taxableAllowance: flexAllowData.taxable + fixedAllowanceTaxable,
+        commission: commissionAmount, bonus: 0, ot: otAmount, pcbGross: grossSalary
+      };
+      const statutoryResult = calculateAllStatutory(statutoryBase, emp, month, ytdData, salaryBreakdown);
+
+      const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
+      const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
+      const socsoEmployee = statutory.socso_enabled ? statutoryResult.socso.employee : 0;
+      const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
+      const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
+      const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
+      const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+
+      const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction;
+      const netPay = grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction + shortHoursDeduction;
+      const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
+
+      // Insert payroll item
+      await client.query(`
+        INSERT INTO payroll_items (
+          payroll_run_id, employee_id,
+          basic_salary, fixed_allowance, commission_amount, claims_amount,
+          ot_hours, ot_amount, ph_days_worked, ph_pay,
+          unpaid_leave_days, unpaid_leave_deduction, advance_deduction,
+          short_hours, short_hours_deduction, absent_days, absent_day_deduction,
+          attendance_bonus, late_days,
+          gross_salary, statutory_base,
+          epf_employee, epf_employer, socso_employee, socso_employer,
+          eis_employee, eis_employer, pcb,
+          total_deductions, net_pay, employer_total_cost,
+          sales_amount, salary_calculation_method
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
+      `, [
+        runId, emp.id, basicSalary, totalAllowances, commissionAmount, claimsAmount,
+        otHours, otAmount, phDaysWorked, phPay,
+        unpaidDays, unpaidDeduction, advanceDeduction,
+        shortHours, shortHoursDeduction, absentDays, absentDayDeduction,
+        attendanceBonus, lateDays,
+        grossSalary, statutoryBase,
+        epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
+        eisEmployee, eisEmployer, pcb,
+        totalDeductions, netPay, employerCost,
+        salesAmount, salaryCalculationMethod
+      ]);
+
+      stats.created++;
+      stats.totalGross += grossSalary;
+      stats.totalNet += netPay;
+      stats.totalDeductions += totalDeductions;
+      stats.totalEmployerCost += employerCost;
+
+      if (basicSalary === 0) warnings.push(`${emp.name} has no basic salary set`);
+    }
+
+    // Update run totals
+    await client.query(`
+      UPDATE payroll_runs SET
+        total_gross = $1, total_deductions = $2, total_net = $3,
+        total_employer_cost = $4, employee_count = $5, has_variance_warning = $6
+      WHERE id = $7
+    `, [stats.totalGross, stats.totalDeductions, stats.totalNet, stats.totalEmployerCost, stats.created, warnings.length > 0, runId]);
+
+    await client.query('COMMIT');
+
+    return { run: runResult.rows[0], stats, warnings };
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// =============================================================================
 // UTILITY ENDPOINTS
 // =============================================================================
 
@@ -555,11 +1024,14 @@ router.get('/runs', authenticateAdmin, async (req, res) => {
  * POST /api/payroll/runs/all-outlets
  * Create separate payroll runs for each outlet at once
  * This is only for outlet-based companies (Mimix)
+ *
+ * IMPORTANT: This endpoint reuses the same logic as POST /runs by calling
+ * generatePayrollRunInternal for each outlet. This ensures consistency
+ * between single-outlet and all-outlets generation.
+ *
  * IMPORTANT: This route must be defined BEFORE /runs/:id routes
  */
 router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
-  const client = await pool.connect();
-
   try {
     const { month, year, notes } = req.body;
     const companyId = req.companyId;
@@ -607,349 +1079,33 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
       });
     }
 
-    await client.query('BEGIN');
-
     const createdRuns = [];
     const skippedOutlets = [];
 
+    // Process each outlet using the same logic as POST /runs
     for (const outlet of outletsToCreate) {
       try {
-        await client.query(`SAVEPOINT outlet_${outlet.id}`);
-        // Create individual payroll run for this outlet
-        const { features, rates, period: periodConfig } = settings;
-        const period = getPayrollPeriod(month, year, periodConfig);
-
-        // Check for active employees FIRST — skip outlet entirely if none
-        const employees = await client.query(`
-          SELECT e.*,
-                 e.default_basic_salary as basic_salary,
-                 e.default_allowance as fixed_allowance,
-                 d.name as department_name,
-                 d.payroll_structure_code
-          FROM employees e
-          LEFT JOIN departments d ON e.department_id = d.id
-          WHERE e.company_id = $1
-            AND e.outlet_id = $2
-            AND (
-              e.status = 'active'
-              OR (e.status = 'resigned' AND e.resign_date BETWEEN $3 AND $4)
-            )
-        `, [companyId, outlet.id, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]]);
-
-        if (employees.rows.length === 0) {
-          skippedOutlets.push({ outlet_name: outlet.name, reason: 'No active employees' });
-          await client.query(`ROLLBACK TO SAVEPOINT outlet_${outlet.id}`);
-          continue;
-        }
-
-        // Create payroll run for this outlet (only if employees exist)
-        const runResult = await client.query(`
-          INSERT INTO payroll_runs (
-            month, year, status, notes, department_id, outlet_id, company_id,
-            period_start_date, period_end_date, payment_due_date, period_label
-          ) VALUES ($1, $2, 'draft', $3, NULL, $4, $5, $6, $7, $8, $9)
-          RETURNING *
-        `, [
-          month, year,
-          notes ? `${outlet.name} - ${notes}` : outlet.name,
-          outlet.id,
+        // Call the internal payroll generation function (same as POST /runs uses)
+        const result = await generatePayrollRunInternal({
           companyId,
-          period.start.toISOString().split('T')[0],
-          period.end.toISOString().split('T')[0],
-          period.paymentDate.toISOString().split('T')[0],
-          period.label
-        ]);
-
-        const runId = runResult.rows[0].id;
-
-        // Get previous month data for carry-forward
-        const prevMonth = month === 1 ? 12 : month - 1;
-        const prevYear = month === 1 ? year - 1 : year;
-        let prevPayrollMap = {};
-
-        if (features.salary_carry_forward) {
-          const prevResult = await client.query(`
-            SELECT pi.employee_id, pi.basic_salary, pi.fixed_allowance, pi.net_pay
-            FROM payroll_items pi
-            JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
-            WHERE pr.month = $1 AND pr.year = $2 AND pr.company_id = $3
-          `, [prevMonth, prevYear, companyId]);
-
-          prevResult.rows.forEach(row => {
-            prevPayrollMap[row.employee_id] = row;
-          });
-        }
-
-        // Get flexible commissions
-        let commissionsMap = {};
-        if (features.flexible_commissions) {
-          const commResult = await client.query(`
-            SELECT ec.employee_id, SUM(ec.amount) as total
-            FROM employee_commissions ec
-            JOIN commission_types ct ON ec.commission_type_id = ct.id
-            WHERE ec.is_active = TRUE AND ct.is_active = TRUE
-            GROUP BY ec.employee_id
-          `);
-          commResult.rows.forEach(r => {
-            commissionsMap[r.employee_id] = parseFloat(r.total) || 0;
-          });
-        }
-
-        // Get flexible allowances
-        let allowancesMap = {};
-        if (features.flexible_allowances) {
-          const allowResult = await client.query(`
-            SELECT ea.employee_id,
-              SUM(ea.amount) as total,
-              SUM(CASE WHEN at.is_taxable THEN ea.amount ELSE 0 END) as taxable,
-              SUM(CASE WHEN NOT at.is_taxable THEN ea.amount ELSE 0 END) as exempt
-            FROM employee_allowances ea
-            JOIN allowance_types at ON ea.allowance_type_id = at.id
-            WHERE ea.is_active = TRUE AND at.is_active = TRUE
-            GROUP BY ea.employee_id
-          `);
-          allowResult.rows.forEach(r => {
-            allowancesMap[r.employee_id] = {
-              total: parseFloat(r.total) || 0,
-              taxable: parseFloat(r.taxable) || 0,
-              exempt: parseFloat(r.exempt) || 0
-            };
-          });
-        }
-
-        // Get all approved claims not yet linked to any payroll
-        let claimsMap = {};
-        if (features.auto_claims_linking) {
-          const claimsResult = await client.query(`
-            SELECT employee_id, SUM(amount) as total_claims
-            FROM claims
-            WHERE status = 'approved'
-              AND linked_payroll_item_id IS NULL
-            GROUP BY employee_id
-          `);
-
-          claimsResult.rows.forEach(r => {
-            claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0;
-          });
-        }
-
-        let totalGross = 0;
-        let totalDeductions = 0;
-        let totalNet = 0;
-        let totalEmployerCost = 0;
-        let employeeCount = 0;
-
-        const workingDays = rates.standard_work_days || 22;
-
-        // Process each employee for this outlet
-        for (const emp of employees.rows) {
-          const prevSalary = prevPayrollMap[emp.id];
-          const isPartTime = emp.work_type === 'part_time' || emp.employment_type === 'part_time' || emp.employee_type === 'part_time';
-
-          let basicSalary = 0;
-          let fixedAllowance = 0;
-          let partTimeData = null;
-
-          if (isPartTime) {
-            // Part-time: salary = working hours × hourly rate
-            partTimeData = await calculatePartTimeHours(
-              emp.id,
-              period.start.toISOString().split('T')[0],
-              period.end.toISOString().split('T')[0],
-              companyId,
-              rates
-            );
-            basicSalary = partTimeData.grossSalary;
-            fixedAllowance = 0; // Part-time no fixed allowance
-          } else {
-            // Full-time: use basic salary
-            basicSalary = prevSalary ? parseFloat(prevSalary.basic_salary) : (parseFloat(emp.basic_salary) || 0);
-            fixedAllowance = prevSalary ? parseFloat(prevSalary.fixed_allowance) : (parseFloat(emp.fixed_allowance) || 0);
-          }
-
-          const flexCommissions = isPartTime ? 0 : (commissionsMap[emp.id] || 0);
-          const flexAllowData = isPartTime ? { total: 0, taxable: 0, exempt: 0 } : (allowancesMap[emp.id] || { total: 0, taxable: 0, exempt: 0 });
-          const flexAllowances = flexAllowData.total;
-          const claimsAmount = claimsMap[emp.id] || 0;
-
-          // Calculate OT if enabled
-          let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
-          const fixedOT = parseFloat(emp.fixed_ot_amount) || 0;
-          if (features.auto_ot_from_clockin) {
-            try {
-              const otResult = await calculateOTFromClockIn(
-                emp.id, companyId, emp.department_id,
-                period.start.toISOString().split('T')[0],
-                period.end.toISOString().split('T')[0],
-                basicSalary
-              );
-              otHours = otResult.total_ot_hours || 0;
-              otAmount = otResult.total_ot_amount || 0;
-            } catch (e) {
-              console.error(`OT calc error for ${emp.name}:`, e.message);
-            }
-          }
-          // Use fixed OT amount if no auto OT calculated
-          if (otAmount === 0 && fixedOT > 0) {
-            otAmount = fixedOT;
-          }
-
-          if (features.auto_ph_pay) {
-            try {
-              phDaysWorked = await calculatePHDaysWorked(
-                emp.id, companyId,
-                period.start.toISOString().split('T')[0],
-                period.end.toISOString().split('T')[0]
-              );
-              if (phDaysWorked > 0 && basicSalary > 0) {
-                const dailyRate = basicSalary / workingDays;
-                phPay = phDaysWorked * dailyRate * rates.ph_multiplier;
-              }
-            } catch (e) {
-              console.error(`PH calc error for ${emp.name}:`, e.message);
-            }
-          }
-
-          // Calculate schedule-based pay and absent days for outlet companies (full-time only)
-          // Part-time employees are paid by hours worked, no absent deduction
-          const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
-          let unpaidDeduction = 0, unpaidDays = 0;
-          let absentDays = 0, absentDayDeduction = 0;
-          let shortHours = 0, shortHoursDeduction = 0;
-          let lateDays = 0, attendanceBonus = 0;
-          let scheduleBasedPay = null;
-
-          if (!isPartTime) {
-            try {
-              scheduleBasedPay = await calculateScheduleBasedPay(
-                emp.id,
-                period.start.toISOString().split('T')[0],
-                period.end.toISOString().split('T')[0]
-              );
-
-              // Absent days = 26 (standard working days) - days actually worked (attended)
-              const daysWorked = scheduleBasedPay.attendedDays || 0;
-              absentDays = Math.max(0, workingDays - daysWorked);
-              absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
-
-              // Short hours = only when clocked in but worked < 8h (not absent days)
-              shortHours = scheduleBasedPay.shortHours || 0;
-              if (shortHours > 0) {
-                const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
-                shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
-              }
-
-              lateDays = scheduleBasedPay.lateDays || 0;
-              // Mimix attendance bonus (full-time only)
-              const totalPenalty = lateDays + absentDays;
-              if (totalPenalty === 0) attendanceBonus = 400;
-              else if (totalPenalty === 1) attendanceBonus = 300;
-              else if (totalPenalty === 2) attendanceBonus = 200;
-              else if (totalPenalty === 3) attendanceBonus = 100;
-              else attendanceBonus = 0;
-            } catch (e) {
-              console.error(`Schedule-based pay calc error for ${emp.name}:`, e.message);
-            }
-          }
-
-          const totalAllowances = fixedAllowance + flexAllowances;
-          const grossBeforeDeductions = basicSalary + totalAllowances + otAmount + phPay + flexCommissions + claimsAmount + attendanceBonus;
-          const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
-
-          // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
-          // This ensures statutory contributions are proportional to actual work done
-          const actualBasicPay = Math.max(0, basicSalary - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
-          const statutoryBase = actualBasicPay + flexCommissions;
-          // PCB calculation needs full gross including allowance
-          // taxableAllowance: typed flex allowances use per-type is_taxable flag
-          // default_allowance (fixedAllowance) uses employee-level allowance_pcb setting
-          const allowancePcb = emp.allowance_pcb || 'excluded';
-          const fixedAllowanceTaxable = allowancePcb === 'excluded' ? 0 : fixedAllowance;
-          const salaryBreakdown = {
-            basic: basicSalary,
-            allowance: totalAllowances,
-            taxableAllowance: flexAllowData.taxable + fixedAllowanceTaxable,
-            commission: flexCommissions,
-            bonus: 0,  // No bonus at payroll creation
-            ot: otAmount,
-            pcbGross: grossSalary
-          };
-          const statutory = calculateAllStatutory(statutoryBase, emp, month, null, salaryBreakdown);
-
-          const totalDeductionsForEmp = (
-            unpaidDeduction + absentDayDeduction + shortHoursDeduction +
-            statutory.epf.employee +
-            statutory.socso.employee +
-            statutory.eis.employee +
-            statutory.pcb
-          );
-
-          const netPay = grossSalary - totalDeductionsForEmp + unpaidDeduction + absentDayDeduction + shortHoursDeduction;
-          const employerCost = grossSalary + statutory.epf.employer + statutory.socso.employer + statutory.eis.employer;
-
-          // Insert payroll item
-          await client.query(`
-            INSERT INTO payroll_items (
-              payroll_run_id, employee_id,
-              basic_salary, fixed_allowance, commission_amount, claims_amount,
-              ot_hours, ot_amount, ph_days_worked, ph_pay,
-              unpaid_leave_days, unpaid_leave_deduction,
-              short_hours, short_hours_deduction,
-              absent_days, absent_day_deduction,
-              attendance_bonus, late_days,
-              gross_salary,
-              epf_employee, epf_employer,
-              socso_employee, socso_employer,
-              eis_employee, eis_employer,
-              pcb,
-              total_deductions, net_pay, employer_total_cost
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
-          `, [
-            runId, emp.id,
-            basicSalary, totalAllowances, flexCommissions, claimsAmount,
-            otHours, otAmount, phDaysWorked, phPay,
-            unpaidDays, unpaidDeduction,
-            shortHours, shortHoursDeduction,
-            absentDays, absentDayDeduction,
-            attendanceBonus, lateDays,
-            grossSalary,
-            statutory.epf.employee, statutory.epf.employer,
-            statutory.socso.employee, statutory.socso.employer,
-            statutory.eis.employee, statutory.eis.employer,
-            statutory.pcb,
-            totalDeductionsForEmp, netPay, employerCost
-          ]);
-
-          totalGross += grossSalary;
-          totalDeductions += totalDeductionsForEmp;
-          totalNet += netPay;
-          totalEmployerCost += employerCost;
-          employeeCount++;
-        }
-
-        // Update run totals
-        await client.query(`
-          UPDATE payroll_runs SET
-            total_gross = $1, total_deductions = $2, total_net = $3,
-            total_employer_cost = $4, employee_count = $5
-          WHERE id = $6
-        `, [totalGross, totalDeductions, totalNet, totalEmployerCost, employeeCount, runId]);
+          month,
+          year,
+          outletId: outlet.id,
+          notes: notes ? `${outlet.name} - ${notes}` : outlet.name
+        });
 
         createdRuns.push({
-          run_id: runId,
+          run_id: result.run.id,
           outlet_id: outlet.id,
           outlet_name: outlet.name,
-          employee_count: employeeCount,
-          total_net: totalNet
+          employee_count: result.stats.created,
+          total_net: result.stats.totalNet
         });
       } catch (outletError) {
-        await client.query(`ROLLBACK TO SAVEPOINT outlet_${outlet.id}`);
         console.error(`Error creating payroll for outlet ${outlet.name}:`, outletError.message);
         skippedOutlets.push({ outlet_name: outlet.name, reason: outletError.message });
       }
     }
-
-    await client.query('COMMIT');
 
     // Calculate totals across all runs
     const grandTotalNet = createdRuns.reduce((sum, r) => sum + r.total_net, 0);
@@ -966,14 +1122,11 @@ router.post('/runs/all-outlets', authenticateAdmin, async (req, res) => {
       }
     });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Error creating all-outlets payroll:', error);
     res.status(500).json({
       error: 'Failed to create payroll runs for all outlets',
       details: error.message
     });
-  } finally {
-    client.release();
   }
 });
 
