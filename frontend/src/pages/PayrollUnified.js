@@ -1868,15 +1868,28 @@ function PayrollUnified() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(attendanceDetails.details?.days_worked || []).map((day, i) => (
-                        <tr key={i}>
-                          <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
-                          <td>{day.clock_in ? new Date(day.clock_in).toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'}) : '-'}</td>
-                          <td>{day.clock_out ? new Date(day.clock_out).toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'}) : '-'}</td>
-                          <td>{day.total_hours?.toFixed(1) || 0}h</td>
-                          <td style={{color: day.ot_hours > 0 ? '#28a745' : '#999'}}>{day.ot_hours > 0 ? `+${day.ot_hours?.toFixed(1)}h` : '-'}</td>
-                        </tr>
-                      ))}
+                      {(attendanceDetails.details?.days_worked || []).map((day, i) => {
+                        // Format time - handle both TIME strings (HH:MM:SS) and full timestamps
+                        const formatTime = (timeVal) => {
+                          if (!timeVal) return '-';
+                          // If it's just a time string like "09:00:00", display it directly
+                          if (typeof timeVal === 'string' && timeVal.match(/^\d{2}:\d{2}/)) {
+                            return timeVal.substring(0, 5); // Return HH:MM
+                          }
+                          // Otherwise try to parse as Date
+                          const d = new Date(timeVal);
+                          return isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('en-MY', {hour: '2-digit', minute: '2-digit'});
+                        };
+                        return (
+                          <tr key={i}>
+                            <td>{new Date(day.date).toLocaleDateString('en-MY', {weekday: 'short', day: 'numeric', month: 'short'})}</td>
+                            <td>{formatTime(day.clock_in)}</td>
+                            <td>{formatTime(day.clock_out)}</td>
+                            <td>{day.total_hours?.toFixed(1) || 0}h</td>
+                            <td style={{color: day.ot_hours > 0 ? '#28a745' : '#999'}}>{day.ot_hours > 0 ? `+${day.ot_hours?.toFixed(1)}h` : '-'}</td>
+                          </tr>
+                        );
+                      })}
                       {(attendanceDetails.details?.days_worked || []).length === 0 && (
                         <tr><td colSpan="5" style={{textAlign: 'center', color: '#999'}}>No records</td></tr>
                       )}
