@@ -1472,22 +1472,32 @@ function PayrollUnified() {
                       </div>
                       <div style={{ color: '#78350f', fontSize: '0.85rem' }}>
                         {selectedRun.excluded_employees.map((emp, idx) => (
-                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                             {selectedRun.status === 'draft' && (
-                              <span
+                              <button
                                 onClick={() => handleAddEmployee(emp.id, emp.name)}
                                 style={{
                                   cursor: 'pointer',
-                                  fontSize: '1.1rem',
-                                  color: '#059669',
+                                  fontSize: '1rem',
+                                  color: 'white',
                                   fontWeight: 'bold',
-                                  width: '20px',
-                                  textAlign: 'center'
+                                  width: '28px',
+                                  height: '28px',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  background: '#059669',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                  transition: 'all 0.2s'
                                 }}
+                                onMouseOver={(e) => e.target.style.background = '#047857'}
+                                onMouseOut={(e) => e.target.style.background = '#059669'}
                                 title={`Add ${emp.name} to payroll`}
                               >
                                 +
-                              </span>
+                              </button>
                             )}
                             <span>{emp.name} ({emp.employee_id})</span>
                           </div>
