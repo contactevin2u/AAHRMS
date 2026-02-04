@@ -585,8 +585,13 @@ function PayrollUnified() {
         const hasValue = (field) => data.employees.some(emp => parseFloat(emp[field]) > 0);
         const showAllow = hasValue('fixed_allowance');
         const showOT = hasValue('ot_amount');
-        const showComm = hasValue('commission_amount');
+        const showPH = hasValue('ph_pay');
+        const showComm = data.employees.some(emp => (parseFloat(emp.commission_amount) || 0) + (parseFloat(emp.trade_commission_amount) || 0) > 0);
+        const showIncentive = hasValue('incentive_amount');
+        const showOutstation = hasValue('outstation_amount');
+        const showClaims = hasValue('claims_amount');
         const showBonus = hasValue('bonus');
+        const showAttBonus = hasValue('attendance_bonus');
         const showEPF = hasValue('epf_employee');
         const showSOCSO = hasValue('socso_employee');
         const showEIS = hasValue('eis_employee');
@@ -596,8 +601,13 @@ function PayrollUnified() {
         const headers = ['#', 'Code', 'Name', 'Basic'];
         if (showAllow) headers.push('Allow');
         if (showOT) headers.push('OT');
+        if (showPH) headers.push('PH Pay');
         if (showComm) headers.push('Comm');
+        if (showIncentive) headers.push('Incentive');
+        if (showOutstation) headers.push('Outstation');
+        if (showClaims) headers.push('Claims');
         if (showBonus) headers.push('Bonus');
+        if (showAttBonus) headers.push('Att.Bonus');
         headers.push('Gross');
         if (showEPF) headers.push('EPF');
         if (showSOCSO) headers.push('SOCSO');
@@ -615,8 +625,13 @@ function PayrollUnified() {
           ];
           if (showAllow) row.push(parseFloat(emp.fixed_allowance || 0).toFixed(2));
           if (showOT) row.push(parseFloat(emp.ot_amount || 0).toFixed(2));
-          if (showComm) row.push(parseFloat(emp.commission_amount || 0).toFixed(2));
+          if (showPH) row.push(parseFloat(emp.ph_pay || 0).toFixed(2));
+          if (showComm) row.push(((parseFloat(emp.commission_amount) || 0) + (parseFloat(emp.trade_commission_amount) || 0)).toFixed(2));
+          if (showIncentive) row.push(parseFloat(emp.incentive_amount || 0).toFixed(2));
+          if (showOutstation) row.push(parseFloat(emp.outstation_amount || 0).toFixed(2));
+          if (showClaims) row.push(parseFloat(emp.claims_amount || 0).toFixed(2));
           if (showBonus) row.push(parseFloat(emp.bonus || 0).toFixed(2));
+          if (showAttBonus) row.push(parseFloat(emp.attendance_bonus || 0).toFixed(2));
           row.push(parseFloat(emp.gross_salary || 0).toFixed(2));
           if (showEPF) row.push(parseFloat(emp.epf_employee || 0).toFixed(2));
           if (showSOCSO) row.push(parseFloat(emp.socso_employee || 0).toFixed(2));
@@ -635,8 +650,13 @@ function PayrollUnified() {
         const totalsRow = ['', '', 'TOTAL', data.totals.basic_salary.toFixed(2)];
         if (showAllow) totalsRow.push(data.totals.fixed_allowance.toFixed(2));
         if (showOT) totalsRow.push(data.totals.ot_amount.toFixed(2));
+        if (showPH) totalsRow.push((data.totals.ph_pay || 0).toFixed(2));
         if (showComm) totalsRow.push(data.totals.commission_amount.toFixed(2));
+        if (showIncentive) totalsRow.push((data.totals.incentive_amount || 0).toFixed(2));
+        if (showOutstation) totalsRow.push((data.totals.outstation_amount || 0).toFixed(2));
+        if (showClaims) totalsRow.push((data.totals.claims_amount || 0).toFixed(2));
         if (showBonus) totalsRow.push(data.totals.bonus.toFixed(2));
+        if (showAttBonus) totalsRow.push((data.totals.attendance_bonus || 0).toFixed(2));
         totalsRow.push(data.totals.gross_salary.toFixed(2));
         if (showEPF) totalsRow.push(data.totals.epf_employee.toFixed(2));
         if (showSOCSO) totalsRow.push(data.totals.socso_employee.toFixed(2));
@@ -990,11 +1010,14 @@ function PayrollUnified() {
     const hasValue = (field) => items.some(item => parseFloat(item[field]) > 0);
     return {
       ot: hasValue('ot_amount'),
+      ph: hasValue('ph_pay'),
       allow: hasValue('fixed_allowance'),
       bonus: hasValue('bonus'),
       attendanceBonus: hasValue('attendance_bonus'),
       claims: hasValue('claims_amount'),
       comm: items.some(item => (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0) > 0),
+      incentive: hasValue('incentive_amount'),
+      outstation: hasValue('outstation_amount'),
       adv: hasValue('advance_deduction'),
       shortHrs: hasValue('short_hours_deduction'),
       epf: hasValue('epf_employee'),
@@ -1344,11 +1367,14 @@ function PayrollUnified() {
                           <tr>
                             <th>Employee</th><th>Basic</th><th>Deduct</th>
                             {vis.ot && <th>OT</th>}
+                            {vis.ph && <th>PH Pay</th>}
                             {vis.allow && <th>Allow</th>}
+                            {vis.comm && <th>Comm.</th>}
+                            {vis.incentive && <th>Incentive</th>}
+                            {vis.outstation && <th>Outstation</th>}
+                            {vis.claims && <th>Claims</th>}
                             {vis.bonus && <th>Bonus</th>}
                             {vis.attendanceBonus && <th>Att. Bonus</th>}
-                            {vis.claims && <th>Claims</th>}
-                            {vis.comm && <th>Comm.</th>}
                             <th>Gross</th>{vis.epf && <th>EPF</th>}{vis.socso && <th>SOCSO</th>}{vis.eis && <th>EIS</th>}{vis.pcb && <th>PCB</th>}
                             {vis.adv && <th>Adv</th>}
                             {vis.shortHrs && <th>Deduct</th>}
@@ -1374,11 +1400,14 @@ function PayrollUnified() {
                                 })()}
                               </td>
                               {vis.ot && renderCell(item, 'ot_amount', item.ot_amount)}
+                              {vis.ph && <td>{formatAmount(item.ph_pay)}</td>}
                               {vis.allow && renderCell(item, 'fixed_allowance', item.fixed_allowance)}
+                              {vis.comm && renderCell(item, 'commission_amount', (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0))}
+                              {vis.incentive && <td>{formatAmount(item.incentive_amount)}</td>}
+                              {vis.outstation && <td>{formatAmount(item.outstation_amount)}</td>}
+                              {vis.claims && <td>{formatAmount(item.claims_amount)}</td>}
                               {vis.bonus && renderCell(item, 'bonus', item.bonus)}
                               {vis.attendanceBonus && <td>{formatAmount(item.attendance_bonus)}</td>}
-                              {vis.claims && <td>{formatAmount(item.claims_amount)}</td>}
-                              {vis.comm && renderCell(item, 'commission_amount', (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0))}
                               <td><strong>{formatAmount(item.gross_salary)}</strong></td>
                               {vis.epf && <td>{formatAmount(item.epf_employee)}</td>}
                               {vis.socso && <td>{formatAmount(item.socso_employee)}</td>}
