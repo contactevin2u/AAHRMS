@@ -963,8 +963,14 @@ function PayrollUnified() {
   };
 
   // ========== HELPERS ==========
-  const formatNum = (num) => parseFloat(num || 0).toFixed(2);
-  const formatAmount = (amount) => `RM ${parseFloat(amount || 0).toFixed(2)}`;
+  const formatNum = (num) => {
+    const n = parseFloat(num);
+    return (isNaN(n) ? 0 : n).toFixed(2);
+  };
+  const formatAmount = (amount) => {
+    const num = parseFloat(amount);
+    return `RM ${(isNaN(num) ? 0 : num).toFixed(2)}`;
+  };
   const getMonthName = (month) => new Date(2000, month - 1, 1).toLocaleString('en', { month: 'long' });
   const getStatusBadge = (status) => <span className={`status-badge ${status}`}>{status}</span>;
 
