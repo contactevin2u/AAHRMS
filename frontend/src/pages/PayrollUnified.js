@@ -1563,11 +1563,14 @@ function PayrollUnified() {
                 <div className="modal-scroll-content">
                   {/* Part-time salary breakdown */}
                   {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time' || editingItem?.work_type === 'PART TIMER') && (() => {
-                    const rawHours = parseFloat(editingItem?.total_work_hours || 0);
+                    const rawNormalHours = parseFloat(editingItem?.total_work_hours || 0);
+                    const otHours = parseFloat(editingItem?.ot_hours || 0);
                     // Round down to nearest 0.5 hour (same as payroll calculation)
-                    const roundedHours = Math.floor(rawHours * 2) / 2;
+                    const normalHours = Math.floor(rawNormalHours * 2) / 2;
+                    // For part-time: OT is just extra hours at same rate (no 1.5x multiplier)
+                    const totalHours = normalHours + otHours;
                     const hourlyRate = parseFloat(editingItem?.hourly_rate || 0);
-                    const totalSalary = roundedHours * hourlyRate;
+                    const totalSalary = totalHours * hourlyRate;
                     return (
                       <div style={{
                         background: 'linear-gradient(135deg, #e0f2fe, #f0f9ff)',
@@ -1579,31 +1582,34 @@ function PayrollUnified() {
                         <div style={{fontWeight: '600', color: '#0369a1', marginBottom: '10px', fontSize: '0.9rem'}}>
                           Part-Time Salary Breakdown
                         </div>
-                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', textAlign: 'center'}}>
+                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', textAlign: 'center'}}>
                           <div>
-                            <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '4px'}}>Hours Worked</div>
-                            <div style={{fontSize: '1.2rem', fontWeight: '600', color: '#0f172a'}}>
-                              {roundedHours.toFixed(1)}h
+                            <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>Normal Hours</div>
+                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#0f172a'}}>
+                              {normalHours.toFixed(1)}h
                             </div>
-                            {rawHours !== roundedHours && (
-                              <div style={{fontSize: '0.65rem', color: '#94a3b8'}}>(raw: {rawHours.toFixed(2)}h)</div>
-                            )}
                           </div>
                           <div>
-                            <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '4px'}}>Hourly Rate</div>
-                            <div style={{fontSize: '1.2rem', fontWeight: '600', color: '#0f172a'}}>
+                            <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>+ Extra Hours</div>
+                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#0f172a'}}>
+                              {otHours.toFixed(1)}h
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>Hourly Rate</div>
+                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#0f172a'}}>
                               RM {hourlyRate.toFixed(2)}
                             </div>
                           </div>
                           <div>
-                            <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '4px'}}>Total Salary</div>
-                            <div style={{fontSize: '1.2rem', fontWeight: '600', color: '#059669'}}>
+                            <div style={{fontSize: '0.7rem', color: '#64748b', marginBottom: '4px'}}>Total Salary</div>
+                            <div style={{fontSize: '1.1rem', fontWeight: '600', color: '#059669'}}>
                               RM {totalSalary.toFixed(2)}
                             </div>
                           </div>
                         </div>
                         <div style={{fontSize: '0.75rem', color: '#64748b', marginTop: '10px', textAlign: 'center'}}>
-                          {roundedHours.toFixed(1)}h × RM {hourlyRate.toFixed(2)}/hr = RM {totalSalary.toFixed(2)}
+                          ({normalHours.toFixed(1)}h + {otHours.toFixed(1)}h) × RM {hourlyRate.toFixed(2)}/hr = <strong>RM {totalSalary.toFixed(2)}</strong>
                         </div>
                       </div>
                     );
