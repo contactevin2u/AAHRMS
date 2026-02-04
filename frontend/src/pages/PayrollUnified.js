@@ -24,6 +24,7 @@ function PayrollUnified() {
   const [creatingAllDepts, setCreatingAllDepts] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [viewMode, setViewMode] = useState(false); // true = read-only view, false = edit mode
   const [departments, setDepartments] = useState([]);
   const [outlets, setOutlets] = useState([]);
 
@@ -705,6 +706,16 @@ function PayrollUnified() {
   };
 
   const handleEditItem = (item) => {
+    setViewMode(false); // Edit mode
+    openItemModal(item);
+  };
+
+  const handleViewItem = (item) => {
+    setViewMode(true); // View-only mode
+    openItemModal(item);
+  };
+
+  const openItemModal = (item) => {
     setEditingItem(item);
 
     // Check if part-time employee
@@ -1429,12 +1440,14 @@ function PayrollUnified() {
                               {vis.shortHrs && <td>{formatAmount(item.short_hours_deduction)}</td>}
                               <td><strong>{formatAmount(item.net_pay)}</strong></td>
                               <td>
-                                {isDraft && (
+                                {isDraft ? (
                                   <>
                                     <button onClick={() => handleRecalculateItem(item.id)} className="action-btn recalc" title="Recalculate">↻</button>
                                     <button onClick={() => handleEditItem(item)} className="action-btn edit" title="Full Edit">✎</button>
                                     <button onClick={() => handleDeleteItem(item)} className="action-btn delete" title="Remove from payroll">🗑</button>
                                   </>
+                                ) : (
+                                  <button onClick={() => handleViewItem(item)} className="action-btn edit" title="View Details">👁</button>
                                 )}
                                 <button onClick={() => handleViewPayslip(item.id)} className="action-btn view" title="View Payslip">📄</button>
                               </td>
@@ -1620,12 +1633,12 @@ function PayrollUnified() {
           </div>
         )}
 
-        {/* Edit Item Modal - Simplified */}
+        {/* Edit/View Item Modal */}
         {showItemModal && editingItem && (
           <div className="modal-overlay" onClick={() => setShowItemModal(false)}>
             <div className="modal large" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
-                <h2 style={{margin: 0}}>Edit - {editingItem.employee_name}</h2>
+                <h2 style={{margin: 0}}>{viewMode ? 'View' : 'Edit'} - {editingItem.employee_name}</h2>
                 {editingItem.days_worked != null && (() => {
                   // Use backend-calculated values - no frontend recalculation
                   const daysWorked = parseInt(editingItem.days_worked) || 0;
@@ -1670,6 +1683,7 @@ function PayrollUnified() {
                 })()}
               </div>
               <form onSubmit={handleUpdateItem}>
+                <fieldset disabled={viewMode} style={{ border: 'none', padding: 0, margin: 0 }}>
                 <div className="modal-scroll-content">
                   {/* Part-time salary breakdown */}
                   {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time' || editingItem?.work_type === 'PART TIMER') && (() => {
@@ -1947,9 +1961,10 @@ function PayrollUnified() {
                     <textarea value={itemForm.notes} onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })} rows="2" />
                   </div>
                 </div>
+                </fieldset>
                 <div className="modal-actions">
-                  <button type="button" onClick={() => setShowItemModal(false)} className="cancel-btn">Cancel</button>
-                  <button type="submit" className="save-btn">Update</button>
+                  <button type="button" onClick={() => setShowItemModal(false)} className="cancel-btn">{viewMode ? 'Close' : 'Cancel'}</button>
+                  {!viewMode && <button type="submit" className="save-btn">Update</button>}
                 </div>
               </form>
             </div>
