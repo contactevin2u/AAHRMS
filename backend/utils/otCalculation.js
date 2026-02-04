@@ -270,19 +270,23 @@ async function calculateOTFromClockIn(employeeId, companyId, departmentId, perio
 
     // Use pre-calculated OT from ot_minutes field if available
     // Otherwise calculate from worked hours vs threshold
+    // IMPORTANT: Always round each day's OT to 0.5h increments (min 1h)
     let otHours = 0;
+    const minOtHours = rules.min_ot_hours || 1.0;
+
     if (record.pre_calculated_ot_hours && record.pre_calculated_ot_hours > 0) {
       // Use pre-calculated OT from database (ot_minutes / 60)
-      otHours = parseFloat(record.pre_calculated_ot_hours) || 0;
+      const rawOtHours = parseFloat(record.pre_calculated_ot_hours) || 0;
+      // Apply OT rounding: 0.5hr increments, min 1hr, round down (per day)
+      otHours = roundOTHours(rawOtHours, minOtHours);
       dailyBreakdown.ot_hours = otHours;
-      dailyBreakdown.raw_ot_hours = otHours;
+      dailyBreakdown.raw_ot_hours = Math.round(rawOtHours * 100) / 100;
       dailyBreakdown.ot_source = 'pre_calculated';
     } else if (workedHours > rules.ot_threshold_hours) {
       // Calculate OT from worked hours
       const rawOtHours = workedHours - rules.ot_threshold_hours;
 
-      // Apply OT rounding: 0.5hr increments, min 1hr, round down
-      const minOtHours = rules.min_ot_hours || 1.0;
+      // Apply OT rounding: 0.5hr increments, min 1hr, round down (per day)
       otHours = roundOTHours(rawOtHours, minOtHours);
 
       dailyBreakdown.ot_hours = otHours;

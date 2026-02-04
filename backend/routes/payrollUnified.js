@@ -4139,20 +4139,30 @@ router.get('/items/:id/attendance-details', authenticateAdmin, async (req, res) 
 
     // Build days worked list
     // For outlet-based companies: only count days with BOTH schedule AND clock-in
+    // OT rounding: Each day's OT rounded to 0.5h increments, min 1h per day
+    const roundOTPerDay = (rawOtHours) => {
+      if (rawOtHours < 1) return 0; // Min 1 hour required
+      return Math.floor(rawOtHours * 2) / 2; // Round down to 0.5h
+    };
+
     const allClockIns = clockInsResult.rows
       .filter(r => r.status === 'completed')
-      .map(r => ({
-        date: r.work_date,
-        dateStr: r.work_date.toISOString().split('T')[0],
-        clock_in: r.clock_in_1,
-        clock_out: r.clock_out_1,
-        clock_in_2: r.clock_in_2,
-        clock_out_2: r.clock_out_2,
-        total_hours: parseFloat(r.total_work_hours) || (parseFloat(r.total_work_minutes) || 0) / 60,
-        ot_hours: (parseFloat(r.ot_minutes) || 0) / 60,
-        ot_status: r.ot_status,
-        has_schedule: scheduledDates.has(r.work_date.toISOString().split('T')[0])
-      }));
+      .map(r => {
+        const rawOtHours = (parseFloat(r.ot_minutes) || 0) / 60;
+        return {
+          date: r.work_date,
+          dateStr: r.work_date.toISOString().split('T')[0],
+          clock_in: r.clock_in_1,
+          clock_out: r.clock_out_1,
+          clock_in_2: r.clock_in_2,
+          clock_out_2: r.clock_out_2,
+          total_hours: parseFloat(r.total_work_hours) || (parseFloat(r.total_work_minutes) || 0) / 60,
+          ot_hours: roundOTPerDay(rawOtHours), // Rounded OT per day
+          raw_ot_hours: rawOtHours, // Keep raw for reference
+          ot_status: r.ot_status,
+          has_schedule: scheduledDates.has(r.work_date.toISOString().split('T')[0])
+        };
+      });
 
     // For outlet-based: split into scheduled work vs unscheduled work
     let daysWorked, unscheduledDays;
