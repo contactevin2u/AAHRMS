@@ -187,9 +187,11 @@ async function calculatePartTimeHours(employeeId, periodStart, periodEnd, compan
   }
 
   const totalMinutes = normalMinutes + phMinutes;
-  const totalHours = totalMinutes / 60;
-  const normalHours = normalMinutes / 60;
-  const phHours = phMinutes / 60;
+
+  // Round down to nearest 0.5 hours (same as OT rounding)
+  const normalHours = Math.floor((normalMinutes / 60) * 2) / 2;
+  const phHours = Math.floor((phMinutes / 60) * 2) / 2;
+  const totalHours = normalHours + phHours;
 
   // Calculate pay: normal rate for normal days, 2x rate for PH
   const hourlyRate = ratesOverride.part_time_hourly_rate ?? PART_TIME_HOURLY_RATE;
@@ -200,9 +202,9 @@ async function calculatePartTimeHours(employeeId, periodStart, periodEnd, compan
 
   return {
     totalMinutes,
-    totalHours: Math.round(totalHours * 100) / 100,
-    normalHours: Math.round(normalHours * 100) / 100,
-    phHours: Math.round(phHours * 100) / 100,
+    totalHours,
+    normalHours,
+    phHours,
     normalPay,
     phPay,
     grossSalary
