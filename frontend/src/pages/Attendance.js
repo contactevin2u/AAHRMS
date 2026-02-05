@@ -37,10 +37,27 @@ const Attendance = () => {
   const [manualForm, setManualForm] = useState({
     employee_id: '',
     work_date: new Date().toISOString().split('T')[0],
+    clock_in: '',
+    clock_out: '',
     total_work_hours: '',
     ot_hours: '',
     notes: ''
   });
+
+  // Auto-calculate hours from clock in/out times
+  const calculateHoursFromClock = (clockIn, clockOut) => {
+    if (!clockIn || !clockOut) return { total: '', ot: '' };
+    const [inH, inM] = clockIn.split(':').map(Number);
+    const [outH, outM] = clockOut.split(':').map(Number);
+    let totalMinutes = (outH * 60 + outM) - (inH * 60 + inM);
+    if (totalMinutes < 0) totalMinutes += 24 * 60; // Handle overnight
+    const breakMinutes = 60; // 1 hour break
+    const workMinutes = Math.max(0, totalMinutes - breakMinutes);
+    const totalHours = Math.round(workMinutes / 60 * 100) / 100;
+    const standardHours = 8;
+    const otHours = Math.max(0, Math.round((totalHours - standardHours) * 100) / 100);
+    return { total: totalHours, ot: otHours };
+  };
 
   // Inline editing state
   const [editingCell, setEditingCell] = useState(null); // { recordId, field }
@@ -374,8 +391,9 @@ const Attendance = () => {
       toast.error('Please select a work date');
       return;
     }
-    if (!manualForm.total_work_hours) {
-      toast.error('Please enter total work hours');
+    // Allow either clock times OR manual hours
+    if (!manualForm.total_work_hours && (!manualForm.clock_in || !manualForm.clock_out)) {
+      toast.error('Please enter clock in/out times or total work hours');
       return;
     }
 
@@ -387,6 +405,8 @@ const Attendance = () => {
       setManualForm({
         employee_id: '',
         work_date: new Date().toISOString().split('T')[0],
+        clock_in: '',
+        clock_out: '',
         total_work_hours: '',
         ot_hours: '',
         notes: ''
@@ -1301,6 +1321,34 @@ const Attendance = () => {
 
                 <div className="form-row">
                   <div className="form-group">
+                    <label>Clock In</label>
+                    <input
+                      type="time"
+                      value={manualForm.clock_in}
+                      onChange={(e) => {
+                        const clockIn = e.target.value;
+                        const { total, ot } = calculateHoursFromClock(clockIn, manualForm.clock_out);
+                        setManualForm({ ...manualForm, clock_in: clockIn, total_work_hours: total, ot_hours: ot });
+                      }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Clock Out</label>
+                    <input
+                      type="time"
+                      value={manualForm.clock_out}
+                      onChange={(e) => {
+                        const clockOut = e.target.value;
+                        const { total, ot } = calculateHoursFromClock(manualForm.clock_in, clockOut);
+                        setManualForm({ ...manualForm, clock_out: clockOut, total_work_hours: total, ot_hours: ot });
+                      }}
+                    />
+                  </div>
+                </div>
+                <small style={{color: '#666', marginBottom: '10px', display: 'block'}}>Enter clock times to auto-calculate hours, or enter hours manually below</small>
+
+                <div className="form-row">
+                  <div className="form-group">
                     <label>Total Work Hours *</label>
                     <input
                       type="number"
@@ -1310,7 +1358,6 @@ const Attendance = () => {
                       value={manualForm.total_work_hours}
                       onChange={(e) => setManualForm({ ...manualForm, total_work_hours: e.target.value })}
                       placeholder="e.g., 8"
-                      required
                     />
                   </div>
 

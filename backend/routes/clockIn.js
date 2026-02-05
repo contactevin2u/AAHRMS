@@ -587,6 +587,8 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
     const {
       employee_id,
       work_date,
+      clock_in,
+      clock_out,
       total_work_hours,
       ot_hours,
       notes
@@ -597,6 +599,11 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
 
     if (!employee_id || !work_date) {
       return res.status(400).json({ error: 'Employee ID and work date are required' });
+    }
+
+    // Require either clock times or manual hours
+    if (!total_work_hours && (!clock_in || !clock_out)) {
+      return res.status(400).json({ error: 'Please provide clock in/out times or total work hours' });
     }
 
     // Verify employee exists
@@ -625,15 +632,21 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
     const totalMinutes = Math.round((parseFloat(total_work_hours) || 0) * 60);
     const otMinutes = Math.round((parseFloat(ot_hours) || 0) * 60);
 
-    // Create manual record (no clock times, just hours)
+    // Format clock times if provided
+    const clockIn1 = clock_in ? `${clock_in}:00` : null;
+    const clockOut1 = clock_out ? `${clock_out}:00` : null;
+
+    // Create manual record with clock times if provided
     const result = await pool.query(`
       INSERT INTO clock_in_records
-      (employee_id, company_id, outlet_id, work_date, total_work_minutes, ot_minutes,
-       total_work_hours, ot_hours, notes, status, has_schedule, approved_by, approved_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'approved', false, $10, NOW())
+      (employee_id, company_id, outlet_id, work_date, clock_in_1, clock_out_1,
+       total_work_minutes, ot_minutes, total_work_hours, ot_hours, notes,
+       status, has_schedule, approved_by, approved_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'approved', false, $12, NOW())
       RETURNING *
     `, [
       employee_id, companyId, employee.outlet_id, work_date,
+      clockIn1, clockOut1,
       totalMinutes, otMinutes,
       total_work_hours || 0, ot_hours || 0,
       notes || 'Manual entry by admin',
