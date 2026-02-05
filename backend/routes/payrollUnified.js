@@ -2746,19 +2746,34 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const outstationAmount = parseFloat(updates.outstation_amount ?? item.outstation_amount) || 0;
     const bonus = parseFloat(updates.bonus ?? item.bonus) || 0;
     const otherDeductions = parseFloat(updates.other_deductions ?? item.other_deductions) || 0;
-    const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
     const shortHours = parseFloat(updates.short_hours ?? item.short_hours) || 0;
-    // Short hours deduction: Allow manual override similar to EPF/PCB
-    // short_override can be provided to set exact short hours deduction amount (even 0)
+    // Short hours deduction: Allow manual override
     const shortHoursDeduction = updates.short_override !== undefined && updates.short_override !== null && updates.short_override !== ''
       ? parseFloat(updates.short_override) || 0
       : parseFloat(updates.short_hours_deduction ?? item.short_hours_deduction) || 0;
-    const absentDays = parseFloat(updates.absent_days ?? item.absent_days) || 0;
-    // Absent deduction: Allow manual override similar to EPF/PCB
-    // absent_override can be provided to set exact absent deduction amount (even 0)
-    const absentDayDeduction = updates.absent_override !== undefined && updates.absent_override !== null && updates.absent_override !== ''
-      ? parseFloat(updates.absent_override) || 0
-      : parseFloat(updates.absent_day_deduction ?? item.absent_day_deduction) || 0;
+
+    // Combined days not worked (unpaid leave + absent) - simplified approach
+    // If days_not_worked is provided, use it; otherwise combine from database
+    const currentUnpaidDays = parseFloat(item.unpaid_leave_days) || 0;
+    const currentAbsentDays = parseFloat(item.absent_days) || 0;
+    const daysNotWorked = updates.days_not_worked !== undefined
+      ? parseFloat(updates.days_not_worked) || 0
+      : currentUnpaidDays + currentAbsentDays;
+
+    // Combined deduction for days not worked (unpaid + absent)
+    // deduction_override can be provided to set exact deduction amount (even 0)
+    const workingDays = rates.standard_work_days || 26;
+    const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
+    const calculatedDeduction = Math.round(dailyRate * daysNotWorked * 100) / 100;
+    const combinedDeduction = updates.deduction_override !== undefined && updates.deduction_override !== null && updates.deduction_override !== ''
+      ? parseFloat(updates.deduction_override) || 0
+      : (updates.total_unpaid_deduction !== undefined ? parseFloat(updates.total_unpaid_deduction) || 0 : calculatedDeduction);
+
+    // Store in absent_day_deduction, set unpaid to 0 (combined approach)
+    const absentDays = daysNotWorked;
+    const absentDayDeduction = combinedDeduction;
+    const unpaidDeduction = 0; // Combined into absentDayDeduction
+
     const attendanceBonus = parseFloat(updates.attendance_bonus ?? item.attendance_bonus) || 0;
     const lateDays = parseFloat(updates.late_days ?? item.late_days) || 0;
 
@@ -2823,7 +2838,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const netPay = grossSalary + unpaidDeduction + absentDayDeduction + shortHoursDeduction - totalDeductions;
     const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
-    // Update item
+    // Update item - combined approach clears unpaid_leave fields
     const result = await pool.query(`
       UPDATE payroll_items SET
         basic_salary = $1, wages = $35, part_time_hours = $36, fixed_allowance = $2,
@@ -2841,6 +2856,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
         notes = $26, claims_amount = $27,
         short_hours = $29, short_hours_deduction = $30,
         absent_days = $31, absent_day_deduction = $32,
+        unpaid_leave_days = 0, unpaid_leave_deduction = 0,
         attendance_bonus = $33, late_days = $34,
         updated_at = NOW()
       WHERE id = $28

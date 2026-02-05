@@ -715,7 +715,13 @@ function PayrollUnified() {
 
     // Use backend-calculated values - no frontend recalculation
     const absentDays = parseFloat(item.absent_days) || 0;
+    const unpaidLeaveDays = parseFloat(item.unpaid_leave_days) || 0;
     const absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
+    const unpaidLeaveDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
+    // Combine unpaid leave + absent into one "days not worked"
+    const daysNotWorked = absentDays + unpaidLeaveDays;
+    const totalUnpaidDeduction = absentDayDeduction + unpaidLeaveDeduction;
+
     const otHours = parseFloat(item.ot_hours) || 0;
     const otAmount = parseFloat(item.ot_amount) || 0;
 
@@ -734,11 +740,11 @@ function PayrollUnified() {
       bonus: item.bonus || 0, other_deductions: item.other_deductions || 0,
       deduction_remarks: item.deduction_remarks || '', notes: item.notes || '',
       short_hours: item.short_hours || 0, short_hours_deduction: item.short_hours_deduction || 0,
-      absent_days: absentDays, absent_day_deduction: absentDayDeduction,
+      days_not_worked: daysNotWorked, total_unpaid_deduction: totalUnpaidDeduction,
       attendance_bonus: item.attendance_bonus || 0, late_days: item.late_days || 0,
       ot_override: '', // Empty means use calculated value, set value to override OT amount
       short_override: '', // Empty means use calculated value, set value to override short hours deduction
-      absent_override: '', // Empty means use calculated value, set value to override absent deduction
+      deduction_override: '', // Empty means use calculated value, set value to override days not worked deduction
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
       claims_override: '', // Empty means use calculated value, set value to override claims amount
@@ -1915,26 +1921,12 @@ function PayrollUnified() {
                       <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated. Enter 0 to remove.</small>
                     </div>
                   </div>
-                  {/* Show unpaid leave if exists - read only */}
-                  {(editingItem?.unpaid_leave_days > 0 || editingItem?.unpaid_leave_deduction > 0) && (
-                    <div className="form-row" style={{background: '#fff3cd', padding: '10px', borderRadius: '4px', marginBottom: '10px'}}>
-                      <div className="form-group">
-                        <label>Unpaid Leave Days</label>
-                        <input type="text" value={editingItem?.unpaid_leave_days || 0} disabled style={{background: '#eee'}} />
-                      </div>
-                      <div className="form-group">
-                        <label>Unpaid Leave Deduction</label>
-                        <input type="text" value={`RM ${parseFloat(editingItem?.unpaid_leave_deduction || 0).toFixed(2)}`} disabled style={{background: '#eee'}} />
-                        <small style={{color: '#856404', fontSize: '0.75rem'}}>From approved unpaid leave requests</small>
-                      </div>
-                    </div>
-                  )}
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Absent Days</label>
-                      <input type="number" step="0.5" value={itemForm.absent_days} onChange={(e) => {
+                      <label>Days Not Worked (Unpaid)</label>
+                      <input type="number" step="0.5" value={itemForm.days_not_worked} onChange={(e) => {
                         const days = parseFloat(e.target.value) || 0;
-                        const wd = selectedRun?.work_days_per_month || 22;
+                        const wd = selectedRun?.work_days_per_month || 26;
                         const deduction = days > 0 ? Math.round((itemForm.basic_salary / wd) * days * 100) / 100 : 0;
                         // Recalculate attendance bonus for Mimix
                         const lateDays = itemForm.late_days || 0;
@@ -1947,21 +1939,25 @@ function PayrollUnified() {
                           else if (totalPenalty === 3) bonus = 100;
                           else bonus = 0;
                         }
-                        setItemForm({ ...itemForm, absent_days: days, absent_day_deduction: deduction, attendance_bonus: bonus });
+                        setItemForm({ ...itemForm, days_not_worked: days, total_unpaid_deduction: deduction, attendance_bonus: bonus });
                       }} />
-                      {editingItem?.days_worked != null && editingItem?.work_type !== 'part_time' && editingItem?.employment_type !== 'part_time' && <small style={{color: '#666', fontSize: '0.75rem'}}>{editingItem.days_worked} days worked / {selectedRun?.work_days_per_month || 22} standard</small>}
+                      {editingItem?.days_worked != null && editingItem?.work_type !== 'part_time' && editingItem?.employment_type !== 'part_time' && (
+                        <small style={{color: '#666', fontSize: '0.75rem'}}>
+                          {editingItem.days_worked} days worked / {selectedRun?.work_days_per_month || 26} standard = {(selectedRun?.work_days_per_month || 26) - editingItem.days_worked} not worked
+                        </small>
+                      )}
                       {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time') && <small style={{color: '#666', fontSize: '0.75rem'}}>Part-time: paid by hours worked</small>}
                     </div>
                     <div className="form-group">
-                      <label>Absent Deduction Override</label>
+                      <label>Deduction Override</label>
                       <input
                         type="number"
                         step="0.01"
-                        value={itemForm.absent_override}
-                        onChange={(e) => setItemForm({ ...itemForm, absent_override: e.target.value })}
-                        placeholder={`Calculated: ${itemForm.absent_day_deduction || editingItem?.absent_day_deduction || '0'}`}
+                        value={itemForm.deduction_override}
+                        onChange={(e) => setItemForm({ ...itemForm, deduction_override: e.target.value })}
+                        placeholder={`Calculated: ${itemForm.total_unpaid_deduction || '0'}`}
                       />
-                      <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated. Enter 0 to remove all absent deduction.</small>
+                      <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated. Enter 0 to remove deduction.</small>
                     </div>
                   </div>
                   {/* Mimix Attendance Bonus - only show for Mimix company */}
