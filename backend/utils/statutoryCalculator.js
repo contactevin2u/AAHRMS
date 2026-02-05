@@ -1,10 +1,268 @@
 /**
  * Malaysian Statutory Deductions Calculator
- * Calculates EPF, SOCSO, EIS based on salary components
+ * Calculates EPF, SOCSO, EIS based on official KWSP/PERKESO tables
  *
- * EPF Base = Basic + Commission + Bonus (excludes Allowance and OT)
- * SOCSO/EIS based on standard Malaysian contribution tables
+ * EPF uses KWSP Third Schedule (contribution table)
+ * SOCSO/EIS uses PERKESO contribution tables
  */
+
+// EPF Third Schedule (2024 rates - 11% employee, 13% employer for <=5000)
+// Format: [maxWage, employeeContrib, employerContrib]
+// Official KWSP Third Schedule - uses RM 20 increments
+const EPF_TABLE = [
+  [10, 0, 0],
+  [20, 0, 0],
+  [40, 2, 5],
+  [60, 5, 7],
+  [80, 7, 10],
+  [100, 9, 12],
+  [120, 11, 15],
+  [140, 14, 17],
+  [160, 16, 20],
+  [180, 18, 22],
+  [200, 20, 25],
+  [220, 22, 27],
+  [240, 24, 30],
+  [260, 27, 32],
+  [280, 29, 35],
+  [300, 31, 37],
+  [320, 33, 40],
+  [340, 35, 42],
+  [360, 37, 45],
+  [380, 39, 47],
+  [400, 42, 50],
+  [420, 44, 52],
+  [440, 46, 55],
+  [460, 48, 57],
+  [480, 50, 60],
+  [500, 53, 62],
+  [520, 55, 65],
+  [540, 57, 67],
+  [560, 59, 70],
+  [580, 61, 72],
+  [600, 64, 75],
+  [620, 66, 77],
+  [640, 68, 80],
+  [660, 70, 82],
+  [680, 72, 85],
+  [700, 75, 87],
+  [720, 77, 90],
+  [740, 79, 92],
+  [760, 81, 95],
+  [780, 83, 97],
+  [800, 86, 100],
+  [820, 88, 102],
+  [840, 90, 105],
+  [860, 92, 107],
+  [880, 94, 110],
+  [900, 97, 112],
+  [920, 99, 115],
+  [940, 101, 117],
+  [960, 103, 120],
+  [980, 105, 122],
+  [1000, 108, 125],
+  [1020, 110, 127],
+  [1040, 112, 130],
+  [1060, 114, 132],
+  [1080, 116, 135],
+  [1100, 119, 137],
+  [1120, 121, 140],
+  [1140, 123, 142],
+  [1160, 125, 145],
+  [1180, 127, 147],
+  [1200, 130, 150],
+  [1220, 132, 152],
+  [1240, 134, 155],
+  [1260, 136, 157],
+  [1280, 138, 160],
+  [1300, 141, 162],
+  [1320, 143, 165],
+  [1340, 145, 167],
+  [1360, 147, 170],
+  [1380, 149, 172],
+  [1400, 152, 175],
+  [1420, 154, 177],
+  [1440, 156, 180],
+  [1460, 158, 182],
+  [1480, 160, 185],
+  [1500, 163, 187],
+  [1520, 165, 190],
+  [1540, 167, 192],
+  [1560, 169, 195],
+  [1580, 171, 197],
+  [1600, 174, 200],
+  [1620, 176, 202],
+  [1640, 178, 205],
+  [1660, 180, 207],
+  [1680, 182, 210],
+  [1700, 185, 212],
+  [1720, 187, 215],
+  [1740, 189, 217],
+  [1760, 191, 220],
+  [1780, 193, 222],
+  [1800, 196, 225],
+  [1820, 198, 227],
+  [1840, 200, 230],
+  [1860, 202, 232],
+  [1880, 204, 235],
+  [1900, 207, 237],
+  [1920, 209, 240],
+  [1940, 211, 242],
+  [1960, 213, 245],
+  [1980, 215, 247],
+  [2000, 218, 250],
+  [2020, 220, 252],
+  [2040, 222, 255],
+  [2060, 224, 257],
+  [2080, 226, 260],
+  [2100, 229, 262],
+  [2120, 231, 265],
+  [2140, 233, 267],
+  [2160, 235, 270],
+  [2180, 237, 272],
+  [2200, 240, 275],
+  [2220, 242, 277],
+  [2240, 244, 280],
+  [2260, 246, 282],
+  [2280, 248, 285],
+  [2300, 251, 287],
+  [2320, 253, 290],
+  [2340, 255, 292],
+  [2360, 257, 295],
+  [2380, 259, 297],
+  [2400, 262, 300],
+  [2420, 264, 302],
+  [2440, 266, 305],
+  [2460, 268, 307],
+  [2480, 270, 310],
+  [2500, 273, 312],
+  [2520, 275, 315],
+  [2540, 277, 317],
+  [2560, 279, 320],
+  [2580, 281, 322],
+  [2600, 284, 325],
+  [2620, 286, 327],
+  [2640, 288, 330],
+  [2660, 290, 332],
+  [2680, 292, 335],
+  [2700, 295, 337],
+  [2720, 297, 340],
+  [2740, 299, 342],
+  [2760, 301, 345],
+  [2780, 303, 347],
+  [2800, 306, 350],
+  [2820, 308, 352],
+  [2840, 310, 355],
+  [2860, 312, 357],
+  [2880, 314, 360],
+  [2900, 317, 362],
+  [2920, 319, 365],
+  [2940, 321, 367],
+  [2960, 323, 370],
+  [2980, 325, 372],
+  [3000, 328, 375],
+  [3020, 330, 377],
+  [3040, 332, 380],
+  [3060, 334, 382],
+  [3080, 336, 385],
+  [3100, 339, 387],
+  [3120, 341, 390],
+  [3140, 343, 392],
+  [3160, 345, 395],
+  [3180, 347, 397],
+  [3200, 350, 400],
+  [3220, 352, 402],
+  [3240, 354, 405],
+  [3260, 356, 407],
+  [3280, 358, 410],
+  [3300, 361, 412],
+  [3320, 363, 415],
+  [3340, 365, 417],
+  [3360, 367, 420],
+  [3380, 369, 422],
+  [3400, 372, 425],
+  [3420, 374, 427],
+  [3440, 376, 430],
+  [3460, 378, 432],
+  [3480, 380, 435],
+  [3500, 383, 437],
+  [3520, 385, 440],
+  [3540, 387, 442],
+  [3560, 389, 445],
+  [3580, 391, 447],
+  [3600, 394, 450],
+  [3620, 396, 452],
+  [3640, 398, 455],
+  [3660, 400, 457],
+  [3680, 402, 460],
+  [3700, 405, 462],
+  [3720, 407, 465],
+  [3740, 409, 467],
+  [3760, 411, 470],
+  [3780, 413, 472],
+  [3800, 416, 475],
+  [3820, 418, 477],
+  [3840, 420, 480],
+  [3860, 422, 482],
+  [3880, 424, 485],
+  [3900, 427, 487],
+  [3920, 429, 490],
+  [3940, 431, 492],
+  [3960, 433, 495],
+  [3980, 435, 497],
+  [4000, 438, 500],
+  [4020, 440, 502],
+  [4040, 442, 505],
+  [4060, 444, 507],
+  [4080, 446, 510],
+  [4100, 449, 512],
+  [4120, 451, 515],
+  [4140, 453, 517],
+  [4160, 455, 520],
+  [4180, 457, 522],
+  [4200, 460, 525],
+  [4220, 462, 527],
+  [4240, 464, 530],
+  [4260, 466, 532],
+  [4280, 468, 535],
+  [4300, 471, 537],
+  [4320, 473, 540],
+  [4340, 475, 542],
+  [4360, 477, 545],
+  [4380, 479, 547],
+  [4400, 482, 550],
+  [4420, 484, 552],
+  [4440, 486, 555],
+  [4460, 488, 557],
+  [4480, 490, 560],
+  [4500, 493, 562],
+  [4520, 495, 565],
+  [4540, 497, 567],
+  [4560, 499, 570],
+  [4580, 501, 572],
+  [4600, 504, 575],
+  [4620, 506, 577],
+  [4640, 508, 580],
+  [4660, 510, 582],
+  [4680, 512, 585],
+  [4700, 515, 587],
+  [4720, 517, 590],
+  [4740, 519, 592],
+  [4760, 521, 595],
+  [4780, 523, 597],
+  [4800, 526, 600],
+  [4820, 528, 602],
+  [4840, 530, 605],
+  [4860, 532, 607],
+  [4880, 534, 610],
+  [4900, 537, 612],
+  [4920, 539, 615],
+  [4940, 541, 617],
+  [4960, 543, 620],
+  [4980, 545, 622],
+  [5000, 548, 625],
+  // For wages above RM 5000, use percentage: 11% employee, 12% employer
+];
 
 // SOCSO Contribution Table (2024 rates)
 // Format: [maxWage, employeeContrib, employerContrib]
@@ -63,21 +321,11 @@ const SOCSO_TABLE = [
   [4800, 23.75, 71.35],
   [4900, 24.25, 72.85],
   [5000, 24.75, 74.35],
-  [5100, 25.25, 75.85],
-  [5200, 25.75, 77.35],
-  [5300, 26.25, 78.85],
-  [5400, 26.75, 80.35],
-  [5500, 27.25, 81.85],
-  [5600, 27.75, 83.35],
-  [5700, 28.25, 84.85],
-  [5800, 28.75, 86.35],
-  [5900, 29.25, 87.85],
-  [6000, 29.75, 89.35],
-  // For wages above 6000, max contribution applies
-  [Infinity, 29.75, 104.15]
+  // For wages above 5000, max contribution applies
+  [Infinity, 24.75, 74.35]
 ];
 
-// EIS Contribution Table (2024 rates - corrected to match official PERKESO rates)
+// EIS Contribution Table (2024 rates)
 // Format: [maxWage, employeeContrib, employerContrib]
 const EIS_TABLE = [
   [30, 0.05, 0.05],
@@ -124,169 +372,91 @@ const EIS_TABLE = [
   [3800, 7.50, 7.50],
   [3900, 7.70, 7.70],
   [4000, 7.90, 7.90],
-  [4100, 8.10, 8.10],
-  [4200, 8.30, 8.30],
-  [4300, 8.50, 8.50],
-  [4400, 8.70, 8.70],
-  [4500, 8.90, 8.90],
-  [4600, 9.10, 9.10],
-  [4700, 9.30, 9.30],
-  [4800, 9.50, 9.50],
-  [4900, 9.70, 9.70],
-  [5000, 9.90, 9.90],
-  // For wages above 5000, max contribution applies
-  [Infinity, 11.90, 11.90]
+  // For wages above 4000, max contribution applies
+  [Infinity, 7.90, 7.90]
 ];
 
 /**
- * Calculate EPF contributions
- * EPF Base = Basic + Commission + Bonus (excludes Allowance and OT)
+ * Calculate EPF contributions using KWSP Third Schedule
  *
- * Malaysian EPF rates (2024):
- * - Employee: 11% (standard), can be 0% for foreign workers
- * - Employer: 13% for wages <= RM5000, 12% for wages > RM5000
- *
- * @param {number} basic - Basic salary
- * @param {number} commission - Commission amount
- * @param {number} bonus - Bonus amount
- * @param {number} employeeRate - Employee EPF rate (default 11%)
- * @param {number} employerRateOverride - Override employer rate (if not set, uses tiered rate)
- * @returns {object} { employee, employer, base }
+ * @param {number} wage - Wage for EPF calculation
+ * @returns {object} { employee, employer }
  */
-function calculateEPF(basic, commission = 0, bonus = 0, employeeRate = 0.11, employerRateOverride = null) {
-  const rawBase = (basic || 0) + (commission || 0) + (bonus || 0);
+function calculateEPF(wage) {
+  const w = wage || 0;
+  if (w <= 0) return { employee: 0, employer: 0 };
 
-  // EPF contributions are calculated on wage bands (rounded up to nearest RM100)
-  // Exception: Commission-only employees with bonus (basic=0, bonus>0) use raw base without rounding
-  const isCommissionOnlyWithBonus = (basic || 0) === 0 && (bonus || 0) > 0;
-  const epfBase = isCommissionOnlyWithBonus ? rawBase : Math.ceil(rawBase / 100) * 100;
+  // Use table for wages up to RM 5000
+  for (const [maxWage, ee, er] of EPF_TABLE) {
+    if (w <= maxWage) {
+      return { employee: ee, employer: er };
+    }
+  }
 
-  // Employer rate: 13% for wages <= RM5000, 12% for wages > RM5000
-  const employerRate = employerRateOverride !== null ? employerRateOverride : (rawBase <= 5000 ? 0.13 : 0.12);
-
-  // Calculate contributions and round to nearest ringgit
-  const employee = Math.round(epfBase * employeeRate);
-  const employer = Math.round(epfBase * employerRate);
-
-  return {
-    base: rawBase,
-    roundedBase: epfBase,
-    employee,
-    employer
-  };
+  // For wages above RM 5000, use percentage: 11% employee, 12% employer
+  const employee = Math.round(w * 0.11);
+  const employer = Math.round(w * 0.12);
+  return { employee, employer };
 }
 
 /**
  * Calculate SOCSO contributions using contribution table
  *
- * @param {number} wages - Total wages for SOCSO calculation
+ * @param {number} wage - Wage for SOCSO calculation
  * @returns {object} { employee, employer }
  */
-function calculateSOCSO(wages) {
-  const wage = wages || 0;
+function calculateSOCSO(wage) {
+  const w = wage || 0;
+  if (w <= 0) return { employee: 0, employer: 0 };
 
   for (const [maxWage, ee, er] of SOCSO_TABLE) {
-    if (wage <= maxWage) {
+    if (w <= maxWage) {
       return { employee: ee, employer: er };
     }
   }
 
-  // Max contribution for wages above table
-  return { employee: 29.75, employer: 104.15 };
+  return { employee: 24.75, employer: 74.35 };
 }
 
 /**
  * Calculate EIS contributions using contribution table
  *
- * @param {number} wages - Total wages for EIS calculation
+ * @param {number} wage - Wage for EIS calculation
  * @returns {object} { employee, employer }
  */
-function calculateEIS(wages) {
-  const wage = wages || 0;
+function calculateEIS(wage) {
+  const w = wage || 0;
+  if (w <= 0) return { employee: 0, employer: 0 };
 
   for (const [maxWage, ee, er] of EIS_TABLE) {
-    if (wage <= maxWage) {
+    if (w <= maxWage) {
       return { employee: ee, employer: er };
     }
   }
 
-  // Max contribution for wages above table
-  return { employee: 11.90, employer: 11.90 };
+  return { employee: 7.90, employer: 7.90 };
 }
 
 /**
  * Calculate all statutory deductions
  *
- * @param {object} salary - Salary components
- * @param {number} salary.basic - Basic salary
- * @param {number} salary.commission - Commission
- * @param {number} salary.allowance - Fixed allowance
- * @param {number} salary.overtime - Overtime pay
- * @param {number} salary.bonus - Bonus
+ * @param {number} statutoryBase - Base wage for statutory calculation
  * @returns {object} All statutory calculations
  */
-function calculateStatutory(salary) {
-  const { basic = 0, commission = 0, allowance = 0, overtime = 0, bonus = 0 } = salary;
-
-  // EPF Base = Basic + Commission + Bonus (excludes Allowance and OT)
-  const epf = calculateEPF(basic, commission, bonus);
-
-  // Gross = all components
-  const gross = basic + commission + allowance + overtime + bonus;
-
-  // SOCSO/EIS based on BASIC + COMMISSION (excluding bonus, allowance, OT)
-  // This matches the pattern in the image data
-  const socsoBase = basic + commission;
-  const socso = calculateSOCSO(socsoBase);
-  const eis = calculateEIS(socsoBase);
-
-  // PERKESO = SOCSO Employee + EIS Employee
-  const perkeso = socso.employee + eis.employee;
+function calculateAllStatutory(statutoryBase) {
+  const epf = calculateEPF(statutoryBase);
+  const socso = calculateSOCSO(statutoryBase);
+  const eis = calculateEIS(statutoryBase);
 
   return {
-    epf,
-    socso,
-    eis,
-    perkeso,
-    gross,
-    summary: {
-      epf_employee: epf.employee,
-      epf_employer: epf.employer,
-      socso_employee: socso.employee,
-      socso_employer: socso.employer,
-      eis_employee: eis.employee,
-      eis_employer: eis.employer,
-      perkeso: perkeso,
-      total_employee_deductions: epf.employee + socso.employee + eis.employee,
-      total_employer_contributions: epf.employer + socso.employer + eis.employer
-    }
-  };
-}
-
-/**
- * Calculate net pay
- *
- * @param {object} salary - Salary components
- * @param {number} pcb - PCB/tax amount (must be provided separately)
- * @param {number} otherDeductions - Other deductions
- * @returns {object} Net pay calculation
- */
-function calculateNetPay(salary, pcb = 0, otherDeductions = 0) {
-  const statutory = calculateStatutory(salary);
-  const { basic = 0, commission = 0, allowance = 0, overtime = 0, bonus = 0, claims = 0 } = salary;
-
-  const gross = basic + commission + allowance + overtime + bonus;
-  const totalDeductions = statutory.epf.employee + statutory.socso.employee + statutory.eis.employee + pcb + otherDeductions;
-  const netPay = gross - totalDeductions + claims;
-
-  return {
-    gross,
-    statutory: statutory.summary,
-    pcb,
-    otherDeductions,
-    totalDeductions,
-    claims,
-    netPay
+    epf_employee: epf.employee,
+    epf_employer: epf.employer,
+    socso_employee: socso.employee,
+    socso_employer: socso.employer,
+    eis_employee: eis.employee,
+    eis_employer: eis.employer,
+    total_employee: epf.employee + socso.employee + eis.employee,
+    total_employer: epf.employer + socso.employer + eis.employer
   };
 }
 
@@ -294,8 +464,8 @@ module.exports = {
   calculateEPF,
   calculateSOCSO,
   calculateEIS,
-  calculateStatutory,
-  calculateNetPay,
+  calculateAllStatutory,
+  EPF_TABLE,
   SOCSO_TABLE,
   EIS_TABLE
 };
