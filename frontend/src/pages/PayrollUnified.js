@@ -1950,7 +1950,7 @@ function PayrollUnified() {
                       }} />
                       {editingItem?.days_worked != null && editingItem?.work_type !== 'part_time' && editingItem?.employment_type !== 'part_time' && (
                         <small style={{color: '#666', fontSize: '0.75rem'}}>
-                          {editingItem.days_worked} days worked / {selectedRun?.work_days_per_month || 26} standard = {(selectedRun?.work_days_per_month || 26) - editingItem.days_worked} not worked
+                          Deduct = days × RM {((itemForm.basic_salary || 0) / (selectedRun?.work_days_per_month || 26)).toFixed(2)}/day
                         </small>
                       )}
                       {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time') && <small style={{color: '#666', fontSize: '0.75rem'}}>Part-time: paid by hours worked</small>}
