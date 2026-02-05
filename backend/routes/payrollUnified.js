@@ -2733,7 +2733,11 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const partTimeHours = parseFloat(updates.part_time_hours ?? item.part_time_hours) || 0;
     const fixedAllowance = parseFloat(updates.fixed_allowance ?? item.fixed_allowance) || 0;
     const otHours = parseFloat(updates.ot_hours ?? item.ot_hours) || 0;
-    const otAmount = parseFloat(updates.ot_amount ?? item.ot_amount) || 0;
+    // OT amount: Allow manual override similar to EPF/PCB
+    // ot_override can be provided to set exact OT amount (even 0)
+    const otAmount = updates.ot_override !== undefined && updates.ot_override !== null && updates.ot_override !== ''
+      ? parseFloat(updates.ot_override) || 0
+      : parseFloat(updates.ot_amount ?? item.ot_amount) || 0;
     const phDaysWorked = parseFloat(updates.ph_days_worked ?? item.ph_days_worked) || 0;
     const phPay = parseFloat(updates.ph_pay ?? item.ph_pay) || 0;
     const incentiveAmount = parseFloat(updates.incentive_amount ?? item.incentive_amount) || 0;
@@ -2746,7 +2750,11 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const shortHours = parseFloat(updates.short_hours ?? item.short_hours) || 0;
     const shortHoursDeduction = parseFloat(updates.short_hours_deduction ?? item.short_hours_deduction) || 0;
     const absentDays = parseFloat(updates.absent_days ?? item.absent_days) || 0;
-    const absentDayDeduction = parseFloat(updates.absent_day_deduction ?? item.absent_day_deduction) || 0;
+    // Absent deduction: Allow manual override similar to EPF/PCB
+    // absent_override can be provided to set exact absent deduction amount (even 0)
+    const absentDayDeduction = updates.absent_override !== undefined && updates.absent_override !== null && updates.absent_override !== ''
+      ? parseFloat(updates.absent_override) || 0
+      : parseFloat(updates.absent_day_deduction ?? item.absent_day_deduction) || 0;
     const attendanceBonus = parseFloat(updates.attendance_bonus ?? item.attendance_bonus) || 0;
     const lateDays = parseFloat(updates.late_days ?? item.late_days) || 0;
 
@@ -2968,46 +2976,12 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const settings = await getCompanySettings(companyId);
     const { rates, statutory, features } = settings;
 
-    // Recalculate OT from clock-in records
-    let otHours = 0, otAmount = 0;
-    const fixedOT = parseFloat(item.fixed_ot_amount) || 0;
-    if (features.auto_ot_from_clockin) {
-      try {
-        const otResult = await calculateOTFromClockIn(
-          item.emp_id, companyId, item.department_id,
-          item.period_start_date, item.period_end_date,
-          parseFloat(item.basic_salary) || 0
-        );
-        otHours = otResult.total_ot_hours || 0;
-        otAmount = otResult.total_ot_amount || 0;
-      } catch (e) {
-        console.warn('OT calculation failed:', e.message);
-      }
-    }
-    // Use fixed OT amount if no auto OT calculated
-    if (otAmount === 0 && fixedOT > 0) {
-      otAmount = fixedOT;
-    }
-
-    // OT rounding: min 1 hour, round down to nearest 0.5h
+    // PRESERVE OT values - don't recalculate
+    // Users can manually edit OT in the edit form
+    // The recalculate endpoint should only recalculate statutory deductions
+    let otHours = parseFloat(item.ot_hours) || 0;
+    let otAmount = parseFloat(item.ot_amount) || 0;
     const isPartTime = item.work_type === 'part_time' || item.employment_type === 'part_time';
-    if (otHours > 0 && otHours < 1) {
-      otHours = 0;
-      otAmount = 0;
-    } else if (otHours >= 1) {
-      otHours = Math.floor(otHours * 2) / 2;
-      if (isPartTime) {
-        // Part-time: OT hours paid at 1.5x hourly rate
-        const partTimeHourlyRate = parseFloat(item.hourly_rate) || rates.part_time_hourly_rate || 8.72;
-        otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
-      } else {
-        const basicSalaryForOT = parseFloat(item.basic_salary) || 0;
-        if (basicSalaryForOT > 0 && otHours > 0) {
-          const hourlyRate = basicSalaryForOT / (rates.standard_work_days || 22) / (rates.standard_work_hours || 8);
-          otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
-        }
-      }
-    }
 
     // Calculate wages for part-time employees
     let wages = 0, partTimeHoursWorked = 0, phPay = parseFloat(item.ph_pay) || 0;
@@ -3042,70 +3016,12 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     let shortHoursDeduction = parseFloat(item.short_hours_deduction) || 0;
     let shortHours = parseFloat(item.short_hours) || 0;
 
-    // Recalculate absent days from clock-in records
+    // PRESERVE absent days values - don't recalculate
+    // Users can manually edit absent days/deduction in the edit form
+    // The recalculate endpoint should only recalculate OT and statutory
     const workingDays = rates.standard_work_days || 26;
-    const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
     let absentDays = parseFloat(item.absent_days) || 0;
     let absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
-
-    try {
-      const periodStart = item.period_start_date;
-      const periodEnd = item.period_end_date;
-
-      // Count days worked
-      const clockInResult = await pool.query(`
-        SELECT COUNT(DISTINCT work_date) as days_worked,
-               COALESCE(SUM(total_work_hours), 0) as total_hours
-        FROM clock_in_records
-        WHERE employee_id = $1
-          AND work_date BETWEEN $2 AND $3
-          AND status = 'completed'
-      `, [item.emp_id, periodStart, periodEnd]);
-      const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
-      const totalHoursWorked = parseFloat(clockInResult.rows[0]?.total_hours) || 0;
-
-      // Count paid leave days
-      const paidLeaveResult = await pool.query(`
-        SELECT COALESCE(SUM(
-          GREATEST(0,
-            (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
-            - (SELECT COUNT(*) FROM generate_series(
-                GREATEST(lr.start_date, $2::date),
-                LEAST(lr.end_date, $1::date),
-                '1 day'::interval
-              ) d WHERE EXTRACT(DOW FROM d) IN (0, 6))
-          )
-        ), 0) as paid_leave_days
-        FROM leave_requests lr
-        JOIN leave_types lt ON lr.leave_type_id = lt.id
-        WHERE lr.employee_id = $3
-          AND lt.is_paid = TRUE
-          AND lr.status = 'approved'
-          AND lr.start_date <= $1
-          AND lr.end_date >= $2
-      `, [periodEnd, periodStart, item.emp_id]);
-      const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
-
-      // Calculate absent days
-      const unpaidDays = parseFloat(item.unpaid_leave_days) || 0;
-      absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
-      absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
-
-      // Calculate short hours for non-outlet companies
-      if (settings.groupingType !== 'outlet') {
-        const expectedHoursPerDay = rates.standard_work_hours || 8;
-        const expectedHours = daysWorked * expectedHoursPerDay;
-        const actualBaseHours = totalHoursWorked - otHours;
-        const calculatedShortHours = Math.max(0, expectedHours - actualBaseHours);
-        if (calculatedShortHours > 0) {
-          shortHours = Math.round(calculatedShortHours * 100) / 100;
-          const hourlyRate = basicSalary / workingDays / expectedHoursPerDay;
-          shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
-        }
-      }
-    } catch (e) {
-      console.warn(`Absent days recalculation failed for item ${id}:`, e.message);
-    }
 
     // Calculate gross (include wages for part-time)
     const grossSalary = basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
@@ -3265,44 +3181,11 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const settings = await getCompanySettings(companyId);
         const { rates, statutory, features } = settings;
 
-        // Recalculate OT
-        let otHours = 0, otAmount = 0;
-        const fixedOT = parseFloat(i.fixed_ot_amount) || 0;
-        if (features.auto_ot_from_clockin) {
-          try {
-            const otResult = await calculateOTFromClockIn(
-              i.emp_id, companyId, i.department_id,
-              i.period_start_date, i.period_end_date,
-              parseFloat(i.basic_salary) || 0
-            );
-            otHours = otResult.total_ot_hours || 0;
-            otAmount = otResult.total_ot_amount || 0;
-          } catch (e) {}
-        }
-        // Use fixed OT amount if no auto OT calculated
-        if (otAmount === 0 && fixedOT > 0) {
-          otAmount = fixedOT;
-        }
-
-        // OT rounding: min 1 hour, round down to nearest 0.5h
+        // PRESERVE OT values - don't recalculate
+        // Users can manually edit OT in the edit form
+        let otHours = parseFloat(i.ot_hours) || 0;
+        let otAmount = parseFloat(i.ot_amount) || 0;
         const isPartTime = i.work_type === 'part_time' || i.employment_type === 'part_time';
-        if (otHours > 0 && otHours < 1) {
-          otHours = 0;
-          otAmount = 0;
-        } else if (otHours >= 1) {
-          otHours = Math.floor(otHours * 2) / 2;
-          if (isPartTime) {
-            // Part-time: OT hours paid at 1.5x hourly rate
-            const partTimeHourlyRate = parseFloat(i.hourly_rate) || rates.part_time_hourly_rate || 8.72;
-            otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
-          } else {
-            const basicForOT = parseFloat(i.basic_salary) || 0;
-            if (basicForOT > 0 && otHours > 0) {
-              const hourlyRate = basicForOT / (rates.standard_work_days || 22) / (rates.standard_work_hours || 8);
-              otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
-            }
-          }
-        }
 
         // Calculate wages for part-time employees
         let wages = parseFloat(i.wages) || 0;
@@ -3338,12 +3221,13 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const unpaidDeduction = parseFloat(i.unpaid_leave_deduction) || 0;
         const otherDeductions = parseFloat(i.other_deductions) || 0;
         const shortHoursDeduction = parseFloat(i.short_hours_deduction) || 0;
+        const absentDayDeduction = parseFloat(i.absent_day_deduction) || 0;
 
         const grossSalary = basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
-                          commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction;
+                          commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
 
         // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
-        const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction);
+        const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
         let statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
         if (statutory.statutory_on_ot) statutoryBase += otAmount;
         if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
@@ -3375,8 +3259,8 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
         const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
 
-        const totalDeductions = unpaidDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
-        const netPay = grossSalary + unpaidDeduction - totalDeductions;
+        const totalDeductions = unpaidDeduction + shortHoursDeduction + absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
+        const netPay = grossSalary + unpaidDeduction + shortHoursDeduction + absentDayDeduction - totalDeductions;
         const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
         await pool.query(`
@@ -3529,9 +3413,56 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
         }
       }
 
-      // Calculate gross and statutory
-      const grossSalary = basicSalary + fixedAllowance + otAmount;
-      const statutoryBase = basicSalary + otAmount;
+      // Calculate absent days from clock-in records
+      let absentDays = 0, absentDayDeduction = 0;
+      const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
+      if (!isPartTime && basicSalary > 0) {
+        try {
+          const periodStart = period.start.toISOString().split('T')[0];
+          const periodEnd = period.end.toISOString().split('T')[0];
+
+          // Count days worked
+          const clockInResult = await client.query(`
+            SELECT COUNT(DISTINCT work_date) as days_worked
+            FROM clock_in_records
+            WHERE employee_id = $1 AND work_date BETWEEN $2 AND $3 AND status = 'completed'
+          `, [emp.id, periodStart, periodEnd]);
+          const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
+
+          // Count paid leave days
+          const paidLeaveResult = await client.query(`
+            SELECT COALESCE(SUM(
+              GREATEST(0, (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+              - (SELECT COUNT(*) FROM generate_series(GREATEST(lr.start_date, $2::date),
+                  LEAST(lr.end_date, $1::date), '1 day'::interval) d WHERE EXTRACT(DOW FROM d) IN (0, 6)))
+            ), 0) as paid_leave_days
+            FROM leave_requests lr JOIN leave_types lt ON lr.leave_type_id = lt.id
+            WHERE lr.employee_id = $3 AND lt.is_paid = TRUE AND lr.status = 'approved'
+              AND lr.start_date <= $1 AND lr.end_date >= $2
+          `, [periodEnd, periodStart, emp.id]);
+          const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
+
+          // Count unpaid leave days
+          const unpaidLeaveResult = await client.query(`
+            SELECT COALESCE(SUM(
+              GREATEST(0, (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+              - (SELECT COUNT(*) FROM generate_series(GREATEST(lr.start_date, $2::date),
+                  LEAST(lr.end_date, $1::date), '1 day'::interval) d WHERE EXTRACT(DOW FROM d) IN (0, 6)))
+            ), 0) as unpaid_leave_days
+            FROM leave_requests lr JOIN leave_types lt ON lr.leave_type_id = lt.id
+            WHERE lr.employee_id = $3 AND lt.is_paid = FALSE AND lr.status = 'approved'
+              AND lr.start_date <= $1 AND lr.end_date >= $2
+          `, [periodEnd, periodStart, emp.id]);
+          const unpaidDays = parseFloat(unpaidLeaveResult.rows[0]?.unpaid_leave_days) || 0;
+
+          absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
+          absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+        } catch (e) { console.warn(`Absent calc failed for ${emp.name}:`, e.message); }
+      }
+
+      // Calculate gross and statutory (with absent deduction)
+      const grossSalary = basicSalary + fixedAllowance + otAmount - absentDayDeduction;
+      const statutoryBase = Math.max(0, basicSalary - absentDayDeduction) + otAmount;
 
       // Build salary breakdown for PCB calculation
       const salaryBreakdown = {
@@ -3555,8 +3486,8 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
       const eisEmployer = statutory.eis_enabled ? (statutoryResult.eis?.employer || 0) : 0;
       const pcb = statutory.pcb_enabled ? (statutoryResult.pcb || 0) : 0;
 
-      const totalDeductions = epfEmployee + socsoEmployee + eisEmployee + pcb;
-      const netPay = grossSalary - totalDeductions;
+      const totalDeductions = absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb;
+      const netPay = grossSalary + absentDayDeduction - totalDeductions;
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       // Insert payroll item
@@ -3564,13 +3495,15 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
         INSERT INTO payroll_items (
           payroll_run_id, employee_id,
           basic_salary, fixed_allowance, ot_hours, ot_amount,
+          absent_days, absent_day_deduction,
           gross_salary, statutory_base,
           epf_employee, epf_employer, socso_employee, socso_employer,
           eis_employee, eis_employer, pcb,
           total_deductions, net_pay, employer_total_cost
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       `, [
         id, emp.id, basicSalary, fixedAllowance, otHours, otAmount,
+        absentDays, absentDayDeduction,
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
         eisEmployee, eisEmployer, pcb,

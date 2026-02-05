@@ -306,7 +306,7 @@ function PayrollUnified() {
   };
 
   const handleRecalculateAll = async (id) => {
-    if (window.confirm('Recalculate OT and statutory deductions?')) {
+    if (window.confirm('Recalculate statutory deductions (EPF, SOCSO, EIS, PCB)? OT and absent values will be preserved.')) {
       try {
         const res = await payrollV2Api.recalculateAll(id);
         fetchRunDetails(id);
@@ -736,6 +736,8 @@ function PayrollUnified() {
       short_hours: item.short_hours || 0, short_hours_deduction: item.short_hours_deduction || 0,
       absent_days: absentDays, absent_day_deduction: absentDayDeduction,
       attendance_bonus: item.attendance_bonus || 0, late_days: item.late_days || 0,
+      ot_override: '', // Empty means use calculated value, set value to override OT amount
+      absent_override: '', // Empty means use calculated value, set value to override absent deduction
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
       claims_override: '', // Empty means use calculated value, set value to override claims amount
@@ -1136,7 +1138,7 @@ function PayrollUnified() {
                         <>
                           <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'csv')} className="download-btn">Download Excel</button>
                           <button onClick={() => handleDownloadBankFile(selectedRun.id, 'maybankBulk')} className="download-btn" style={{marginLeft: '8px'}}>Maybank CSV</button>
-                          <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate OT</button>
+                          <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate Statutory</button>
                           <button onClick={() => handleFinalizeRun(selectedRun.id)} className="finalize-btn">Finalize</button>
                           <button onClick={() => handleDeleteRun(selectedRun.id)} className="delete-btn">Delete</button>
                         </>
@@ -1848,8 +1850,15 @@ function PayrollUnified() {
                         })()}
                       </div>
                       <div className="form-group">
-                        <label>OT Amount</label>
-                        <input type="number" step="0.01" value={itemForm.ot_amount} onChange={(e) => setItemForm({ ...itemForm, ot_amount: parseFloat(e.target.value) || 0 })} />
+                        <label>OT Amount Override</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={itemForm.ot_override}
+                          onChange={(e) => setItemForm({ ...itemForm, ot_override: e.target.value })}
+                          placeholder={`Calculated: ${itemForm.ot_amount || editingItem?.ot_amount || '0'}`}
+                        />
+                        <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated. Enter value to override.</small>
                       </div>
                     </div>
                   )}
@@ -1922,8 +1931,15 @@ function PayrollUnified() {
                       {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time') && <small style={{color: '#666', fontSize: '0.75rem'}}>Part-time: paid by hours worked</small>}
                     </div>
                     <div className="form-group">
-                      <label>Absent Day Deduction</label>
-                      <input type="number" step="0.01" value={itemForm.absent_day_deduction} onChange={(e) => setItemForm({ ...itemForm, absent_day_deduction: parseFloat(e.target.value) || 0 })} />
+                      <label>Absent Deduction Override</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.absent_override}
+                        onChange={(e) => setItemForm({ ...itemForm, absent_override: e.target.value })}
+                        placeholder={`Calculated: ${itemForm.absent_day_deduction || editingItem?.absent_day_deduction || '0'}`}
+                      />
+                      <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated. Enter 0 to remove all absent deduction.</small>
                     </div>
                   </div>
                   {/* Mimix Attendance Bonus - only show for Mimix company */}
