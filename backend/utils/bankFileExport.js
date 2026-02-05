@@ -55,6 +55,10 @@ const formatters = {
         // Clean name - remove commas to avoid CSV issues
         const cleanName = (item.employee_name || '').toUpperCase().replace(/,/g, '');
 
+        // Generate payment reference like SALARYJAN2026
+        const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        const paymentRef = `SALARY${monthNames[parseInt(options.month) - 1]}${options.year}`;
+
         const line = [
           cleanName,
           bankName,
@@ -62,8 +66,8 @@ const formatters = {
           'NRIC',
           icNumber,
           (parseFloat(item.net_pay) || 0).toFixed(2),
-          '',  // Payment Reference - left blank
-          ''   // Payment Description - left blank
+          paymentRef,
+          paymentRef
         ].join(',');
 
         lines.push(line);
