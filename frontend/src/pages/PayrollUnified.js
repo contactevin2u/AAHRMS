@@ -2033,12 +2033,12 @@ function PayrollUnified() {
                       <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use approved claims. Enter value to override total claims.</small>
                     </div>
                   </div>
+                  <div className="form-group">
+                    <label>Notes</label>
+                    <textarea value={itemForm.notes} onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })} rows="2" />
+                  </div>
                 </div>
                 </fieldset>
-                <div className="form-group" style={{ marginTop: '15px' }}>
-                  <label>Notes</label>
-                  <textarea value={itemForm.notes} onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })} rows="2" disabled={viewMode} />
-                </div>
                 <div className="modal-actions">
                   <button type="button" onClick={() => setShowItemModal(false)} className="cancel-btn">{viewMode ? 'Close' : 'Cancel'}</button>
                   {!viewMode && <button type="submit" className="save-btn">Update</button>}

@@ -1522,6 +1522,7 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1529,6 +1530,7 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1553,9 +1555,9 @@
 }
 
 .modal-scroll-content {
-  overflow-y: scroll;
-  flex: 1 1 auto;
-  min-height: 100px;
+  overflow-y: auto;
+  flex: 1 1 0;
+  min-height: 0;
   padding-right: 5px;
 }
 
@@ -1713,8 +1715,6 @@
   border-top: 1px solid #eee;
   flex-shrink: 0;
   background: white;
-  position: relative;
-  z-index: 1;
 }
 
 .cancel-btn {
