@@ -3431,6 +3431,21 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
         }
       }
 
+      // PH pay calculation
+      let phDaysWorked = 0, phPay = 0;
+      if (!isPartTime && features.auto_ph_pay && basicSalary > 0) {
+        try {
+          phDaysWorked = await calculatePHDaysWorked(
+            emp.id, companyId,
+            period.start.toISOString().split('T')[0],
+            period.end.toISOString().split('T')[0]
+          );
+          if (phDaysWorked > 0) {
+            phPay = Math.round(phDaysWorked * (basicSalary / workingDays) * (rates.ph_multiplier || 2) * 100) / 100;
+          }
+        } catch (e) { console.warn(`PH calc failed for ${emp.name}:`, e.message); }
+      }
+
       // Calculate absent days from clock-in records
       let absentDays = 0, absentDayDeduction = 0;
       const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
@@ -3479,8 +3494,11 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
       }
 
       // Calculate gross and statutory (with absent deduction)
-      const grossSalary = basicSalary + fixedAllowance + otAmount - absentDayDeduction;
-      const statutoryBase = Math.max(0, basicSalary - absentDayDeduction) + otAmount;
+      const grossSalary = basicSalary + fixedAllowance + otAmount + phPay - absentDayDeduction;
+      let statutoryBase = Math.max(0, basicSalary - absentDayDeduction);
+      if (statutory.statutory_on_ot) statutoryBase += otAmount;
+      if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
+      if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
 
       // Build salary breakdown for PCB calculation
       const salaryBreakdown = {
@@ -3489,7 +3507,7 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
         taxableAllowance: 0,
         commission: 0,
         bonus: 0,
-        ot: otAmount,
+        ot: otAmount + phPay,
         pcbGross: grossSalary
       };
 
@@ -3513,14 +3531,16 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
         INSERT INTO payroll_items (
           payroll_run_id, employee_id,
           basic_salary, fixed_allowance, ot_hours, ot_amount,
+          ph_days_worked, ph_pay,
           absent_days, absent_day_deduction,
           gross_salary, statutory_base,
           epf_employee, epf_employer, socso_employee, socso_employer,
           eis_employee, eis_employer, pcb,
           total_deductions, net_pay, employer_total_cost
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
       `, [
         id, emp.id, basicSalary, fixedAllowance, otHours, otAmount,
+        phDaysWorked, phPay,
         absentDays, absentDayDeduction,
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
