@@ -323,6 +323,9 @@ function Layout({ children }) {
                     Departments
                   </NavLink>
                 )}
+                <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Feedback
+                </NavLink>
               </div>
             )}
           </div>
