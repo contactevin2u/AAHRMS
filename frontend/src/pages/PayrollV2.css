@@ -1515,6 +1515,21 @@
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.modal form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.modal fieldset {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
 }
 
 .modal.large {
@@ -1538,7 +1553,7 @@
 .modal-scroll-content {
   overflow-y: auto;
   flex: 1;
-  max-height: calc(90vh - 140px);
+  min-height: 0;
 }
 
 /* Form */
@@ -1689,6 +1704,7 @@
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid #eee;
+  flex-shrink: 0;
 }
 
 .cancel-btn {
