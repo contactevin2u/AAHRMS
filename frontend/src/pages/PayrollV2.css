@@ -1534,6 +1534,7 @@
 
 .modal.large {
   max-width: 540px;
+  max-height: 95vh;
 }
 
 .modal-header {
@@ -1552,11 +1553,14 @@
 }
 
 .modal-scroll-content {
-  overflow-y: auto;
+  overflow-y: scroll;
   flex: 1 1 auto;
   min-height: 100px;
-  max-height: calc(85vh - 120px);
   padding-right: 5px;
+}
+
+.modal.large .modal-scroll-content {
+  max-height: calc(95vh - 150px);
 }
 
 /* Form */
