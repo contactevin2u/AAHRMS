@@ -255,12 +255,10 @@ async function calculateScheduleBasedPay(employeeId, periodStart, periodEnd) {
     if (row.attended) {
       // Check for late
       if (row.clock_in_1 && row.shift_start) {
-        // clock_in_1 is timestamp, shift_start is TIME
-        // Extract time from clock_in_1 and compare with shift_start
-        const clockInTime = new Date(row.clock_in_1);
-        const clockInMinutes = clockInTime.getHours() * 60 + clockInTime.getMinutes();
+        // Both clock_in_1 and shift_start are TIME types (strings like "HH:MM:SS")
+        const clockInParts = row.clock_in_1.split(':');
+        const clockInMinutes = parseInt(clockInParts[0]) * 60 + parseInt(clockInParts[1]);
 
-        // shift_start is a time string like "09:00:00"
         const shiftParts = row.shift_start.split(':');
         const shiftMinutes = parseInt(shiftParts[0]) * 60 + parseInt(shiftParts[1]);
 
