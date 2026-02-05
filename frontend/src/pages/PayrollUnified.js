@@ -1915,6 +1915,20 @@ function PayrollUnified() {
                       <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated. Enter 0 to remove.</small>
                     </div>
                   </div>
+                  {/* Show unpaid leave if exists - read only */}
+                  {(editingItem?.unpaid_leave_days > 0 || editingItem?.unpaid_leave_deduction > 0) && (
+                    <div className="form-row" style={{background: '#fff3cd', padding: '10px', borderRadius: '4px', marginBottom: '10px'}}>
+                      <div className="form-group">
+                        <label>Unpaid Leave Days</label>
+                        <input type="text" value={editingItem?.unpaid_leave_days || 0} disabled style={{background: '#eee'}} />
+                      </div>
+                      <div className="form-group">
+                        <label>Unpaid Leave Deduction</label>
+                        <input type="text" value={`RM ${parseFloat(editingItem?.unpaid_leave_deduction || 0).toFixed(2)}`} disabled style={{background: '#eee'}} />
+                        <small style={{color: '#856404', fontSize: '0.75rem'}}>From approved unpaid leave requests</small>
+                      </div>
+                    </div>
+                  )}
                   <div className="form-row">
                     <div className="form-group">
                       <label>Absent Days</label>
