@@ -126,7 +126,8 @@ async function getCompanySettings(companyId) {
     statutory: { ...DEFAULT_PAYROLL_SETTINGS.statutory, ...payrollSettings.statutory,
       statutory_on_allowance: payrollConfig.statutory_on_allowance ?? payrollSettings.statutory?.statutory_on_allowance ?? false,
       statutory_on_ot: payrollConfig.statutory_on_ot ?? payrollSettings.statutory?.statutory_on_ot ?? false,
-      statutory_on_ph_pay: payrollConfig.statutory_on_ph_pay ?? payrollSettings.statutory?.statutory_on_ph_pay ?? false,
+      // Mimix (company_id=3): PH pay included in statutory by default
+      statutory_on_ph_pay: payrollConfig.statutory_on_ph_pay ?? payrollSettings.statutory?.statutory_on_ph_pay ?? (companyId === 3),
       statutory_on_incentive: payrollConfig.statutory_on_incentive ?? payrollSettings.statutory?.statutory_on_incentive ?? false,
       statutory_on_commission: payrollConfig.statutory_on_commission ?? true
     },
