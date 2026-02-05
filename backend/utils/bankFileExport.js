@@ -27,7 +27,8 @@ const formatters = {
     generate: (payrollItems, options = {}) => {
       const lines = [];
       const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-      const paymentRef = `SALARY${monthNames[parseInt(options.month) - 1]}${options.year}`;
+      const monthIndex = (parseInt(options.month) || 1) - 1;
+      const paymentRef = `SALARY${monthNames[monthIndex]}${options.year || new Date().getFullYear()}`;
 
       // Format crediting date as DD/MM/YYYY
       let creditDate = options.creditingDate;
