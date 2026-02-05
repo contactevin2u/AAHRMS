@@ -364,7 +364,23 @@ const Attendance = () => {
   // Handle manual attendance creation
   const handleCreateManual = async (e) => {
     e.preventDefault();
+
+    // Validate required fields
+    if (!manualForm.employee_id) {
+      toast.error('Please select an employee');
+      return;
+    }
+    if (!manualForm.work_date) {
+      toast.error('Please select a work date');
+      return;
+    }
+    if (!manualForm.total_work_hours) {
+      toast.error('Please enter total work hours');
+      return;
+    }
+
     try {
+      console.log('Creating manual attendance:', manualForm);
       await attendanceApi.createManual(manualForm);
       toast.success('Manual attendance created and approved');
       setShowManualModal(false);
@@ -377,6 +393,7 @@ const Attendance = () => {
       });
       fetchData();
     } catch (error) {
+      console.error('Manual attendance error:', error);
       toast.error(error.response?.data?.error || 'Failed to create manual attendance');
     }
   };
@@ -1264,10 +1281,12 @@ const Attendance = () => {
                     required
                   >
                     <option value="">Select Employee</option>
+                    {employees.length === 0 && <option disabled>No employees loaded</option>}
                     {employees.map(e => (
                       <option key={e.id} value={e.id}>{e.employee_id} - {e.name}</option>
                     ))}
                   </select>
+                  {employees.length === 0 && <small style={{color: 'red'}}>No employees available. Please refresh the page.</small>}
                 </div>
 
                 <div className="form-group">
