@@ -884,17 +884,18 @@ function PayrollUnified() {
       ${earnings.claims_amount > 0 ? `<tr><td>Claims</td><td class="amount">RM ${formatNum(earnings.claims_amount)}</td></tr>` : ''}
       ${earnings.bonus > 0 ? `<tr><td>Bonus</td><td class="amount">RM ${formatNum(earnings.bonus)}</td></tr>` : ''}
       ${earnings.attendance_bonus > 0 ? `<tr><td>Attendance Bonus</td><td class="amount">RM ${formatNum(earnings.attendance_bonus)}</td></tr>` : ''}
+      ${deductions.absent_day_deduction > 0 ? `<tr style="color:#dc2626"><td>Less: Absent (${deductions.absent_days || 0} days)</td><td class="amount">-RM ${formatNum(deductions.absent_day_deduction)}</td></tr>` : ''}
+      ${deductions.short_hours_deduction > 0 ? `<tr style="color:#dc2626"><td>Less: Short Hours (${deductions.short_hours || 0} hrs)</td><td class="amount">-RM ${formatNum(deductions.short_hours_deduction)}</td></tr>` : ''}
+      ${deductions.unpaid_leave_deduction > 0 ? `<tr style="color:#dc2626"><td>Less: Unpaid Leave (${deductions.unpaid_leave_days || 0} days)</td><td class="amount">-RM ${formatNum(deductions.unpaid_leave_deduction)}</td></tr>` : ''}
+      ${deductions.other_deductions > 0 ? `<tr style="color:#dc2626"><td>Less: Schedule Deduction</td><td class="amount">-RM ${formatNum(deductions.other_deductions)}</td></tr>` : ''}
       <tr class="total-row"><td>GROSS PAY</td><td class="amount">RM ${formatNum(totals.gross_salary)}</td></tr></table>
       <table><tr class="section-title"><td colspan="2">DEDUCTIONS</td></tr>
-      ${deductions.unpaid_leave_deduction > 0 ? `<tr><td>Unpaid Leave (${deductions.unpaid_leave_days} days)</td><td class="amount">RM ${formatNum(deductions.unpaid_leave_deduction)}</td></tr>` : ''}
       <tr><td>EPF (Employee)</td><td class="amount">RM ${formatNum(deductions.epf_employee)}</td></tr>
       <tr><td>SOCSO (Employee)</td><td class="amount">RM ${formatNum(deductions.socso_employee)}</td></tr>
       <tr><td>EIS (Employee)</td><td class="amount">RM ${formatNum(deductions.eis_employee)}</td></tr>
       <tr><td style="padding-left:20px;font-style:italic;color:#666">→ PERKESO Total</td><td class="amount" style="color:#666">RM ${formatNum(perkeso)}</td></tr>
       <tr><td>PCB (Tax)</td><td class="amount">RM ${formatNum(deductions.pcb)}</td></tr>
-      ${deductions.short_hours_deduction > 0 ? `<tr><td>Short Hours (${deductions.short_hours} hrs)</td><td class="amount">RM ${formatNum(deductions.short_hours_deduction)}</td></tr>` : ''}
       ${deductions.advance_deduction > 0 ? `<tr><td>Advance Deduction</td><td class="amount">RM ${formatNum(deductions.advance_deduction)}</td></tr>` : ''}
-      ${deductions.other_deductions > 0 ? `<tr><td>Other Deductions</td><td class="amount">RM ${formatNum(deductions.other_deductions)}</td></tr>` : ''}
       <tr class="total-row"><td>TOTAL DEDUCTIONS</td><td class="amount">RM ${formatNum(totals.total_deductions)}</td></tr></table>
       <table><tr style="background:#1e293b;color:white"><td><strong>NET PAY</strong></td><td class="amount" style="font-size:1.3em"><strong>RM ${formatNum(totals.net_pay)}</strong></td></tr></table>
       <div class="employer-section"><h4 style="margin:0 0 10px;color:#1e293b">Employer Contributions (For Reference)</h4>
