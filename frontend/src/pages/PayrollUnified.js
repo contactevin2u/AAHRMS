@@ -1164,6 +1164,9 @@ function PayrollUnified() {
                   <div className="summary-stats">
                     <div className="summary-stat"><span className="stat-label">Employees</span><span className="stat-value">{selectedRun.items?.length || 0}</span></div>
                     <div className="summary-stat"><span className="stat-label">Working Days</span><span className="stat-value">{selectedRun.work_days_per_month || 22}</span></div>
+                    {(selectedRun.items?.reduce((sum, i) => sum + (parseFloat(i.ph_pay) || 0), 0) > 0) && (
+                      <div className="summary-stat"><span className="stat-label">PH Pay</span><span className="stat-value">{formatAmount(selectedRun.items?.reduce((sum, i) => sum + (parseFloat(i.ph_pay) || 0), 0))}</span></div>
+                    )}
                     <div className="summary-stat"><span className="stat-label">Gross</span><span className="stat-value">{formatAmount(selectedRun.total_gross)}</span></div>
                     <div className="summary-stat"><span className="stat-label">Deductions</span><span className="stat-value">{formatAmount(selectedRun.total_deductions)}</span></div>
                     <div className="summary-stat highlight"><span className="stat-label">Net</span><span className="stat-value">{formatAmount(selectedRun.total_net)}</span></div>
