@@ -26,6 +26,11 @@ const formatters = {
     extension: 'csv',
     generate: (payrollItems, options = {}) => {
       const lines = [];
+      const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const monthAbbr = monthNames[parseInt(options.month) - 1];
+
+      // Generate batch reference number (6 digits)
+      const batchNum = String(Math.floor(Math.random() * 900000) + 100000);
 
       // Format crediting date as DD/MM/YYYY
       let creditDate = options.creditingDate;
@@ -36,11 +41,20 @@ const formatters = {
         creditDate = `05/${String(nextMonth).padStart(2, '0')}/${creditYear}`;
       }
 
+      // Generate row reference: PRE + DDMMYY + 9-digit sequence
+      const now = new Date();
+      const dateStr = String(now.getDate()).padStart(2, '0') +
+                      String(now.getMonth() + 1).padStart(2, '0') +
+                      String(now.getFullYear()).slice(-2);
+      const seqNum = String(now.getTime()).slice(-9);
+      const rowRef = `PRE${dateStr}${seqNum}`;
+      const rowDesc = `PDC${dateStr}${seqNum}`;
+
       // Header section (6 rows)
       lines.push('Employer Info :,,,,,,,');
       lines.push(`Crediting Date (eg. dd/MM/yyyy),${creditDate},,,,,,`);
-      lines.push('Payment Reference,,,,,,,');
-      lines.push('Payment Description,,,,,,,');
+      lines.push(`Payment Reference,MBPREF${batchNum},,,,,,`);
+      lines.push(`Payment Description,MBP${monthAbbr}${batchNum},,,,,,`);
       lines.push('Bulk Payment Type,Salary,,,,,,');
       lines.push(',,,,,,,');
 
@@ -55,10 +69,6 @@ const formatters = {
         // Clean name - remove commas to avoid CSV issues
         const cleanName = (item.employee_name || '').toUpperCase().replace(/,/g, '');
 
-        // Generate payment reference like SALARYJAN2026
-        const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-        const paymentRef = `SALARY${monthNames[parseInt(options.month) - 1]}${options.year}`;
-
         const line = [
           cleanName,
           bankName,
@@ -66,8 +76,8 @@ const formatters = {
           'NRIC',
           icNumber,
           (parseFloat(item.net_pay) || 0).toFixed(2),
-          paymentRef,
-          paymentRef
+          rowRef,
+          rowDesc
         ].join(',');
 
         lines.push(line);
