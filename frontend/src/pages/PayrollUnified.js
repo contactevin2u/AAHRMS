@@ -1394,10 +1394,15 @@ function PayrollUnified() {
                     };
                     return (
                     <div className="items-table full-breakdown">
+                      <div style={{ fontSize: '0.75rem', color: '#666', marginBottom: '8px', display: 'flex', gap: '20px' }}>
+                        <span><strong>Deduct</strong> = Absent/Short/Unpaid (reduces Gross)</span>
+                        <span><strong>EPF, SOCSO, EIS, PCB</strong> = Statutory (reduces Net)</span>
+                        <span><strong>Adv</strong> = Advance (non-statutory)</span>
+                      </div>
                       <table>
                         <thead>
                           <tr>
-                            <th>Employee</th><th>Basic</th>{vis.wages && <th>Wages</th>}<th>Deduct</th>
+                            <th>Employee</th><th>Basic</th>{vis.wages && <th>Wages</th>}<th title="Absent/Short/Unpaid (reduces Gross)">Deduct</th>
                             {vis.ot && <th>OT</th>}
                             {vis.ph && <th>PH Pay</th>}
                             {vis.allow && <th>Allow</th>}
@@ -1407,9 +1412,8 @@ function PayrollUnified() {
                             {vis.claims && <th>Claims</th>}
                             {vis.bonus && <th>Bonus</th>}
                             {vis.attendanceBonus && <th>Att. Bonus</th>}
-                            <th>Gross</th>{vis.epf && <th>EPF</th>}{vis.socso && <th>SOCSO</th>}{vis.eis && <th>EIS</th>}{vis.pcb && <th>PCB</th>}
-                            {vis.adv && <th>Adv</th>}
-                            {vis.shortHrs && <th>Deduct</th>}
+                            <th>Gross</th>{vis.epf && <th title="Statutory">EPF</th>}{vis.socso && <th title="Statutory">SOCSO</th>}{vis.eis && <th title="Statutory">EIS</th>}{vis.pcb && <th title="Statutory">PCB</th>}
+                            {vis.adv && <th title="Non-statutory">Adv</th>}
                             <th>Net</th><th></th>
                           </tr>
                         </thead>
@@ -1447,7 +1451,6 @@ function PayrollUnified() {
                               {vis.eis && <td>{formatAmount(item.eis_employee)}</td>}
                               {vis.pcb && renderCell(item, 'pcb', item.pcb)}
                               {vis.adv && <td>{formatAmount(item.advance_deduction)}</td>}
-                              {vis.shortHrs && <td>{formatAmount(item.short_hours_deduction)}</td>}
                               <td><strong>{formatAmount(item.net_pay)}</strong></td>
                               <td>
                                 {isDraft ? (
