@@ -581,6 +581,45 @@ router.post('/bulk-approve', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Helper function to calculate hours from clock times
+function calculateHoursFromClockTimes(clockIn, clockOut) {
+  if (!clockIn || !clockOut) return null;
+
+  const [inH, inM] = clockIn.split(':').map(Number);
+  const [outH, outM] = clockOut.split(':').map(Number);
+
+  let totalMinutes = (outH * 60 + outM) - (inH * 60 + inM);
+  if (totalMinutes < 0) totalMinutes += 24 * 60; // Handle overnight
+
+  const breakMinutes = 60; // 1 hour break
+  const workMinutes = Math.max(0, totalMinutes - breakMinutes);
+  const totalHours = Math.round(workMinutes / 60 * 100) / 100;
+
+  const standardHours = 8;
+  const rawOt = Math.max(0, totalHours - standardHours);
+  // Round OT down to nearest 0.5
+  const otHours = Math.floor(rawOt * 2) / 2;
+
+  return { totalHours, otHours, totalMinutes: workMinutes, otMinutes: Math.round(otHours * 60) };
+}
+
+// Calculate hours from clock times (preview endpoint)
+router.post('/calculate-hours', authenticateAdmin, async (req, res) => {
+  try {
+    const { clock_in, clock_out } = req.body;
+
+    if (!clock_in || !clock_out) {
+      return res.status(400).json({ error: 'Clock in and clock out times are required' });
+    }
+
+    const result = calculateHoursFromClockTimes(clock_in, clock_out);
+    res.json(result);
+  } catch (error) {
+    console.error('Error calculating hours:', error);
+    res.status(500).json({ error: 'Failed to calculate hours' });
+  }
+});
+
 // Create manual attendance record (admin creates for employees who didn't clock in)
 router.post('/manual', authenticateAdmin, async (req, res) => {
   try {
@@ -589,8 +628,6 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
       work_date,
       clock_in,
       clock_out,
-      total_work_hours,
-      ot_hours,
       notes
     } = req.body;
 
@@ -601,9 +638,9 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Employee ID and work date are required' });
     }
 
-    // Require either clock times or manual hours
-    if (!total_work_hours && (!clock_in || !clock_out)) {
-      return res.status(400).json({ error: 'Please provide clock in/out times or total work hours' });
+    // Require clock times
+    if (!clock_in || !clock_out) {
+      return res.status(400).json({ error: 'Please provide clock in and clock out times' });
     }
 
     // Verify employee exists
@@ -628,15 +665,18 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Attendance record already exists for this date. Use edit instead.' });
     }
 
-    // Calculate minutes from hours
-    const totalMinutes = Math.round((parseFloat(total_work_hours) || 0) * 60);
-    const otMinutes = Math.round((parseFloat(ot_hours) || 0) * 60);
+    // Calculate hours from clock times (backend calculation)
+    const calculated = calculateHoursFromClockTimes(clock_in, clock_out);
+    const totalWorkHours = calculated.totalHours;
+    const otHours = calculated.otHours;
+    const totalMinutes = calculated.totalMinutes;
+    const otMinutes = calculated.otMinutes;
 
-    // Format clock times if provided
-    const clockIn1 = clock_in ? `${clock_in}:00` : null;
-    const clockOut1 = clock_out ? `${clock_out}:00` : null;
+    // Format clock times
+    const clockIn1 = `${clock_in}:00`;
+    const clockOut1 = `${clock_out}:00`;
 
-    // Create manual record with clock times if provided
+    // Create manual record with calculated hours
     const result = await pool.query(`
       INSERT INTO clock_in_records
       (employee_id, company_id, outlet_id, work_date, clock_in_1, clock_out_1,
@@ -648,7 +688,7 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
       employee_id, companyId, employee.outlet_id, work_date,
       clockIn1, clockOut1,
       totalMinutes, otMinutes,
-      total_work_hours || 0, ot_hours || 0,
+      totalWorkHours, otHours,
       notes || 'Manual entry by admin',
       adminId
     ]);

@@ -44,21 +44,19 @@ const Attendance = () => {
     notes: ''
   });
 
-  // Auto-calculate hours from clock in/out times
-  const calculateHoursFromClock = (clockIn, clockOut) => {
-    if (!clockIn || !clockOut) return { total: '', ot: '' };
-    const [inH, inM] = clockIn.split(':').map(Number);
-    const [outH, outM] = clockOut.split(':').map(Number);
-    let totalMinutes = (outH * 60 + outM) - (inH * 60 + inM);
-    if (totalMinutes < 0) totalMinutes += 24 * 60; // Handle overnight
-    const breakMinutes = 60; // 1 hour break
-    const workMinutes = Math.max(0, totalMinutes - breakMinutes);
-    const totalHours = Math.round(workMinutes / 60 * 100) / 100; // Keep exact for work hours
-    const standardHours = 8;
-    const rawOt = Math.max(0, totalHours - standardHours);
-    // Round OT down to nearest 0.5
-    const otHours = Math.floor(rawOt * 2) / 2;
-    return { total: totalHours, ot: otHours };
+  // Call backend to calculate hours from clock times
+  const calculateHoursFromBackend = async (clockIn, clockOut) => {
+    if (!clockIn || !clockOut) return;
+    try {
+      const res = await attendanceApi.calculateHours({ clock_in: clockIn, clock_out: clockOut });
+      setManualForm(prev => ({
+        ...prev,
+        total_work_hours: res.data.totalHours,
+        ot_hours: res.data.otHours
+      }));
+    } catch (error) {
+      console.error('Error calculating hours:', error);
+    }
   };
 
   // Inline editing state
@@ -393,9 +391,8 @@ const Attendance = () => {
       toast.error('Please select a work date');
       return;
     }
-    // Allow either clock times OR manual hours
-    if (!manualForm.total_work_hours && (!manualForm.clock_in || !manualForm.clock_out)) {
-      toast.error('Please enter clock in/out times or total work hours');
+    if (!manualForm.clock_in || !manualForm.clock_out) {
+      toast.error('Please enter clock in and clock out times');
       return;
     }
 
@@ -1323,56 +1320,64 @@ const Attendance = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Clock In</label>
+                    <label>Clock In *</label>
                     <input
                       type="time"
                       value={manualForm.clock_in}
                       onChange={(e) => {
                         const clockIn = e.target.value;
-                        const { total, ot } = calculateHoursFromClock(clockIn, manualForm.clock_out);
-                        setManualForm({ ...manualForm, clock_in: clockIn, total_work_hours: total, ot_hours: ot });
+                        setManualForm(prev => ({ ...prev, clock_in: clockIn }));
+                        if (clockIn && manualForm.clock_out) {
+                          calculateHoursFromBackend(clockIn, manualForm.clock_out);
+                        }
                       }}
+                      required
                     />
                   </div>
                   <div className="form-group">
-                    <label>Clock Out</label>
+                    <label>Clock Out *</label>
                     <input
                       type="time"
                       value={manualForm.clock_out}
                       onChange={(e) => {
                         const clockOut = e.target.value;
-                        const { total, ot } = calculateHoursFromClock(manualForm.clock_in, clockOut);
-                        setManualForm({ ...manualForm, clock_out: clockOut, total_work_hours: total, ot_hours: ot });
+                        setManualForm(prev => ({ ...prev, clock_out: clockOut }));
+                        if (manualForm.clock_in && clockOut) {
+                          calculateHoursFromBackend(manualForm.clock_in, clockOut);
+                        }
                       }}
+                      required
                     />
                   </div>
                 </div>
-                <small style={{color: '#666', marginBottom: '10px', display: 'block'}}>Enter clock times to auto-calculate hours, or enter hours manually below</small>
+                <small style={{color: '#666', marginBottom: '10px', display: 'block'}}>Enter clock times - hours auto-calculated by system (1hr break deducted, OT rounded down to 0.5)</small>
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Total Work Hours *</label>
+                    <label>Total Work Hours</label>
                     <input
                       type="number"
                       step="any"
                       min="0"
                       max="24"
                       value={manualForm.total_work_hours}
-                      onChange={(e) => setManualForm({ ...manualForm, total_work_hours: e.target.value })}
-                      placeholder="e.g., 8.67"
+                      readOnly
+                      style={{backgroundColor: '#f5f5f5'}}
+                      placeholder="Auto-calculated"
                     />
                   </div>
 
                   <div className="form-group">
-                    <label>OT Hours (rounded to 0.5)</label>
+                    <label>OT Hours</label>
                     <input
                       type="number"
                       step="0.5"
                       min="0"
                       max="16"
                       value={manualForm.ot_hours}
-                      onChange={(e) => setManualForm({ ...manualForm, ot_hours: e.target.value })}
-                      placeholder="e.g., 0.5"
+                      readOnly
+                      style={{backgroundColor: '#f5f5f5'}}
+                      placeholder="Auto-calculated"
                     />
                   </div>
                 </div>
