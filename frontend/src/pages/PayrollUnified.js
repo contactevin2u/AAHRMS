@@ -1679,6 +1679,8 @@ function PayrollUnified() {
                   const daysWorked = parseInt(editingItem.days_worked) || 0;
                   const standardDays = selectedRun?.work_days_per_month || 26;
                   const absentDays = parseFloat(editingItem.absent_days) || 0;
+                  const unpaidLeaveDays = parseFloat(editingItem.unpaid_leave_days) || 0;
+                  const daysNotWorked = absentDays + unpaidLeaveDays;
                   const shortHours = parseFloat(editingItem.short_hours) || 0;
                   const totalHours = parseFloat(editingItem.total_work_hours) || 0;
                   const otHours = parseFloat(editingItem.ot_hours) || 0;
@@ -1691,8 +1693,13 @@ function PayrollUnified() {
                         onClick={() => { fetchAttendanceDetails(editingItem.id); setAttendanceDetailsTab('days_worked'); }}
                         title="Click to see details"
                       >
-                        Days Worked: <strong>{daysWorked}</strong> / {standardDays} {absentDays > 0 && <span style={{color: '#dc3545'}}>({absentDays} absent)</span>}
+                        Days Worked: <strong>{daysWorked}</strong> / {standardDays}
                       </div>
+                      {daysNotWorked > 0 && (
+                        <div style={{color: '#dc3545'}}>
+                          Days Not Worked: <strong>{daysNotWorked}</strong> <span style={{fontSize: '0.75rem'}}>(unpaid)</span>
+                        </div>
+                      )}
                       {noScheduleDays > 0 && (
                         <div
                           style={{...clickableStyle, color: '#f59e0b'}}
