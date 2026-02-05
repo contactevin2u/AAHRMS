@@ -2784,13 +2784,11 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     } else if (settings.groupingType === 'outlet') {
       // Total penalty = late days + days not worked (absent + unpaid leave)
       const totalPenalty = lateDays + daysNotWorked;
-      console.log(`Attendance bonus calc: lateDays=${lateDays}, daysNotWorked=${daysNotWorked}, totalPenalty=${totalPenalty}`);
       if (totalPenalty === 0) attendanceBonus = 400;
       else if (totalPenalty === 1) attendanceBonus = 300;
       else if (totalPenalty === 2) attendanceBonus = 200;
       else if (totalPenalty === 3) attendanceBonus = 100;
       else attendanceBonus = 0;
-      console.log(`Attendance bonus result: ${attendanceBonus}`);
     } else {
       attendanceBonus = parseFloat(updates.attendance_bonus ?? item.attendance_bonus) || 0;
     }

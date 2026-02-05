@@ -1981,8 +1981,8 @@ function PayrollUnified() {
                         <label>Late Days</label>
                         <input type="number" step="1" value={itemForm.late_days} onChange={(e) => {
                           const days = parseFloat(e.target.value) || 0;
-                          const absentDays = itemForm.absent_days || 0;
-                          const totalPenalty = days + absentDays;
+                          const daysNotWorked = itemForm.days_not_worked || 0;
+                          const totalPenalty = days + daysNotWorked;
                           let bonus = 0;
                           if (totalPenalty === 0) bonus = 400;
                           else if (totalPenalty === 1) bonus = 300;
