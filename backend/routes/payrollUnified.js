@@ -2773,8 +2773,24 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const absentDayDeduction = combinedDeduction;
     const unpaidDeduction = 0; // Combined into absentDayDeduction
 
-    const attendanceBonus = parseFloat(updates.attendance_bonus ?? item.attendance_bonus) || 0;
     const lateDays = parseFloat(updates.late_days ?? item.late_days) || 0;
+
+    // Attendance bonus: Auto-calculate for outlet companies based on late days + absent days
+    // Formula: RM400=0, RM300=1, RM200=2, RM100=3, RM0=4+ late/absent
+    // Allow manual override via attendance_bonus_override
+    let attendanceBonus = 0;
+    if (updates.attendance_bonus_override !== undefined && updates.attendance_bonus_override !== null && updates.attendance_bonus_override !== '') {
+      attendanceBonus = parseFloat(updates.attendance_bonus_override) || 0;
+    } else if (settings.groupingType === 'outlet') {
+      const totalPenalty = lateDays + absentDays;
+      if (totalPenalty === 0) attendanceBonus = 400;
+      else if (totalPenalty === 1) attendanceBonus = 300;
+      else if (totalPenalty === 2) attendanceBonus = 200;
+      else if (totalPenalty === 3) attendanceBonus = 100;
+      else attendanceBonus = 0;
+    } else {
+      attendanceBonus = parseFloat(updates.attendance_bonus ?? item.attendance_bonus) || 0;
+    }
 
     // Claims: Allow manual override similar to EPF/PCB
     const claimsAmount = updates.claims_override !== undefined && updates.claims_override !== null && updates.claims_override !== ''
