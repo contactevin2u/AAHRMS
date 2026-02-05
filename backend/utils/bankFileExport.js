@@ -30,13 +30,12 @@ const formatters = {
       const monthIndex = (parseInt(options.month) || 1) - 1;
       const paymentRef = `SALARY${monthNames[monthIndex]}${options.year || new Date().getFullYear()}`;
 
-      // Format crediting date as DD/MM/YYYY
+      // Format crediting date as DD/MM/YYYY - must be at least tomorrow (can't submit same day after 3:30pm)
       let creditDate = options.creditingDate;
       if (!creditDate) {
-        // Default to 5th of next month
-        const nextMonth = parseInt(options.month) === 12 ? 1 : parseInt(options.month) + 1;
-        const creditYear = parseInt(options.month) === 12 ? parseInt(options.year) + 1 : parseInt(options.year);
-        creditDate = `05/${String(nextMonth).padStart(2, '0')}/${creditYear}`;
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        creditDate = `${String(tomorrow.getDate()).padStart(2, '0')}/${String(tomorrow.getMonth() + 1).padStart(2, '0')}/${tomorrow.getFullYear()}`;
       }
 
       // Header section (6 rows)
