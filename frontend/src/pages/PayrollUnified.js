@@ -737,6 +737,7 @@ function PayrollUnified() {
       absent_days: absentDays, absent_day_deduction: absentDayDeduction,
       attendance_bonus: item.attendance_bonus || 0, late_days: item.late_days || 0,
       ot_override: '', // Empty means use calculated value, set value to override OT amount
+      short_override: '', // Empty means use calculated value, set value to override short hours deduction
       absent_override: '', // Empty means use calculated value, set value to override absent deduction
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
@@ -1903,8 +1904,15 @@ function PayrollUnified() {
                       )}
                     </div>
                     <div className="form-group">
-                      <label>Short Hours Deduction</label>
-                      <input type="number" step="0.01" value={itemForm.short_hours_deduction} onChange={(e) => setItemForm({ ...itemForm, short_hours_deduction: parseFloat(e.target.value) || 0 })} />
+                      <label>Short Hours Override</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.short_override}
+                        onChange={(e) => setItemForm({ ...itemForm, short_override: e.target.value })}
+                        placeholder={`Calculated: ${itemForm.short_hours_deduction || editingItem?.short_hours_deduction || '0'}`}
+                      />
+                      <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated. Enter 0 to remove.</small>
                     </div>
                   </div>
                   <div className="form-row">

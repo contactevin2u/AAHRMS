@@ -2748,7 +2748,11 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const otherDeductions = parseFloat(updates.other_deductions ?? item.other_deductions) || 0;
     const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
     const shortHours = parseFloat(updates.short_hours ?? item.short_hours) || 0;
-    const shortHoursDeduction = parseFloat(updates.short_hours_deduction ?? item.short_hours_deduction) || 0;
+    // Short hours deduction: Allow manual override similar to EPF/PCB
+    // short_override can be provided to set exact short hours deduction amount (even 0)
+    const shortHoursDeduction = updates.short_override !== undefined && updates.short_override !== null && updates.short_override !== ''
+      ? parseFloat(updates.short_override) || 0
+      : parseFloat(updates.short_hours_deduction ?? item.short_hours_deduction) || 0;
     const absentDays = parseFloat(updates.absent_days ?? item.absent_days) || 0;
     // Absent deduction: Allow manual override similar to EPF/PCB
     // absent_override can be provided to set exact absent deduction amount (even 0)
