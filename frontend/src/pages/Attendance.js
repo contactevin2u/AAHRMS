@@ -53,9 +53,11 @@ const Attendance = () => {
     if (totalMinutes < 0) totalMinutes += 24 * 60; // Handle overnight
     const breakMinutes = 60; // 1 hour break
     const workMinutes = Math.max(0, totalMinutes - breakMinutes);
-    const totalHours = Math.round(workMinutes / 60 * 100) / 100;
+    const totalHours = Math.round(workMinutes / 60 * 100) / 100; // Keep exact for work hours
     const standardHours = 8;
-    const otHours = Math.max(0, Math.round((totalHours - standardHours) * 100) / 100);
+    const rawOt = Math.max(0, totalHours - standardHours);
+    // Round OT down to nearest 0.5
+    const otHours = Math.floor(rawOt * 2) / 2;
     return { total: totalHours, ot: otHours };
   };
 
@@ -1352,17 +1354,17 @@ const Attendance = () => {
                     <label>Total Work Hours *</label>
                     <input
                       type="number"
-                      step="0.5"
+                      step="any"
                       min="0"
                       max="24"
                       value={manualForm.total_work_hours}
                       onChange={(e) => setManualForm({ ...manualForm, total_work_hours: e.target.value })}
-                      placeholder="e.g., 8"
+                      placeholder="e.g., 8.67"
                     />
                   </div>
 
                   <div className="form-group">
-                    <label>OT Hours</label>
+                    <label>OT Hours (rounded to 0.5)</label>
                     <input
                       type="number"
                       step="0.5"
@@ -1370,7 +1372,7 @@ const Attendance = () => {
                       max="16"
                       value={manualForm.ot_hours}
                       onChange={(e) => setManualForm({ ...manualForm, ot_hours: e.target.value })}
-                      placeholder="e.g., 2"
+                      placeholder="e.g., 0.5"
                     />
                   </div>
                 </div>
