@@ -1,7 +1,8 @@
 /**
  * Analytics Dashboard API
  * Provides payroll overview, department breakdown, salary rankings,
- * monthly trends, headcount, attendance summary, and AI insights.
+ * monthly trends, headcount, attendance summary, statutory breakdown,
+ * OT analysis, and AI insights.
  */
 
 const express = require('express');
@@ -33,19 +34,60 @@ async function getLatestPayrollPeriod(companyId) {
   return result.rows[0] || null;
 }
 
+// Helper: resolve month/year from query params or fallback to latest
+async function resolveMonthYear(companyId, query) {
+  if (query.month && query.year) {
+    return { month: parseInt(query.month), year: parseInt(query.year) };
+  }
+  return await getLatestPayrollPeriod(companyId);
+}
+
 /**
- * GET /api/analytics/payroll-overview
- * Total payroll cost, employee count, average salary, MoM change, totals by company
+ * GET /api/analytics/available-periods
+ * List all months that have finalized payroll data
+ */
+router.get('/available-periods', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    if (!companyId) return res.status(403).json({ error: 'Company context required' });
+
+    const result = await pool.query(`
+      SELECT DISTINCT pr.month, pr.year
+      FROM payroll_runs pr
+      WHERE pr.company_id = $1
+        AND pr.status IN ('finalized', 'approved')
+      ORDER BY pr.year DESC, pr.month DESC
+    `, [companyId]);
+
+    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+
+    res.json({
+      periods: result.rows.map(r => ({
+        month: r.month,
+        year: r.year,
+        label: `${monthNames[r.month]} ${r.year}`
+      }))
+    });
+  } catch (error) {
+    console.error('Available periods error:', error);
+    res.status(500).json({ error: 'Failed to fetch available periods' });
+  }
+});
+
+/**
+ * GET /api/analytics/payroll-overview?month=X&year=Y
+ * Total payroll cost, employee count, average salary, MoM change, YoY change, employer cost
  */
 router.get('/payroll-overview', authenticateAdmin, async (req, res) => {
   try {
     const companyId = req.companyId;
     if (!companyId) return res.status(403).json({ error: 'Company context required' });
 
-    const latest = await getLatestPayrollPeriod(companyId);
-    if (!latest) return res.json({ totalPayroll: 0, employeeCount: 0, avgSalary: 0, momChange: null });
+    const period = await resolveMonthYear(companyId, req.query);
+    if (!period) return res.json({ totalPayroll: 0, employeeCount: 0, avgSalary: 0, momChange: null });
 
-    // Current month totals
+    // Current month totals (including statutory employer contributions)
     const current = await pool.query(`
       SELECT
         COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
@@ -55,17 +97,20 @@ router.get('/payroll-overview', authenticateAdmin, async (req, res) => {
         COUNT(DISTINCT pi.employee_id) AS employee_count,
         CASE WHEN COUNT(DISTINCT pi.employee_id) > 0
           THEN ROUND(SUM(pi.net_pay) / COUNT(DISTINCT pi.employee_id), 2)
-          ELSE 0 END AS avg_salary
+          ELSE 0 END AS avg_salary,
+        COALESCE(SUM(pi.epf_employer), 0) AS total_epf_employer,
+        COALESCE(SUM(pi.socso_employer), 0) AS total_socso_employer,
+        COALESCE(SUM(pi.eis_employer), 0) AS total_eis_employer
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       WHERE pr.company_id = $1
         AND pr.month = $2 AND pr.year = $3
         AND pr.status IN ('finalized', 'approved')
-    `, [companyId, latest.month, latest.year]);
+    `, [companyId, period.month, period.year]);
 
     // Previous month totals for MoM
-    let prevMonth = latest.month - 1;
-    let prevYear = latest.year;
+    let prevMonth = period.month - 1;
+    let prevYear = period.year;
     if (prevMonth < 1) { prevMonth = 12; prevYear -= 1; }
 
     const prev = await pool.query(`
@@ -77,28 +122,37 @@ router.get('/payroll-overview', authenticateAdmin, async (req, res) => {
         AND pr.status IN ('finalized', 'approved')
     `, [companyId, prevMonth, prevYear]);
 
+    // Same month last year for YoY
+    const yoy = await pool.query(`
+      SELECT COALESCE(SUM(pi.net_pay), 0) AS total_net,
+             COUNT(DISTINCT pi.employee_id) AS employee_count
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.company_id = $1
+        AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('finalized', 'approved')
+    `, [companyId, period.month, period.year - 1]);
+
     const currentData = current.rows[0];
     const prevNet = parseFloat(prev.rows[0].total_net);
     const currentNet = parseFloat(currentData.total_net);
     const momChange = prevNet > 0 ? ((currentNet - prevNet) / prevNet * 100).toFixed(1) : null;
 
-    // By company (for super admin viewing all)
-    const byCompany = await pool.query(`
-      SELECT c.name AS company_name, c.id AS company_id,
-        COALESCE(SUM(pi.net_pay), 0) AS total_net,
-        COUNT(DISTINCT pi.employee_id) AS employee_count
-      FROM payroll_items pi
-      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
-      JOIN companies c ON pr.company_id = c.id
-      WHERE pr.month = $1 AND pr.year = $2
-        AND pr.status IN ('finalized', 'approved')
-        AND (pr.company_id = $3 OR $3::int IS NULL)
-      GROUP BY c.id, c.name
-    `, [latest.month, latest.year, companyId]);
+    const yoyNet = parseFloat(yoy.rows[0].total_net);
+    const yoyChange = yoyNet > 0 ? ((currentNet - yoyNet) / yoyNet * 100).toFixed(1) : null;
+    const yoyHeadcountChange = parseInt(yoy.rows[0].employee_count) > 0
+      ? parseInt(currentData.employee_count) - parseInt(yoy.rows[0].employee_count)
+      : null;
+
+    // Employer cost = Net Pay + Employer EPF + Employer SOCSO + Employer EIS
+    const employerEPF = parseFloat(currentData.total_epf_employer);
+    const employerSOCSO = parseFloat(currentData.total_socso_employer);
+    const employerEIS = parseFloat(currentData.total_eis_employer);
+    const totalEmployerCost = parseFloat(currentData.total_gross) + employerEPF + employerSOCSO + employerEIS;
 
     res.json({
-      month: latest.month,
-      year: latest.year,
+      month: period.month,
+      year: period.year,
       totalGross: parseFloat(currentData.total_gross),
       totalGrossExClaims: parseFloat(currentData.total_gross_ex_claims),
       totalNet: currentNet,
@@ -106,7 +160,12 @@ router.get('/payroll-overview', authenticateAdmin, async (req, res) => {
       employeeCount: parseInt(currentData.employee_count),
       avgSalary: parseFloat(currentData.avg_salary),
       momChange: momChange ? parseFloat(momChange) : null,
-      byCompany: byCompany.rows
+      yoyChange: yoyChange ? parseFloat(yoyChange) : null,
+      yoyHeadcountChange,
+      totalEmployerCost: Math.round(totalEmployerCost * 100) / 100,
+      employerEPF,
+      employerSOCSO,
+      employerEIS
     });
   } catch (error) {
     console.error('Payroll overview error:', error);
@@ -115,19 +174,17 @@ router.get('/payroll-overview', authenticateAdmin, async (req, res) => {
 });
 
 /**
- * GET /api/analytics/department-breakdown
+ * GET /api/analytics/department-breakdown?month=X&year=Y
  * Per-department/outlet totals, avg salary, employee count, % of total
- * Mimix (company 3) groups by outlet, others by department
  */
 router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
   try {
     const companyId = req.companyId;
     if (!companyId) return res.status(403).json({ error: 'Company context required' });
 
-    const latest = await getLatestPayrollPeriod(companyId);
-    if (!latest) return res.json({ departments: [], groupBy: 'department' });
+    const period = await resolveMonthYear(companyId, req.query);
+    if (!period) return res.json({ departments: [], groupBy: 'department' });
 
-    // Mimix uses outlet-based grouping
     const isOutletBased = companyId === 3;
 
     let result;
@@ -151,7 +208,7 @@ router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
           AND pr.status IN ('finalized', 'approved')
         GROUP BY o.id, o.name
         ORDER BY total_net DESC
-      `, [companyId, latest.month, latest.year]);
+      `, [companyId, period.month, period.year]);
     } else {
       result = await pool.query(`
         SELECT
@@ -173,7 +230,7 @@ router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
           AND pr.status IN ('finalized', 'approved')
         GROUP BY d.id, d.name
         ORDER BY total_net DESC
-      `, [companyId, latest.month, latest.year]);
+      `, [companyId, period.month, period.year]);
     }
 
     const totalPayroll = result.rows.reduce((sum, r) => sum + parseFloat(r.total_net), 0);
@@ -188,7 +245,7 @@ router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
       percentage: totalPayroll > 0 ? parseFloat((parseFloat(r.total_net) / totalPayroll * 100).toFixed(1)) : 0
     }));
 
-    res.json({ month: latest.month, year: latest.year, departments, totalPayroll, groupBy: isOutletBased ? 'outlet' : 'department' });
+    res.json({ month: period.month, year: period.year, departments, totalPayroll, groupBy: isOutletBased ? 'outlet' : 'department' });
   } catch (error) {
     console.error('Department breakdown error:', error);
     res.status(500).json({ error: 'Failed to fetch department breakdown' });
@@ -196,7 +253,7 @@ router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
 });
 
 /**
- * GET /api/analytics/salary-ranking
+ * GET /api/analytics/salary-ranking?month=X&year=Y
  * Top 10 highest paid employees, top paid per department
  */
 router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
@@ -204,10 +261,9 @@ router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
     const companyId = req.companyId;
     if (!companyId) return res.status(403).json({ error: 'Company context required' });
 
-    const latest = await getLatestPayrollPeriod(companyId);
-    if (!latest) return res.json({ top10: [], topByDepartment: [] });
+    const period = await resolveMonthYear(companyId, req.query);
+    if (!period) return res.json({ top10: [], topByDepartment: [] });
 
-    // Top 10 highest paid
     const top10 = await pool.query(`
       SELECT e.name, d.name AS department_name,
         pi.net_pay, pi.gross_salary,
@@ -222,9 +278,8 @@ router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
         AND pr.status IN ('finalized', 'approved')
       ORDER BY net_pay_ex_claims DESC
       LIMIT 10
-    `, [companyId, latest.month, latest.year]);
+    `, [companyId, period.month, period.year]);
 
-    // Mimix uses outlet-based grouping
     const isOutletBased = companyId === 3;
 
     let topByDept;
@@ -243,7 +298,7 @@ router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
           AND pr.month = $2 AND pr.year = $3
           AND pr.status IN ('finalized', 'approved')
         ORDER BY o.id, net_pay_ex_claims DESC
-      `, [companyId, latest.month, latest.year]);
+      `, [companyId, period.month, period.year]);
     } else {
       topByDept = await pool.query(`
         SELECT DISTINCT ON (d.id)
@@ -259,12 +314,12 @@ router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
           AND pr.month = $2 AND pr.year = $3
           AND pr.status IN ('finalized', 'approved')
         ORDER BY d.id, net_pay_ex_claims DESC
-      `, [companyId, latest.month, latest.year]);
+      `, [companyId, period.month, period.year]);
     }
 
     res.json({
-      month: latest.month,
-      year: latest.year,
+      month: period.month,
+      year: period.year,
       groupBy: isOutletBased ? 'outlet' : 'department',
       top10: top10.rows.map(r => ({
         name: r.name,
@@ -306,7 +361,8 @@ router.get('/monthly-trend', authenticateAdmin, async (req, res) => {
         COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
         COALESCE(SUM(pi.net_pay), 0) AS total_net,
         COALESCE(SUM(pi.total_deductions), 0) AS total_deductions,
-        COUNT(DISTINCT pi.employee_id) AS employee_count
+        COUNT(DISTINCT pi.employee_id) AS employee_count,
+        COALESCE(SUM(pi.epf_employer), 0) + COALESCE(SUM(pi.socso_employer), 0) + COALESCE(SUM(pi.eis_employer), 0) AS total_employer_statutory
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       WHERE pr.company_id = $1
@@ -316,7 +372,6 @@ router.get('/monthly-trend', authenticateAdmin, async (req, res) => {
       LIMIT $2
     `, [companyId, months]);
 
-    // Reverse to chronological order
     const trend = result.rows.reverse().map(r => ({
       month: r.month,
       year: r.year,
@@ -325,27 +380,165 @@ router.get('/monthly-trend', authenticateAdmin, async (req, res) => {
       totalGrossExClaims: parseFloat(r.total_gross_ex_claims),
       totalNet: parseFloat(r.total_net),
       totalDeductions: parseFloat(r.total_deductions),
-      employeeCount: parseInt(r.employee_count)
+      employeeCount: parseInt(r.employee_count),
+      totalEmployerCost: parseFloat(r.total_gross) + parseFloat(r.total_employer_statutory)
     }));
 
-    // Per-department monthly trend
-    const deptTrend = await pool.query(`
-      SELECT pr.month, pr.year, d.name AS department_name,
-        COALESCE(SUM(pi.net_pay), 0) AS total_net
-      FROM payroll_items pi
-      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
-      JOIN employees e ON pi.employee_id = e.id
-      LEFT JOIN departments d ON e.department_id = d.id
-      WHERE pr.company_id = $1
-        AND pr.status IN ('finalized', 'approved')
-      GROUP BY pr.year, pr.month, d.name
-      ORDER BY pr.year DESC, pr.month DESC
-    `, [companyId]);
-
-    res.json({ trend, departmentTrend: deptTrend.rows });
+    res.json({ trend });
   } catch (error) {
     console.error('Monthly trend error:', error);
     res.status(500).json({ error: 'Failed to fetch monthly trend' });
+  }
+});
+
+/**
+ * GET /api/analytics/statutory-breakdown?month=X&year=Y
+ * EPF, SOCSO, EIS, PCB totals (employee + employer)
+ */
+router.get('/statutory-breakdown', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    if (!companyId) return res.status(403).json({ error: 'Company context required' });
+
+    const period = await resolveMonthYear(companyId, req.query);
+    if (!period) return res.json({ statutory: null });
+
+    const result = await pool.query(`
+      SELECT
+        COALESCE(SUM(pi.epf_employee), 0) AS epf_employee,
+        COALESCE(SUM(pi.epf_employer), 0) AS epf_employer,
+        COALESCE(SUM(pi.socso_employee), 0) AS socso_employee,
+        COALESCE(SUM(pi.socso_employer), 0) AS socso_employer,
+        COALESCE(SUM(pi.eis_employee), 0) AS eis_employee,
+        COALESCE(SUM(pi.eis_employer), 0) AS eis_employer,
+        COALESCE(SUM(pi.pcb), 0) AS pcb,
+        COUNT(DISTINCT pi.employee_id) AS employee_count
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.company_id = $1
+        AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('finalized', 'approved')
+    `, [companyId, period.month, period.year]);
+
+    const d = result.rows[0];
+    const epfEmployee = parseFloat(d.epf_employee);
+    const epfEmployer = parseFloat(d.epf_employer);
+    const socsoEmployee = parseFloat(d.socso_employee);
+    const socsoEmployer = parseFloat(d.socso_employer);
+    const eisEmployee = parseFloat(d.eis_employee);
+    const eisEmployer = parseFloat(d.eis_employer);
+    const pcb = parseFloat(d.pcb);
+
+    res.json({
+      month: period.month,
+      year: period.year,
+      statutory: {
+        epf: { employee: epfEmployee, employer: epfEmployer, total: epfEmployee + epfEmployer },
+        socso: { employee: socsoEmployee, employer: socsoEmployer, total: socsoEmployee + socsoEmployer },
+        eis: { employee: eisEmployee, employer: eisEmployer, total: eisEmployee + eisEmployer },
+        pcb: { employee: pcb, total: pcb },
+        totalEmployee: epfEmployee + socsoEmployee + eisEmployee + pcb,
+        totalEmployer: epfEmployer + socsoEmployer + eisEmployer,
+        grandTotal: epfEmployee + epfEmployer + socsoEmployee + socsoEmployer + eisEmployee + eisEmployer + pcb,
+        employeeCount: parseInt(d.employee_count)
+      }
+    });
+  } catch (error) {
+    console.error('Statutory breakdown error:', error);
+    res.status(500).json({ error: 'Failed to fetch statutory breakdown' });
+  }
+});
+
+/**
+ * GET /api/analytics/ot-analysis?month=X&year=Y
+ * OT cost breakdown, avg OT per employee, top OT earners
+ */
+router.get('/ot-analysis', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    if (!companyId) return res.status(403).json({ error: 'Company context required' });
+
+    const period = await resolveMonthYear(companyId, req.query);
+    if (!period) return res.json({ otAnalysis: null });
+
+    // Overall OT stats
+    const overall = await pool.query(`
+      SELECT
+        COALESCE(SUM(pi.ot_amount), 0) AS total_ot_cost,
+        COALESCE(SUM(pi.ot_hours), 0) AS total_ot_hours,
+        COUNT(DISTINCT pi.employee_id) FILTER (WHERE pi.ot_hours > 0) AS employees_with_ot,
+        COUNT(DISTINCT pi.employee_id) AS total_employees,
+        CASE WHEN COUNT(DISTINCT pi.employee_id) FILTER (WHERE pi.ot_hours > 0) > 0
+          THEN ROUND(SUM(pi.ot_hours)::numeric / COUNT(DISTINCT pi.employee_id) FILTER (WHERE pi.ot_hours > 0), 1)
+          ELSE 0 END AS avg_ot_hours,
+        CASE WHEN COUNT(DISTINCT pi.employee_id) FILTER (WHERE pi.ot_hours > 0) > 0
+          THEN ROUND(SUM(pi.ot_amount)::numeric / COUNT(DISTINCT pi.employee_id) FILTER (WHERE pi.ot_hours > 0), 2)
+          ELSE 0 END AS avg_ot_cost
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.company_id = $1
+        AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('finalized', 'approved')
+    `, [companyId, period.month, period.year]);
+
+    // Top 10 OT earners
+    const topOT = await pool.query(`
+      SELECT e.name, e.employee_id AS emp_code,
+        COALESCE(pi.ot_hours, 0) AS ot_hours,
+        COALESCE(pi.ot_amount, 0) AS ot_amount
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pr.company_id = $1
+        AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('finalized', 'approved')
+        AND pi.ot_hours > 0
+      ORDER BY pi.ot_amount DESC
+      LIMIT 10
+    `, [companyId, period.month, period.year]);
+
+    // Previous month OT for comparison
+    let prevMonth = period.month - 1;
+    let prevYear = period.year;
+    if (prevMonth < 1) { prevMonth = 12; prevYear -= 1; }
+
+    const prevOT = await pool.query(`
+      SELECT COALESCE(SUM(pi.ot_amount), 0) AS total_ot_cost,
+             COALESCE(SUM(pi.ot_hours), 0) AS total_ot_hours
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.company_id = $1
+        AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('finalized', 'approved')
+    `, [companyId, prevMonth, prevYear]);
+
+    const d = overall.rows[0];
+    const prevOTCost = parseFloat(prevOT.rows[0].total_ot_cost);
+    const currentOTCost = parseFloat(d.total_ot_cost);
+    const otCostChange = prevOTCost > 0 ? ((currentOTCost - prevOTCost) / prevOTCost * 100).toFixed(1) : null;
+
+    res.json({
+      month: period.month,
+      year: period.year,
+      otAnalysis: {
+        totalOTCost: currentOTCost,
+        totalOTHours: parseFloat(d.total_ot_hours),
+        employeesWithOT: parseInt(d.employees_with_ot),
+        totalEmployees: parseInt(d.total_employees),
+        avgOTHours: parseFloat(d.avg_ot_hours),
+        avgOTCost: parseFloat(d.avg_ot_cost),
+        otCostChange: otCostChange ? parseFloat(otCostChange) : null,
+        topOTEarners: topOT.rows.map(r => ({
+          name: r.name,
+          empCode: r.emp_code,
+          otHours: parseFloat(r.ot_hours),
+          otAmount: parseFloat(r.ot_amount)
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('OT analysis error:', error);
+    res.status(500).json({ error: 'Failed to fetch OT analysis' });
   }
 });
 
@@ -358,7 +551,6 @@ router.get('/headcount', authenticateAdmin, async (req, res) => {
     const companyId = req.companyId;
     if (!companyId) return res.status(403).json({ error: 'Company context required' });
 
-    // Overall counts
     const counts = await pool.query(`
       SELECT
         COUNT(*) FILTER (WHERE status = 'active') AS active,
@@ -370,7 +562,6 @@ router.get('/headcount', authenticateAdmin, async (req, res) => {
       WHERE company_id = $1
     `, [companyId]);
 
-    // By department
     const byDept = await pool.query(`
       SELECT d.name AS department_name,
         COUNT(*) FILTER (WHERE e.status = 'active') AS active,
@@ -383,7 +574,6 @@ router.get('/headcount', authenticateAdmin, async (req, res) => {
       ORDER BY active DESC
     `, [companyId]);
 
-    // New hires this month
     const now = new Date();
     const newHires = await pool.query(`
       SELECT COUNT(*) AS count
@@ -435,14 +625,13 @@ router.get('/attendance-summary', authenticateAdmin, async (req, res) => {
         AND EXTRACT(YEAR FROM ci.clock_in_time) = $3
     `, [companyId, month, year]);
 
-    // Active employee count for attendance rate
     const activeCount = await pool.query(`
       SELECT COUNT(*) AS count FROM employees
       WHERE company_id = $1 AND status = 'active'
     `, [companyId]);
 
     const data = result.rows[0];
-    const workingDays = Math.min(now.getDate(), 22); // rough estimate
+    const workingDays = Math.min(now.getDate(), 22);
     const expectedRecords = parseInt(activeCount.rows[0].count) * workingDays;
     const attendanceRate = expectedRecords > 0
       ? Math.min(100, (parseInt(data.total_records) / expectedRecords * 100)).toFixed(1)
@@ -479,11 +668,9 @@ router.get('/ai-insights', authenticateAdmin, async (req, res) => {
       return res.json({ insights: ['AI insights unavailable - API key not configured.'] });
     }
 
-    // Gather data for analysis
     const latest = await getLatestPayrollPeriod(companyId);
     if (!latest) return res.json({ insights: ['No payroll data available for analysis.'] });
 
-    // Current month summary
     const summary = await pool.query(`
       SELECT
         COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
@@ -499,7 +686,6 @@ router.get('/ai-insights', authenticateAdmin, async (req, res) => {
         AND pr.status IN ('finalized', 'approved')
     `, [companyId, latest.month, latest.year]);
 
-    // Department breakdown
     const depts = await pool.query(`
       SELECT d.name, COUNT(DISTINCT pi.employee_id) AS count,
         COALESCE(SUM(pi.net_pay), 0) AS total_net,
@@ -513,7 +699,6 @@ router.get('/ai-insights', authenticateAdmin, async (req, res) => {
       GROUP BY d.name
     `, [companyId, latest.month, latest.year]);
 
-    // Previous month for comparison
     let prevMonth = latest.month - 1, prevYear = latest.year;
     if (prevMonth < 1) { prevMonth = 12; prevYear -= 1; }
     const prevSummary = await pool.query(`

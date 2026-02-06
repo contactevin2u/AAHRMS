@@ -777,10 +777,13 @@ export const payrollConfigApi = {
 };
 
 export const analyticsApi = {
-  getPayrollOverview: () => api.get('/analytics/payroll-overview'),
-  getDepartmentBreakdown: () => api.get('/analytics/department-breakdown'),
-  getSalaryRanking: () => api.get('/analytics/salary-ranking'),
+  getAvailablePeriods: () => api.get('/analytics/available-periods'),
+  getPayrollOverview: (params) => api.get('/analytics/payroll-overview', { params }),
+  getDepartmentBreakdown: (params) => api.get('/analytics/department-breakdown', { params }),
+  getSalaryRanking: (params) => api.get('/analytics/salary-ranking', { params }),
   getMonthlyTrend: (months = 12) => api.get('/analytics/monthly-trend', { params: { months } }),
+  getStatutoryBreakdown: (params) => api.get('/analytics/statutory-breakdown', { params }),
+  getOTAnalysis: (params) => api.get('/analytics/ot-analysis', { params }),
   getHeadcount: () => api.get('/analytics/headcount'),
   getAttendanceSummary: () => api.get('/analytics/attendance-summary'),
   getAiInsights: () => api.get('/analytics/ai-insights'),

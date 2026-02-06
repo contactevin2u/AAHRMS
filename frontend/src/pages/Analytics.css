@@ -21,6 +21,46 @@
   margin: 0;
 }
 
+/* Period Selector & Export Button */
+.period-selector {
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  background: white;
+  cursor: pointer;
+  min-width: 180px;
+}
+
+.period-selector:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.export-pdf-btn {
+  padding: 8px 18px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.export-pdf-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.export-pdf-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Top Stats Row */
 .analytics-stats-row {
   display: grid;
@@ -34,6 +74,11 @@
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.analytics-stat-card.highlight-card {
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+  border: 1px solid #fcd34d;
 }
 
 .analytics-stat-card .stat-label {
@@ -50,8 +95,8 @@
 }
 
 .analytics-stat-card .stat-change {
-  font-size: 13px;
-  margin-top: 6px;
+  font-size: 12px;
+  margin-top: 4px;
   font-weight: 500;
 }
 
@@ -81,6 +126,131 @@
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   margin-bottom: 24px;
+}
+
+.analytics-two-col .analytics-chart-card {
+  margin-bottom: 0;
+}
+
+/* Statutory Contributions */
+.statutory-card {
+  background: linear-gradient(135deg, #f0fdf4 0%, #f0f9ff 100%);
+  border: 1px solid #bbf7d0;
+}
+
+.statutory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.statutory-item {
+  background: white;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.statutory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.statutory-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.statutory-total {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.statutory-detail {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 10px;
+}
+
+.statutory-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.statutory-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.statutory-bar-fill.epf { background: #3b82f6; }
+.statutory-bar-fill.socso { background: #8b5cf6; }
+.statutory-bar-fill.eis { background: #06b6d4; }
+.statutory-bar-fill.pcb { background: #f59e0b; }
+
+.statutory-summary {
+  display: flex;
+  gap: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #d1d5db;
+}
+
+.statutory-summary > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.statutory-summary > div strong {
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.statutory-grand-total {
+  margin-left: auto;
+}
+
+.statutory-grand-total strong {
+  color: #16a34a !important;
+  font-size: 16px !important;
+}
+
+/* OT Analysis */
+.ot-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.ot-stat {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+}
+
+.ot-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.ot-stat-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
 }
 
 /* Department Detail Table */
@@ -204,6 +374,9 @@
   .analytics-stats-row {
     grid-template-columns: repeat(2, 1fr);
   }
+  .statutory-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
@@ -217,6 +390,19 @@
 
   .analytics-two-col {
     grid-template-columns: 1fr;
+  }
+
+  .statutory-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .statutory-summary {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .statutory-grand-total {
+    margin-left: 0;
   }
 
   .analytics-stat-card .stat-value {
