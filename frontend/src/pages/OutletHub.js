@@ -134,6 +134,7 @@ function OutletHub() {
         <div className="dept-hub-content">
           {ActiveComponent ? (
             <ActiveComponent
+              key={outletId || 'all'}
               outletId={outletId}
               embedded={true}
             />

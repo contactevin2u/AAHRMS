@@ -6,17 +6,19 @@ const { authenticateAdmin } = require('../middleware/auth');
 // Get all letters with filters
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, letter_type, status, from_date, to_date, department_id } = req.query;
+    const { employee_id, letter_type, status, from_date, to_date, department_id, outlet_id } = req.query;
 
     let query = `
       SELECT
         l.*,
         e.name as employee_name,
         e.employee_id as employee_code,
-        d.name as department_name
+        d.name as department_name,
+        o.name as outlet_name
       FROM hr_letters l
       LEFT JOIN employees e ON l.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
       WHERE 1=1
     `;
     const params = [];
@@ -25,6 +27,10 @@ router.get('/', authenticateAdmin, async (req, res) => {
     if (department_id) {
       query += ` AND e.department_id = $${paramIndex++}`;
       params.push(department_id);
+    }
+    if (outlet_id) {
+      query += ` AND e.outlet_id = $${paramIndex++}`;
+      params.push(outlet_id);
     }
     if (employee_id) {
       query += ` AND l.employee_id = $${paramIndex++}`;

@@ -3,8 +3,9 @@ import Layout from '../components/Layout';
 import { benefitsApi, employeeApi } from '../api';
 import './BenefitsInKind.css';
 
-const BenefitsInKind = ({ departmentId: propDeptId, embedded = false }) => {
+const BenefitsInKind = ({ departmentId: propDeptId, outletId: propOutletId, embedded = false }) => {
   const isDeptLocked = !!propDeptId;
+  const isOutletLocked = !!propOutletId;
   const [benefits, setBenefits] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [benefitTypes, setBenefitTypes] = useState([]);
@@ -15,7 +16,8 @@ const BenefitsInKind = ({ departmentId: propDeptId, embedded = false }) => {
     status: '',
     benefit_type: '',
     employee_id: '',
-    department_id: propDeptId || ''
+    department_id: propDeptId || '',
+    outlet_id: propOutletId || ''
   });
 
   const [formData, setFormData] = useState({
@@ -40,6 +42,7 @@ const BenefitsInKind = ({ departmentId: propDeptId, embedded = false }) => {
       setLoading(true);
       const empParams = {};
       if (propDeptId) empParams.department_id = propDeptId;
+      if (propOutletId) empParams.outlet_id = propOutletId;
       const [benefitsRes, employeesRes, typesRes] = await Promise.all([
         benefitsApi.getAll(filters),
         employeeApi.getAll(empParams),

@@ -25,7 +25,8 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
     employee_id: '',
     letter_type: '',
     status: '',
-    department_id: propDeptId || ''
+    department_id: propDeptId || '',
+    outlet_id: propOutletId || ''
   });
 
   const [form, setForm] = useState({

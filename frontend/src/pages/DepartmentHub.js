@@ -144,6 +144,7 @@ function DepartmentHub() {
             </div>
           ) : ActiveComponent ? (
             <ActiveComponent
+              key={departmentId || 'all'}
               departmentId={isAll ? undefined : departmentId}
               embedded={true}
             />
