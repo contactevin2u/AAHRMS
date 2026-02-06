@@ -202,6 +202,18 @@ router.get('/my-schedule', authenticateEmployee, asyncHandler(async (req, res) =
     [employeeId, companyId, startDate, endDate]
   );
 
+  // Query approved leaves for this employee in this month
+  const leaveResult = await pool.query(
+    `SELECT lr.id as leave_id, lr.employee_id, lr.start_date, lr.end_date,
+            lr.half_day, lt.code as leave_code, lt.name as leave_name
+     FROM leave_requests lr
+     JOIN leave_types lt ON lr.leave_type_id = lt.id
+     WHERE lr.employee_id = $1
+       AND lr.status = 'approved'
+       AND lr.start_date <= $2 AND lr.end_date >= $3`,
+    [employeeId, endDate, startDate]
+  );
+
   // Group by date for calendar display
   const calendar = {};
   const processedDates = new Set();
@@ -230,6 +242,43 @@ router.get('/my-schedule', authenticateEmployee, asyncHandler(async (req, res) =
         clock_out_2: schedule.clock_out_2,
         attendance_status: schedule.attendance_status
       };
+    }
+  });
+
+  // Merge approved leaves into calendar
+  leaveResult.rows.forEach(leave => {
+    const leaveStart = new Date(leave.start_date);
+    const leaveEnd = new Date(leave.end_date);
+    const monthStart = new Date(startDate);
+    const monthEnd = new Date(endDate);
+
+    // Clamp to displayed month
+    const from = leaveStart < monthStart ? monthStart : leaveStart;
+    const to = leaveEnd > monthEnd ? monthEnd : leaveEnd;
+
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      const dateKey = d.toISOString().split('T')[0];
+
+      if (leave.half_day && calendar[dateKey]) {
+        // Half-day leave: keep existing schedule, add leave info
+        calendar[dateKey].has_half_day_leave = true;
+        calendar[dateKey].half_day_leave_period = leave.half_day;
+        calendar[dateKey].leave_code = leave.leave_code;
+        calendar[dateKey].leave_name = leave.leave_name;
+      } else if (!leave.half_day) {
+        // Full-day leave: override schedule
+        calendar[dateKey] = {
+          ...(calendar[dateKey] || {}),
+          is_leave: true,
+          leave_code: leave.leave_code,
+          leave_name: leave.leave_name,
+          shift_code: leave.leave_code,
+          shift_color: '#F59E0B',
+          shift_name: leave.leave_name,
+          is_off: false,
+          status: 'leave'
+        };
+      }
     }
   });
 
@@ -704,6 +753,73 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
       [outletFilter]
     );
 
+    // Query approved leaves for outlet employees
+    const outletEmpIds = empResult.rows.map(e => e.id);
+    if (outletEmpIds.length > 0) {
+      const leaveResult = await pool.query(
+        `SELECT lr.id as leave_id, lr.employee_id, lr.start_date, lr.end_date,
+                lr.half_day, lt.code as leave_code, lt.name as leave_name,
+                e.name as employee_name, e.employee_id as emp_code
+         FROM leave_requests lr
+         JOIN leave_types lt ON lr.leave_type_id = lt.id
+         JOIN employees e ON lr.employee_id = e.id
+         WHERE lr.employee_id = ANY($1)
+           AND lr.status = 'approved'
+           AND lr.start_date <= $2 AND lr.end_date >= $3`,
+        [outletEmpIds, endDate, startDate]
+      );
+
+      const monthStart = new Date(startDate);
+      const monthEnd = new Date(endDate);
+
+      leaveResult.rows.forEach(leave => {
+        const leaveStart = new Date(leave.start_date);
+        const leaveEnd = new Date(leave.end_date);
+        const from = leaveStart < monthStart ? monthStart : leaveStart;
+        const to = leaveEnd > monthEnd ? monthEnd : leaveEnd;
+
+        for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+          const dateKey = d.toISOString().split('T')[0];
+          if (!schedules[dateKey]) schedules[dateKey] = [];
+
+          // Check if employee already has a schedule entry for this date
+          const existingIdx = schedules[dateKey].findIndex(s => s.employee_id === leave.employee_id);
+
+          if (leave.half_day && existingIdx >= 0) {
+            // Half-day leave: annotate existing schedule
+            schedules[dateKey][existingIdx].has_half_day_leave = true;
+            schedules[dateKey][existingIdx].half_day_leave_period = leave.half_day;
+            schedules[dateKey][existingIdx].leave_code = leave.leave_code;
+            schedules[dateKey][existingIdx].leave_name = leave.leave_name;
+          } else if (!leave.half_day) {
+            // Full-day leave: replace or add entry
+            if (existingIdx >= 0) {
+              schedules[dateKey][existingIdx].is_leave = true;
+              schedules[dateKey][existingIdx].leave_code = leave.leave_code;
+              schedules[dateKey][existingIdx].leave_name = leave.leave_name;
+              schedules[dateKey][existingIdx].shift_code = leave.leave_code;
+              schedules[dateKey][existingIdx].shift_color = '#F59E0B';
+              schedules[dateKey][existingIdx].status = 'leave';
+            } else {
+              schedules[dateKey].push({
+                employee_id: leave.employee_id,
+                employee_name: leave.employee_name,
+                emp_code: leave.emp_code,
+                is_leave: true,
+                leave_code: leave.leave_code,
+                leave_name: leave.leave_name,
+                shift_code: leave.leave_code,
+                shift_color: '#F59E0B',
+                status: 'leave',
+                shift_start: '',
+                shift_end: ''
+              });
+            }
+          }
+        }
+      });
+    }
+
     res.json({
       year: parseInt(currentYear),
       month: parseInt(currentMonth),
@@ -775,6 +891,70 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
        ORDER BY e.name`,
       [deptFilter, req.employee.company_id]
     );
+
+    // Query approved leaves for department employees
+    const deptEmpIds = empResult.rows.map(e => e.id);
+    if (deptEmpIds.length > 0) {
+      const leaveResult = await pool.query(
+        `SELECT lr.id as leave_id, lr.employee_id, lr.start_date, lr.end_date,
+                lr.half_day, lt.code as leave_code, lt.name as leave_name,
+                e.name as employee_name, e.employee_id as emp_code
+         FROM leave_requests lr
+         JOIN leave_types lt ON lr.leave_type_id = lt.id
+         JOIN employees e ON lr.employee_id = e.id
+         WHERE lr.employee_id = ANY($1)
+           AND lr.status = 'approved'
+           AND lr.start_date <= $2 AND lr.end_date >= $3`,
+        [deptEmpIds, endDate, startDate]
+      );
+
+      const monthStart = new Date(startDate);
+      const monthEnd = new Date(endDate);
+
+      leaveResult.rows.forEach(leave => {
+        const leaveStart = new Date(leave.start_date);
+        const leaveEnd = new Date(leave.end_date);
+        const from = leaveStart < monthStart ? monthStart : leaveStart;
+        const to = leaveEnd > monthEnd ? monthEnd : leaveEnd;
+
+        for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+          const dateKey = d.toISOString().split('T')[0];
+          if (!schedules[dateKey]) schedules[dateKey] = [];
+
+          const existingIdx = schedules[dateKey].findIndex(s => s.employee_id === leave.employee_id);
+
+          if (leave.half_day && existingIdx >= 0) {
+            schedules[dateKey][existingIdx].has_half_day_leave = true;
+            schedules[dateKey][existingIdx].half_day_leave_period = leave.half_day;
+            schedules[dateKey][existingIdx].leave_code = leave.leave_code;
+            schedules[dateKey][existingIdx].leave_name = leave.leave_name;
+          } else if (!leave.half_day) {
+            if (existingIdx >= 0) {
+              schedules[dateKey][existingIdx].is_leave = true;
+              schedules[dateKey][existingIdx].leave_code = leave.leave_code;
+              schedules[dateKey][existingIdx].leave_name = leave.leave_name;
+              schedules[dateKey][existingIdx].shift_code = leave.leave_code;
+              schedules[dateKey][existingIdx].shift_color = '#F59E0B';
+              schedules[dateKey][existingIdx].status = 'leave';
+            } else {
+              schedules[dateKey].push({
+                employee_id: leave.employee_id,
+                employee_name: leave.employee_name,
+                emp_code: leave.emp_code,
+                is_leave: true,
+                leave_code: leave.leave_code,
+                leave_name: leave.leave_name,
+                shift_code: leave.leave_code,
+                shift_color: '#F59E0B',
+                status: 'leave',
+                shift_start: '',
+                shift_end: ''
+              });
+            }
+          }
+        }
+      });
+    }
 
     res.json({
       year: parseInt(currentYear),

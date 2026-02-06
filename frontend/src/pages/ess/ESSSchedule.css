@@ -150,6 +150,11 @@
   border-bottom: 3px solid #1976d2;
 }
 
+.calendar-day.leave {
+  background: #FEF3C7 !important;
+  border-bottom: 3px solid #F59E0B;
+}
+
 .calendar-day.attended {
   border-bottom: 3px solid #22c55e;
 }

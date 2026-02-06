@@ -79,6 +79,12 @@
   color: #dc2626;
 }
 
+.ts-shift-chip.leave {
+  background: #FEF3C720;
+  border-color: #F59E0B;
+  color: #92400E;
+}
+
 .ts-shift-dot {
   width: 8px;
   height: 8px;
@@ -321,6 +327,10 @@
   font-size: 0.5rem;
 }
 
+.ts-avatar.on-leave {
+  border-color: #FEF3C7;
+}
+
 .ts-add-hint {
   margin-top: auto;
   text-align: center;
@@ -538,6 +548,11 @@
 
 .ts-day-item.off {
   background: #fef2f2;
+}
+
+.ts-day-item.on-leave {
+  background: #FEF3C7;
+  border-left: 3px solid #F59E0B;
 }
 
 .ts-day-avatar {

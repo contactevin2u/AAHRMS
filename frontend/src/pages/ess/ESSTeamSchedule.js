@@ -306,7 +306,13 @@ function ESSTeamSchedule({ embedded = false }) {
   const getDaySummary = (daySchedules) => {
     const summary = {};
     daySchedules.forEach(s => {
-      if (s.status !== 'off') {
+      if (s.status === 'leave' || s.is_leave) {
+        const code = s.leave_code || s.shift_code || 'LV';
+        if (!summary[code]) {
+          summary[code] = { count: 0, color: '#F59E0B', isLeave: true };
+        }
+        summary[code].count++;
+      } else if (s.status !== 'off') {
         const code = s.shift_code || 'WORK';
         if (!summary[code]) {
           summary[code] = { count: 0, color: s.shift_color || '#3B82F6' };
@@ -358,6 +364,11 @@ function ESSTeamSchedule({ embedded = false }) {
                 <span className="ts-shift-time">{t.start_time}-{t.end_time}</span>
               </div>
             ))}
+            <div className="ts-shift-chip leave">
+              <span className="ts-shift-dot" style={{ backgroundColor: '#F59E0B' }}></span>
+              <span className="ts-shift-code">Leave</span>
+              <span className="ts-shift-time">Approved</span>
+            </div>
             <div className="ts-shift-chip off">
               <span className="ts-shift-code">-</span>
               <span className="ts-shift-time">No schedule = Off</span>
@@ -442,7 +453,8 @@ function ESSTeamSchedule({ embedded = false }) {
                 twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
                 twoDaysFromNow.setHours(0, 0, 0, 0);
                 const isLocked = !isExemptFromLock && date < twoDaysFromNow;
-                const workingSchedules = daySchedules.filter(s => s.status !== 'off');
+                const workingSchedules = daySchedules.filter(s => s.status !== 'off' && s.status !== 'leave' && !s.is_leave);
+                const leaveSchedules = daySchedules.filter(s => s.status === 'leave' || s.is_leave);
                 const daySummary = getDaySummary(daySchedules);
 
                 return (
@@ -468,7 +480,7 @@ function ESSTeamSchedule({ embedded = false }) {
                       </div>
                     )}
 
-                    {/* Employee avatars */}
+                    {/* Employee avatars - working */}
                     {workingSchedules.length > 0 && (
                       <div className="ts-day-avatars">
                         {workingSchedules.slice(0, 3).map((s, i) => (
@@ -483,6 +495,25 @@ function ESSTeamSchedule({ embedded = false }) {
                         ))}
                         {workingSchedules.length > 3 && (
                           <div className="ts-avatar more">+{workingSchedules.length - 3}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Employee avatars - on leave */}
+                    {leaveSchedules.length > 0 && (
+                      <div className="ts-day-avatars">
+                        {leaveSchedules.slice(0, 2).map((s, i) => (
+                          <div
+                            key={`lv-${i}`}
+                            className="ts-avatar on-leave"
+                            style={{ backgroundColor: '#F59E0B' }}
+                            title={`${s.employee_name} (${s.leave_code || s.shift_code})`}
+                          >
+                            {getInitials(s.employee_name)}
+                          </div>
+                        ))}
+                        {leaveSchedules.length > 2 && (
+                          <div className="ts-avatar more">+{leaveSchedules.length - 2}</div>
                         )}
                       </div>
                     )}
@@ -561,32 +592,47 @@ function ESSTeamSchedule({ embedded = false }) {
               </div>
 
               <div className="ts-day-list">
-                {selectedDaySchedules.map((s, i) => (
-                  <div key={i} className={`ts-day-item ${s.status === 'off' ? 'off' : ''}`}>
-                    <div
-                      className="ts-day-avatar"
-                      style={{ backgroundColor: s.status === 'off' ? '#fecaca' : (s.shift_color || '#3B82F6') }}
-                    >
-                      {getInitials(s.employee_name)}
-                    </div>
-                    <div className="ts-day-info">
-                      <div className="ts-day-name">{s.employee_name}</div>
-                      <div className="ts-day-shift">
-                        {s.status === 'off' ? '🏖️ Day Off' : (
-                          <>
-                            <span className="ts-shift-badge" style={{ backgroundColor: s.shift_color || '#3B82F6' }}>
-                              {s.shift_code || 'WORK'}
-                            </span>
-                            <span className="ts-shift-hours">{s.shift_start} - {s.shift_end}</span>
-                          </>
-                        )}
+                {selectedDaySchedules.map((s, i) => {
+                  const isLeave = s.status === 'leave' || s.is_leave;
+                  return (
+                    <div key={i} className={`ts-day-item ${s.status === 'off' ? 'off' : ''} ${isLeave ? 'on-leave' : ''}`}>
+                      <div
+                        className="ts-day-avatar"
+                        style={{ backgroundColor: isLeave ? '#F59E0B' : (s.status === 'off' ? '#fecaca' : (s.shift_color || '#3B82F6')) }}
+                      >
+                        {getInitials(s.employee_name)}
                       </div>
+                      <div className="ts-day-info">
+                        <div className="ts-day-name">{s.employee_name}</div>
+                        <div className="ts-day-shift">
+                          {isLeave ? (
+                            <>
+                              <span className="ts-shift-badge" style={{ backgroundColor: '#F59E0B' }}>
+                                {s.leave_code || s.shift_code}
+                              </span>
+                              <span className="ts-shift-hours">{s.leave_name || 'Leave'}</span>
+                            </>
+                          ) : s.status === 'off' ? '🏖️ Day Off' : (
+                            <>
+                              <span className="ts-shift-badge" style={{ backgroundColor: s.shift_color || '#3B82F6' }}>
+                                {s.shift_code || 'WORK'}
+                              </span>
+                              <span className="ts-shift-hours">{s.shift_start} - {s.shift_end}</span>
+                              {s.has_half_day_leave && (
+                                <span className="ts-shift-badge" style={{ backgroundColor: '#F59E0B', marginLeft: '4px' }}>
+                                  {s.leave_code} ({s.half_day_leave_period})
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {!selectedDateLocked && !isLeave && (
+                        <button className="ts-delete-btn" onClick={(e) => handleDelete(s.id, e)}>🗑️</button>
+                      )}
                     </div>
-                    {!selectedDateLocked && (
-                      <button className="ts-delete-btn" onClick={(e) => handleDelete(s.id, e)}>🗑️</button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {selectedDateLocked && (

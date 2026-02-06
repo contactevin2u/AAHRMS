@@ -84,12 +84,21 @@ function MyScheduleContent() {
           const shiftStart = schedule.shift_start || '09:00';
           const shiftEnd = schedule.shift_end || '18:00';
           const isOff = schedule.is_off || schedule.status === 'off' || (shiftStart === '00:00' && shiftEnd === '00:00');
+          const isLeave = schedule.is_leave;
+          const hasHalfDayLeave = schedule.has_half_day_leave;
 
           let shiftCode = null;
           let shiftName = null;
           let shiftColor = schedule.shift_color || null;
 
-          if (isOff) {
+          if (isLeave) {
+            shiftCode = schedule.leave_code;
+            shiftName = schedule.leave_name;
+            shiftColor = '#F59E0B';
+            if (!legendMap[shiftCode]) {
+              legendMap[shiftCode] = { code: shiftCode, name: shiftName, color: shiftColor };
+            }
+          } else if (isOff) {
             shiftCode = 'Off';
             shiftName = 'Day Off';
             shiftColor = '#fee2e2';
@@ -106,11 +115,16 @@ function MyScheduleContent() {
             shiftLabel: shiftCode,
             shiftName: shiftName,
             shiftColor: shiftColor,
-            time: isOff ? 'Day Off' : `${formatTime(shiftStart)} - ${formatTime(shiftEnd)}`,
+            time: isLeave ? schedule.leave_name : (isOff ? 'Day Off' : `${formatTime(shiftStart)} - ${formatTime(shiftEnd)}`),
             outlet: schedule.outlet_name || '',
             attended: schedule.attended || false,
             status: schedule.status,
-            isPublicHoliday: schedule.is_public_holiday
+            isPublicHoliday: schedule.is_public_holiday,
+            isLeave: isLeave,
+            leaveCode: schedule.leave_code,
+            leaveName: schedule.leave_name,
+            hasHalfDayLeave: hasHalfDayLeave,
+            halfDayLeavePeriod: schedule.half_day_leave_period
           };
         });
       }
@@ -206,13 +220,18 @@ function MyScheduleContent() {
                   <div
                     key={idx}
                     onClick={() => setSelectedDate({ date, schedule })}
-                    className={`calendar-day ${isToday ? 'today' : ''} ${schedule ? 'scheduled' : ''}`}
+                    className={`calendar-day ${isToday ? 'today' : ''} ${schedule ? 'scheduled' : ''} ${schedule?.isLeave ? 'leave' : ''}`}
                     style={{ background: schedule ? getShiftColor(schedule) : undefined }}
                   >
                     <span className="day-num">{date.getDate()}</span>
                     {schedule && (
                       <div className="shift-indicator" style={{ color: schedule.shiftColor || '#1976d2' }}>
                         {schedule.shiftLabel || (schedule.shift === 'Off' ? 'Off' : 'W')}
+                      </div>
+                    )}
+                    {schedule?.hasHalfDayLeave && (
+                      <div style={{ fontSize: '8px', color: '#F59E0B', fontWeight: 600 }}>
+                        {schedule.leaveCode} ({schedule.halfDayLeavePeriod})
                       </div>
                     )}
                     {schedule?.isPublicHoliday && <div style={{ fontSize: '8px', color: '#dc2626' }}>PH</div>}
@@ -261,16 +280,38 @@ function MyScheduleContent() {
             </h3>
             {selectedDate.schedule ? (
               <div style={{ background: getShiftColor(selectedDate.schedule), padding: '12px', borderRadius: '8px' }}>
-                <div className="detail-row">
-                  <span className="label">{t('schedule.shift')}</span>
-                  <span className="value" style={{ color: getShiftColor(selectedDate.schedule, false) }}>
-                    {selectedDate.schedule.shiftLabel || t('schedule.work')} - {selectedDate.schedule.shiftName || t('schedule.shift')}
-                  </span>
-                </div>
-                <div className="detail-row">
-                  <span className="label">{t('schedule.time')}</span>
-                  <span className="value">{selectedDate.schedule.time}</span>
-                </div>
+                {selectedDate.schedule.isLeave && (
+                  <div style={{ background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: '6px', padding: '8px 12px', marginBottom: '10px', color: '#92400E', fontWeight: 600 }}>
+                    On Leave: {selectedDate.schedule.leaveName}
+                  </div>
+                )}
+                {selectedDate.schedule.hasHalfDayLeave && (
+                  <div style={{ background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: '6px', padding: '8px 12px', marginBottom: '10px', color: '#92400E', fontWeight: 500, fontSize: '13px' }}>
+                    Half-day Leave ({selectedDate.schedule.halfDayLeavePeriod}): {selectedDate.schedule.leaveName}
+                  </div>
+                )}
+                {!selectedDate.schedule.isLeave && (
+                  <>
+                    <div className="detail-row">
+                      <span className="label">{t('schedule.shift')}</span>
+                      <span className="value" style={{ color: getShiftColor(selectedDate.schedule, false) }}>
+                        {selectedDate.schedule.shiftLabel || t('schedule.work')} - {selectedDate.schedule.shiftName || t('schedule.shift')}
+                      </span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="label">{t('schedule.time')}</span>
+                      <span className="value">{selectedDate.schedule.time}</span>
+                    </div>
+                  </>
+                )}
+                {selectedDate.schedule.isLeave && (
+                  <div className="detail-row">
+                    <span className="label">{t('schedule.shift')}</span>
+                    <span className="value" style={{ color: '#F59E0B' }}>
+                      {selectedDate.schedule.leaveCode} - {selectedDate.schedule.leaveName}
+                    </span>
+                  </div>
+                )}
                 {selectedDate.schedule.outlet && (
                   <div className="detail-row">
                     <span className="label">{t('schedule.outlet')}</span>
