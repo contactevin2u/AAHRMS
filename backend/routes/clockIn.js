@@ -708,11 +708,11 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
 router.patch('/:id/hours', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { total_work_hours, ot_hours, notes, clock_in_1, clock_out_1 } = req.body;
+    const { total_work_hours, ot_hours, notes, clock_in_1, clock_out_1, clock_in_2, clock_out_2 } = req.body;
     const companyId = getCompanyFilter(req);
 
     // Check if editing clock times (AA Alive only feature)
-    const editingClockTimes = clock_in_1 !== undefined || clock_out_1 !== undefined;
+    const editingClockTimes = clock_in_1 !== undefined || clock_out_1 !== undefined || clock_in_2 !== undefined || clock_out_2 !== undefined;
 
     if (editingClockTimes) {
       // Verify this is AA Alive company
@@ -739,10 +739,23 @@ router.patch('/:id/hours', authenticateAdmin, async (req, res) => {
 
       if (clock_out_1 !== undefined) {
         paramCount++;
-        // Format time to HH:MM:SS
         const formattedOut = clock_out_1.length === 5 ? `${clock_out_1}:00` : clock_out_1;
         updates.push(`clock_out_1 = $${paramCount}`);
         values.push(formattedOut);
+      }
+
+      if (clock_in_2 !== undefined) {
+        paramCount++;
+        const formattedIn2 = clock_in_2.length === 5 ? `${clock_in_2}:00` : clock_in_2;
+        updates.push(`clock_in_2 = $${paramCount}`);
+        values.push(formattedIn2);
+      }
+
+      if (clock_out_2 !== undefined) {
+        paramCount++;
+        const formattedOut2 = clock_out_2.length === 5 ? `${clock_out_2}:00` : clock_out_2;
+        updates.push(`clock_out_2 = $${paramCount}`);
+        values.push(formattedOut2);
       }
 
       if (notes !== undefined) {
@@ -1531,6 +1544,125 @@ router.get('/ot-for-payroll/:year/:month', authenticateAdmin, async (req, res) =
   } catch (error) {
     console.error('Error fetching OT for payroll:', error);
     res.status(500).json({ error: 'Failed to fetch OT data' });
+  }
+});
+
+// =====================================================
+// EXPORT ATTENDANCE TO EXCEL
+// =====================================================
+
+router.get('/export-excel', authenticateAdmin, async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const companyId = getCompanyFilter(req);
+    const { month, year, department_id, employee_id } = req.query;
+
+    if (!month || !year) {
+      return res.status(400).json({ error: 'month and year are required' });
+    }
+
+    // Build query
+    let query = `
+      SELECT
+        e.name as employee_name,
+        e.employee_id as emp_code,
+        d.name as department_name,
+        e.role_type,
+        c.work_date,
+        c.clock_in_1,
+        c.clock_out_1,
+        c.clock_in_2,
+        c.clock_out_2,
+        c.total_work_minutes,
+        c.ot_minutes,
+        c.total_hours,
+        c.ot_hours,
+        c.address_in_1,
+        c.address_out_1,
+        c.is_outstation,
+        c.status
+      FROM clock_in_records c
+      JOIN employees e ON c.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE EXTRACT(MONTH FROM c.work_date) = $1
+        AND EXTRACT(YEAR FROM c.work_date) = $2
+    `;
+    let params = [month, year];
+    let paramIdx = 3;
+
+    if (companyId !== null) {
+      query += ` AND c.company_id = $${paramIdx}`;
+      params.push(companyId);
+      paramIdx++;
+    }
+
+    if (department_id) {
+      query += ` AND e.department_id = $${paramIdx}`;
+      params.push(department_id);
+      paramIdx++;
+    }
+
+    if (employee_id) {
+      query += ` AND c.employee_id = $${paramIdx}`;
+      params.push(employee_id);
+      paramIdx++;
+    }
+
+    query += ' ORDER BY e.name, c.work_date';
+
+    const result = await pool.query(query, params);
+
+    const formatTime = (t) => {
+      if (!t) return '';
+      return t.slice(0, 5);
+    };
+
+    const data = result.rows.map(r => {
+      const appDate = r.work_date.toISOString().slice(0, 10);
+      return {
+        'Employee': r.employee_name,
+        'Employee ID': r.emp_code,
+        'Department': r.department_name || '',
+        'Role': r.role_type || '',
+        'Date': appDate,
+        'Clock In': formatTime(r.clock_in_1),
+        'Clock Out': formatTime(r.clock_out_1),
+        'Clock In 2': formatTime(r.clock_in_2),
+        'Clock Out 2': formatTime(r.clock_out_2),
+        'Total Minutes': r.total_work_minutes || 0,
+        'Total Hours': r.total_hours ? parseFloat(r.total_hours).toFixed(2) : '',
+        'OT Minutes': r.ot_minutes || 0,
+        'OT Hours': r.ot_hours ? parseFloat(r.ot_hours).toFixed(2) : '',
+        'Address (Clock In)': r.address_in_1 || '',
+        'Address (Clock Out)': r.address_out_1 || '',
+        'Outstation': r.is_outstation ? 'Yes' : 'No',
+        'Status': r.status || ''
+      };
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+
+    ws['!cols'] = [
+      { wch: 35 }, { wch: 12 }, { wch: 20 }, { wch: 10 },
+      { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
+      { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+      { wch: 45 }, { wch: 45 }, { wch: 12 }, { wch: 10 }
+    ];
+
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const sheetName = `Attendance ${monthNames[month-1]} ${year}`;
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Attendance_${monthNames[month-1]}_${year}.xlsx"`);
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('Error exporting attendance:', error);
+    res.status(500).json({ error: 'Failed to export attendance' });
   }
 });
 

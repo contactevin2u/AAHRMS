@@ -697,6 +697,29 @@ const Attendance = () => {
             Recalculate Hours
           </button>
           <button
+            className="sync-drivers-btn"
+            onClick={async () => {
+              try {
+                const params = { month: filters.month, year: filters.year };
+                if (filters.department_id) params.department_id = filters.department_id;
+                if (filters.employee_id) params.employee_id = filters.employee_id;
+                const res = await attendanceApi.exportExcel(params);
+                const url = window.URL.createObjectURL(new Blob([res.data]));
+                const link = document.createElement('a');
+                link.href = url;
+                const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                link.download = `Attendance_${monthNames[filters.month-1]}_${filters.year}.xlsx`;
+                link.click();
+                window.URL.revokeObjectURL(url);
+                toast.success('Excel downloaded');
+              } catch (err) {
+                toast.error('Failed to export');
+              }
+            }}
+          >
+            Export Excel
+          </button>
+          <button
             className="create-manual-btn"
             onClick={() => setShowManualModal(true)}
           >
@@ -1220,8 +1243,8 @@ const Attendance = () => {
                               <div className="detail-items">
                                 <span><strong>In 1:</strong> {isAAAlive ? renderEditableClockTime(record, 'clock_in_1', record.clock_in_1) : formatTime(record.clock_in_1)}</span>
                                 <span><strong>Out 1:</strong> {isAAAlive ? renderEditableClockTime(record, 'clock_out_1', record.clock_out_1) : formatTime(record.clock_out_1)}</span>
-                                <span><strong>In 2:</strong> {formatTime(record.clock_in_2)}</span>
-                                <span><strong>Out 2:</strong> {formatTime(record.clock_out_2)}</span>
+                                <span><strong>In 2:</strong> {isAAAlive ? renderEditableClockTime(record, 'clock_in_2', record.clock_in_2) : formatTime(record.clock_in_2)}</span>
+                                <span><strong>Out 2:</strong> {isAAAlive ? renderEditableClockTime(record, 'clock_out_2', record.clock_out_2) : formatTime(record.clock_out_2)}</span>
                               </div>
                             </div>
                             {!isAAAlive && (
