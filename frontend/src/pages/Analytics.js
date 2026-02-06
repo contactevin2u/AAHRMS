@@ -7,7 +7,9 @@ import {
 } from 'recharts';
 import './Analytics.css';
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#ec4899', '#06b6d4', '#84cc16'];
+const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#14b8a6', '#f97316', '#a855f7', '#e11d48', '#0ea5e9', '#65a30d', '#d946ef'];
+
+const truncate = (str, max) => str && str.length > max ? str.substring(0, max) + '...' : str;
 
 const formatRM = (amount) =>
   new Intl.NumberFormat('en-MY', { style: 'currency', currency: 'MYR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount || 0);
@@ -120,7 +122,7 @@ function Analytics() {
   const divisionTotal = divisionData.reduce((s, d) => s + d.value, 0);
 
   const top10Data = salaryRanking?.top10?.map(e => ({
-    name: e.name.length > 18 ? e.name.substring(0, 18) + '...' : e.name,
+    name: e.name,
     netPay: e.netPayExClaims
   })) || [];
 
@@ -195,12 +197,29 @@ function Analytics() {
           <div className="analytics-chart-card">
             <h3>Payroll Share by {groupLabel}</h3>
             {deptPieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={340}>
                 <PieChart>
-                  <Pie data={deptPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  <Pie
+                    data={deptPieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="45%"
+                    outerRadius={90}
+                    label={({ name, percent }) => percent >= 0.05 ? `${truncate(name, 12)} ${(percent * 100).toFixed(0)}%` : ''}
+                    labelLine={({ percent }) => percent >= 0.05}
+                    fontSize={11}
+                  >
                     {deptPieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
                   <Tooltip formatter={v => formatRM(v)} />
+                  <Legend
+                    layout="horizontal"
+                    verticalAlign="bottom"
+                    align="center"
+                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                    formatter={(value) => truncate(value, 18)}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : <p style={{ color: '#94a3b8' }}>No {groupLabel.toLowerCase()} data</p>}
@@ -208,11 +227,11 @@ function Analytics() {
           <div className="analytics-chart-card">
             <h3>Average Salary by {groupLabel}</h3>
             {deptBarData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={deptBarData} layout="vertical" margin={{ left: 80 }}>
+              <ResponsiveContainer width="100%" height={Math.max(300, deptBarData.length * 28)}>
+                <BarChart data={deptBarData} layout="vertical" margin={{ left: 10, right: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={75} />
+                  <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={130} tickFormatter={(v) => truncate(v, 18)} />
                   <Tooltip formatter={v => formatRM(v)} />
                   <Bar dataKey="avgSalary" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -267,11 +286,11 @@ function Analytics() {
           <div className="analytics-chart-card">
             <h3>Highest Paid {groupLabel}</h3>
             {deptRankData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={deptRankData} layout="vertical" margin={{ left: 80 }}>
+              <ResponsiveContainer width="100%" height={Math.max(300, deptRankData.length * 28)}>
+                <BarChart data={deptRankData} layout="vertical" margin={{ left: 10, right: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={75} />
+                  <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={130} tickFormatter={(v) => truncate(v, 18)} />
                   <Tooltip formatter={v => formatRM(v)} />
                   <Bar dataKey="netPay" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Net Pay (excl. Claims)" />
                 </BarChart>
@@ -281,11 +300,11 @@ function Analytics() {
           <div className="analytics-chart-card">
             <h3>Top 10 Highest Paid Employees</h3>
             {top10Data.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={top10Data} layout="vertical" margin={{ left: 100 }}>
+              <ResponsiveContainer width="100%" height={Math.max(300, top10Data.length * 30)}>
+                <BarChart data={top10Data} layout="vertical" margin={{ left: 10, right: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={95} />
+                  <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} tickFormatter={(v) => truncate(v, 20)} />
                   <Tooltip formatter={v => formatRM(v)} />
                   <Bar dataKey="netPay" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Net Pay (excl. Claims)" />
                 </BarChart>
