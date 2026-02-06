@@ -80,6 +80,8 @@ function Analytics() {
     { name: 'Inactive', value: parseInt(headcount.inactive) || 0 },
   ].filter(d => d.value > 0) : [];
 
+  const groupLabel = deptBreakdown?.groupBy === 'outlet' ? 'Outlet' : 'Department';
+
   const deptPieData = deptBreakdown?.departments?.map(d => ({
     name: d.departmentName,
     value: d.totalGrossExClaims
@@ -191,7 +193,7 @@ function Analytics() {
         {/* Department Breakdown: Pie + Bar */}
         <div className="analytics-two-col">
           <div className="analytics-chart-card">
-            <h3>Payroll Share by Department</h3>
+            <h3>Payroll Share by {groupLabel}</h3>
             {deptPieData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -201,10 +203,10 @@ function Analytics() {
                   <Tooltip formatter={v => formatRM(v)} />
                 </PieChart>
               </ResponsiveContainer>
-            ) : <p style={{ color: '#94a3b8' }}>No department data</p>}
+            ) : <p style={{ color: '#94a3b8' }}>No {groupLabel.toLowerCase()} data</p>}
           </div>
           <div className="analytics-chart-card">
-            <h3>Average Salary by Department</h3>
+            <h3>Average Salary by {groupLabel}</h3>
             {deptBarData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={deptBarData} layout="vertical" margin={{ left: 80 }}>
@@ -263,7 +265,7 @@ function Analytics() {
         {/* Salary Rankings: Dept rank + Top 10 */}
         <div className="analytics-two-col">
           <div className="analytics-chart-card">
-            <h3>Highest Paid Department</h3>
+            <h3>Highest Paid {groupLabel}</h3>
             {deptRankData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={deptRankData} layout="vertical" margin={{ left: 80 }}>
@@ -295,13 +297,13 @@ function Analytics() {
         {/* Department Detail Table */}
         {deptBreakdown?.departments?.length > 0 && (
           <div className="analytics-chart-card">
-            <h3>Department Detail</h3>
+            <h3>{groupLabel} Detail</h3>
             <div className="analytics-table-wrap">
               <table className="analytics-table">
                 <thead>
                   <tr>
                     <th>Rank</th>
-                    <th>Department</th>
+                    <th>{groupLabel}</th>
                     <th>Employees</th>
                     <th>Total Salary</th>
                     <th>Gross (excl. Claims)</th>

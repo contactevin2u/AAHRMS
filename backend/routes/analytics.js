@@ -116,7 +116,8 @@ router.get('/payroll-overview', authenticateAdmin, async (req, res) => {
 
 /**
  * GET /api/analytics/department-breakdown
- * Per-department totals, avg salary, employee count, % of total
+ * Per-department/outlet totals, avg salary, employee count, % of total
+ * Mimix (company 3) groups by outlet, others by department
  */
 router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
   try {
@@ -124,34 +125,61 @@ router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
     if (!companyId) return res.status(403).json({ error: 'Company context required' });
 
     const latest = await getLatestPayrollPeriod(companyId);
-    if (!latest) return res.json({ departments: [] });
+    if (!latest) return res.json({ departments: [], groupBy: 'department' });
 
-    const result = await pool.query(`
-      SELECT
-        d.id AS department_id,
-        d.name AS department_name,
-        COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
-        COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
-        COALESCE(SUM(pi.net_pay), 0) AS total_net,
-        COUNT(DISTINCT pi.employee_id) AS employee_count,
-        CASE WHEN COUNT(DISTINCT pi.employee_id) > 0
-          THEN ROUND(SUM(pi.net_pay) / COUNT(DISTINCT pi.employee_id), 2)
-          ELSE 0 END AS avg_salary
-      FROM payroll_items pi
-      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
-      JOIN employees e ON pi.employee_id = e.id
-      LEFT JOIN departments d ON e.department_id = d.id
-      WHERE pr.company_id = $1
-        AND pr.month = $2 AND pr.year = $3
-        AND pr.status IN ('finalized', 'approved')
-      GROUP BY d.id, d.name
-      ORDER BY total_net DESC
-    `, [companyId, latest.month, latest.year]);
+    // Mimix uses outlet-based grouping
+    const isOutletBased = companyId === 3;
+
+    let result;
+    if (isOutletBased) {
+      result = await pool.query(`
+        SELECT
+          o.id AS group_id,
+          o.name AS group_name,
+          COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
+          COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
+          COALESCE(SUM(pi.net_pay), 0) AS total_net,
+          COUNT(DISTINCT pi.employee_id) AS employee_count,
+          CASE WHEN COUNT(DISTINCT pi.employee_id) > 0
+            THEN ROUND(SUM(pi.net_pay) / COUNT(DISTINCT pi.employee_id), 2)
+            ELSE 0 END AS avg_salary
+        FROM payroll_items pi
+        JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+        LEFT JOIN outlets o ON pr.outlet_id = o.id
+        WHERE pr.company_id = $1
+          AND pr.month = $2 AND pr.year = $3
+          AND pr.status IN ('finalized', 'approved')
+        GROUP BY o.id, o.name
+        ORDER BY total_net DESC
+      `, [companyId, latest.month, latest.year]);
+    } else {
+      result = await pool.query(`
+        SELECT
+          d.id AS group_id,
+          d.name AS group_name,
+          COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
+          COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
+          COALESCE(SUM(pi.net_pay), 0) AS total_net,
+          COUNT(DISTINCT pi.employee_id) AS employee_count,
+          CASE WHEN COUNT(DISTINCT pi.employee_id) > 0
+            THEN ROUND(SUM(pi.net_pay) / COUNT(DISTINCT pi.employee_id), 2)
+            ELSE 0 END AS avg_salary
+        FROM payroll_items pi
+        JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+        JOIN employees e ON pi.employee_id = e.id
+        LEFT JOIN departments d ON e.department_id = d.id
+        WHERE pr.company_id = $1
+          AND pr.month = $2 AND pr.year = $3
+          AND pr.status IN ('finalized', 'approved')
+        GROUP BY d.id, d.name
+        ORDER BY total_net DESC
+      `, [companyId, latest.month, latest.year]);
+    }
 
     const totalPayroll = result.rows.reduce((sum, r) => sum + parseFloat(r.total_net), 0);
     const departments = result.rows.map(r => ({
-      departmentId: r.department_id,
-      departmentName: r.department_name || 'Unassigned',
+      departmentId: r.group_id,
+      departmentName: r.group_name || 'Unassigned',
       totalGross: parseFloat(r.total_gross),
       totalGrossExClaims: parseFloat(r.total_gross_ex_claims),
       totalNet: parseFloat(r.total_net),
@@ -160,7 +188,7 @@ router.get('/department-breakdown', authenticateAdmin, async (req, res) => {
       percentage: totalPayroll > 0 ? parseFloat((parseFloat(r.total_net) / totalPayroll * 100).toFixed(1)) : 0
     }));
 
-    res.json({ month: latest.month, year: latest.year, departments, totalPayroll });
+    res.json({ month: latest.month, year: latest.year, departments, totalPayroll, groupBy: isOutletBased ? 'outlet' : 'department' });
   } catch (error) {
     console.error('Department breakdown error:', error);
     res.status(500).json({ error: 'Failed to fetch department breakdown' });
@@ -196,26 +224,48 @@ router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
       LIMIT 10
     `, [companyId, latest.month, latest.year]);
 
-    // Top paid per department
-    const topByDept = await pool.query(`
-      SELECT DISTINCT ON (d.id)
-        d.name AS department_name, e.name AS employee_name,
-        pi.net_pay, pi.gross_salary,
-        (pi.gross_salary - COALESCE(pi.claims_amount, 0)) AS gross_ex_claims,
-        (pi.net_pay - COALESCE(pi.claims_amount, 0)) AS net_pay_ex_claims
-      FROM payroll_items pi
-      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
-      JOIN employees e ON pi.employee_id = e.id
-      LEFT JOIN departments d ON e.department_id = d.id
-      WHERE pr.company_id = $1
-        AND pr.month = $2 AND pr.year = $3
-        AND pr.status IN ('finalized', 'approved')
-      ORDER BY d.id, net_pay_ex_claims DESC
-    `, [companyId, latest.month, latest.year]);
+    // Mimix uses outlet-based grouping
+    const isOutletBased = companyId === 3;
+
+    let topByDept;
+    if (isOutletBased) {
+      topByDept = await pool.query(`
+        SELECT DISTINCT ON (o.id)
+          o.name AS group_name, e.name AS employee_name,
+          pi.net_pay, pi.gross_salary,
+          (pi.gross_salary - COALESCE(pi.claims_amount, 0)) AS gross_ex_claims,
+          (pi.net_pay - COALESCE(pi.claims_amount, 0)) AS net_pay_ex_claims
+        FROM payroll_items pi
+        JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+        JOIN employees e ON pi.employee_id = e.id
+        LEFT JOIN outlets o ON pr.outlet_id = o.id
+        WHERE pr.company_id = $1
+          AND pr.month = $2 AND pr.year = $3
+          AND pr.status IN ('finalized', 'approved')
+        ORDER BY o.id, net_pay_ex_claims DESC
+      `, [companyId, latest.month, latest.year]);
+    } else {
+      topByDept = await pool.query(`
+        SELECT DISTINCT ON (d.id)
+          d.name AS group_name, e.name AS employee_name,
+          pi.net_pay, pi.gross_salary,
+          (pi.gross_salary - COALESCE(pi.claims_amount, 0)) AS gross_ex_claims,
+          (pi.net_pay - COALESCE(pi.claims_amount, 0)) AS net_pay_ex_claims
+        FROM payroll_items pi
+        JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+        JOIN employees e ON pi.employee_id = e.id
+        LEFT JOIN departments d ON e.department_id = d.id
+        WHERE pr.company_id = $1
+          AND pr.month = $2 AND pr.year = $3
+          AND pr.status IN ('finalized', 'approved')
+        ORDER BY d.id, net_pay_ex_claims DESC
+      `, [companyId, latest.month, latest.year]);
+    }
 
     res.json({
       month: latest.month,
       year: latest.year,
+      groupBy: isOutletBased ? 'outlet' : 'department',
       top10: top10.rows.map(r => ({
         name: r.name,
         department: r.department_name || 'Unassigned',
@@ -225,7 +275,7 @@ router.get('/salary-ranking', authenticateAdmin, async (req, res) => {
         grossExClaims: parseFloat(r.gross_ex_claims)
       })),
       topByDepartment: topByDept.rows.map(r => ({
-        department: r.department_name || 'Unassigned',
+        department: r.group_name || 'Unassigned',
         employeeName: r.employee_name,
         netPay: parseFloat(r.net_pay),
         netPayExClaims: parseFloat(r.net_pay_ex_claims),
