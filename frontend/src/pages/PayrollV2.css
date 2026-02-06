@@ -1562,7 +1562,7 @@
 }
 
 .modal.large .modal-scroll-content {
-  /* Let flex layout handle sizing - no fixed max-height needed */
+  max-height: calc(95vh - 280px);
 }
 
 /* Form */
