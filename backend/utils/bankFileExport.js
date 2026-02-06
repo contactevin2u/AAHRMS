@@ -56,11 +56,13 @@ const formatters = {
         const icNumber = (item.ic_number || '').replace(/-/g, '');
         // Clean name - remove commas to avoid CSV issues
         const cleanName = (item.employee_name || '').toUpperCase().replace(/,/g, '');
+        // Strip spaces from bank account number
+        const cleanAccountNo = (item.bank_account_no || '').replace(/\s/g, '');
 
         const line = [
           cleanName,
           bankName,
-          item.bank_account_no || '',
+          cleanAccountNo,
           'NRIC',
           icNumber,
           (parseFloat(item.net_pay) || 0).toFixed(2),
