@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { companiesApi } from '../api';
+import { companiesApi, outletsApi } from '../api';
 import { DEPARTMENT_CONFIG, DEPARTMENT_ORDER } from '../config/departmentConfig';
 import './Layout.css';
 
@@ -14,6 +14,7 @@ function Layout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+  const [sidebarOutlets, setSidebarOutlets] = useState([]);
   const inactivityTimerRef = React.useRef(null);
 
   useEffect(() => {
@@ -31,6 +32,15 @@ function Layout({ children }) {
       }
     }
   }, []);
+
+  // Fetch outlets for Mimix sidebar
+  useEffect(() => {
+    if (usesOutlets()) {
+      outletsApi.getAll()
+        .then(res => setSidebarOutlets(res.data || []))
+        .catch(() => setSidebarOutlets([]));
+    }
+  }, [adminInfo]);
 
   // Inactivity timeout - auto logout after 15 minutes of no activity
   useEffect(() => {
@@ -120,8 +130,19 @@ function Layout({ children }) {
       } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales') || path.includes('/payroll-guide') || path.includes('/ai-change-logs') || path.includes('/payroll-settings')) {
         setExpandedSection('payroll');
       }
+    } else if (usesOutlets()) {
+      // Mimix: outlet-centric sidebar
+      if (path.includes('/admin/outlet/')) {
+        setExpandedSection('outlet');
+      } else if (path.includes('/payroll') || path.includes('/payroll-guide') || path.includes('/ai-change-logs') || path.includes('/payroll-settings')) {
+        setExpandedSection('payroll');
+      } else if (path.includes('/resignations') || path.includes('/public-holidays') || path.includes('/feedback')) {
+        setExpandedSection('hr');
+      } else if (path.includes('/users') || path.includes('/settings')) {
+        setExpandedSection('system');
+      }
     } else {
-      // Mimix / other companies: original logic
+      // Other companies: original logic
       if (path.includes('/employees') || path.includes('/leave') || path.includes('/claims') || path.includes('/attendance') || path.includes('/schedules')) {
         setExpandedSection('people');
       } else if (path.includes('/payroll') || path.includes('/salary') || path.includes('/contributions') || path.includes('/sales') || path.includes('/payroll-guide') || path.includes('/ai-change-logs') || path.includes('/payroll-settings')) {
@@ -231,7 +252,133 @@ function Layout({ children }) {
     </>
   );
 
-  // Render Mimix / default sidebar navigation (unchanged)
+  // Render Mimix outlet-centric sidebar navigation
+  const renderMimixNav = () => (
+    <>
+      {/* Dashboard */}
+      <NavLink to="/admin/dashboard" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+        <span className="nav-icon">📊</span>
+        <span>Dashboard</span>
+      </NavLink>
+
+      <NavLink to="/admin/analytics" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+        <span className="nav-icon">📈</span>
+        <span>Analytics</span>
+      </NavLink>
+
+      {/* OUTLET SECTION */}
+      <div className="nav-section">
+        <button className={`section-header ${expandedSection === 'outlet' ? 'expanded' : ''}`} onClick={() => toggleSection('outlet')}>
+          <span className="section-icon">🏪</span>
+          <span>Outlet</span>
+          <span className="expand-icon">{expandedSection === 'outlet' ? '−' : '+'}</span>
+        </button>
+        {expandedSection === 'outlet' && (
+          <div className="section-items">
+            <NavLink
+              to="/admin/outlet/all"
+              className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <span style={{ marginRight: '6px' }}>📋</span>
+              All Outlets
+            </NavLink>
+            {sidebarOutlets.map(outlet => (
+              <NavLink
+                key={outlet.id}
+                to={`/admin/outlet/${outlet.id}`}
+                className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <span style={{ marginRight: '6px' }}>🏪</span>
+                {outlet.name}
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* PAYROLL SECTION */}
+      <div className="nav-section">
+        <button className={`section-header ${expandedSection === 'payroll' ? 'expanded' : ''}`} onClick={() => toggleSection('payroll')}>
+          <span className="section-icon">💰</span>
+          <span>Payroll</span>
+          <span className="expand-icon">{expandedSection === 'payroll' ? '−' : '+'}</span>
+        </button>
+        {expandedSection === 'payroll' && (
+          <div className="section-items">
+            <NavLink to="/admin/payroll-v2" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              Payroll
+            </NavLink>
+            <NavLink to="/admin/payroll-guide" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              Calculation Guide
+            </NavLink>
+            <NavLink to="/admin/ai-change-logs" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              AI Change History
+            </NavLink>
+            <NavLink to="/admin/payroll-settings" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              Payroll Settings
+            </NavLink>
+          </div>
+        )}
+      </div>
+
+      {/* HR ADMIN SECTION */}
+      <div className="nav-section">
+        <button className={`section-header ${expandedSection === 'hr' ? 'expanded' : ''}`} onClick={() => toggleSection('hr')}>
+          <span className="section-icon">📋</span>
+          <span>HR Admin</span>
+          <span className="expand-icon">{expandedSection === 'hr' ? '−' : '+'}</span>
+        </button>
+        {expandedSection === 'hr' && (
+          <div className="section-items">
+            <NavLink to="/admin/resignations" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              Resignations
+            </NavLink>
+            <NavLink to="/admin/public-holidays" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              Public Holidays
+            </NavLink>
+            <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+              Feedback
+            </NavLink>
+          </div>
+        )}
+      </div>
+
+      {/* SYSTEM SECTION */}
+      {(canManageUsers() || isSuperAdmin()) && (
+        <div className="nav-section">
+          <button className={`section-header ${expandedSection === 'system' ? 'expanded' : ''}`} onClick={() => toggleSection('system')}>
+            <span className="section-icon">⚙️</span>
+            <span>System</span>
+            <span className="expand-icon">{expandedSection === 'system' ? '−' : '+'}</span>
+          </button>
+          {expandedSection === 'system' && (
+            <div className="section-items">
+              <NavLink to="/admin/settings" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                Settings
+              </NavLink>
+              {canManageUsers() && (
+                <NavLink to="/admin/users" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                  Users & Access
+                </NavLink>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Settings for non-admin users */}
+      {!canManageUsers() && !isSuperAdmin() && (
+        <NavLink to="/admin/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+          <span className="nav-icon">⚙️</span>
+          <span>Settings</span>
+        </NavLink>
+      )}
+    </>
+  );
+
+  // Render default sidebar navigation (fallback for other companies)
   const renderDefaultNav = () => (
     <>
       {/* Dashboard */}
@@ -441,7 +588,7 @@ function Layout({ children }) {
 
         {/* Navigation */}
         <div className="nav-container">
-          {isAAAlive() ? renderAAAliveNav() : renderDefaultNav()}
+          {isAAAlive() ? renderAAAliveNav() : usesOutlets() ? renderMimixNav() : renderDefaultNav()}
         </div>
 
         {/* Footer */}

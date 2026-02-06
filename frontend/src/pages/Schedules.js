@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import { schedulesApi, outletsApi, employeeApi, leaveApi, attendanceApi } from '../api';
 import './Schedules.css';
 
-function Schedules() {
+function Schedules({ outletId: propOutletId, embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -84,8 +84,14 @@ function Schedules() {
         setOutlets(allOutlets);
         setTemplates(templatesRes.data || []);
 
-        // For non-admin (supervisor), filter to their outlet only
-        if (adminInfo && !isAdmin && adminInfo.outlet_id) {
+        // Pre-select outlet if propOutletId is provided
+        if (propOutletId) {
+          const lockedOutlet = allOutlets.find(o => o.id === parseInt(propOutletId));
+          if (lockedOutlet) {
+            setSelectedOutlet(lockedOutlet);
+          }
+        } else if (adminInfo && !isAdmin && adminInfo.outlet_id) {
+          // For non-admin (supervisor), filter to their outlet only
           const myOutlet = allOutlets.find(o => o.id === adminInfo.outlet_id);
           if (myOutlet) {
             setSelectedOutlet(myOutlet);
@@ -601,15 +607,18 @@ function Schedules() {
   const weekDates = getWeekDates();
   const weekLabel = `${weekDates[0].dayNum} - ${weekDates[6].dayNum} ${new Date(weekDates[0].date).toLocaleDateString('en-MY', { month: 'short', year: 'numeric' })}`;
 
-  return (
-    <Layout>
+  const isOutletLocked = !!propOutletId;
+
+  const content = (
       <div className="schedules-page-v2">
+        {!embedded && (
         <header className="page-header">
           <div>
             <h1>Staff Schedules</h1>
             <p>{isAdmin ? 'Manage all outlet schedules' : `${selectedOutlet?.name || 'Your Outlet'} Schedule`}</p>
           </div>
         </header>
+        )}
 
         {/* Tabs - Admin only sees requests tabs */}
         {isAdmin && (
@@ -645,8 +654,8 @@ function Schedules() {
 
         {activeTab === 'schedule' && (
           <div className={`schedule-layout ${isAdmin ? 'admin-view' : 'supervisor-view'}`}>
-            {/* Left Panel - Outlet List (Admin only) */}
-            {isAdmin && (
+            {/* Left Panel - Outlet List (Admin only, hidden when outlet locked) */}
+            {isAdmin && !isOutletLocked && (
               <div className="outlet-list-panel">
                 <h3>Outlets</h3>
                 <div className="outlet-items">
@@ -1105,8 +1114,9 @@ function Schedules() {
           </div>
         )}
       </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 }
 
 export default Schedules;

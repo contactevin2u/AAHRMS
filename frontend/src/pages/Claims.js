@@ -3,8 +3,9 @@ import { claimsApi, employeeApi, outletsApi, departmentApi, advancesApi } from '
 import Layout from '../components/Layout';
 import './Claims.css';
 
-function Claims({ departmentId: propDeptId, embedded = false }) {
+function Claims({ departmentId: propDeptId, outletId: propOutletId, embedded = false }) {
   const isDeptLocked = !!propDeptId;
+  const isOutletLocked = !!propOutletId;
   const [claims, setClaims] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -28,7 +29,7 @@ function Claims({ departmentId: propDeptId, embedded = false }) {
     status: '',
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
-    outlet_id: '',
+    outlet_id: propOutletId || '',
     department_id: propDeptId || ''
   });
 
@@ -78,6 +79,7 @@ function Claims({ departmentId: propDeptId, embedded = false }) {
     try {
       const empParams = { status: 'active' };
       if (propDeptId) empParams.department_id = propDeptId;
+      if (propOutletId) empParams.outlet_id = propOutletId;
       const [empRes, catRes, countRes, outletsRes, deptsRes, restrictionsRes] = await Promise.all([
         employeeApi.getAll(empParams),
         claimsApi.getCategories(),
@@ -489,7 +491,7 @@ function Claims({ departmentId: propDeptId, embedded = false }) {
 
         {/* Filters */}
         <div className="filters-row">
-          {isMimix && outlets.length > 0 && (
+          {isMimix && !isOutletLocked && outlets.length > 0 && (
             <select
               value={filter.outlet_id}
               onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value })}

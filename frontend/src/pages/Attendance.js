@@ -4,8 +4,9 @@ import { attendanceApi, employeeApi, outletsApi, departmentApi, schedulesApi, aa
 import { toast } from 'react-toastify';
 import './Attendance.css';
 
-const Attendance = ({ departmentId: propDeptId, embedded = false }) => {
+const Attendance = ({ departmentId: propDeptId, outletId: propOutletId, embedded = false }) => {
   const isDeptLocked = !!propDeptId;
+  const isOutletLocked = !!propOutletId;
   const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [outlets, setOutlets] = useState([]);
@@ -22,7 +23,7 @@ const Attendance = ({ departmentId: propDeptId, embedded = false }) => {
     year: new Date().getFullYear(),
     status: '',
     ot_status: '',
-    outlet_id: '',
+    outlet_id: propOutletId || '',
     department_id: propDeptId || '',
     employee_id: '',
     region: '',
@@ -150,6 +151,7 @@ const Attendance = ({ departmentId: propDeptId, embedded = false }) => {
       }
       const empParams = {};
       if (propDeptId) empParams.department_id = propDeptId;
+      if (propOutletId) empParams.outlet_id = propOutletId;
       const [recordsRes, employeesRes, outletsRes, departmentsRes] = await Promise.all([
         attendanceApi.getAll(params),
         employeeApi.getAll(empParams),
@@ -845,7 +847,7 @@ const Attendance = ({ departmentId: propDeptId, embedded = false }) => {
           </div>
         )}
 
-        {!isSupervisor && !isAAAlive && outlets.length > 0 && (
+        {!isSupervisor && !isAAAlive && !isOutletLocked && outlets.length > 0 && (
           <div className="filter-group">
             <label>Outlet</label>
             <select name="outlet_id" value={filters.outlet_id} onChange={handleFilterChange}>

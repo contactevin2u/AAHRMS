@@ -13,10 +13,11 @@ import EmployeeDetailModal from './EmployeeDetailModal';
 
 import '../Employees.css';
 
-function Employees({ departmentId: propDeptId, embedded = false }) {
+function Employees({ departmentId: propDeptId, outletId: propOutletId, embedded = false }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isDeptLocked = !!propDeptId;
+  const isOutletLocked = !!propOutletId;
 
   // Check if company uses outlets (Mimix = company_id 3)
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
@@ -33,6 +34,7 @@ function Employees({ departmentId: propDeptId, embedded = false }) {
   // Filter state
   const [filter, setFilter] = useState({
     department_id: propDeptId || searchParams.get('department_id') || '',
+    outlet_id: propOutletId || '',
     status: 'active',
     search: '',
     employment_type: ''
@@ -222,9 +224,9 @@ function Employees({ departmentId: propDeptId, embedded = false }) {
 
         <EmployeeFilters
           filter={filter}
-          setFilter={isDeptLocked ? (f) => setFilter({ ...f, department_id: propDeptId }) : setFilter}
+          setFilter={isDeptLocked ? (f) => setFilter({ ...f, department_id: propDeptId }) : isOutletLocked ? (f) => setFilter({ ...f, outlet_id: propOutletId }) : setFilter}
           departments={departments}
-          hideDepartment={isDeptLocked}
+          hideDepartment={isDeptLocked || isOutletLocked}
         />
 
         <EmployeeTable

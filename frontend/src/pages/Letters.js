@@ -6,8 +6,9 @@ import { jsPDF } from 'jspdf';
 import Layout from '../components/Layout';
 import './Letters.css';
 
-function Letters({ departmentId: propDeptId, embedded = false }) {
+function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = false }) {
   const isDeptLocked = !!propDeptId;
+  const isOutletLocked = !!propOutletId;
   const navigate = useNavigate();
   const [letters, setLetters] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -83,6 +84,7 @@ function Letters({ departmentId: propDeptId, embedded = false }) {
       setLoading(true);
       const empParams = { status: 'active' };
       if (propDeptId) empParams.department_id = propDeptId;
+      if (propOutletId) empParams.outlet_id = propOutletId;
       const [lettersRes, employeesRes, templatesRes, statsRes] = await Promise.all([
         lettersApi.getAll(filters),
         employeeApi.getAll(empParams),

@@ -3,8 +3,9 @@ import { leaveApi, employeeApi, outletsApi, departmentApi } from '../api';
 import Layout from '../components/Layout';
 import './Leave.css';
 
-function Leave({ departmentId: propDeptId, embedded = false }) {
+function Leave({ departmentId: propDeptId, outletId: propOutletId, embedded = false }) {
   const isDeptLocked = !!propDeptId;
+  const isOutletLocked = !!propOutletId;
   const [activeTab, setActiveTab] = useState('requests');
   const [requests, setRequests] = useState([]);
   const [balances, setBalances] = useState([]);
@@ -58,7 +59,7 @@ function Leave({ departmentId: propDeptId, embedded = false }) {
     employee_id: '',
     status: '',
     leave_type_id: '',
-    outlet_id: '',
+    outlet_id: propOutletId || '',
     department_id: propDeptId || '',
     year: new Date().getFullYear()
   });
@@ -107,6 +108,7 @@ function Leave({ departmentId: propDeptId, embedded = false }) {
     try {
       const empParams = { status: 'active' };
       if (propDeptId) empParams.department_id = propDeptId;
+      if (propOutletId) empParams.outlet_id = propOutletId;
       const [typesRes, empRes, countRes, outletsRes, deptsRes] = await Promise.all([
         leaveApi.getTypes(),
         employeeApi.getAll(empParams),
@@ -599,7 +601,7 @@ function Leave({ departmentId: propDeptId, embedded = false }) {
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
-              {isMimix ? (
+              {isMimix && !isOutletLocked ? (
                 <select
                   value={filter.outlet_id}
                   onChange={(e) => setFilter({ ...filter, outlet_id: e.target.value })}
@@ -609,7 +611,7 @@ function Leave({ departmentId: propDeptId, embedded = false }) {
                     <option key={o.id} value={o.id}>{o.name}</option>
                   ))}
                 </select>
-              ) : !isDeptLocked ? (
+              ) : !isDeptLocked && !isOutletLocked ? (
                 <select
                   value={filter.department_id}
                   onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}

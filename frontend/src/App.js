@@ -40,6 +40,7 @@ import PublicHolidays from './pages/PublicHolidays';
 import OutstationAllowance from './pages/OutstationAllowance';
 import PayrollSettings from './pages/PayrollSettings';
 import DepartmentHub from './pages/DepartmentHub';
+import OutletHub from './pages/OutletHub';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -364,6 +365,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DepartmentHub />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/outlet/:id"
+          element={
+            <ProtectedRoute>
+              <OutletHub />
             </ProtectedRoute>
           }
         />
