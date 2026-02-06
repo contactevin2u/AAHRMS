@@ -1527,11 +1527,7 @@
 }
 
 .modal fieldset {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  display: contents;
 }
 
 .modal.large {
@@ -1562,7 +1558,7 @@
 }
 
 .modal.large .modal-scroll-content {
-  max-height: calc(95vh - 280px);
+  /* no max-height needed - fieldset uses display:contents so flex chain works */
 }
 
 /* Form */
