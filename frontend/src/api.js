@@ -427,6 +427,7 @@ export const attendanceApi = {
   approveWithSchedule: (id, data) => api.post(`/clock-in/${id}/approve-with-schedule`, data),
   // Recalculate work hours for a month (fixes overnight shifts)
   recalculate: (data) => api.post('/clock-in/recalculate', data),
+  exportExcel: (params) => api.get('/clock-in/export-excel', { params, responseType: 'blob' }),
 };
 
 // Benefits In Kind (BIK) - for AA Alive
