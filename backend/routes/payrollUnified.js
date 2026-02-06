@@ -4596,13 +4596,14 @@ router.get('/items/:id/attendance-details', authenticateAdmin, async (req, res) 
         ot_minutes,
         status,
         CASE WHEN ot_approved = true THEN 'approved'
+             WHEN $4 = false AND ot_minutes > 0 THEN 'approved'
              WHEN ot_minutes > 0 THEN 'pending'
              ELSE null END as ot_status
       FROM clock_in_records
       WHERE employee_id = $1
         AND work_date BETWEEN $2 AND $3
       ORDER BY work_date
-    `, [item.employee_id, periodStart, periodEnd]);
+    `, [item.employee_id, periodStart, periodEnd, companyId === 3]);
 
     // Get schedules for the period
     const schedulesResult = await pool.query(`
