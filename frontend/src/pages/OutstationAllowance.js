@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Layout from '../components/Layout';
 import api from '../api';
 
-function OutstationAllowance() {
+function OutstationAllowance({ departmentId: propDeptId, embedded = false }) {
   const [activeTab, setActiveTab] = useState('report');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -264,8 +264,7 @@ function OutstationAllowance() {
     </div>
   );
 
-  return (
-    <Layout>
+  const content = (
       <div style={{ padding: '24px' }}>
         <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '4px' }}>Outstation Allowance</h1>
         <p style={{ color: '#6b7280', marginBottom: '24px' }}>OrderOps driver outstation allowance report</p>
@@ -295,8 +294,9 @@ function OutstationAllowance() {
 
         {activeTab === 'report' ? renderReport() : renderGuide()}
       </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 }
 
 export default OutstationAllowance;

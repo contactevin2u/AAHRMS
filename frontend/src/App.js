@@ -39,6 +39,7 @@ import IndoorSalesCommission from './pages/IndoorSalesCommission';
 import PublicHolidays from './pages/PublicHolidays';
 import OutstationAllowance from './pages/OutstationAllowance';
 import PayrollSettings from './pages/PayrollSettings';
+import DepartmentHub from './pages/DepartmentHub';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -355,6 +356,14 @@ function App() {
           element={
             <ProtectedRoute>
               <PayrollSettings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/department/:slug"
+          element={
+            <ProtectedRoute>
+              <DepartmentHub />
             </ProtectedRoute>
           }
         />

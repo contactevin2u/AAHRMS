@@ -1887,6 +1887,51 @@ router.get('/stats/overview', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get employee birthdays for a given month
+router.get('/birthdays', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = getCompanyFilter(req);
+    const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
+
+    let paramIndex = 1;
+    const params = [];
+    let companyFilter = '';
+
+    if (companyId !== null) {
+      companyFilter = `AND e.company_id = $${paramIndex}`;
+      params.push(companyId);
+      paramIndex++;
+    }
+
+    params.push(month);
+
+    const result = await pool.query(`
+      SELECT e.id, e.employee_id, e.name, e.ic_number, e.date_of_birth,
+             d.name as department_name
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE e.status = 'active' ${companyFilter}
+        AND (
+          (e.date_of_birth IS NOT NULL AND EXTRACT(MONTH FROM e.date_of_birth) = $${paramIndex})
+          OR
+          (e.date_of_birth IS NULL AND e.ic_number IS NOT NULL
+           AND LENGTH(REPLACE(REPLACE(e.ic_number, '-', ''), ' ', '')) >= 6
+           AND CAST(SUBSTRING(REPLACE(REPLACE(e.ic_number, '-', ''), ' ', '') FROM 3 FOR 2) AS INTEGER) = $${paramIndex})
+        )
+      ORDER BY
+        COALESCE(
+          EXTRACT(DAY FROM e.date_of_birth),
+          CAST(SUBSTRING(REPLACE(REPLACE(e.ic_number, '-', ''), ' ', '') FROM 5 FOR 2) AS INTEGER)
+        )
+    `, params);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching birthdays:', error);
+    res.status(500).json({ error: 'Failed to fetch birthdays' });
+  }
+});
+
 // Clear all test/seed data (public endpoint with key protection)
 router.post('/init-clear-all-data', async (req, res) => {
   const client = await pool.connect();

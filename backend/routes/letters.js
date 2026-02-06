@@ -6,7 +6,7 @@ const { authenticateAdmin } = require('../middleware/auth');
 // Get all letters with filters
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, letter_type, status, from_date, to_date } = req.query;
+    const { employee_id, letter_type, status, from_date, to_date, department_id } = req.query;
 
     let query = `
       SELECT
@@ -22,6 +22,10 @@ router.get('/', authenticateAdmin, async (req, res) => {
     const params = [];
     let paramIndex = 1;
 
+    if (department_id) {
+      query += ` AND e.department_id = $${paramIndex++}`;
+      params.push(department_id);
+    }
     if (employee_id) {
       query += ` AND l.employee_id = $${paramIndex++}`;
       params.push(employee_id);

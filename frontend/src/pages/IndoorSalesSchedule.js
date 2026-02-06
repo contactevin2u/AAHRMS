@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import { schedulesApi, commissionApi } from '../api';
 import './IndoorSalesSchedule.css';
 
-function IndoorSalesSchedule() {
+function IndoorSalesSchedule({ departmentId: propDeptId, embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState([]);
   const [selectedDepartment, setSelectedDepartment] = useState('');
@@ -55,7 +55,9 @@ function IndoorSalesSchedule() {
       try {
         const res = await commissionApi.getIndoorSalesDepartments();
         setDepartments(res.data || []);
-        if (res.data?.length > 0) {
+        if (propDeptId) {
+          setSelectedDepartment(propDeptId.toString());
+        } else if (res.data?.length > 0) {
           setSelectedDepartment(res.data[0].id.toString());
         }
       } catch (error) {
@@ -63,7 +65,7 @@ function IndoorSalesSchedule() {
       }
     };
     fetchDepartments();
-  }, []);
+  }, [propDeptId]);
 
   // Fetch monthly roster
   const fetchRoster = useCallback(async () => {
@@ -310,8 +312,7 @@ function IndoorSalesSchedule() {
   const selectedEmployeeTotals = selectedEmployeeData ? calculateTotals(selectedEmployeeData.shifts) : null;
   const employeesOnSelectedDate = selectedDate ? getEmployeesOnDate(selectedDate) : [];
 
-  return (
-    <Layout>
+  const content = (
       <div className="indoor-sales-schedule calendar-view">
         <header className="page-header">
           <div>
@@ -578,8 +579,9 @@ function IndoorSalesSchedule() {
           </div>
         )}
       </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 }
 
 export default IndoorSalesSchedule;

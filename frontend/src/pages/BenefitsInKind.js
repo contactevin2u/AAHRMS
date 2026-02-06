@@ -3,7 +3,8 @@ import Layout from '../components/Layout';
 import { benefitsApi, employeeApi } from '../api';
 import './BenefitsInKind.css';
 
-const BenefitsInKind = () => {
+const BenefitsInKind = ({ departmentId: propDeptId, embedded = false }) => {
+  const isDeptLocked = !!propDeptId;
   const [benefits, setBenefits] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [benefitTypes, setBenefitTypes] = useState([]);
@@ -13,7 +14,8 @@ const BenefitsInKind = () => {
   const [filters, setFilters] = useState({
     status: '',
     benefit_type: '',
-    employee_id: ''
+    employee_id: '',
+    department_id: propDeptId || ''
   });
 
   const [formData, setFormData] = useState({
@@ -36,9 +38,11 @@ const BenefitsInKind = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const empParams = {};
+      if (propDeptId) empParams.department_id = propDeptId;
       const [benefitsRes, employeesRes, typesRes] = await Promise.all([
         benefitsApi.getAll(filters),
-        employeeApi.getAll(),
+        employeeApi.getAll(empParams),
         benefitsApi.getTypes().catch(() => ({ data: [] }))
       ]);
       setBenefits(benefitsRes.data);
@@ -179,8 +183,7 @@ const BenefitsInKind = () => {
   const totalAnnualValue = activeBenefits.reduce((sum, b) => sum + parseFloat(b.annual_value || 0), 0);
   const totalMonthlyValue = totalAnnualValue / 12;
 
-  return (
-    <Layout>
+  const content = (
       <div className="bik-page">
         <div className="page-header">
           <div className="header-content">
@@ -517,8 +520,9 @@ const BenefitsInKind = () => {
           </div>
         )}
       </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 };
 
 export default BenefitsInKind;

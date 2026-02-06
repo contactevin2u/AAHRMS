@@ -13,6 +13,7 @@ function AdminDashboard() {
   const [pendingLeave, setPendingLeave] = useState([]);
   const [pendingClaims, setPendingClaims] = useState([]);
   const [outlets, setOutlets] = useState([]);
+  const [birthdays, setBirthdays] = useState([]);
 
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth() + 1;
@@ -20,6 +21,13 @@ function AdminDashboard() {
 
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
   const usesOutlets = adminInfo?.company_grouping_type === 'outlet';
+
+  const isAAAlive = () => {
+    const companyId = adminInfo?.role === 'super_admin'
+      ? parseInt(localStorage.getItem('selectedCompanyId') || '0')
+      : adminInfo?.company_id;
+    return companyId === 1;
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -40,6 +48,9 @@ function AdminDashboard() {
         promises.push(outletsApi.getAll().catch(() => ({ data: [] })));
       }
 
+      // Always fetch birthdays
+      promises.push(employeeApi.getBirthdays({ month: currentMonth }).catch(() => ({ data: [] })));
+
       const results = await Promise.all(promises);
 
       setStats(results[0].data);
@@ -50,6 +61,9 @@ function AdminDashboard() {
 
       if (usesOutlets && results[5]) {
         setOutlets(results[5].data || []);
+        setBirthdays(results[6]?.data || []);
+      } else {
+        setBirthdays(results[5]?.data || []);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -82,6 +96,19 @@ function AdminDashboard() {
     return diffDays;
   };
 
+  const getBirthdayDay = (emp) => {
+    if (emp.date_of_birth) {
+      return new Date(emp.date_of_birth).getDate();
+    }
+    if (emp.ic_number) {
+      const cleaned = emp.ic_number.replace(/[-\s]/g, '');
+      if (cleaned.length >= 6) {
+        return parseInt(cleaned.substring(4, 6));
+      }
+    }
+    return null;
+  };
+
   // Calculate action items count
   const actionItemsCount = pendingProbations.length + pendingLeave.length + pendingClaims.length;
 
@@ -99,6 +126,160 @@ function AdminDashboard() {
     );
   }
 
+  // AA Alive simplified dashboard
+  if (isAAAlive()) {
+    return (
+      <Layout>
+        <div className="dashboard">
+          <div className="dashboard-header">
+            <div>
+              <h1>Dashboard</h1>
+              <p>{currentDate.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            </div>
+          </div>
+
+          <div className="dashboard-grid aa-grid">
+            {/* Pending Leave */}
+            <div className="dashboard-card" onClick={() => navigate('/admin/leave')} style={{ cursor: 'pointer' }}>
+              <div className="card-header">
+                <h2>Pending Leave</h2>
+                {pendingLeave.length > 0 && <span className="badge orange">{pendingLeave.length}</span>}
+              </div>
+              <div className="card-body">
+                {pendingLeave.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                    </div>
+                    <p>No pending leave requests</p>
+                  </div>
+                ) : (
+                  <div className="action-items">
+                    {pendingLeave.slice(0, 5).map(leave => (
+                      <div key={leave.id} className="action-item">
+                        <div className="action-info">
+                          <span className="action-name">{leave.employee_name}</span>
+                          <span className="action-detail">{leave.leave_type_name || leave.leave_type} - {formatDate(leave.start_date)}</span>
+                        </div>
+                        <span className="action-badge yellow">Review</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Pending Claims */}
+            <div className="dashboard-card" onClick={() => navigate('/admin/claims')} style={{ cursor: 'pointer' }}>
+              <div className="card-header">
+                <h2>Pending Claims</h2>
+                {pendingClaims.length > 0 && <span className="badge blue">{pendingClaims.length}</span>}
+              </div>
+              <div className="card-body">
+                {pendingClaims.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                    </div>
+                    <p>No pending claims</p>
+                  </div>
+                ) : (
+                  <div className="action-items">
+                    {pendingClaims.slice(0, 5).map(claim => (
+                      <div key={claim.id} className="action-item">
+                        <div className="action-info">
+                          <span className="action-name">{claim.employee_name}</span>
+                          <span className="action-detail">{claim.category} - {formatCurrency(claim.amount)}</span>
+                        </div>
+                        <span className="action-badge blue">Review</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Pending Confirmations */}
+            <div className="dashboard-card">
+              <div className="card-header">
+                <h2>Pending Confirmations</h2>
+                {pendingProbations.length > 0 && <span className="badge red">{pendingProbations.length}</span>}
+              </div>
+              <div className="card-body">
+                {pendingProbations.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                    </div>
+                    <p>No probations ending soon</p>
+                  </div>
+                ) : (
+                  <div className="action-items">
+                    {pendingProbations.slice(0, 5).map(emp => (
+                      <div key={emp.id} className="action-item" onClick={() => navigate(`/admin/employees?search=${emp.employee_id}`)}>
+                        <div className="action-info">
+                          <span className="action-name">{emp.name}</span>
+                          <span className="action-detail">
+                            Ends {formatDate(emp.probation_end_date)}
+                            {getDaysUntil(emp.probation_end_date) <= 7 && (
+                              <span className="urgent"> ({getDaysUntil(emp.probation_end_date)} days)</span>
+                            )}
+                          </span>
+                        </div>
+                        <span className="action-badge red">Confirm</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Birthdays This Month */}
+            <div className="dashboard-card">
+              <div className="card-header">
+                <h2>Birthdays This Month</h2>
+                {birthdays.length > 0 && <span className="badge green">{birthdays.length}</span>}
+              </div>
+              <div className="card-body">
+                {birthdays.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon" style={{ fontSize: '32px' }}>🎂</div>
+                    <p>No birthdays this month</p>
+                  </div>
+                ) : (
+                  <div className="action-items">
+                    {birthdays.slice(0, 8).map(emp => {
+                      const day = getBirthdayDay(emp);
+                      return (
+                        <div key={emp.id} className="action-item">
+                          <div className="action-info">
+                            <span className="action-name">{emp.name}</span>
+                            <span className="action-detail">{emp.department_name || 'No dept'}</span>
+                          </div>
+                          {day && <span className="action-badge green">{day}{getDaySuffix(day)}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Default (Mimix / other companies) dashboard - UNCHANGED
   return (
     <Layout>
       <div className="dashboard">
@@ -446,6 +627,16 @@ function AdminDashboard() {
       </div>
     </Layout>
   );
+}
+
+function getDaySuffix(day) {
+  if (day >= 11 && day <= 13) return 'th';
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
 }
 
 export default AdminDashboard;

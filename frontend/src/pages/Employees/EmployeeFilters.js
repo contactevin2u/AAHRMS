@@ -1,6 +1,6 @@
 import React from 'react';
 
-const EmployeeFilters = ({ filter, setFilter, departments }) => {
+const EmployeeFilters = ({ filter, setFilter, departments, hideDepartment = false }) => {
   return (
     <div className="filters-row">
       <input
@@ -9,15 +9,17 @@ const EmployeeFilters = ({ filter, setFilter, departments }) => {
         value={filter.search}
         onChange={(e) => setFilter({ ...filter, search: e.target.value })}
       />
-      <select
-        value={filter.department_id}
-        onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}
-      >
-        <option value="">All Departments</option>
-        {departments.map(d => (
-          <option key={d.id} value={d.id}>{d.name}</option>
-        ))}
-      </select>
+      {!hideDepartment && (
+        <select
+          value={filter.department_id}
+          onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}
+        >
+          <option value="">All Departments</option>
+          {departments.map(d => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+      )}
       <select
         value={filter.status}
         onChange={(e) => setFilter({ ...filter, status: e.target.value })}

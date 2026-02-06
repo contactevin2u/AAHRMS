@@ -13,9 +13,10 @@ import EmployeeDetailModal from './EmployeeDetailModal';
 
 import '../Employees.css';
 
-function Employees() {
+function Employees({ departmentId: propDeptId, embedded = false }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const isDeptLocked = !!propDeptId;
 
   // Check if company uses outlets (Mimix = company_id 3)
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
@@ -31,7 +32,7 @@ function Employees() {
 
   // Filter state
   const [filter, setFilter] = useState({
-    department_id: searchParams.get('department_id') || '',
+    department_id: propDeptId || searchParams.get('department_id') || '',
     status: 'active',
     search: '',
     employment_type: ''
@@ -200,8 +201,7 @@ function Employees() {
     }
   };
 
-  return (
-    <Layout>
+  const content = (
       <div className="employees-page">
         <header className="page-header">
           <div>
@@ -222,8 +222,9 @@ function Employees() {
 
         <EmployeeFilters
           filter={filter}
-          setFilter={setFilter}
+          setFilter={isDeptLocked ? (f) => setFilter({ ...f, department_id: propDeptId }) : setFilter}
           departments={departments}
+          hideDepartment={isDeptLocked}
         />
 
         <EmployeeTable
@@ -404,8 +405,9 @@ function Employees() {
           </div>
         )}
       </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 }
 
 export default Employees;

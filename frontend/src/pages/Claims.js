@@ -3,7 +3,8 @@ import { claimsApi, employeeApi, outletsApi, departmentApi, advancesApi } from '
 import Layout from '../components/Layout';
 import './Claims.css';
 
-function Claims() {
+function Claims({ departmentId: propDeptId, embedded = false }) {
+  const isDeptLocked = !!propDeptId;
   const [claims, setClaims] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -28,7 +29,7 @@ function Claims() {
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
     outlet_id: '',
-    department_id: ''
+    department_id: propDeptId || ''
   });
 
   // Expandable rows
@@ -399,8 +400,7 @@ function Claims() {
     }
   });
 
-  return (
-    <Layout>
+  const content = (
       <div className="claims-page">
         <header className="page-header">
           <div>
@@ -498,7 +498,7 @@ function Claims() {
               ))}
             </select>
           )}
-          {!isMimix && departments.length > 0 && (
+          {!isMimix && !isDeptLocked && departments.length > 0 && (
             <select
               value={filter.department_id}
               onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}
@@ -1113,8 +1113,9 @@ function Claims() {
           </div>
         )}
       </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 }
 
 export default Claims;

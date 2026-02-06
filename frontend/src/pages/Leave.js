@@ -3,7 +3,8 @@ import { leaveApi, employeeApi, outletsApi, departmentApi } from '../api';
 import Layout from '../components/Layout';
 import './Leave.css';
 
-function Leave() {
+function Leave({ departmentId: propDeptId, embedded = false }) {
+  const isDeptLocked = !!propDeptId;
   const [activeTab, setActiveTab] = useState('requests');
   const [requests, setRequests] = useState([]);
   const [balances, setBalances] = useState([]);
@@ -58,7 +59,7 @@ function Leave() {
     status: '',
     leave_type_id: '',
     outlet_id: '',
-    department_id: '',
+    department_id: propDeptId || '',
     year: new Date().getFullYear()
   });
 
@@ -402,8 +403,7 @@ function Leave() {
   // Get pending requests for the alert card
   const pendingRequests = requests.filter(r => r.status === 'pending');
 
-  return (
-    <Layout>
+  const content = (
       <div className="leave-page">
         <header className="page-header">
           <div>
@@ -607,7 +607,7 @@ function Leave() {
                     <option key={o.id} value={o.id}>{o.name}</option>
                   ))}
                 </select>
-              ) : (
+              ) : !isDeptLocked ? (
                 <select
                   value={filter.department_id}
                   onChange={(e) => setFilter({ ...filter, department_id: e.target.value })}
@@ -617,7 +617,7 @@ function Leave() {
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
-              )}
+              ) : null}
               <input
                 type="text"
                 placeholder="Search by name or ID..."
@@ -1122,8 +1122,9 @@ function Leave() {
           </div>
         )}
       </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 }
 
 export default Leave;

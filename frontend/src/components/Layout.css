@@ -291,6 +291,20 @@
   color: #f87171;
 }
 
+.logout-btn.aa-logout {
+  margin-top: 4px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.logout-btn.aa-logout:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
 /* Main Content */
 .main-content {
   flex: 1;

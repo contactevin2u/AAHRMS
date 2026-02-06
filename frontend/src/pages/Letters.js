@@ -6,7 +6,8 @@ import { jsPDF } from 'jspdf';
 import Layout from '../components/Layout';
 import './Letters.css';
 
-function Letters() {
+function Letters({ departmentId: propDeptId, embedded = false }) {
+  const isDeptLocked = !!propDeptId;
   const navigate = useNavigate();
   const [letters, setLetters] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -22,7 +23,8 @@ function Letters() {
   const [filters, setFilters] = useState({
     employee_id: '',
     letter_type: '',
-    status: ''
+    status: '',
+    department_id: propDeptId || ''
   });
 
   const [form, setForm] = useState({
@@ -79,9 +81,11 @@ function Letters() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const empParams = { status: 'active' };
+      if (propDeptId) empParams.department_id = propDeptId;
       const [lettersRes, employeesRes, templatesRes, statsRes] = await Promise.all([
         lettersApi.getAll(filters),
-        employeeApi.getAll({ status: 'active' }),
+        employeeApi.getAll(empParams),
         lettersApi.getTemplates(),
         lettersApi.getStats()
       ]);
@@ -411,8 +415,7 @@ function Letters() {
     return found ? found.color : '#7a8a9a';
   };
 
-  return (
-    <Layout>
+  const content = (
     <div className="letters-page">
       <div className="page-header">
         <div>
@@ -903,8 +906,9 @@ function Letters() {
         </div>
       )}
     </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 }
 
 export default Letters;

@@ -1,0 +1,184 @@
+/* DepartmentHub Page */
+.dept-hub {
+  padding: 0;
+}
+
+.dept-hub-loading,
+.dept-hub-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #64748b;
+  gap: 12px;
+}
+
+.dept-hub-error h2 {
+  color: #334155;
+  margin: 0;
+}
+
+.dept-hub-error button {
+  margin-top: 8px;
+  padding: 8px 20px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Header */
+.dept-hub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+}
+
+.dept-hub-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dept-hub-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.dept-hub-title h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.dept-hub-title p {
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+/* Tab Bar */
+.dept-hub-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 24px;
+  border-bottom: 2px solid #e2e8f0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.dept-hub-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.dept-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.dept-tab:hover {
+  color: #334155;
+}
+
+.dept-tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.dept-tab-icon {
+  font-size: 1rem;
+}
+
+.dept-tab-label {
+  font-size: 0.85rem;
+}
+
+/* Tab Content */
+.dept-hub-content {
+  padding: 0;
+  min-height: 400px;
+}
+
+/* Embedded pages remove their own padding since DepartmentHub provides it */
+.dept-hub-content .employees-page,
+.dept-hub-content .leave-page,
+.dept-hub-content .claims-page,
+.dept-hub-content .letters-page,
+.dept-hub-content .bik-page,
+.dept-hub-content .attendance-page,
+.dept-hub-content .indoor-sales-page,
+.dept-hub-content .commission-page,
+.dept-hub-content .outstation-page {
+  padding: 16px 24px;
+}
+
+/* Placeholder for features not yet built */
+.dept-hub-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.dept-hub-placeholder h3 {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 1.1rem;
+}
+
+.dept-hub-placeholder p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .dept-hub-header {
+    padding: 16px 16px 8px;
+  }
+
+  .dept-hub-tabs {
+    padding: 0 16px;
+  }
+
+  .dept-tab {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+
+  .dept-tab-icon {
+    display: none;
+  }
+
+  .dept-hub-content .employees-page,
+  .dept-hub-content .leave-page,
+  .dept-hub-content .claims-page,
+  .dept-hub-content .letters-page,
+  .dept-hub-content .bik-page,
+  .dept-hub-content .attendance-page,
+  .dept-hub-content .indoor-sales-page,
+  .dept-hub-content .commission-page,
+  .dept-hub-content .outstation-page {
+    padding: 12px 16px;
+  }
+}

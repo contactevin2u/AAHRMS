@@ -18,7 +18,7 @@ const { getCompanyFilter } = require('../middleware/tenant');
 // Get all benefits (filtered by company)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, status, benefit_type } = req.query;
+    const { employee_id, status, benefit_type, department_id } = req.query;
     const companyId = getCompanyFilter(req);
 
     let query = `
@@ -43,6 +43,12 @@ router.get('/', authenticateAdmin, async (req, res) => {
       paramCount++;
       query += ` AND b.company_id = $${paramCount}`;
       params.push(companyId);
+    }
+
+    if (department_id) {
+      paramCount++;
+      query += ` AND e.department_id = $${paramCount}`;
+      params.push(department_id);
     }
 
     if (employee_id) {

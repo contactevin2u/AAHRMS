@@ -110,6 +110,15 @@
   gap: 20px;
 }
 
+.dashboard-grid.aa-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.badge.green {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
 /* Dashboard Cards */
 .dashboard-card {
   background: white;

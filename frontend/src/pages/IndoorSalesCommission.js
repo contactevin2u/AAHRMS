@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import { commissionApi } from '../api';
 import './IndoorSalesCommission.css';
 
-function IndoorSalesCommission() {
+function IndoorSalesCommission({ departmentId: propDeptId, embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState([]);
   const [selectedDepartment, setSelectedDepartment] = useState('');
@@ -47,7 +47,9 @@ function IndoorSalesCommission() {
       try {
         const res = await commissionApi.getIndoorSalesDepartments();
         setDepartments(res.data || []);
-        if (res.data?.length > 0) {
+        if (propDeptId) {
+          setSelectedDepartment(propDeptId.toString());
+        } else if (res.data?.length > 0) {
           setSelectedDepartment(res.data[0].id.toString());
         }
       } catch (error) {
@@ -55,7 +57,7 @@ function IndoorSalesCommission() {
       }
     };
     fetchDepartments();
-  }, []);
+  }, [propDeptId]);
 
   // Fetch sales data for selected period
   const fetchSalesData = useCallback(async () => {
@@ -217,8 +219,7 @@ function IndoorSalesCommission() {
 
   const isFinalized = salesData?.status === 'finalized';
 
-  return (
-    <Layout>
+  const content = (
       <div className="indoor-sales-commission">
         <header className="page-header">
           <div>
@@ -495,8 +496,9 @@ function IndoorSalesCommission() {
           </div>
         )}
       </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 }
 
 export default IndoorSalesCommission;

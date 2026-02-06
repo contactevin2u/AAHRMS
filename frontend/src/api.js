@@ -147,6 +147,7 @@ export const employeeApi = {
   patch: (id, data) => api.patch(`/employees/${id}`, data), // Partial update for inline editing
   delete: (id) => api.delete(`/employees/${id}`),
   getStats: () => api.get('/employees/stats/overview'),
+  getBirthdays: (params) => api.get('/employees/birthdays', { params }),
   bulkImport: (employees) => api.post('/employees/bulk-import', { employees }),
   bulkUpdate: (employee_ids, updates) => api.put('/employees/bulk-update', { employee_ids, updates }),
   bulkDelete: (employee_ids) => api.post('/employees/bulk-delete', { employee_ids }),
