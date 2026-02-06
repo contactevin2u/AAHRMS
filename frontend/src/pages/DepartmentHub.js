@@ -55,8 +55,12 @@ function DepartmentHub() {
     fetchDepartments();
   }, []);
 
-  // Resolve slug → department_id
+  // Resolve slug → department_id (skip for "all")
   useEffect(() => {
+    if (slug === 'all') {
+      setDepartmentId(null);
+      return;
+    }
     if (departments.length === 0) return;
 
     const match = departments.find(d => getSlugForDepartmentName(d.name) === slug);
@@ -87,7 +91,7 @@ function DepartmentHub() {
     );
   }
 
-  if (loading) {
+  if (loading && slug !== 'all') {
     return (
       <Layout>
         <div className="dept-hub">
@@ -97,6 +101,7 @@ function DepartmentHub() {
     );
   }
 
+  const isAll = slug === 'all';
   const ActiveComponent = activeTab ? TAB_COMPONENTS[activeTab] : null;
 
   return (
@@ -107,8 +112,8 @@ function DepartmentHub() {
           <div className="dept-hub-title">
             <span className="dept-hub-icon">{config.icon}</span>
             <div>
-              <h1>{config.name}</h1>
-              <p>Manage {config.name.toLowerCase()} department</p>
+              <h1>{isAll ? 'All Departments' : config.name}</h1>
+              <p>{isAll ? 'View all employees and data across departments' : `Manage ${config.name.toLowerCase()} department`}</p>
             </div>
           </div>
         </div>
@@ -139,7 +144,7 @@ function DepartmentHub() {
             </div>
           ) : ActiveComponent ? (
             <ActiveComponent
-              departmentId={departmentId}
+              departmentId={isAll ? undefined : departmentId}
               embedded={true}
             />
           ) : null}

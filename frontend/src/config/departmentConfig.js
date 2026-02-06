@@ -2,6 +2,11 @@
 // Maps slug → display name, icon, and available tabs
 
 export const DEPARTMENT_CONFIG = {
+  'all': {
+    name: 'All',
+    icon: '📋',
+    tabs: ['employees', 'letters', 'benefits', 'leave', 'claims', 'schedule', 'attendance', 'commission', 'trip-allowance', 'upsell-commission']
+  },
   'office': {
     name: 'Office',
     icon: '🏢',
@@ -35,6 +40,7 @@ export const DEPARTMENT_CONFIG = {
 };
 
 export const DEPARTMENT_ORDER = [
+  'all',
   'office',
   'packing-room',
   'indoor-sales',
