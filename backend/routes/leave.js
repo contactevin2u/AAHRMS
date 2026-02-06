@@ -372,7 +372,7 @@ router.put('/balances/:id', authenticateAdmin, async (req, res) => {
 // Get all leave requests
 router.get('/requests', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, status, month, year, pending_approval, department_id } = req.query;
+    const { employee_id, status, month, year, pending_approval, department_id, outlet_id } = req.query;
     const companyId = getCompanyFilter(req);
 
     let query = `
@@ -413,6 +413,12 @@ router.get('/requests', authenticateAdmin, async (req, res) => {
       paramCount++;
       query += ` AND e.department_id = $${paramCount}`;
       params.push(department_id);
+    }
+
+    if (outlet_id) {
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
     }
 
     if (employee_id) {
