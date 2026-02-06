@@ -36,6 +36,7 @@ const EmployeeFilters = ({ filter, setFilter, departments, hideDepartment = fals
         <option value="probation">On Probation</option>
         <option value="confirmed">Confirmed</option>
         <option value="contract">Contract</option>
+        <option value="part_time">Part Time</option>
       </select>
     </div>
   );

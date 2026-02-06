@@ -14,7 +14,8 @@ const AA_ALIVE_POSITION_OPTIONS = [
 const EMPLOYMENT_OPTIONS = [
   { value: 'probation', label: 'Probation' },
   { value: 'confirmed', label: 'Confirmed' },
-  { value: 'contract', label: 'Contract' }
+  { value: 'contract', label: 'Contract' },
+  { value: 'part_time', label: 'Part Time' }
 ];
 
 // Status enum values
@@ -391,7 +392,8 @@ const EmployeeTable = ({
                           title={onInlineUpdate ? "Click to edit" : ""}
                         >
                           {emp.employment_type === 'confirmed' ? 'Confirmed' :
-                           emp.employment_type === 'contract' ? 'Contract' : 'Probation'}
+                           emp.employment_type === 'contract' ? 'Contract' :
+                           emp.employment_type === 'part_time' ? 'Part Time' : 'Probation'}
                         </span>
                       )
                     )}

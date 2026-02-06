@@ -845,6 +845,7 @@ const EmployeeForm = ({
             <option value="probation">Probation</option>
             <option value="confirmed">Confirmed</option>
             <option value="contract">Contract</option>
+            <option value="part_time">Part Time</option>
           </select>
         </div>
         <div className="form-group">
