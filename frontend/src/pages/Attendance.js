@@ -148,9 +148,11 @@ const Attendance = ({ departmentId: propDeptId, embedded = false }) => {
         params.month = filters.month;
         params.year = filters.year;
       }
+      const empParams = {};
+      if (propDeptId) empParams.department_id = propDeptId;
       const [recordsRes, employeesRes, outletsRes, departmentsRes] = await Promise.all([
         attendanceApi.getAll(params),
-        employeeApi.getAll(),
+        employeeApi.getAll(empParams),
         outletsApi.getAll().catch(() => ({ data: [] })),
         departmentApi.getAll().catch(() => ({ data: [] }))
       ]);

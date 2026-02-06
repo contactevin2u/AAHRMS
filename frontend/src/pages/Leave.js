@@ -105,9 +105,11 @@ function Leave({ departmentId: propDeptId, embedded = false }) {
 
   const fetchInitialData = async () => {
     try {
+      const empParams = { status: 'active' };
+      if (propDeptId) empParams.department_id = propDeptId;
       const [typesRes, empRes, countRes, outletsRes, deptsRes] = await Promise.all([
         leaveApi.getTypes(),
-        employeeApi.getAll({ status: 'active' }),
+        employeeApi.getAll(empParams),
         leaveApi.getPendingCount(),
         outletsApi.getAll().catch(() => ({ data: [] })),
         departmentApi.getAll().catch(() => ({ data: [] }))

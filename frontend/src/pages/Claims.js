@@ -76,8 +76,10 @@ function Claims({ departmentId: propDeptId, embedded = false }) {
 
   const fetchInitialData = async () => {
     try {
+      const empParams = { status: 'active' };
+      if (propDeptId) empParams.department_id = propDeptId;
       const [empRes, catRes, countRes, outletsRes, deptsRes, restrictionsRes] = await Promise.all([
-        employeeApi.getAll({ status: 'active' }),
+        employeeApi.getAll(empParams),
         claimsApi.getCategories(),
         claimsApi.getPendingCount(),
         outletsApi.getAll().catch(() => ({ data: [] })),

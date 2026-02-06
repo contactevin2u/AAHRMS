@@ -129,7 +129,7 @@ function calculateWorkTime(record, companyId) {
 // Get all attendance records (filtered by company/outlet)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, outlet_id, month, year, status, start_date, end_date, region } = req.query;
+    const { employee_id, outlet_id, month, year, status, start_date, end_date, region, department_id } = req.query;
     const companyId = getCompanyFilter(req);
     const supervisorOutletId = getOutletFilter(req);
 
@@ -157,6 +157,12 @@ router.get('/', authenticateAdmin, async (req, res) => {
       paramCount++;
       query += ` AND cr.company_id = $${paramCount}`;
       params.push(companyId);
+    }
+
+    if (department_id) {
+      paramCount++;
+      query += ` AND e.department_id = $${paramCount}`;
+      params.push(department_id);
     }
 
     // Supervisor can ONLY see their outlet's records
