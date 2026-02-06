@@ -36,6 +36,12 @@ const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { calculateAllStatutory, getPublicHolidaysInMonth } = require('../utils/statutory');
 const { calculateOTFromClockIn, calculatePHDaysWorked } = require('../utils/otCalculation');
+const {
+  AA_ALIVE_COMPANY_ID,
+  getAAAliveConfig,
+  getEmployeeRoleType,
+  calculateDriverPayroll,
+} = require('../utils/aaalivePayroll');
 
 // =============================================================================
 // DEFAULT SETTINGS (used if company has no payroll_settings)
@@ -671,6 +677,13 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       advancesResult.rows.forEach(r => { advancesMap[r.employee_id] = parseFloat(r.total_advance_deduction) || 0; });
     } catch (e) { /* table might not exist */ }
 
+    // Load AA Alive config if applicable
+    const isAAAlive = companyId === AA_ALIVE_COMPANY_ID;
+    let aaConfig = null;
+    if (isAAAlive) {
+      aaConfig = await getAAAliveConfig(companyId);
+    }
+
     // Process each employee
     let stats = { created: 0, totalGross: 0, totalNet: 0, totalDeductions: 0, totalEmployerCost: 0 };
     let warnings = [];
@@ -700,9 +713,15 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let flexAllowData = isPartTime ? { total: 0, taxable: 0, exempt: 0 } : (allowancesMap[emp.id] || { total: 0, taxable: 0, exempt: 0 });
       let flexAllowance = flexAllowData.total;
 
-      // Indoor Sales logic
+      // AA Alive-specific payroll variables
+      let upsellCommission = 0, orderCommission = 0;
+      let tripAllowance = 0, tripAllowanceDays = 0;
+      let otExtraDays = 0, otExtraDaysAmount = 0;
+      let employeeRoleType = null;
+
+      // Indoor Sales logic (Mimix only - not AA Alive)
       let salesAmount = 0, salaryCalculationMethod = null;
-      if (features.indoor_sales_logic && emp.payroll_structure_code === 'indoor_sales') {
+      if (!isAAAlive && features.indoor_sales_logic && emp.payroll_structure_code === 'indoor_sales') {
         salesAmount = salesMap[emp.id] || 0;
         const calculatedCommission = salesAmount * (rates.indoor_sales_commission_rate / 100);
         if (calculatedCommission >= rates.indoor_sales_basic) {
@@ -720,37 +739,95 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let otHours = 0, otAmount = 0, phDaysWorked = 0, phPay = 0;
       const fixedOT = parseFloat(emp.fixed_ot_amount) || 0;
 
-      // Auto-calculate OT from clock-in records (works for both full-time and part-time)
-      if (features.auto_ot_from_clockin) {
-        try {
-          const otResult = await calculateOTFromClockIn(
-            emp.id, companyId, emp.department_id,
-            period.start.toISOString().split('T')[0],
-            period.end.toISOString().split('T')[0], basicSalary
-          );
-          otHours = otResult.total_ot_hours || 0;
-          otAmount = otResult.total_ot_amount || 0;
-        } catch (e) { console.warn(`OT calculation failed for ${emp.name}:`, e.message); }
-      }
+      // =====================================================
+      // AA ALIVE DRIVER/OFFICE PAYROLL
+      // =====================================================
+      if (isAAAlive && !isPartTime) {
+        const periodStart = period.start.toISOString().split('T')[0];
+        const periodEnd = period.end.toISOString().split('T')[0];
+        employeeRoleType = await getEmployeeRoleType(emp);
 
-      if (otHours > 0 && otHours < 1) { otHours = 0; otAmount = 0; }
-      else if (otHours >= 1) {
-        otHours = Math.floor(otHours * 2) / 2;
-        if (isPartTime) {
-          // Part-time: OT at 1.5x hourly rate
-          const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
-          otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
-        } else if (basicSalary > 0 && otHours > 0) {
-          // Full-time: OT at 1.5x calculated hourly rate
-          const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
-          otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+        if (employeeRoleType === 'driver') {
+          try {
+            const driverPayroll = await calculateDriverPayroll(
+              emp, basicSalary, periodStart, periodEnd, month, year, aaConfig
+            );
+
+            // Daily OT (extra hours beyond 9hrs/day)
+            otHours = driverPayroll.dailyOT.totalOTHours;
+            otAmount = driverPayroll.dailyOT.totalOTAmount;
+
+            // Monthly OT (extra days beyond 22)
+            otExtraDays = driverPayroll.monthlyOT.extraDays;
+            otExtraDaysAmount = driverPayroll.monthlyOT.totalAmount;
+
+            // Commissions from driver_commissions table
+            orderCommission = driverPayroll.commissions.order;
+            upsellCommission = driverPayroll.commissions.upsell;
+
+            // Trip allowance from outstation days
+            tripAllowanceDays = driverPayroll.tripAllowance.days;
+            tripAllowance = driverPayroll.tripAllowance.total;
+
+            // Add flexible commissions on top of driver commissions
+            commissionAmount = commissionAmount + orderCommission + upsellCommission;
+          } catch (e) {
+            console.warn(`AA Alive driver payroll failed for ${emp.name}:`, e.message);
+          }
+        } else {
+          // Office staff: standard calculation, commissions from flexible system
+          // OT from standard clock-in calculation
+          if (features.auto_ot_from_clockin) {
+            try {
+              const otResult = await calculateOTFromClockIn(
+                emp.id, companyId, emp.department_id, periodStart, periodEnd, basicSalary
+              );
+              otHours = otResult.total_ot_hours || 0;
+              otAmount = otResult.total_ot_amount || 0;
+            } catch (e) { console.warn(`OT calculation failed for ${emp.name}:`, e.message); }
+          }
+        }
+      }
+      // =====================================================
+      // NON-AA ALIVE OT CALCULATION (Mimix and others)
+      // =====================================================
+      else if (!isAAAlive) {
+        // Auto-calculate OT from clock-in records (works for both full-time and part-time)
+        if (features.auto_ot_from_clockin) {
+          try {
+            const otResult = await calculateOTFromClockIn(
+              emp.id, companyId, emp.department_id,
+              period.start.toISOString().split('T')[0],
+              period.end.toISOString().split('T')[0], basicSalary
+            );
+            otHours = otResult.total_ot_hours || 0;
+            otAmount = otResult.total_ot_amount || 0;
+          } catch (e) { console.warn(`OT calculation failed for ${emp.name}:`, e.message); }
+        }
+
+        if (otHours > 0 && otHours < 1) { otHours = 0; otAmount = 0; }
+        else if (otHours >= 1) {
+          otHours = Math.floor(otHours * 2) / 2;
+          if (isPartTime) {
+            // Part-time: OT at 1.5x hourly rate
+            const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
+            otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
+          } else if (basicSalary > 0 && otHours > 0) {
+            // Full-time: OT at 1.5x calculated hourly rate
+            const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+            otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+          }
         }
       }
 
       if (otAmount === 0 && fixedOT > 0) otAmount = fixedOT;
 
-      // PH pay calculation
-      if (isPartTime) {
+      // PH pay calculation (not for AA Alive drivers - PH is 1.0x, included in daily OT)
+      if (isAAAlive && employeeRoleType === 'driver') {
+        // AA Alive drivers: PH at 1.0x = same as normal OT, already included
+        phPay = 0;
+        phDaysWorked = 0;
+      } else if (isPartTime) {
         // Part-time: PH pay already calculated in calculatePartTimeHours
         phPay = partTimePhPay;
       } else if (features.auto_ph_pay && basicSalary > 0) {
@@ -775,7 +852,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let lateDays = 0, attendanceBonus = 0;
 
       // Short hours calculation for ALL companies (full-time only)
-      if (!isPartTime && basicSalary > 0) {
+      // AA Alive drivers: skip short hours (they have 9hr days, OT handles extra)
+      if (!isPartTime && basicSalary > 0 && !(isAAAlive && employeeRoleType === 'driver')) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];
@@ -819,8 +897,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       }
 
       // Calculate absent days from clock-in records (ALL companies including outlet)
-      if (!isPartTime) {
-        // Non-outlet: calculate absent days from clock-in records
+      // AA Alive drivers: skip absent day deduction (salary covers 22 days, extra days = OT)
+      if (!isPartTime && !(isAAAlive && employeeRoleType === 'driver')) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];
@@ -862,16 +940,30 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       const claimsAmount = claimsMap[emp.id] || 0;
       const advanceDeduction = advancesMap[emp.id] || 0;
 
+      // Calculate gross salary - different for AA Alive drivers
+      let grossSalary, statutoryBase;
       const totalAllowances = fixedAllowance + flexAllowance;
-      const grossBeforeDeductions = basicSalary + wages + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount + attendanceBonus;
-      const grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
 
-      // Statutory base - EPF/SOCSO/EIS based on actual pay received
-      const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
-      let statutoryBase = actualBasicPay + commissionAmount;
-      if (statutory.statutory_on_ot) statutoryBase += otAmount;
-      if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
-      if (statutory.statutory_on_allowance) statutoryBase += totalAllowances;
+      if (isAAAlive && employeeRoleType === 'driver' && !isPartTime) {
+        // AA Alive Driver: basic + daily_ot + monthly_ot + commissions + trip_allowance
+        const grossBeforeDeductions = basicSalary + otAmount + otExtraDaysAmount +
+          upsellCommission + orderCommission + tripAllowance + commissionAmount +
+          totalAllowances + claimsAmount;
+        grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+        // Statutory base = basic + commission only (NOT OT, NOT trip allowance)
+        statutoryBase = basicSalary + commissionAmount;
+      } else {
+        // Standard calculation (Mimix, AA Alive office, etc.)
+        const grossBeforeDeductions = basicSalary + wages + totalAllowances + otAmount + phPay + commissionAmount + claimsAmount + attendanceBonus;
+        grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+
+        // Statutory base - EPF/SOCSO/EIS based on actual pay received
+        const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+        statutoryBase = actualBasicPay + commissionAmount;
+        if (statutory.statutory_on_ot) statutoryBase += otAmount;
+        if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
+        if (statutory.statutory_on_allowance) statutoryBase += totalAllowances;
+      }
 
       // Get YTD data for PCB
       let ytdData = null;
@@ -900,7 +992,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       const netPay = grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction + shortHoursDeduction;
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
-      // Insert payroll item
+      // Insert payroll item (with AA Alive columns)
       await client.query(`
         INSERT INTO payroll_items (
           payroll_run_id, employee_id,
@@ -913,8 +1005,10 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
           epf_employee, epf_employer, socso_employee, socso_employer,
           eis_employee, eis_employer, pcb,
           total_deductions, net_pay, employer_total_cost,
-          sales_amount, salary_calculation_method
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
+          sales_amount, salary_calculation_method,
+          upsell_commission, order_commission, trip_allowance, trip_allowance_days,
+          ot_extra_days, ot_extra_days_amount, employee_role_type
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
       `, [
         runId, emp.id, basicSalary, wages, partTimeHoursWorked, totalAllowances, commissionAmount, claimsAmount,
         otHours, otAmount, phDaysWorked, phPay,
@@ -925,7 +1019,9 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
         epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
         eisEmployee, eisEmployer, pcb,
         totalDeductions, netPay, employerCost,
-        salesAmount, salaryCalculationMethod
+        salesAmount, salaryCalculationMethod,
+        upsellCommission, orderCommission, tripAllowance, tripAllowanceDays,
+        otExtraDays, otExtraDaysAmount, employeeRoleType
       ]);
 
       stats.created++;
@@ -2798,17 +2894,39 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       ? parseFloat(updates.claims_override) || 0
       : parseFloat(item.claims_amount) || 0;
 
-    // Gross salary (includes wages for part-time and attendance bonus for Mimix)
-    const grossSalary = basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
-                        commissionAmount + tradeCommission + outstationAmount + bonus + attendanceBonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
+    // AA Alive-specific fields
+    const isAAAlive = item.company_id === AA_ALIVE_COMPANY_ID;
+    const upsellCommission = parseFloat(updates.upsell_commission ?? item.upsell_commission) || 0;
+    const orderCommission = parseFloat(updates.order_commission ?? item.order_commission) || 0;
+    const tripAllowanceAmount = parseFloat(updates.trip_allowance ?? item.trip_allowance) || 0;
+    const tripAllowanceDays = parseInt(updates.trip_allowance_days ?? item.trip_allowance_days) || 0;
+    const otExtraDays = parseInt(updates.ot_extra_days ?? item.ot_extra_days) || 0;
+    const otExtraDaysAmount = parseFloat(updates.ot_extra_days_amount ?? item.ot_extra_days_amount) || 0;
+    const employeeRoleType = item.employee_role_type;
 
-    // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
-    const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
-    let statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
-    if (statutory.statutory_on_ot) statutoryBase += otAmount;
-    if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
-    if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
-    if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
+    // Gross salary calculation - different for AA Alive drivers
+    let grossSalary, statutoryBase;
+
+    if (isAAAlive && employeeRoleType === 'driver') {
+      // AA Alive Driver: basic + daily_ot + monthly_ot + commissions + trip_allowance
+      grossSalary = basicSalary + otAmount + otExtraDaysAmount +
+        upsellCommission + orderCommission + tripAllowanceAmount +
+        commissionAmount + fixedAllowance + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
+      // Statutory base = basic + commission only (NOT OT, NOT trip allowance)
+      statutoryBase = basicSalary + commissionAmount + orderCommission + upsellCommission;
+    } else {
+      // Standard calculation (Mimix, AA Alive office, etc.)
+      grossSalary = basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
+                    commissionAmount + tradeCommission + outstationAmount + bonus + attendanceBonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
+
+      // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
+      const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+      statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
+      if (statutory.statutory_on_ot) statutoryBase += otAmount;
+      if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
+      if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
+      if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
+    }
 
     // Get YTD data
     let ytdData = null;
@@ -2821,9 +2939,9 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const salaryBreakdown = {
       basic: basicSalary + wages,  // Include wages for part-time
       allowance: fixedAllowance + outstationAmount + incentiveAmount,  // All allowance-type items
-      commission: commissionAmount + tradeCommission,
+      commission: commissionAmount + tradeCommission + orderCommission + upsellCommission,
       bonus: bonus,
-      ot: otAmount + phPay,  // OT and PH pay as additional
+      ot: otAmount + phPay + otExtraDaysAmount,  // OT and PH pay as additional
       pcbGross: grossSalary
     };
     const statutoryResult = calculateAllStatutory(statutoryBase, item, item.month, ytdData, salaryBreakdown);
@@ -2874,6 +2992,9 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
         absent_days = $31, absent_day_deduction = $32,
         unpaid_leave_days = 0, unpaid_leave_deduction = 0,
         attendance_bonus = $33, late_days = $34,
+        upsell_commission = $37, order_commission = $38,
+        trip_allowance = $39, trip_allowance_days = $40,
+        ot_extra_days = $41, ot_extra_days_amount = $42,
         updated_at = NOW()
       WHERE id = $28
       RETURNING *
@@ -2894,7 +3015,10 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       shortHours, shortHoursDeduction,
       absentDays, absentDayDeduction,
       attendanceBonus, lateDays,
-      wages, partTimeHours
+      wages, partTimeHours,
+      upsellCommission, orderCommission,
+      tripAllowanceAmount, tripAllowanceDays,
+      otExtraDays, otExtraDaysAmount
     ]);
 
     // Update run totals

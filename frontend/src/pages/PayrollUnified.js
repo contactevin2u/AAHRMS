@@ -13,6 +13,7 @@ function PayrollUnified() {
   // ========== PAYROLL STATE ==========
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
   const isMimix = adminInfo.company_id === 3;
+  const isAAAlive = adminInfo.company_id === 1;
 
   const [runs, setRuns] = useState([]);
   const [selectedRun, setSelectedRun] = useState(null);
@@ -601,13 +602,22 @@ function PayrollUnified() {
         const showSOCSO = hasValue('socso_employee');
         const showEIS = hasValue('eis_employee');
         const showPCB = hasValue('pcb');
+        // AA Alive columns
+        const showExtraDays = hasValue('ot_extra_days_amount');
+        const showUpsellComm = hasValue('upsell_commission');
+        const showOrderComm = hasValue('order_commission');
+        const showTripAllow = hasValue('trip_allowance');
 
         // Build dynamic headers
         const headers = ['#', 'Code', 'Name', 'Basic'];
         if (showAllow) headers.push('Allow');
         if (showOT) headers.push('OT');
+        if (showExtraDays) headers.push('ExDays');
         if (showPH) headers.push('PH Pay');
         if (showComm) headers.push('Comm');
+        if (showUpsellComm) headers.push('Upsell');
+        if (showOrderComm) headers.push('Order');
+        if (showTripAllow) headers.push('Trip');
         if (showIncentive) headers.push('Incentive');
         if (showOutstation) headers.push('Outstation');
         if (showClaims) headers.push('Claims');
@@ -630,8 +640,12 @@ function PayrollUnified() {
           ];
           if (showAllow) row.push(parseFloat(emp.fixed_allowance || 0).toFixed(2));
           if (showOT) row.push(parseFloat(emp.ot_amount || 0).toFixed(2));
+          if (showExtraDays) row.push(parseFloat(emp.ot_extra_days_amount || 0).toFixed(2));
           if (showPH) row.push(parseFloat(emp.ph_pay || 0).toFixed(2));
           if (showComm) row.push(((parseFloat(emp.commission_amount) || 0) + (parseFloat(emp.trade_commission_amount) || 0)).toFixed(2));
+          if (showUpsellComm) row.push(parseFloat(emp.upsell_commission || 0).toFixed(2));
+          if (showOrderComm) row.push(parseFloat(emp.order_commission || 0).toFixed(2));
+          if (showTripAllow) row.push(parseFloat(emp.trip_allowance || 0).toFixed(2));
           if (showIncentive) row.push(parseFloat(emp.incentive_amount || 0).toFixed(2));
           if (showOutstation) row.push(parseFloat(emp.outstation_amount || 0).toFixed(2));
           if (showClaims) row.push(parseFloat(emp.claims_amount || 0).toFixed(2));
@@ -655,8 +669,12 @@ function PayrollUnified() {
         const totalsRow = ['', '', 'TOTAL', data.totals.basic_salary.toFixed(2)];
         if (showAllow) totalsRow.push(data.totals.fixed_allowance.toFixed(2));
         if (showOT) totalsRow.push(data.totals.ot_amount.toFixed(2));
+        if (showExtraDays) totalsRow.push(data.employees.reduce((s, e) => s + (parseFloat(e.ot_extra_days_amount) || 0), 0).toFixed(2));
         if (showPH) totalsRow.push((data.totals.ph_pay || 0).toFixed(2));
         if (showComm) totalsRow.push(data.totals.commission_amount.toFixed(2));
+        if (showUpsellComm) totalsRow.push(data.employees.reduce((s, e) => s + (parseFloat(e.upsell_commission) || 0), 0).toFixed(2));
+        if (showOrderComm) totalsRow.push(data.employees.reduce((s, e) => s + (parseFloat(e.order_commission) || 0), 0).toFixed(2));
+        if (showTripAllow) totalsRow.push(data.employees.reduce((s, e) => s + (parseFloat(e.trip_allowance) || 0), 0).toFixed(2));
         if (showIncentive) totalsRow.push((data.totals.incentive_amount || 0).toFixed(2));
         if (showOutstation) totalsRow.push((data.totals.outstation_amount || 0).toFixed(2));
         if (showClaims) totalsRow.push((data.totals.claims_amount || 0).toFixed(2));
@@ -748,7 +766,14 @@ function PayrollUnified() {
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
       claims_override: '', // Empty means use calculated value, set value to override claims amount
-      part_time_hours: partTimeHours // For part-time: hours worked
+      part_time_hours: partTimeHours, // For part-time: hours worked
+      // AA Alive fields
+      upsell_commission: item.upsell_commission || 0,
+      order_commission: item.order_commission || 0,
+      trip_allowance: item.trip_allowance || 0,
+      trip_allowance_days: item.trip_allowance_days || 0,
+      ot_extra_days: item.ot_extra_days || 0,
+      ot_extra_days_amount: item.ot_extra_days_amount || 0,
     });
     setShowItemModal(true);
     const statutoryBase = (parseFloat(item.basic_salary) || 0) + wages + (parseFloat(item.commission_amount) || 0) +
@@ -771,9 +796,13 @@ function PayrollUnified() {
   };
 
   const calculateOTAmount = (basicSalary, otHours, workingDays) => {
-    const wd = workingDays || selectedRun?.work_days_per_month || 22;
     if (!basicSalary || !otHours || otHours <= 0) return 0;
-    // OT rate = hourly rate x 1.5
+    if (isAAAlive) {
+      // AA Alive: OT rate = basic/26/8 × 1.0
+      return Math.round((basicSalary / 26 / 8) * 1.0 * otHours * 100) / 100;
+    }
+    const wd = workingDays || selectedRun?.work_days_per_month || 22;
+    // Mimix/others: OT rate = hourly rate x 1.5
     return Math.round((basicSalary / wd / 8) * 1.5 * otHours * 100) / 100;
   };
 
@@ -805,9 +834,13 @@ function PayrollUnified() {
   }, []);
 
   const getStatutoryBase = useCallback((form) => {
-    return (parseFloat(form.basic_salary) || 0) + (parseFloat(form.commission_amount) || 0) +
+    let base = (parseFloat(form.basic_salary) || 0) + (parseFloat(form.commission_amount) || 0) +
       (parseFloat(form.trade_commission_amount) || 0) + (parseFloat(form.bonus) || 0);
-  }, []);
+    if (isAAAlive) {
+      base += (parseFloat(form.order_commission) || 0) + (parseFloat(form.upsell_commission) || 0);
+    }
+    return base;
+  }, [isAAAlive]);
 
   const handleBasicSalaryChange = (basicSalary) => {
     const newForm = {
@@ -876,10 +909,14 @@ function PayrollUnified() {
       <tr><td>Basic Salary</td><td class="amount">RM ${formatNum(earnings.basic_salary)}</td></tr>
       ${earnings.fixed_allowance > 0 ? `<tr><td>Allowance</td><td class="amount">RM ${formatNum(earnings.fixed_allowance)}</td></tr>` : ''}
       ${earnings.ot_amount > 0 ? `<tr><td>OT (${earnings.ot_hours} hrs)</td><td class="amount">RM ${formatNum(earnings.ot_amount)}</td></tr>` : ''}
+      ${earnings.ot_extra_days_amount > 0 ? `<tr><td>Extra Days (${earnings.ot_extra_days} days)</td><td class="amount">RM ${formatNum(earnings.ot_extra_days_amount)}</td></tr>` : ''}
       ${earnings.ph_pay > 0 ? `<tr><td>PH Pay (${earnings.ph_days_worked} days)</td><td class="amount">RM ${formatNum(earnings.ph_pay)}</td></tr>` : ''}
       ${earnings.incentive_amount > 0 ? `<tr><td>Incentive</td><td class="amount">RM ${formatNum(earnings.incentive_amount)}</td></tr>` : ''}
       ${earnings.commission_amount > 0 ? `<tr><td>Commission</td><td class="amount">RM ${formatNum(earnings.commission_amount)}</td></tr>` : ''}
+      ${earnings.upsell_commission > 0 ? `<tr><td>Upsell Commission</td><td class="amount">RM ${formatNum(earnings.upsell_commission)}</td></tr>` : ''}
+      ${earnings.order_commission > 0 ? `<tr><td>Order Commission</td><td class="amount">RM ${formatNum(earnings.order_commission)}</td></tr>` : ''}
       ${earnings.trade_commission_amount > 0 ? `<tr><td>Trade Commission</td><td class="amount">RM ${formatNum(earnings.trade_commission_amount)}</td></tr>` : ''}
+      ${earnings.trip_allowance > 0 ? `<tr><td>Trip Allowance (${earnings.trip_allowance_days} days)</td><td class="amount">RM ${formatNum(earnings.trip_allowance)}</td></tr>` : ''}
       ${earnings.outstation_amount > 0 ? `<tr><td>Outstation</td><td class="amount">RM ${formatNum(earnings.outstation_amount)}</td></tr>` : ''}
       ${earnings.claims_amount > 0 ? `<tr><td>Claims</td><td class="amount">RM ${formatNum(earnings.claims_amount)}</td></tr>` : ''}
       ${earnings.bonus > 0 ? `<tr><td>Bonus</td><td class="amount">RM ${formatNum(earnings.bonus)}</td></tr>` : ''}
@@ -1007,6 +1044,13 @@ function PayrollUnified() {
         bonus: item.bonus || 0,
         other_deductions: item.other_deductions || 0,
         notes: item.notes || '',
+        // AA Alive fields (preserved on inline edit)
+        upsell_commission: item.upsell_commission || 0,
+        order_commission: item.order_commission || 0,
+        trip_allowance: item.trip_allowance || 0,
+        trip_allowance_days: item.trip_allowance_days || 0,
+        ot_extra_days: item.ot_extra_days || 0,
+        ot_extra_days_amount: item.ot_extra_days_amount || 0,
       };
       // Map display field to payload field
       const fieldMap = {
@@ -1054,6 +1098,11 @@ function PayrollUnified() {
       socso: hasValue('socso_employee'),
       eis: hasValue('eis_employee'),
       pcb: hasValue('pcb'),
+      // AA Alive specific columns
+      otExtraDays: hasValue('ot_extra_days_amount'),
+      upsellComm: hasValue('upsell_commission'),
+      orderComm: hasValue('order_commission'),
+      tripAllow: hasValue('trip_allowance'),
     };
   };
 
@@ -1403,10 +1452,14 @@ function PayrollUnified() {
                         <thead>
                           <tr>
                             <th>Employee</th><th>Basic</th>{vis.wages && <th>Wages</th>}<th title="Absent/Short/Unpaid (reduces Gross)">Deduct</th>
-                            {vis.ot && <th>OT</th>}
+                            {vis.ot && <th title="Daily OT (extra hours)">OT</th>}
+                            {vis.otExtraDays && <th title="Extra days beyond 22">Extra Days</th>}
                             {vis.ph && <th>PH Pay</th>}
                             {vis.allow && <th>Allow</th>}
                             {vis.comm && <th>Comm.</th>}
+                            {vis.upsellComm && <th title="Upsell Commission">Upsell</th>}
+                            {vis.orderComm && <th title="Order Commission">Order</th>}
+                            {vis.tripAllow && <th title="Trip Allowance (outstation)">Trip</th>}
                             {vis.incentive && <th>Incentive</th>}
                             {vis.outstation && <th>Outstation</th>}
                             {vis.claims && <th>Claims</th>}
@@ -1437,9 +1490,13 @@ function PayrollUnified() {
                                 })()}
                               </td>
                               {vis.ot && renderCell(item, 'ot_amount', item.ot_amount)}
+                              {vis.otExtraDays && <td title={`${item.ot_extra_days || 0} extra days`}>{formatAmount(item.ot_extra_days_amount)}</td>}
                               {vis.ph && <td>{formatAmount(item.ph_pay)}</td>}
                               {vis.allow && renderCell(item, 'fixed_allowance', item.fixed_allowance)}
                               {vis.comm && renderCell(item, 'commission_amount', (parseFloat(item.commission_amount) || 0) + (parseFloat(item.trade_commission_amount) || 0))}
+                              {vis.upsellComm && <td>{formatAmount(item.upsell_commission)}</td>}
+                              {vis.orderComm && <td>{formatAmount(item.order_commission)}</td>}
+                              {vis.tripAllow && <td title={`${item.trip_allowance_days || 0} days`}>{formatAmount(item.trip_allowance)}</td>}
                               {vis.incentive && <td>{formatAmount(item.incentive_amount)}</td>}
                               {vis.outstation && <td>{formatAmount(item.outstation_amount)}</td>}
                               {vis.claims && <td>{formatAmount(item.claims_amount)}</td>}
@@ -1864,8 +1921,12 @@ function PayrollUnified() {
                         <label>OT Hours</label>
                         <input type="number" step="0.5" value={itemForm.ot_hours} onChange={(e) => handleOTHoursChange(parseFloat(e.target.value) || 0)} />
                         {itemForm.basic_salary > 0 && (() => {
-                          const wd = selectedRun?.work_days_per_month || 22;
                           const basic = parseFloat(itemForm.basic_salary) || 0;
+                          if (isAAAlive) {
+                            const hourlyRate = basic / 26 / 8;
+                            return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {basic.toFixed(0)} / 26 days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.0 = RM {hourlyRate.toFixed(2)}/hr OT</small>;
+                          }
+                          const wd = selectedRun?.work_days_per_month || 22;
                           const hourlyRate = basic / wd / 8;
                           return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {basic.toFixed(0)} / {wd} days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
                         })()}
@@ -1908,6 +1969,57 @@ function PayrollUnified() {
                       <input type="number" step="0.01" value={itemForm.bonus} onChange={(e) => handleStatutoryFieldChange('bonus', parseFloat(e.target.value) || 0)} />
                     </div>
                   </div>
+                  {/* AA Alive Driver Fields */}
+                  {isAAAlive && editingItem?.employee_role_type === 'driver' && (
+                    <>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Extra Days (beyond 22)</label>
+                          <input type="number" step="1" value={itemForm.ot_extra_days} onChange={(e) => {
+                            const days = parseInt(e.target.value) || 0;
+                            const basic = parseFloat(itemForm.basic_salary) || 0;
+                            const dailyRate = basic / 26;
+                            const amount = Math.round(days * dailyRate * 100) / 100;
+                            setItemForm({ ...itemForm, ot_extra_days: days, ot_extra_days_amount: amount });
+                          }} />
+                          {itemForm.basic_salary > 0 && (
+                            <small style={{color: '#666', fontSize: '0.75rem'}}>
+                              Rate: RM {(parseFloat(itemForm.basic_salary) / 26).toFixed(2)}/day (basic/26)
+                            </small>
+                          )}
+                        </div>
+                        <div className="form-group">
+                          <label>Extra Days Amount</label>
+                          <input type="number" step="0.01" value={itemForm.ot_extra_days_amount} onChange={(e) => setItemForm({ ...itemForm, ot_extra_days_amount: parseFloat(e.target.value) || 0 })} />
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Upsell Commission</label>
+                          <input type="number" step="0.01" value={itemForm.upsell_commission} onChange={(e) => setItemForm({ ...itemForm, upsell_commission: parseFloat(e.target.value) || 0 })} />
+                        </div>
+                        <div className="form-group">
+                          <label>Order Commission</label>
+                          <input type="number" step="0.01" value={itemForm.order_commission} onChange={(e) => setItemForm({ ...itemForm, order_commission: parseFloat(e.target.value) || 0 })} />
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Trip Allowance Days</label>
+                          <input type="number" step="1" value={itemForm.trip_allowance_days} onChange={(e) => {
+                            const days = parseInt(e.target.value) || 0;
+                            const amount = days * 100; // RM100/day
+                            setItemForm({ ...itemForm, trip_allowance_days: days, trip_allowance: amount });
+                          }} />
+                          <small style={{color: '#666', fontSize: '0.75rem'}}>RM100/day outstation</small>
+                        </div>
+                        <div className="form-group">
+                          <label>Trip Allowance Amount</label>
+                          <input type="number" step="0.01" value={itemForm.trip_allowance} onChange={(e) => setItemForm({ ...itemForm, trip_allowance: parseFloat(e.target.value) || 0 })} />
+                        </div>
+                      </div>
+                    </>
+                  )}
                   <div className="form-row">
                     <div className="form-group">
                       <label>Short Hours</label>

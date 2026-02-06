@@ -415,4 +415,210 @@ router.post('/sync', async (req, res) => {
   }
 });
 
+// =============================================================================
+// COMMISSION MANAGEMENT
+// =============================================================================
+
+/**
+ * Sync commissions from OrderOps
+ * POST /api/admin/aaalive/sync-commissions
+ * Body: { month, year }
+ */
+router.post('/sync-commissions', async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    if (!API_KEY) {
+      return res.status(500).json({ error: 'AAALIVE_API_KEY not configured' });
+    }
+
+    const { month, year } = req.body;
+    if (!month || !year) {
+      return res.status(400).json({ error: 'month and year are required' });
+    }
+
+    // Calculate date range for the month
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endOfMonth = new Date(year, month, 0);
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')}`;
+
+    // Fetch commissions from OrderOps
+    const url = `${API_URL}/commissions?start_date=${startDate}&end_date=${endDate}`;
+    console.log(`Fetching commissions from: ${url}`);
+
+    let commissionsData = [];
+    try {
+      const response = await httpsGet(url, { 'X-API-Key': API_KEY });
+      if (response.ok) {
+        const data = await response.json();
+        commissionsData = Array.isArray(data) ? data : (data.commissions || data.data || []);
+      } else {
+        console.warn('OrderOps commissions API not available, skipping sync');
+      }
+    } catch (apiErr) {
+      console.warn('OrderOps commissions API error:', apiErr.message);
+    }
+
+    await client.query('BEGIN');
+    const results = { synced: [], skipped: [], failed: [] };
+
+    for (const comm of commissionsData) {
+      try {
+        const driverName = comm.driver_name;
+        if (!driverName) continue;
+
+        // Find employee
+        const mappedId = DRIVER_MAPPING[driverName] || DRIVER_MAPPING[driverName.toUpperCase()];
+        let employee = null;
+
+        if (mappedId) {
+          const r = await client.query(
+            `SELECT id, employee_id, name FROM employees WHERE company_id = $1 AND UPPER(employee_id) = UPPER($2) AND status = 'active'`,
+            [AA_ALIVE_COMPANY_ID, mappedId]
+          );
+          if (r.rows.length > 0) employee = r.rows[0];
+        }
+
+        if (!employee) {
+          const r = await client.query(
+            `SELECT id, employee_id, name FROM employees WHERE company_id = $1 AND status = 'active'
+              AND (UPPER(employee_id) = UPPER($2) OR UPPER(name) LIKE UPPER($3)) LIMIT 1`,
+            [AA_ALIVE_COMPANY_ID, driverName, `%${driverName}%`]
+          );
+          if (r.rows.length > 0) employee = r.rows[0];
+        }
+
+        if (!employee) {
+          results.failed.push({ driver_name: driverName, error: 'Employee not found' });
+          continue;
+        }
+
+        const commissionType = comm.commission_type || 'order';
+        const amount = parseFloat(comm.amount) || 0;
+        const orderCount = parseInt(comm.order_count) || 0;
+        const ratePerOrder = parseFloat(comm.rate_per_order) || 0;
+
+        await client.query(`
+          INSERT INTO driver_commissions (employee_id, company_id, period_month, period_year, commission_type, amount, order_count, rate_per_order, source, notes)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'orderops', $9)
+          ON CONFLICT (employee_id, period_month, period_year, commission_type)
+          DO UPDATE SET amount = $6, order_count = $7, rate_per_order = $8, source = 'orderops', notes = $9, updated_at = NOW()
+        `, [employee.id, AA_ALIVE_COMPANY_ID, month, year, commissionType, amount, orderCount, ratePerOrder, comm.notes || null]);
+
+        results.synced.push({ employee_id: employee.employee_id, name: employee.name, type: commissionType, amount });
+      } catch (err) {
+        results.failed.push({ commission: comm, error: err.message });
+      }
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      period: { month, year },
+      summary: {
+        total: commissionsData.length,
+        synced: results.synced.length,
+        skipped: results.skipped.length,
+        failed: results.failed.length
+      },
+      details: results
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Commission sync error:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Get commissions for a period
+ * GET /api/admin/aaalive/commissions?month=X&year=Y
+ */
+router.get('/commissions', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) {
+      return res.status(400).json({ error: 'month and year are required' });
+    }
+
+    const result = await pool.query(`
+      SELECT dc.*, e.employee_id as emp_code, e.name as employee_name
+      FROM driver_commissions dc
+      JOIN employees e ON dc.employee_id = e.id
+      WHERE dc.company_id = $1 AND dc.period_month = $2 AND dc.period_year = $3
+      ORDER BY e.name, dc.commission_type
+    `, [AA_ALIVE_COMPANY_ID, month, year]);
+
+    res.json({
+      period: { month: parseInt(month), year: parseInt(year) },
+      commissions: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching commissions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Update a commission manually
+ * PUT /api/admin/aaalive/commissions/:id
+ */
+router.put('/commissions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, order_count, rate_per_order, notes } = req.body;
+
+    const result = await pool.query(`
+      UPDATE driver_commissions SET
+        amount = COALESCE($1, amount),
+        order_count = COALESCE($2, order_count),
+        rate_per_order = COALESCE($3, rate_per_order),
+        notes = COALESCE($4, notes),
+        source = 'manual',
+        updated_at = NOW()
+      WHERE id = $5
+      RETURNING *
+    `, [amount, order_count, rate_per_order, notes, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Commission not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating commission:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Create a commission manually
+ * POST /api/admin/aaalive/commissions
+ */
+router.post('/commissions', async (req, res) => {
+  try {
+    const { employee_id, month, year, commission_type, amount, order_count, rate_per_order, notes } = req.body;
+
+    if (!employee_id || !month || !year || !commission_type) {
+      return res.status(400).json({ error: 'employee_id, month, year, and commission_type are required' });
+    }
+
+    const result = await pool.query(`
+      INSERT INTO driver_commissions (employee_id, company_id, period_month, period_year, commission_type, amount, order_count, rate_per_order, source, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual', $9)
+      ON CONFLICT (employee_id, period_month, period_year, commission_type)
+      DO UPDATE SET amount = $6, order_count = $7, rate_per_order = $8, source = 'manual', notes = $9, updated_at = NOW()
+      RETURNING *
+    `, [employee_id, AA_ALIVE_COMPANY_ID, month, year, commission_type, amount || 0, order_count || 0, rate_per_order || 0, notes || null]);
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating commission:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
