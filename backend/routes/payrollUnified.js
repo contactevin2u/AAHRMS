@@ -1725,7 +1725,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
     const workDaysPerMonth = settings.rates.standard_work_days || 22;
 
     res.json({
-      run: { ...run, work_days_per_month: workDaysPerMonth },
+      run: { ...run, work_days_per_month: workDaysPerMonth, part_time_hourly_rate: settings.rates.part_time_hourly_rate || 8.72 },
       items: itemsResult.rows
     });
   } catch (error) {

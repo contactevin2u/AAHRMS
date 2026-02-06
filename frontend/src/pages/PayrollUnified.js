@@ -1805,7 +1805,7 @@ function PayrollUnified() {
                   {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time' || editingItem?.work_type === 'PART TIMER') && (() => {
                     const normalHours = parseFloat(itemForm.part_time_hours) || 0;
                     const otHours = parseFloat(itemForm.ot_hours) || 0;
-                    const hourlyRate = parseFloat(editingItem?.hourly_rate || 0);
+                    const hourlyRate = parseFloat(editingItem?.hourly_rate) || parseFloat(selectedRun?.part_time_hourly_rate) || 8.72;
                     // For part-time: OT is 1.5x hourly rate
                     const normalPay = normalHours * hourlyRate;
                     const otPay = otHours * hourlyRate * 1.5;
