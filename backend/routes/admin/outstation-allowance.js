@@ -118,8 +118,18 @@ router.get('/report', async (req, res) => {
     const shiftParams = { start_date, end_date };
     if (driver_id) shiftParams.driver_id = driver_id;
 
-    const shiftsData = await fetchApi('/shifts', shiftParams);
+    let shiftsData;
+    let apiError = null;
+    try {
+      shiftsData = await fetchApi('/shifts', shiftParams);
+    } catch (err) {
+      console.error('OrderOps API error:', err.message);
+      apiError = err.message;
+      shiftsData = {};
+    }
     const shifts = shiftsData.shifts || shiftsData.data || shiftsData || [];
+    const totalShiftsFetched = Array.isArray(shifts) ? shifts.length : 0;
+    console.log(`Outstation report: ${totalShiftsFetched} shifts fetched from OrderOps for ${start_date} to ${end_date}`);
 
     // Group shifts by driver
     const driverShifts = {};
@@ -228,7 +238,10 @@ router.get('/report', async (req, res) => {
       eligible_drivers: eligibleDrivers,
       summary: {
         total_drivers: eligibleDrivers.length,
-        total_allowance: totalAllowance
+        total_allowance: totalAllowance,
+        total_shifts_fetched: totalShiftsFetched,
+        total_unique_drivers: Object.keys(driverShifts).length,
+        api_error: apiError
       }
     });
   } catch (err) {

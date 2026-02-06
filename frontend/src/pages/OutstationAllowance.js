@@ -140,7 +140,20 @@ function OutstationAllowance({ departmentId: propDeptId, embedded = false }) {
           </div>
 
           {reportData.eligible_drivers.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>No eligible drivers found for this period.</div>
+            <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+              <div>No eligible drivers found for this period.</div>
+              {reportData.summary.api_error && (
+                <div style={{ color: '#dc2626', marginTop: '8px', fontSize: '13px' }}>
+                  API Error: {reportData.summary.api_error}
+                </div>
+              )}
+              {!reportData.summary.api_error && (
+                <div style={{ marginTop: '8px', fontSize: '13px' }}>
+                  OrderOps returned {reportData.summary.total_shifts_fetched || 0} shifts from {reportData.summary.total_unique_drivers || 0} drivers.
+                  {reportData.summary.total_shifts_fetched === 0 && ' The OrderOps API may not have data for this date range.'}
+                </div>
+              )}
+            </div>
           )}
 
           {reportData.eligible_drivers.map((driver, driverIdx) => (
