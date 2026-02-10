@@ -10,6 +10,7 @@ import Attendance from './Attendance';
 import Leave from './Leave';
 import Claims from './Claims';
 import Letters from './Letters';
+import Resignations from './Resignations';
 
 import './DepartmentHub.css'; // Reuse same CSS
 
@@ -20,6 +21,7 @@ const OUTLET_TABS = [
   { key: 'leave', label: 'Leave', icon: '📅' },
   { key: 'claims', label: 'Claims', icon: '💰' },
   { key: 'letters', label: 'HR Letters', icon: '📋' },
+  { key: 'resignations', label: 'Resignation', icon: '📝' },
 ];
 
 const TAB_COMPONENTS = {
@@ -29,6 +31,7 @@ const TAB_COMPONENTS = {
   'leave': Leave,
   'claims': Claims,
   'letters': Letters,
+  'resignations': Resignations,
 };
 
 function OutletHub() {

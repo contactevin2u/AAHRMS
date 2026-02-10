@@ -7,24 +7,32 @@ const { calculateFinalSettlement, saveFinalSettlement } = require('../utils/fina
 // Get all resignations
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, outlet_id } = req.query;
 
     let query = `
       SELECT r.*,
              e.name as employee_name,
              e.employee_id as emp_code,
              e.default_basic_salary,
-             d.name as department_name
+             e.outlet_id,
+             d.name as department_name,
+             o.name as outlet_name
       FROM resignations r
       JOIN employees e ON r.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN outlets o ON e.outlet_id = o.id
       WHERE 1=1
     `;
     const params = [];
 
     if (status) {
-      query += ` AND r.status = $1`;
       params.push(status);
+      query += ` AND r.status = $${params.length}`;
+    }
+
+    if (outlet_id) {
+      params.push(outlet_id);
+      query += ` AND e.outlet_id = $${params.length}`;
     }
 
     query += ' ORDER BY r.created_at DESC';

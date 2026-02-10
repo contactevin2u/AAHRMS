@@ -3,7 +3,9 @@ import { resignationsApi, employeeApi } from '../api';
 import Layout from '../components/Layout';
 import './Resignations.css';
 
-function Resignations() {
+function Resignations({ outletId: propOutletId, embedded = false }) {
+  const isOutletLocked = !!propOutletId;
+
   // Check if company uses outlets (Mimix = company_id 3)
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
   const isMimix = adminInfo.company_id === 3;
@@ -11,7 +13,7 @@ function Resignations() {
   const [resignations, setResignations] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState({ status: '' });
+  const [filter, setFilter] = useState({ status: '', outlet_id: propOutletId || '' });
 
   // Modals
   const [showModal, setShowModal] = useState(false);
@@ -45,9 +47,11 @@ function Resignations() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const empParams = { status: 'active' };
+      if (propOutletId) empParams.outlet_id = propOutletId;
       const [resRes, empRes] = await Promise.all([
         resignationsApi.getAll(filter),
-        employeeApi.getAll({ status: 'active' })
+        employeeApi.getAll(empParams)
       ]);
       setResignations(resRes.data);
       setEmployees(empRes.data);
@@ -236,9 +240,9 @@ function Resignations() {
     return diffDays;
   };
 
-  return (
-    <Layout>
+  const content = (
       <div className="resignations-page">
+        {!embedded && (
         <header className="page-header">
           <div>
             <h1>Resignations</h1>
@@ -248,6 +252,14 @@ function Resignations() {
             + New Resignation
           </button>
         </header>
+        )}
+        {embedded && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+          <button onClick={() => { resetForm(); setShowModal(true); }} className="add-btn">
+            + New Resignation
+          </button>
+        </div>
+        )}
 
         {/* Stats */}
         <div className="stats-row">
@@ -664,8 +676,9 @@ function Resignations() {
           </div>
         )}
       </div>
-    </Layout>
   );
+
+  return embedded ? content : <Layout>{content}</Layout>;
 }
 
 export default Resignations;
