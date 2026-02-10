@@ -19,6 +19,20 @@ const {
   isAAAliveIndoorSalesManager
 } = require('../../middleware/essPermissions');
 
+// Helper: sync has_schedule on clock_in_records when a schedule is created/updated
+const syncClockInHasSchedule = async (employeeId, scheduleDate, scheduleId) => {
+  try {
+    await pool.query(
+      `UPDATE clock_in_records
+       SET has_schedule = true, schedule_id = $1
+       WHERE employee_id = $2 AND work_date = $3 AND (has_schedule = false OR has_schedule IS NULL)`,
+      [scheduleId, employeeId, scheduleDate]
+    );
+  } catch (err) {
+    console.error('Error syncing has_schedule:', err.message);
+  }
+};
+
 // Check if employee can manage schedules (supervisor/manager OR designated AA Alive schedule manager)
 const canManageSchedules = async (employee) => {
   if (isSupervisorOrManager(employee)) return true;
@@ -1058,6 +1072,11 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
        template.is_off ? 'off' : 'scheduled', employee_id, schedule_date]
     );
 
+    // Sync has_schedule on clock_in_records
+    if (!template.is_off) {
+      await syncClockInHasSchedule(employee_id, schedule_date, result.rows[0].id);
+    }
+
     return res.json({
       message: 'Schedule updated successfully',
       schedule: {
@@ -1081,6 +1100,11 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
      targetEmployee.company_id, schedule_date, shift_template_id,
      template.start_time, template.end_time, template.is_off ? 'off' : 'scheduled']
   );
+
+  // Sync has_schedule on clock_in_records
+  if (!template.is_off) {
+    await syncClockInHasSchedule(employee_id, schedule_date, result.rows[0].id);
+  }
 
   res.status(201).json({
     message: 'Schedule created successfully',
@@ -1182,6 +1206,7 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
         [employee_id, schedule_date]
       );
 
+      let scheduleId;
       if (existing.rows.length > 0) {
         // Update existing
         await pool.query(
@@ -1191,6 +1216,7 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
           [shift_template_id, template.start_time, template.end_time,
            template.is_off ? 'off' : 'scheduled', existing.rows[0].id]
         );
+        scheduleId = existing.rows[0].id;
         updated.push({ id: existing.rows[0].id, employee_id, schedule_date });
       } else {
         // Create new
@@ -1204,7 +1230,13 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
            targetEmployee.company_id, schedule_date, shift_template_id,
            template.start_time, template.end_time, template.is_off ? 'off' : 'scheduled']
         );
+        scheduleId = result.rows[0].id;
         created.push({ id: result.rows[0].id, employee_id, schedule_date });
+      }
+
+      // Sync has_schedule on clock_in_records
+      if (!template.is_off) {
+        await syncClockInHasSchedule(employee_id, schedule_date, scheduleId);
       }
     } catch (err) {
       errors.push({ employee_id: sched.employee_id, schedule_date: sched.schedule_date, error: err.message });

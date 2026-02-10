@@ -10,6 +10,20 @@ const formatTime = (time) => {
   return time.substring(0, 5); // HH:MM
 };
 
+// Helper: sync has_schedule on clock_in_records when a schedule is created/updated
+const syncClockInHasSchedule = async (employeeId, scheduleDate, scheduleId) => {
+  try {
+    await pool.query(
+      `UPDATE clock_in_records
+       SET has_schedule = true, schedule_id = $1
+       WHERE employee_id = $2 AND work_date = $3 AND (has_schedule = false OR has_schedule IS NULL)`,
+      [scheduleId, employeeId, scheduleDate]
+    );
+  } catch (err) {
+    console.error('Error syncing has_schedule:', err.message);
+  }
+};
+
 // Helper to check schedule edit permissions based on position role
 // Returns { allowed: boolean, reason: string }
 const checkScheduleEditPermission = async (adminId, scheduleDate) => {
@@ -331,6 +345,9 @@ router.post('/', authenticateAdmin, async (req, res) => {
        RETURNING *`,
       [employee_id, companyId, effectiveOutletId, schedule_date, shift_start, shift_end, break_duration || 60, adminId]
     );
+
+    // Sync has_schedule on clock_in_records
+    await syncClockInHasSchedule(employee_id, schedule_date, result.rows[0].id);
 
     // Log audit (optional - don't fail if audit table doesn't exist)
     try {
@@ -954,8 +971,14 @@ router.post('/roster/assign', authenticateAdmin, async (req, res) => {
       );
     }
 
+    // Sync has_schedule on clock_in_records
+    const schedule = result.rows[0];
+    if (!t.is_off) {
+      await syncClockInHasSchedule(employee_id, schedule_date, schedule.id);
+    }
+
     res.json({
-      ...result.rows[0],
+      ...schedule,
       shift_code: t.code,
       shift_color: t.color,
       is_off: t.is_off
@@ -1005,6 +1028,7 @@ router.post('/roster/bulk-assign', authenticateAdmin, async (req, res) => {
           [a.employee_id, a.schedule_date]
         );
 
+        let scheduleId;
         if (existing.rows.length > 0) {
           await pool.query(
             `UPDATE schedules
@@ -1014,18 +1038,26 @@ router.post('/roster/bulk-assign', authenticateAdmin, async (req, res) => {
             [a.shift_template_id, t.start_time, t.end_time,
              a.is_public_holiday || false, t.is_off ? 'off' : 'scheduled', existing.rows[0].id]
           );
+          scheduleId = existing.rows[0].id;
           results.updated++;
         } else {
-          await pool.query(
+          const insertResult = await pool.query(
             `INSERT INTO schedules
               (employee_id, company_id, outlet_id, schedule_date, shift_template_id,
                shift_start, shift_end, is_public_holiday, status, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             RETURNING id`,
             [a.employee_id, companyId, outlet_id, a.schedule_date, a.shift_template_id,
              t.start_time, t.end_time, a.is_public_holiday || false,
              t.is_off ? 'off' : 'scheduled', adminId]
           );
+          scheduleId = insertResult.rows[0].id;
           results.created++;
+        }
+
+        // Sync has_schedule on clock_in_records
+        if (!t.is_off) {
+          await syncClockInHasSchedule(a.employee_id, a.schedule_date, scheduleId);
         }
       } catch (err) {
         results.errors.push({ employee_id: a.employee_id, date: a.schedule_date, error: err.message });
@@ -1470,8 +1502,14 @@ router.post('/roster/department/assign', authenticateAdmin, async (req, res) => 
       );
     }
 
+    // Sync has_schedule on clock_in_records
+    const deptSchedule = result.rows[0];
+    if (!t.is_off) {
+      await syncClockInHasSchedule(employee_id, schedule_date, deptSchedule.id);
+    }
+
     res.json({
-      ...result.rows[0],
+      ...deptSchedule,
       shift_code: t.code,
       shift_color: t.color,
       is_off: t.is_off
@@ -1510,6 +1548,7 @@ router.post('/roster/department/bulk-assign', authenticateAdmin, async (req, res
           [a.employee_id, a.schedule_date]
         );
 
+        let scheduleId;
         if (existing.rows.length > 0) {
           await pool.query(
             `UPDATE schedules
@@ -1519,18 +1558,26 @@ router.post('/roster/department/bulk-assign', authenticateAdmin, async (req, res
             [a.shift_template_id, t.start_time, t.end_time,
              a.is_public_holiday || false, t.is_off ? 'off' : 'scheduled', department_id, existing.rows[0].id]
           );
+          scheduleId = existing.rows[0].id;
           results.updated++;
         } else {
-          await pool.query(
+          const insertResult = await pool.query(
             `INSERT INTO schedules
               (employee_id, company_id, department_id, schedule_date, shift_template_id,
                shift_start, shift_end, is_public_holiday, status, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             RETURNING id`,
             [a.employee_id, companyId, department_id, a.schedule_date, a.shift_template_id,
              t.start_time, t.end_time, a.is_public_holiday || false,
              t.is_off ? 'off' : 'scheduled', adminId]
           );
+          scheduleId = insertResult.rows[0].id;
           results.created++;
+        }
+
+        // Sync has_schedule on clock_in_records
+        if (!t.is_off) {
+          await syncClockInHasSchedule(a.employee_id, a.schedule_date, scheduleId);
         }
       } catch (err) {
         results.errors.push({ employee_id: a.employee_id, date: a.schedule_date, error: err.message });
