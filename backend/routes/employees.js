@@ -268,14 +268,15 @@ router.get('/', authenticateAdmin, async (req, res) => {
     }
 
     // Outlet filter (for supervisors - they can ONLY see their outlet)
+    // Also includes managers/supervisors linked via employee_outlets junction table
     if (outletId !== null) {
       paramCount++;
-      query += ` AND e.outlet_id = $${paramCount}`;
+      query += ` AND (e.outlet_id = $${paramCount} OR e.id IN (SELECT employee_id FROM employee_outlets WHERE outlet_id = $${paramCount}))`;
       params.push(outletId);
     } else if (outlet_id) {
       // Allow admins to filter by specific outlet via query param
       paramCount++;
-      query += ` AND e.outlet_id = $${paramCount}`;
+      query += ` AND (e.outlet_id = $${paramCount} OR e.id IN (SELECT employee_id FROM employee_outlets WHERE outlet_id = $${paramCount}))`;
       params.push(outlet_id);
     }
 
