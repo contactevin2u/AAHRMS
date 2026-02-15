@@ -235,7 +235,13 @@ const isAAAliveCompany = (companyId) => {
  */
 const getManagedOutlets = async (employee) => {
   if (employee.employee_role === ROLES.SUPERVISOR) {
-    return employee.outlet_id ? [employee.outlet_id] : [];
+    // Supervisor: own outlet, fallback to employee_outlets if outlet_id is null
+    if (employee.outlet_id) return [employee.outlet_id];
+    const result = await pool.query(
+      'SELECT outlet_id FROM employee_outlets WHERE employee_id = $1',
+      [employee.id]
+    );
+    return result.rows.map(r => r.outlet_id);
   }
 
   if (employee.employee_role === ROLES.MANAGER) {

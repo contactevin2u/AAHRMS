@@ -79,13 +79,16 @@ function ESSTeamSchedule({ embedded = false }) {
 
       if (empRes.data.outlets?.length > 0) {
         setSelectedOutlet(empRes.data.outlets[0].id.toString());
-      }
-      if (empRes.data.departments?.length > 0) {
+      } else if (empRes.data.departments?.length > 0) {
         setSelectedDepartment(empRes.data.departments[0].id.toString());
+      } else {
+        // No outlets or departments assigned - stop loading
+        setLoading(false);
       }
     } catch (error) {
       console.error('Error fetching initial data:', error);
       toast.error('Failed to load data');
+      setLoading(false);
     }
   };
 
@@ -422,6 +425,10 @@ function ESSTeamSchedule({ embedded = false }) {
           <div className="ts-loading">
             <div className="ts-spinner"></div>
             <span>{t('common.loading')}</span>
+          </div>
+        ) : outlets.length === 0 && departments.length === 0 ? (
+          <div className="ts-loading">
+            <p>No outlets or departments assigned. Please contact admin to assign your managed outlets.</p>
           </div>
         ) : (
           /* Calendar View */

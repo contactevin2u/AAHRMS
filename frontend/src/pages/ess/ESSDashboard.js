@@ -89,8 +89,8 @@ function ESSDashboard() {
       //   }
       // }
 
-      // Fetch pending claims approvals
-      if (canApproveClaims(info)) {
+      // Fetch pending claims approvals (use backend permission flag)
+      if (info?.permissions?.can_approve_claims) {
         try {
           const claimsRes = await essApi.getTeamPendingClaims();
           approvals.claims = claimsRes.data?.length || 0;
