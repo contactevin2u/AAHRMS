@@ -329,6 +329,9 @@ export const resignationsApi = {
   // Notice waiver
   waiveNotice: (id, data) => api.post(`/resignations/${id}/waive-notice`, data),
 
+  // Leave entitlement
+  getLeaveEntitlement: (id) => api.get(`/resignations/${id}/leave-entitlement`),
+
   // Settlement
   getSettlement: (id, params) => api.get(`/resignations/${id}/settlement`, { params }),
   saveSettlement: (id, data) => api.post(`/resignations/${id}/settlement`, data),

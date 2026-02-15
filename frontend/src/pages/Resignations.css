@@ -864,6 +864,78 @@
   box-shadow: 0 6px 16px rgba(142, 199, 135, 0.4);
 }
 
+/* Leave Entitlement Table */
+.leave-entitlement-table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 10px;
+}
+
+.leave-entitlement-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  min-width: 700px;
+}
+
+.leave-entitlement-table th,
+.leave-entitlement-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.leave-entitlement-table th {
+  background: #f1f5f9;
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.leave-entitlement-table th.col-left,
+.leave-entitlement-table td.col-left {
+  text-align: left;
+}
+
+.leave-entitlement-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.leave-entitlement-table tr.advance-warning {
+  background: #fff5f5;
+}
+
+.leave-entitlement-table tr.advance-warning:hover {
+  background: #fee2e2;
+}
+
+.leave-entitlement-table .of-total {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.advance-warning-box {
+  background: #fff5f5;
+  border: 2px solid #fecaca;
+  border-radius: 12px;
+  padding: 15px;
+  margin-top: 10px;
+}
+
+.advance-warning-box strong {
+  color: #991b1b;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.advance-warning-box p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #b91c1c;
+}
+
 /* Print styles */
 @media print {
   .modal-overlay {

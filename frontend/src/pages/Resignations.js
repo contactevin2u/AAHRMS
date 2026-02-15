@@ -27,6 +27,10 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
   const [loadingSettlement, setLoadingSettlement] = useState(false);
   const [loadingClearance, setLoadingClearance] = useState(false);
 
+  // Leave entitlement
+  const [leaveEntitlement, setLeaveEntitlement] = useState(null);
+  const [loadingLeave, setLoadingLeave] = useState(false);
+
   // Form
   const [form, setForm] = useState({
     employee_id: '',
@@ -126,6 +130,7 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
       setDetailsTab('overview');
       setClearanceData(null);
       setSettlementData(null);
+      setLeaveEntitlement(null);
       setShowDetailsModal(true);
     } catch (error) {
       alert('Failed to fetch resignation details');
@@ -237,6 +242,19 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
       alert('Failed to calculate settlement');
     } finally {
       setLoadingSettlement(false);
+    }
+  };
+
+  // Leave entitlement
+  const loadLeaveEntitlement = async (id) => {
+    setLoadingLeave(true);
+    try {
+      const res = await resignationsApi.getLeaveEntitlement(id);
+      setLeaveEntitlement(res.data);
+    } catch (error) {
+      console.error('Error loading leave entitlement:', error);
+    } finally {
+      setLoadingLeave(false);
     }
   };
 
@@ -630,7 +648,7 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
                 )}
                 <button
                   className={`tab-btn ${detailsTab === 'leave' ? 'active' : ''}`}
-                  onClick={() => setDetailsTab('leave')}
+                  onClick={() => { setDetailsTab('leave'); loadLeaveEntitlement(selectedResignation.id); }}
                 >
                   Leave
                 </button>
@@ -769,37 +787,85 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
                 {/* Leave Tab */}
                 {detailsTab === 'leave' && (
                   <div className="leave-content">
-                    <div className="detail-section">
-                      <h4>Leave Balances</h4>
-                      {selectedResignation.leave_balances?.length > 0 ? (
-                        <div className="leave-balance-table">
-                          <div className="lb-header">
-                            <span>Type</span>
-                            <span>Entitled</span>
-                            <span>Used</span>
-                            <span>Balance</span>
+                    {loadingLeave ? (
+                      <div className="loading">Loading leave entitlement...</div>
+                    ) : leaveEntitlement ? (
+                      <>
+                        <div className="detail-section">
+                          <h4>Leave Entitlement Breakdown</h4>
+                          <p style={{ color: '#64748b', fontSize: '0.82rem', marginTop: -10, marginBottom: 12 }}>
+                            Reference date: {formatDate(leaveEntitlement.reference_date)} | Completed months: {leaveEntitlement.completed_months}/12
+                          </p>
+                          <div className="leave-entitlement-table-wrapper">
+                            <table className="leave-entitlement-table">
+                              <thead>
+                                <tr>
+                                  <th className="col-left">Leave Type</th>
+                                  <th>Last Year B/F</th>
+                                  <th>YTD Earned</th>
+                                  <th>Adj</th>
+                                  <th>Total Entitlement</th>
+                                  <th>YTD Taken</th>
+                                  <th>Future Taken</th>
+                                  <th>Pending</th>
+                                  <th>Available Balance</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {leaveEntitlement.leave_types.map(lt => (
+                                  <tr key={lt.leave_type_id} className={lt.advance_used > 0 ? 'advance-warning' : ''}>
+                                    <td className="col-left">{lt.name} ({lt.code})</td>
+                                    <td>{lt.carried_forward}</td>
+                                    <td>{lt.ytd_earned} <span className="of-total">/ {lt.full_year_entitlement}</span></td>
+                                    <td>{lt.adjustment}</td>
+                                    <td><strong>{lt.total_entitlement}</strong></td>
+                                    <td>{lt.ytd_taken}</td>
+                                    <td>{lt.future_taken}</td>
+                                    <td>{lt.pending}</td>
+                                    <td><strong>{lt.available_balance}</strong></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
-                          {selectedResignation.leave_balances.map(lb => (
-                            <div key={lb.id || lb.code} className="lb-row">
-                              <span>{lb.leave_type_name || lb.code}</span>
-                              <span>{lb.entitled_days}</span>
-                              <span>{lb.used_days}</span>
-                              <strong>{(parseFloat(lb.entitled_days) - parseFloat(lb.used_days)).toFixed(1)}</strong>
-                            </div>
-                          ))}
                         </div>
-                      ) : (
-                        <p style={{ color: '#64748b' }}>No paid leave balances found</p>
-                      )}
-                    </div>
 
-                    <div className="detail-section">
-                      <h4>Leave Encashment</h4>
-                      <div className="info-grid">
-                        <div><span>Encashment Days:</span><strong>{selectedResignation.leave_encashment_days || 0}</strong></div>
-                        <div><span>Encashment Amount:</span><strong>{formatAmount(selectedResignation.leave_encashment_amount)}</strong></div>
-                      </div>
-                    </div>
+                        <div className="detail-section">
+                          <h4>Encashment Summary</h4>
+                          <div className="calc-table">
+                            {leaveEntitlement.leave_types.filter(lt => lt.is_paid).map(lt => (
+                              <div key={lt.leave_type_id} className="calc-row">
+                                <span>{lt.name} — encashable</span>
+                                <strong>{lt.encashable_days} days</strong>
+                              </div>
+                            ))}
+                            <div className="calc-row subtotal">
+                              <span>Total Encashable Days</span>
+                              <strong>{leaveEntitlement.summary.total_encashable_days} days</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        {leaveEntitlement.summary.has_advance_usage && (
+                          <div className="advance-warning-box">
+                            <strong>Advance Leave Warning</strong>
+                            <p>
+                              Employee has used {leaveEntitlement.summary.total_advance_used} day(s) of advance (unearned) leave.
+                              This may need to be deducted from the final settlement.
+                            </p>
+                            <div style={{ marginTop: 8 }}>
+                              {leaveEntitlement.leave_types.filter(lt => lt.advance_used > 0).map(lt => (
+                                <div key={lt.leave_type_id} style={{ fontSize: '0.82rem', color: '#991b1b' }}>
+                                  {lt.name}: {lt.advance_used} day(s) advance used (earned {lt.ytd_earned}, used {lt.ytd_taken + lt.future_taken}, B/F {lt.carried_forward})
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="no-data">Click the Leave tab to load entitlement details</div>
+                    )}
                   </div>
                 )}
 

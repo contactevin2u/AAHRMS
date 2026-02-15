@@ -4,6 +4,7 @@ const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter, buildCompanyFilter } = require('../middleware/tenant');
 const { calculateFinalSettlement, saveFinalSettlement } = require('../utils/finalSettlement');
+const { calculateDetailedLeaveEntitlement } = require('../utils/leaveProration');
 
 /**
  * Calculate required notice period based on Malaysian Employment Act 1955
@@ -868,6 +869,37 @@ router.post('/:id/cleanup-leaves', authenticateAdmin, async (req, res) => {
     res.status(500).json({ error: 'Failed to cleanup leaves' });
   } finally {
     client.release();
+  }
+});
+
+// Get detailed leave entitlement for resignation
+router.get('/:id/leave-entitlement', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const resignation = await pool.query(
+      'SELECT r.employee_id, r.last_working_day, e.join_date, e.company_id FROM resignations r JOIN employees e ON r.employee_id = e.id WHERE r.id = $1',
+      [id]
+    );
+
+    if (resignation.rows.length === 0) {
+      return res.status(404).json({ error: 'Resignation not found' });
+    }
+
+    const r = resignation.rows[0];
+    const referenceDate = r.last_working_day || new Date();
+
+    const entitlement = await calculateDetailedLeaveEntitlement(
+      r.employee_id,
+      r.company_id,
+      referenceDate,
+      r.join_date
+    );
+
+    res.json(entitlement);
+  } catch (error) {
+    console.error('Error calculating leave entitlement:', error);
+    res.status(500).json({ error: 'Failed to calculate leave entitlement' });
   }
 });
 

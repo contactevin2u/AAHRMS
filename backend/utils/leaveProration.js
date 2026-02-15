@@ -483,6 +483,144 @@ function calculateLeaveEncashment(remainingDays, basicSalary, workingDaysPerMont
   return Math.round(remainingDays * dailyRate * encashmentRate * 100) / 100;
 }
 
+/**
+ * Calculate detailed leave entitlement for resignation
+ * Shows YTD earned vs advance leave breakdown
+ *
+ * @param {number} employeeId
+ * @param {number} companyId
+ * @param {Date|string} referenceDate - Usually last_working_day
+ * @param {Date|string} joinDate - Employee join date
+ * @returns {Object} Detailed leave entitlement breakdown
+ */
+async function calculateDetailedLeaveEntitlement(employeeId, companyId, referenceDate, joinDate) {
+  const refDate = new Date(referenceDate);
+  const join = new Date(joinDate);
+  const year = refDate.getFullYear();
+
+  // Get company settings for rounding
+  const settings = await getCompanyLeaveSettings(companyId);
+
+  // Calculate completed months for YTD earned
+  // completedMonths = number of full months completed from Jan 1 to reference date
+  let completedMonths;
+  if (join.getFullYear() === year) {
+    // Mid-year joiner: count from join month to reference month
+    completedMonths = refDate.getMonth() - join.getMonth();
+    if (completedMonths < 0) completedMonths = 0;
+  } else {
+    // Full-year employee: months completed = reference month (0-indexed = completed months)
+    completedMonths = refDate.getMonth();
+  }
+
+  // Query 1: Leave balances + types
+  const balancesResult = await pool.query(`
+    SELECT lb.*, lt.code, lt.name, lt.is_paid
+    FROM leave_balances lb
+    JOIN leave_types lt ON lb.leave_type_id = lt.id
+    WHERE lb.employee_id = $1 AND lb.year = $2
+    ORDER BY lt.code
+  `, [employeeId, year]);
+
+  // Query 2: Split leave requests into YTD taken / future / pending
+  const requestsResult = await pool.query(`
+    SELECT lr.leave_type_id,
+      COALESCE(SUM(lr.total_days) FILTER (WHERE lr.status = 'approved' AND lr.start_date <= $3), 0) as ytd_taken,
+      COALESCE(SUM(lr.total_days) FILTER (WHERE lr.status = 'approved' AND lr.start_date > $3), 0) as future_taken,
+      COALESCE(SUM(lr.total_days) FILTER (WHERE lr.status = 'pending'), 0) as pending
+    FROM leave_requests lr
+    WHERE lr.employee_id = $1 AND EXTRACT(YEAR FROM lr.start_date) = $2
+    GROUP BY lr.leave_type_id
+  `, [employeeId, year, refDate]);
+
+  // Build a map of leave request data by leave_type_id
+  const requestsMap = {};
+  for (const row of requestsResult.rows) {
+    requestsMap[row.leave_type_id] = {
+      ytd_taken: parseFloat(row.ytd_taken),
+      future_taken: parseFloat(row.future_taken),
+      pending: parseFloat(row.pending)
+    };
+  }
+
+  // Calculate per leave type
+  const leaveTypes = [];
+  let totalEncashableDays = 0;
+  let totalAdvanceUsed = 0;
+
+  for (const lb of balancesResult.rows) {
+    const entitledDays = parseFloat(lb.entitled_days);
+    const carriedForward = parseFloat(lb.carried_forward);
+
+    // Calculate YTD earned with rounding
+    let ytdEarnedRaw = entitledDays * completedMonths / 12;
+    let ytdEarned;
+    switch (settings.leave_proration_rounding) {
+      case 'up':
+        ytdEarned = Math.ceil(ytdEarnedRaw);
+        break;
+      case 'down':
+        ytdEarned = Math.floor(ytdEarnedRaw);
+        break;
+      case 'nearest':
+      default:
+        ytdEarned = Math.round(ytdEarnedRaw * 2) / 2;
+    }
+
+    const adjustment = 0; // Hardcoded for now
+    const totalEntitlement = carriedForward + entitledDays;
+
+    const requests = requestsMap[lb.leave_type_id] || { ytd_taken: 0, future_taken: 0, pending: 0 };
+    const ytdTaken = requests.ytd_taken;
+    const futureTaken = requests.future_taken;
+    const pending = requests.pending;
+
+    const availableBalance = totalEntitlement - ytdTaken - futureTaken - pending;
+    const advanceDays = entitledDays - ytdEarned;
+    const advanceUsed = Math.max(0, (ytdTaken + futureTaken) - (carriedForward + ytdEarned));
+    const encashableDays = lb.is_paid
+      ? Math.max(0, carriedForward + ytdEarned - ytdTaken - futureTaken)
+      : 0;
+
+    if (lb.is_paid) {
+      totalEncashableDays += encashableDays;
+    }
+    totalAdvanceUsed += advanceUsed;
+
+    leaveTypes.push({
+      leave_type_id: lb.leave_type_id,
+      code: lb.code,
+      name: lb.name,
+      is_paid: lb.is_paid,
+      carried_forward: carriedForward,
+      full_year_entitlement: entitledDays,
+      ytd_earned: ytdEarned,
+      adjustment,
+      total_entitlement: totalEntitlement,
+      ytd_taken: ytdTaken,
+      future_taken: futureTaken,
+      pending,
+      available_balance: availableBalance,
+      advance_days: advanceDays,
+      advance_used: advanceUsed,
+      encashable_days: encashableDays
+    });
+  }
+
+  return {
+    employee_id: employeeId,
+    reference_date: refDate.toISOString().split('T')[0],
+    year,
+    completed_months: completedMonths,
+    leave_types: leaveTypes,
+    summary: {
+      total_encashable_days: totalEncashableDays,
+      total_advance_used: totalAdvanceUsed,
+      has_advance_usage: totalAdvanceUsed > 0
+    }
+  };
+}
+
 module.exports = {
   getCompanyLeaveSettings,
   calculateProratedLeave,
@@ -490,6 +628,7 @@ module.exports = {
   initializeYearlyLeaveBalances,
   getLeaveBalanceSummary,
   calculateLeaveEncashment,
+  calculateDetailedLeaveEntitlement,
   // New Malaysian Employment Act functions
   calculateYearsOfService,
   getEntitlementByServiceYears,
