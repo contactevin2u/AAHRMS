@@ -418,6 +418,8 @@ const Attendance = ({ departmentId: propDeptId, outletId: propOutletId, embedded
       fetchData();
     } catch (error) {
       console.error('Manual attendance error:', error);
+      console.error('Response data:', error.response?.data);
+      console.error('Response status:', error.response?.status);
       toast.error(error.response?.data?.error || 'Failed to create manual attendance');
     }
   };

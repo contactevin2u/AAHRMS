@@ -640,12 +640,16 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
     const companyId = req.companyId || req.admin?.company_id || 1;
     const adminId = req.admin?.id;
 
+    console.log('Manual attendance request:', { employee_id, work_date, clock_in, clock_out, notes, companyId, adminId });
+
     if (!employee_id || !work_date) {
+      console.log('Validation failed: missing employee_id or work_date', { employee_id, work_date });
       return res.status(400).json({ error: 'Employee ID and work date are required' });
     }
 
     // Require clock times
     if (!clock_in || !clock_out) {
+      console.log('Validation failed: missing clock times', { clock_in, clock_out });
       return res.status(400).json({ error: 'Please provide clock in and clock out times' });
     }
 
@@ -668,6 +672,7 @@ router.post('/manual', authenticateAdmin, async (req, res) => {
     );
 
     if (existing.rows.length > 0) {
+      console.log('Validation failed: record exists', { employee_id, work_date, existing_id: existing.rows[0].id });
       return res.status(400).json({ error: 'Attendance record already exists for this date. Use edit instead.' });
     }
 

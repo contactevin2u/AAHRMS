@@ -57,7 +57,7 @@ app.use(cors({
   ].filter(Boolean),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id']
 }));
 app.use(express.json({ limit: '10mb' }));  // Increased for base64 image uploads
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
