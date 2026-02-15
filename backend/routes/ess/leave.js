@@ -295,6 +295,16 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
   }
 
   const employee = empResult.rows[0];
+
+  // ESS restriction: reject leave if dates are after last working day (resigned employee)
+  if (employee.last_working_day && employee.employment_status && ['notice', 'resigned_pending'].includes(employee.employment_status)) {
+    const lwdDate = new Date(employee.last_working_day);
+    lwdDate.setHours(0, 0, 0, 0);
+    if (end > lwdDate) {
+      throw new ValidationError(`Cannot apply leave beyond your last working day (${employee.last_working_day.toISOString().split('T')[0]})`);
+    }
+  }
+
   console.log('[Leave Apply] Employee company_id:', employee.company_id);
 
   // Get leave type details - support both leave_type_id (number) and leave_type (name string)

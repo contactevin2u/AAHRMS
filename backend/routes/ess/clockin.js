@@ -613,6 +613,21 @@ router.post('/action', authenticateEmployee, asyncHandler(async (req, res) => {
     throw new ValidationError('Invalid action. Must be one of: clock_in_1, clock_out_1, clock_in_2, clock_out_2');
   }
 
+  // ESS restriction: reject clock-in/out after last working day
+  const resignCheck = await pool.query(
+    'SELECT employment_status, last_working_day FROM employees WHERE id = $1',
+    [employeeId]
+  );
+  if (resignCheck.rows.length > 0 && resignCheck.rows[0].last_working_day) {
+    const lwdDate = new Date(resignCheck.rows[0].last_working_day);
+    lwdDate.setHours(0, 0, 0, 0);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    if (todayDate > lwdDate && ['notice', 'resigned_pending', 'exited'].includes(resignCheck.rows[0].employment_status)) {
+      throw new ValidationError('Cannot clock in/out after your last working day');
+    }
+  }
+
   // Validate mandatory data for ALL actions
   const validationErrors = validateClockData(req.body, action);
   if (validationErrors.length > 0) {

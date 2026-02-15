@@ -1991,6 +1991,99 @@ Human Resources Department
           ALTER TABLE shift_swap_requests ADD COLUMN supervisor_approved_at TIMESTAMP;
         END IF;
       END $$;
+
+      -- =====================================================
+      -- EXIT CLEARANCE SYSTEM
+      -- =====================================================
+
+      -- Exit Clearance Templates (company-level checklist templates)
+      CREATE TABLE IF NOT EXISTS exit_clearance_templates (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER REFERENCES companies(id) DEFAULT 1,
+        category VARCHAR(50) NOT NULL,
+        item_name VARCHAR(255) NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Exit Clearance Items (per resignation)
+      CREATE TABLE IF NOT EXISTS exit_clearance (
+        id SERIAL PRIMARY KEY,
+        resignation_id INTEGER REFERENCES resignations(id) ON DELETE CASCADE,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        company_id INTEGER REFERENCES companies(id) DEFAULT 1,
+        category VARCHAR(50) NOT NULL,
+        item_name VARCHAR(255) NOT NULL,
+        is_completed BOOLEAN DEFAULT FALSE,
+        completed_by INTEGER REFERENCES admin_users(id),
+        completed_at TIMESTAMP,
+        remarks TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_exit_clearance_resignation ON exit_clearance(resignation_id);
+      CREATE INDEX IF NOT EXISTS idx_exit_clearance_templates_company ON exit_clearance_templates(company_id);
+
+      -- ALTER resignations: add company_id, approval fields, notice fields, clearance fields
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='company_id') THEN
+          ALTER TABLE resignations ADD COLUMN company_id INTEGER REFERENCES companies(id);
+          -- Backfill from employee
+          UPDATE resignations r SET company_id = e.company_id FROM employees e WHERE r.employee_id = e.id AND r.company_id IS NULL;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='approved_by') THEN
+          ALTER TABLE resignations ADD COLUMN approved_by INTEGER REFERENCES admin_users(id);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='approved_at') THEN
+          ALTER TABLE resignations ADD COLUMN approved_at TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='rejection_reason') THEN
+          ALTER TABLE resignations ADD COLUMN rejection_reason TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='required_notice_days') THEN
+          ALTER TABLE resignations ADD COLUMN required_notice_days INTEGER;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='actual_notice_days') THEN
+          ALTER TABLE resignations ADD COLUMN actual_notice_days INTEGER;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='notice_waived') THEN
+          ALTER TABLE resignations ADD COLUMN notice_waived BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='notice_waived_by') THEN
+          ALTER TABLE resignations ADD COLUMN notice_waived_by INTEGER REFERENCES admin_users(id);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='clearance_completed') THEN
+          ALTER TABLE resignations ADD COLUMN clearance_completed BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='clearance_completed_at') THEN
+          ALTER TABLE resignations ADD COLUMN clearance_completed_at TIMESTAMP;
+        END IF;
+      END $$;
+
+      -- ALTER employees: add last_working_day
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='last_working_day') THEN
+          ALTER TABLE employees ADD COLUMN last_working_day DATE;
+        END IF;
+      END $$;
+
+      -- Seed default exit clearance templates (only if empty)
+      INSERT INTO exit_clearance_templates (company_id, category, item_name, sort_order)
+      SELECT 1, t.category, t.item_name, t.sort_order
+      FROM (VALUES
+        ('IT', 'Return company laptop/equipment', 1),
+        ('Admin', 'Return access card & office keys', 2),
+        ('Department', 'Handover job documents & files', 3),
+        ('Finance', 'Clear outstanding expense claims', 4),
+        ('Admin', 'Return company uniform', 5),
+        ('Finance', 'Clear any company loans/advances', 6),
+        ('HR', 'Exit interview', 7)
+      ) AS t(category, item_name, sort_order)
+      WHERE NOT EXISTS (SELECT 1 FROM exit_clearance_templates LIMIT 1);
     `);
     console.log('Database tables initialized');
   } catch (err) {

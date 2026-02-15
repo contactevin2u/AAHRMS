@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { resignationsApi, employeeApi } from '../api';
 import Layout from '../components/Layout';
 import './Resignations.css';
@@ -6,7 +6,6 @@ import './Resignations.css';
 function Resignations({ outletId: propOutletId, embedded = false }) {
   const isOutletLocked = !!propOutletId;
 
-  // Check if company uses outlets (Mimix = company_id 3)
   const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
   const isMimix = adminInfo.company_id === 3;
 
@@ -18,12 +17,15 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showProcessModal, setShowProcessModal] = useState(false);
-  const [showLeaveConfirmModal, setShowLeaveConfirmModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
   const [selectedResignation, setSelectedResignation] = useState(null);
-  const [settlementCalc, setSettlementCalc] = useState(null);
-  const [leaveCheckData, setLeaveCheckData] = useState(null);
-  const [checkingLeaves, setCheckingLeaves] = useState(false);
+  const [detailsTab, setDetailsTab] = useState('overview');
+
+  // Clearance & Settlement
+  const [clearanceData, setClearanceData] = useState(null);
+  const [settlementData, setSettlementData] = useState(null);
+  const [loadingSettlement, setLoadingSettlement] = useState(false);
+  const [loadingClearance, setLoadingClearance] = useState(false);
 
   // Form
   const [form, setForm] = useState({
@@ -34,11 +36,11 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
     remarks: ''
   });
 
-  // Process form
-  const [processForm, setProcessForm] = useState({
-    final_salary_amount: 0,
-    settlement_date: new Date().toISOString().split('T')[0]
-  });
+  // Notice info for create modal
+  const [noticeInfo, setNoticeInfo] = useState(null);
+
+  // Reject form
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -62,6 +64,49 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
     }
   };
 
+  // Auto-calculate notice period when employee is selected
+  const handleEmployeeSelect = (empId) => {
+    setForm({ ...form, employee_id: empId });
+    if (!empId) {
+      setNoticeInfo(null);
+      return;
+    }
+    const emp = employees.find(e => e.id === parseInt(empId));
+    if (emp && emp.join_date) {
+      const joinDate = new Date(emp.join_date);
+      const now = new Date();
+      const serviceMonths = (now.getFullYear() - joinDate.getFullYear()) * 12 + (now.getMonth() - joinDate.getMonth());
+      let noticeDays;
+      if (serviceMonths < 24) noticeDays = 28;
+      else if (serviceMonths < 60) noticeDays = 42;
+      else noticeDays = 56;
+
+      const serviceYears = Math.floor(serviceMonths / 12);
+      const serviceRemMonths = serviceMonths % 12;
+
+      // Recommend last working day
+      const recommendedLwd = new Date(form.notice_date || new Date());
+      recommendedLwd.setDate(recommendedLwd.getDate() + noticeDays);
+      const recommendedLwdStr = recommendedLwd.toISOString().split('T')[0];
+
+      setNoticeInfo({
+        notice_days: noticeDays,
+        service: `${serviceYears}y ${serviceRemMonths}m`,
+        recommended_lwd: recommendedLwdStr,
+        description: serviceMonths < 24
+          ? '4 weeks (less than 2 years service)'
+          : serviceMonths < 60
+            ? '6 weeks (2-5 years service)'
+            : '8 weeks (5+ years service)'
+      });
+
+      // Auto-fill last working day if empty
+      if (!form.last_working_day) {
+        setForm(prev => ({ ...prev, employee_id: empId, last_working_day: recommendedLwdStr }));
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -78,84 +123,63 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
     try {
       const res = await resignationsApi.getOne(id);
       setSelectedResignation(res.data);
+      setDetailsTab('overview');
+      setClearanceData(null);
+      setSettlementData(null);
       setShowDetailsModal(true);
     } catch (error) {
       alert('Failed to fetch resignation details');
     }
   };
 
-  const handleCalculateSettlement = async () => {
-    if (!selectedResignation) return;
+  // Approval actions
+  const handleApprove = async (id) => {
+    if (!window.confirm('Approve this resignation? This will start the exit clearance process.')) return;
     try {
-      const res = await resignationsApi.calculateSettlement({
-        employee_id: selectedResignation.employee_id,
-        last_working_day: selectedResignation.last_working_day
-      });
-      setSettlementCalc(res.data);
-      setProcessForm({
-        ...processForm,
-        final_salary_amount: res.data.total_final_settlement
-      });
-    } catch (error) {
-      alert('Failed to calculate settlement');
-    }
-  };
-
-  // Check for leaves before showing process modal
-  const handleProcessClick = async (resignation) => {
-    setSelectedResignation(resignation);
-    setCheckingLeaves(true);
-    setLeaveCheckData(null);
-
-    try {
-      const res = await resignationsApi.checkLeaves(resignation.id);
-      setLeaveCheckData(res.data);
-
-      if (res.data.has_leaves_to_cancel) {
-        // Show leave confirmation modal first
-        setShowLeaveConfirmModal(true);
-      } else {
-        // No leaves to cancel, go directly to process modal
-        setSettlementCalc(null);
-        setShowProcessModal(true);
+      await resignationsApi.approve(id);
+      fetchData();
+      if (showDetailsModal) {
+        const res = await resignationsApi.getOne(id);
+        setSelectedResignation(res.data);
       }
     } catch (error) {
-      console.error('Error checking leaves:', error);
-      // If check fails, still allow processing
-      setSettlementCalc(null);
-      setShowProcessModal(true);
-    } finally {
-      setCheckingLeaves(false);
+      alert(error.response?.data?.error || 'Failed to approve resignation');
     }
   };
 
-  // Confirm leave cancellation and proceed to process modal
-  const handleConfirmLeaveCancellation = () => {
-    setShowLeaveConfirmModal(false);
-    setSettlementCalc(null);
-    setShowProcessModal(true);
+  const handleReject = async () => {
+    if (!rejectionReason.trim()) {
+      alert('Please provide a rejection reason');
+      return;
+    }
+    try {
+      await resignationsApi.reject(selectedResignation.id, { rejection_reason: rejectionReason });
+      setShowRejectModal(false);
+      setRejectionReason('');
+      fetchData();
+      if (showDetailsModal) setShowDetailsModal(false);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to reject resignation');
+    }
   };
 
-  const handleProcess = async (e) => {
-    e.preventDefault();
+  const handleWithdraw = async (id) => {
+    if (!window.confirm('Withdraw this resignation?')) return;
     try {
-      await resignationsApi.process(selectedResignation.id, processForm);
-      setShowProcessModal(false);
-      setSelectedResignation(null);
-      setSettlementCalc(null);
-      setLeaveCheckData(null);
+      await resignationsApi.withdraw(id);
       fetchData();
-      alert('Resignation processed successfully. Employee status updated to resigned.');
+      if (showDetailsModal) setShowDetailsModal(false);
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to process resignation');
+      alert(error.response?.data?.error || 'Failed to withdraw resignation');
     }
   };
 
   const handleCancel = async (id) => {
-    if (window.confirm('Cancel this resignation? The employee will remain active.')) {
+    if (window.confirm('Cancel this resignation? The employee will be reverted to active.')) {
       try {
         await resignationsApi.cancel(id);
         fetchData();
+        if (showDetailsModal) setShowDetailsModal(false);
       } catch (error) {
         alert(error.response?.data?.error || 'Failed to cancel resignation');
       }
@@ -163,7 +187,7 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this resignation record?')) {
+    if (window.confirm('Delete this resignation record permanently?')) {
       try {
         await resignationsApi.delete(id);
         fetchData();
@@ -173,31 +197,83 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
     }
   };
 
-  // Cleanup leaves for already-completed resignations
-  const handleCleanupLeaves = async (resignation) => {
+  // Clearance
+  const loadClearance = useCallback(async (id) => {
+    setLoadingClearance(true);
     try {
-      // First check if there are leaves to cleanup
-      const checkRes = await resignationsApi.checkLeaves(resignation.id);
-
-      if (!checkRes.data.has_leaves_to_cancel) {
-        alert('No leaves found after last working day. Nothing to cleanup.');
-        return;
-      }
-
-      const totalDays = checkRes.data.total_approved_days + checkRes.data.total_pending_days;
-      const leaveDetails = [
-        ...checkRes.data.approved_leaves.map(l => `${l.leave_type_name}: ${formatDate(l.start_date)} (${l.total_days} days)`),
-        ...checkRes.data.pending_leaves.map(l => `${l.leave_type_name}: ${formatDate(l.start_date)} (${l.total_days} days)`)
-      ].join('\n');
-
-      if (window.confirm(`Found ${totalDays} days of leave after last working day:\n\n${leaveDetails}\n\nCancel these leaves and restore balance?`)) {
-        await resignationsApi.cleanupLeaves(resignation.id);
-        alert('Leaves cancelled and balance restored successfully.');
-        fetchData();
-      }
+      const res = await resignationsApi.getClearance(id);
+      setClearanceData(res.data);
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to cleanup leaves');
+      console.error('Error loading clearance:', error);
+    } finally {
+      setLoadingClearance(false);
     }
+  }, []);
+
+  const handleToggleClearanceItem = async (itemId, isCompleted, remarks) => {
+    if (!selectedResignation) return;
+    try {
+      await resignationsApi.updateClearanceItem(selectedResignation.id, itemId, {
+        is_completed: !isCompleted,
+        remarks
+      });
+      loadClearance(selectedResignation.id);
+      // Refresh the main resignation data too
+      const res = await resignationsApi.getOne(selectedResignation.id);
+      setSelectedResignation(res.data);
+    } catch (error) {
+      alert('Failed to update clearance item');
+    }
+  };
+
+  // Settlement
+  const loadSettlement = async (id, waiveNotice = false) => {
+    setLoadingSettlement(true);
+    try {
+      const res = await resignationsApi.getSettlement(id, { waive_notice: waiveNotice });
+      setSettlementData(res.data);
+    } catch (error) {
+      console.error('Error loading settlement:', error);
+      alert('Failed to calculate settlement');
+    } finally {
+      setLoadingSettlement(false);
+    }
+  };
+
+  const handleWaiveNotice = async () => {
+    if (!selectedResignation) return;
+    const newWaive = !selectedResignation.notice_waived;
+    try {
+      await resignationsApi.waiveNotice(selectedResignation.id, { waive: newWaive });
+      const res = await resignationsApi.getOne(selectedResignation.id);
+      setSelectedResignation(res.data);
+      // Recalculate settlement with new waive state
+      loadSettlement(selectedResignation.id, newWaive);
+    } catch (error) {
+      alert('Failed to update notice waiver');
+    }
+  };
+
+  // Process final pay
+  const handleProcessFinalPay = async () => {
+    if (!selectedResignation || !settlementData) return;
+    if (!window.confirm('Process final pay and complete exit? This will set the employee status to exited.')) return;
+    try {
+      await resignationsApi.process(selectedResignation.id, {
+        final_salary_amount: settlementData.final_amount,
+        settlement_date: new Date().toISOString().split('T')[0],
+        override_clearance: false
+      });
+      setShowDetailsModal(false);
+      fetchData();
+      alert('Exit process completed. Employee status updated to exited.');
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to process exit');
+    }
+  };
+
+  const handlePrintSummary = () => {
+    window.print();
   };
 
   const resetForm = () => {
@@ -208,6 +284,7 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
       reason: '',
       remarks: ''
     });
+    setNoticeInfo(null);
   };
 
   const formatDate = (dateStr) => {
@@ -226,8 +303,11 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
   const getStatusBadge = (status) => {
     const classes = {
       pending: 'status-badge pending',
+      clearing: 'status-badge clearing',
       completed: 'status-badge completed',
-      cancelled: 'status-badge cancelled'
+      cancelled: 'status-badge cancelled',
+      rejected: 'status-badge rejected',
+      withdrawn: 'status-badge withdrawn'
     };
     return <span className={classes[status] || 'status-badge'}>{status}</span>;
   };
@@ -240,13 +320,21 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
     return diffDays;
   };
 
+  // Stats counts
+  const statusCounts = {
+    pending: resignations.filter(r => r.status === 'pending').length,
+    clearing: resignations.filter(r => r.status === 'clearing').length,
+    completed: resignations.filter(r => r.status === 'completed').length,
+    rejected: resignations.filter(r => r.status === 'rejected').length,
+  };
+
   const content = (
       <div className="resignations-page">
         {!embedded && (
         <header className="page-header">
           <div>
             <h1>Resignations</h1>
-            <p>Manage employee resignations and exit process</p>
+            <p>Manage employee resignations, exit clearance and final settlement</p>
           </div>
           <button onClick={() => { resetForm(); setShowModal(true); }} className="add-btn">
             + New Resignation
@@ -263,17 +351,21 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
 
         {/* Stats */}
         <div className="stats-row">
-          <div className="stat-box">
-            <span className="stat-num">{resignations.filter(r => r.status === 'pending').length}</span>
+          <div className="stat-box" onClick={() => setFilter({ ...filter, status: 'pending' })} style={{ cursor: 'pointer' }}>
+            <span className="stat-num">{statusCounts.pending}</span>
             <span className="stat-text">Pending</span>
           </div>
-          <div className="stat-box highlight">
-            <span className="stat-num">{resignations.filter(r => r.status === 'completed').length}</span>
+          <div className="stat-box stat-clearing" onClick={() => setFilter({ ...filter, status: 'clearing' })} style={{ cursor: 'pointer' }}>
+            <span className="stat-num">{statusCounts.clearing}</span>
+            <span className="stat-text">Clearing</span>
+          </div>
+          <div className="stat-box highlight" onClick={() => setFilter({ ...filter, status: 'completed' })} style={{ cursor: 'pointer' }}>
+            <span className="stat-num">{statusCounts.completed}</span>
             <span className="stat-text">Completed</span>
           </div>
-          <div className="stat-box">
-            <span className="stat-num">{resignations.filter(r => r.status === 'cancelled').length}</span>
-            <span className="stat-text">Cancelled</span>
+          <div className="stat-box" onClick={() => setFilter({ ...filter, status: 'rejected' })} style={{ cursor: 'pointer' }}>
+            <span className="stat-num">{statusCounts.rejected}</span>
+            <span className="stat-text">Rejected</span>
           </div>
         </div>
 
@@ -285,7 +377,10 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
           >
             <option value="">All Status</option>
             <option value="pending">Pending</option>
+            <option value="clearing">Clearing</option>
             <option value="completed">Completed</option>
+            <option value="rejected">Rejected</option>
+            <option value="withdrawn">Withdrawn</option>
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
@@ -300,6 +395,10 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
             ) : (
               resignations.map(r => {
                 const daysLeft = getDaysUntilExit(r.last_working_day);
+                const clearanceProgress = r.clearance_total > 0
+                  ? Math.round((parseInt(r.clearance_done || 0) / parseInt(r.clearance_total)) * 100)
+                  : null;
+
                 return (
                   <div key={r.id} className="resignation-card">
                     <div className="card-header">
@@ -319,18 +418,29 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
                         <span>Last Working Day:</span>
                         <strong>{formatDate(r.last_working_day)}</strong>
                       </div>
-                      {r.status === 'pending' && (
+                      {r.required_notice_days && (
+                        <div className="detail-row">
+                          <span>Notice Period:</span>
+                          <strong>{r.actual_notice_days || 0}d / {r.required_notice_days}d required</strong>
+                        </div>
+                      )}
+                      {(r.status === 'pending' || r.status === 'clearing') && (
                         <div className="detail-row">
                           <span>Days Until Exit:</span>
                           <strong className={daysLeft <= 7 ? 'urgent' : ''}>
-                            {daysLeft > 0 ? `${daysLeft} days` : 'Overdue'}
+                            {daysLeft > 0 ? `${daysLeft} days` : daysLeft === 0 ? 'Today' : 'Overdue'}
                           </strong>
                         </div>
                       )}
-                      {r.leave_encashment_days > 0 && (
+                      {clearanceProgress !== null && (
                         <div className="detail-row">
-                          <span>Leave Encashment:</span>
-                          <strong>{r.leave_encashment_days} days ({formatAmount(r.leave_encashment_amount)})</strong>
+                          <span>Clearance:</span>
+                          <div className="clearance-progress-inline">
+                            <div className="progress-bar-mini">
+                              <div className="progress-fill-mini" style={{ width: `${clearanceProgress}%` }}></div>
+                            </div>
+                            <strong>{r.clearance_done}/{r.clearance_total}</strong>
+                          </div>
                         </div>
                       )}
                       {r.reason && (
@@ -347,27 +457,23 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
                       </button>
                       {r.status === 'pending' && (
                         <>
-                          <button
-                            onClick={() => handleProcessClick(r)}
-                            className="action-btn process"
-                            disabled={checkingLeaves}
-                          >
-                            {checkingLeaves && selectedResignation?.id === r.id ? 'Checking...' : 'Process Exit'}
+                          <button onClick={() => handleApprove(r.id)} className="action-btn approve">
+                            Approve
                           </button>
-                          <button onClick={() => handleCancel(r.id)} className="action-btn cancel">
-                            Cancel
+                          <button onClick={() => { setSelectedResignation(r); setRejectionReason(''); setShowRejectModal(true); }} className="action-btn reject-btn">
+                            Reject
+                          </button>
+                          <button onClick={() => handleWithdraw(r.id)} className="action-btn cancel">
+                            Withdraw
                           </button>
                           <button onClick={() => handleDelete(r.id)} className="action-btn delete">
                             Delete
                           </button>
                         </>
                       )}
-                      {r.status === 'completed' && (
-                        <button
-                          onClick={() => handleCleanupLeaves(r)}
-                          className="action-btn cleanup"
-                        >
-                          Cleanup Leaves
+                      {r.status === 'clearing' && (
+                        <button onClick={() => handleCancel(r.id)} className="action-btn cancel">
+                          Cancel
                         </button>
                       )}
                     </div>
@@ -388,7 +494,7 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
                   <label>Employee *</label>
                   <select
                     value={form.employee_id}
-                    onChange={(e) => setForm({ ...form, employee_id: e.target.value })}
+                    onChange={(e) => handleEmployeeSelect(e.target.value)}
                     required
                   >
                     <option value="">Select employee</option>
@@ -397,6 +503,16 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
                     ))}
                   </select>
                 </div>
+
+                {noticeInfo && (
+                  <div className="notice-info-box">
+                    <strong>Notice Period: {noticeInfo.notice_days} days</strong>
+                    <p>{noticeInfo.description}</p>
+                    <p>Service: {noticeInfo.service}</p>
+                    <p>Recommended last day: {formatDate(noticeInfo.recommended_lwd)}</p>
+                  </div>
+                )}
+
                 <div className="form-row">
                   <div className="form-group">
                     <label>Notice Date *</label>
@@ -454,222 +570,407 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
           </div>
         )}
 
-        {/* Details Modal */}
+        {/* Reject Modal */}
+        {showRejectModal && selectedResignation && (
+          <div className="modal-overlay" onClick={() => setShowRejectModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Reject Resignation</h2>
+              <p style={{ color: '#64748b', marginBottom: 15 }}>
+                Rejecting resignation for <strong>{selectedResignation.employee_name}</strong>
+              </p>
+              <div className="form-group">
+                <label>Rejection Reason *</label>
+                <textarea
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  rows="3"
+                  placeholder="Provide reason for rejection"
+                  required
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowRejectModal(false)} className="cancel-btn">
+                  Cancel
+                </button>
+                <button type="button" onClick={handleReject} className="save-btn" style={{ background: '#ef4444' }}>
+                  Confirm Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Enhanced Details Modal (Tabbed) */}
         {showDetailsModal && selectedResignation && (
           <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
-            <div className="modal large" onClick={(e) => e.stopPropagation()}>
-              <h2>Resignation Details</h2>
-              <div className="details-content">
-                <div className="detail-section">
-                  <h4>Employee Information</h4>
-                  <div className="info-grid">
-                    <div><span>Name:</span><strong>{selectedResignation.employee_name}</strong></div>
-                    <div><span>ID:</span><strong>{selectedResignation.emp_code}</strong></div>
-                    <div><span>{isMimix ? 'Outlet' : 'Department'}:</span><strong>{isMimix ? selectedResignation.outlet_name : selectedResignation.department_name || '-'}</strong></div>
-                    <div><span>Basic Salary:</span><strong>{formatAmount(selectedResignation.default_basic_salary)}</strong></div>
-                  </div>
-                </div>
-
-                <div className="detail-section">
-                  <h4>Resignation Details</h4>
-                  <div className="info-grid">
-                    <div><span>Notice Date:</span><strong>{formatDate(selectedResignation.notice_date)}</strong></div>
-                    <div><span>Last Working Day:</span><strong>{formatDate(selectedResignation.last_working_day)}</strong></div>
-                    <div><span>Status:</span>{getStatusBadge(selectedResignation.status)}</div>
-                    <div><span>Reason:</span><strong>{selectedResignation.reason || '-'}</strong></div>
-                  </div>
-                  {selectedResignation.remarks && (
-                    <div className="remarks-box">
-                      <span>Remarks:</span>
-                      <p>{selectedResignation.remarks}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="detail-section">
-                  <h4>Leave Encashment</h4>
-                  <div className="info-grid">
-                    <div><span>Days:</span><strong>{selectedResignation.leave_encashment_days || 0}</strong></div>
-                    <div><span>Amount:</span><strong>{formatAmount(selectedResignation.leave_encashment_amount)}</strong></div>
-                  </div>
-                  {selectedResignation.leave_balances?.length > 0 && (
-                    <div className="leave-balances">
-                      <p>Current Leave Balances:</p>
-                      <div className="balance-chips">
-                        {selectedResignation.leave_balances.map(lb => (
-                          <span key={lb.code} className="balance-chip">
-                            {lb.code}: {lb.entitled_days - lb.used_days} days
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {selectedResignation.status === 'completed' && (
-                  <div className="detail-section">
-                    <h4>Settlement</h4>
-                    <div className="info-grid">
-                      <div><span>Final Amount:</span><strong>{formatAmount(selectedResignation.final_salary_amount)}</strong></div>
-                      <div><span>Settlement Date:</span><strong>{formatDate(selectedResignation.settlement_date)}</strong></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="modal-actions">
-                <button onClick={() => setShowDetailsModal(false)} className="save-btn">Close</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Process Modal */}
-        {showProcessModal && selectedResignation && (
-          <div className="modal-overlay" onClick={() => setShowProcessModal(false)}>
-            <div className="modal large" onClick={(e) => e.stopPropagation()}>
-              <h2>Process Exit - {selectedResignation.employee_name}</h2>
-
-              <div className="process-info">
-                <p><strong>Last Working Day:</strong> {formatDate(selectedResignation.last_working_day)}</p>
-                <p><strong>Leave Encashment:</strong> {selectedResignation.leave_encashment_days || 0} days = {formatAmount(selectedResignation.leave_encashment_amount)}</p>
-              </div>
-
-              <button onClick={handleCalculateSettlement} className="calc-btn">
-                Calculate Final Settlement
-              </button>
-
-              {settlementCalc && (
-                <div className="settlement-calc">
-                  <h4>Final Settlement Breakdown</h4>
-                  <div className="calc-table">
-                    <div className="calc-row">
-                      <span>Pro-rated Salary ({settlementCalc.days_worked}/{settlementCalc.days_in_month} days)</span>
-                      <strong>{formatAmount(settlementCalc.pro_rated_salary)}</strong>
-                    </div>
-                    <div className="calc-row">
-                      <span>Leave Encashment ({settlementCalc.leave_encashment_days} days)</span>
-                      <strong>{formatAmount(settlementCalc.leave_encashment_amount)}</strong>
-                    </div>
-                    <div className="calc-row">
-                      <span>Pending Claims</span>
-                      <strong>{formatAmount(settlementCalc.pending_claims)}</strong>
-                    </div>
-                    <div className="calc-row total">
-                      <span>Total Final Settlement</span>
-                      <strong>{formatAmount(settlementCalc.total_final_settlement)}</strong>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <form onSubmit={handleProcess}>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Final Settlement Amount (RM) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={processForm.final_salary_amount}
-                      onChange={(e) => setProcessForm({ ...processForm, final_salary_amount: parseFloat(e.target.value) || 0 })}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Settlement Date *</label>
-                    <input
-                      type="date"
-                      value={processForm.settlement_date}
-                      onChange={(e) => setProcessForm({ ...processForm, settlement_date: e.target.value })}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="warning-box">
-                  This will mark the resignation as completed and change the employee status to "resigned".
-                  This action cannot be undone.
-                </div>
-
-                <div className="modal-actions">
-                  <button type="button" onClick={() => setShowProcessModal(false)} className="cancel-btn">
-                    Cancel
-                  </button>
-                  <button type="submit" className="save-btn process">Complete Exit Process</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Leave Confirmation Modal */}
-        {showLeaveConfirmModal && selectedResignation && leaveCheckData && (
-          <div className="modal-overlay" onClick={() => setShowLeaveConfirmModal(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>Leave Cancellation Required</h2>
-
-              <div className="leave-warning-box">
-                <p>
-                  <strong>{selectedResignation.employee_name}</strong> has leaves scheduled after their last working day
-                  ({formatDate(leaveCheckData.last_working_day)}):
-                </p>
-
-                {leaveCheckData.approved_leaves.length > 0 && (
-                  <div className="leave-list-section">
-                    <h4>Approved Leaves ({leaveCheckData.total_approved_days} days)</h4>
-                    <ul className="leave-cancel-list">
-                      {leaveCheckData.approved_leaves.map(leave => (
-                        <li key={leave.id}>
-                          <span className="leave-type">{leave.leave_type_name}</span>
-                          <span className="leave-dates">
-                            {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
-                          </span>
-                          <span className="leave-days">{leave.total_days} day(s)</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {leaveCheckData.pending_leaves.length > 0 && (
-                  <div className="leave-list-section">
-                    <h4>Pending Leaves ({leaveCheckData.total_pending_days} days)</h4>
-                    <ul className="leave-cancel-list">
-                      {leaveCheckData.pending_leaves.map(leave => (
-                        <li key={leave.id}>
-                          <span className="leave-type">{leave.leave_type_name}</span>
-                          <span className="leave-dates">
-                            {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
-                          </span>
-                          <span className="leave-days">{leave.total_days} day(s)</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="leave-confirm-note">
-                  These leaves will be <strong>automatically cancelled</strong> and the leave balance will be <strong>restored</strong> when you proceed.
+            <div className="modal xlarge" onClick={(e) => e.stopPropagation()}>
+              <div className="details-modal-header">
+                <h2>{selectedResignation.employee_name}</h2>
+                <div className="details-header-meta">
+                  <span className="emp-code">{selectedResignation.emp_code}</span>
+                  {getStatusBadge(selectedResignation.status)}
                 </div>
               </div>
 
-              <div className="modal-actions">
+              {/* Tabs */}
+              <div className="details-tabs">
                 <button
-                  type="button"
-                  onClick={() => {
-                    setShowLeaveConfirmModal(false);
-                    setSelectedResignation(null);
-                    setLeaveCheckData(null);
-                  }}
-                  className="cancel-btn"
+                  className={`tab-btn ${detailsTab === 'overview' ? 'active' : ''}`}
+                  onClick={() => setDetailsTab('overview')}
                 >
-                  Go Back
+                  Overview
+                </button>
+                {(selectedResignation.status === 'clearing' || selectedResignation.status === 'completed') && (
+                  <button
+                    className={`tab-btn ${detailsTab === 'clearance' ? 'active' : ''}`}
+                    onClick={() => { setDetailsTab('clearance'); loadClearance(selectedResignation.id); }}
+                  >
+                    Clearance
+                  </button>
+                )}
+                <button
+                  className={`tab-btn ${detailsTab === 'leave' ? 'active' : ''}`}
+                  onClick={() => setDetailsTab('leave')}
+                >
+                  Leave
                 </button>
                 <button
-                  type="button"
-                  onClick={handleConfirmLeaveCancellation}
-                  className="save-btn process"
+                  className={`tab-btn ${detailsTab === 'settlement' ? 'active' : ''}`}
+                  onClick={() => { setDetailsTab('settlement'); loadSettlement(selectedResignation.id, selectedResignation.notice_waived); }}
                 >
-                  Confirm & Continue
+                  Settlement
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              <div className="tab-content">
+                {/* Overview Tab */}
+                {detailsTab === 'overview' && (
+                  <div className="details-content">
+                    <div className="detail-section">
+                      <h4>Employee Information</h4>
+                      <div className="info-grid">
+                        <div><span>Name:</span><strong>{selectedResignation.employee_name}</strong></div>
+                        <div><span>ID:</span><strong>{selectedResignation.emp_code}</strong></div>
+                        <div><span>{isMimix ? 'Outlet' : 'Department'}:</span><strong>{isMimix ? selectedResignation.outlet_name : selectedResignation.department_name || '-'}</strong></div>
+                        <div><span>Basic Salary:</span><strong>{formatAmount(selectedResignation.default_basic_salary)}</strong></div>
+                        <div><span>Join Date:</span><strong>{formatDate(selectedResignation.join_date)}</strong></div>
+                        <div><span>Employment Status:</span><strong>{selectedResignation.employment_status || '-'}</strong></div>
+                      </div>
+                    </div>
+
+                    <div className="detail-section">
+                      <h4>Resignation Timeline</h4>
+                      <div className="info-grid">
+                        <div><span>Notice Date:</span><strong>{formatDate(selectedResignation.notice_date)}</strong></div>
+                        <div><span>Last Working Day:</span><strong>{formatDate(selectedResignation.last_working_day)}</strong></div>
+                        <div><span>Status:</span>{getStatusBadge(selectedResignation.status)}</div>
+                        <div><span>Reason:</span><strong>{selectedResignation.reason || '-'}</strong></div>
+                      </div>
+                    </div>
+
+                    <div className="detail-section">
+                      <h4>Notice Period</h4>
+                      <div className="info-grid">
+                        <div><span>Required:</span><strong>{selectedResignation.required_notice_days || '-'} days</strong></div>
+                        <div><span>Actual:</span><strong>{selectedResignation.actual_notice_days || '-'} days</strong></div>
+                        <div>
+                          <span>Shortfall:</span>
+                          <strong className={(selectedResignation.required_notice_days - selectedResignation.actual_notice_days) > 0 ? 'urgent' : ''}>
+                            {Math.max(0, (selectedResignation.required_notice_days || 0) - (selectedResignation.actual_notice_days || 0))} days
+                          </strong>
+                        </div>
+                        <div><span>Notice Waived:</span><strong>{selectedResignation.notice_waived ? 'Yes' : 'No'}</strong></div>
+                      </div>
+                    </div>
+
+                    {selectedResignation.approved_by_name && (
+                      <div className="detail-section">
+                        <h4>Approval</h4>
+                        <div className="info-grid">
+                          <div><span>Approved By:</span><strong>{selectedResignation.approved_by_name}</strong></div>
+                          <div><span>Approved At:</span><strong>{formatDate(selectedResignation.approved_at)}</strong></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedResignation.rejection_reason && (
+                      <div className="detail-section">
+                        <h4>Rejection</h4>
+                        <div className="remarks-box" style={{ background: '#fff3f3', borderLeft: '3px solid #ef4444' }}>
+                          <p>{selectedResignation.rejection_reason}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedResignation.remarks && (
+                      <div className="remarks-box">
+                        <span>Remarks:</span>
+                        <p>{selectedResignation.remarks}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Clearance Tab */}
+                {detailsTab === 'clearance' && (
+                  <div className="clearance-content">
+                    {loadingClearance ? (
+                      <div className="loading">Loading clearance items...</div>
+                    ) : clearanceData ? (
+                      <>
+                        <div className="clearance-progress">
+                          <div className="progress-header">
+                            <span>Exit Clearance Progress</span>
+                            <strong>{clearanceData.completed}/{clearanceData.total} ({clearanceData.progress}%)</strong>
+                          </div>
+                          <div className="progress-bar">
+                            <div
+                              className="progress-fill"
+                              style={{
+                                width: `${clearanceData.progress}%`,
+                                background: clearanceData.progress === 100 ? '#22c55e' : '#3b82f6'
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        {Object.entries(clearanceData.grouped || {}).map(([category, items]) => (
+                          <div key={category} className="clearance-category">
+                            <h4 className="category-header">{category}</h4>
+                            {items.map(item => (
+                              <div key={item.id} className={`clearance-item ${item.is_completed ? 'done' : ''}`}>
+                                <label className="clearance-checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.is_completed}
+                                    onChange={() => handleToggleClearanceItem(item.id, item.is_completed, item.remarks)}
+                                    disabled={selectedResignation.status === 'completed'}
+                                  />
+                                  <span className="checkmark"></span>
+                                  <span className="item-name">{item.item_name}</span>
+                                </label>
+                                {item.is_completed && item.completed_by_name && (
+                                  <span className="item-meta">
+                                    by {item.completed_by_name} on {formatDate(item.completed_at)}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <div className="no-data">No clearance items found</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Leave Tab */}
+                {detailsTab === 'leave' && (
+                  <div className="leave-content">
+                    <div className="detail-section">
+                      <h4>Leave Balances</h4>
+                      {selectedResignation.leave_balances?.length > 0 ? (
+                        <div className="leave-balance-table">
+                          <div className="lb-header">
+                            <span>Type</span>
+                            <span>Entitled</span>
+                            <span>Used</span>
+                            <span>Balance</span>
+                          </div>
+                          {selectedResignation.leave_balances.map(lb => (
+                            <div key={lb.id || lb.code} className="lb-row">
+                              <span>{lb.leave_type_name || lb.code}</span>
+                              <span>{lb.entitled_days}</span>
+                              <span>{lb.used_days}</span>
+                              <strong>{(parseFloat(lb.entitled_days) - parseFloat(lb.used_days)).toFixed(1)}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ color: '#64748b' }}>No paid leave balances found</p>
+                      )}
+                    </div>
+
+                    <div className="detail-section">
+                      <h4>Leave Encashment</h4>
+                      <div className="info-grid">
+                        <div><span>Encashment Days:</span><strong>{selectedResignation.leave_encashment_days || 0}</strong></div>
+                        <div><span>Encashment Amount:</span><strong>{formatAmount(selectedResignation.leave_encashment_amount)}</strong></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Settlement Tab */}
+                {detailsTab === 'settlement' && (
+                  <div className="settlement-content">
+                    {loadingSettlement ? (
+                      <div className="loading">Calculating settlement...</div>
+                    ) : settlementData ? (
+                      <>
+                        <div className="settlement-section">
+                          <h4>Earnings</h4>
+                          <div className="calc-table">
+                            <div className="calc-row">
+                              <span>
+                                Prorated Salary
+                                {settlementData.breakdown.prorated_salary.already_paid
+                                  ? ' (already paid)'
+                                  : ` (${settlementData.breakdown.prorated_salary.working_days_worked}/${settlementData.breakdown.prorated_salary.working_days_in_month} working days)`
+                                }
+                              </span>
+                              <strong>{formatAmount(settlementData.breakdown.prorated_salary.amount)}</strong>
+                            </div>
+                            <div className="calc-row">
+                              <span>Leave Encashment ({settlementData.breakdown.leave_encashment.total_days} days)</span>
+                              <strong>{formatAmount(settlementData.breakdown.leave_encashment.amount)}</strong>
+                            </div>
+                            <div className="calc-row">
+                              <span>Pending Claims ({settlementData.breakdown.pending_claims.count} items)</span>
+                              <strong>{formatAmount(settlementData.breakdown.pending_claims.amount)}</strong>
+                            </div>
+                            {settlementData.breakdown.prorated_bonus.enabled && (
+                              <div className="calc-row">
+                                <span>Prorated Bonus ({settlementData.breakdown.prorated_bonus.months_worked} months)</span>
+                                <strong>{formatAmount(settlementData.breakdown.prorated_bonus.amount)}</strong>
+                              </div>
+                            )}
+                            <div className="calc-row subtotal">
+                              <span>Gross Settlement</span>
+                              <strong>{formatAmount(settlementData.breakdown.totals.gross)}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="settlement-section">
+                          <h4>Deductions</h4>
+                          <div className="calc-table">
+                            <div className="calc-row deduction">
+                              <span>EPF (Employee)</span>
+                              <strong>-{formatAmount(settlementData.breakdown.statutory_deductions.epf_employee)}</strong>
+                            </div>
+                            <div className="calc-row deduction">
+                              <span>SOCSO (Employee)</span>
+                              <strong>-{formatAmount(settlementData.breakdown.statutory_deductions.socso_employee)}</strong>
+                            </div>
+                            <div className="calc-row deduction">
+                              <span>EIS (Employee)</span>
+                              <strong>-{formatAmount(settlementData.breakdown.statutory_deductions.eis_employee)}</strong>
+                            </div>
+                            <div className="calc-row deduction">
+                              <span>PCB (Tax)</span>
+                              <strong>-{formatAmount(settlementData.breakdown.statutory_deductions.pcb)}</strong>
+                            </div>
+                            {settlementData.breakdown.notice_buyout.shortfall_days > 0 && (
+                              <div className="calc-row deduction">
+                                <span>
+                                  Notice Shortfall ({settlementData.breakdown.notice_buyout.shortfall_days} days)
+                                  {settlementData.breakdown.notice_buyout.waived && ' [WAIVED]'}
+                                </span>
+                                <strong>
+                                  {settlementData.breakdown.notice_buyout.waived
+                                    ? 'RM 0.00'
+                                    : `-${formatAmount(settlementData.breakdown.notice_buyout.amount)}`
+                                  }
+                                </strong>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Waive Notice Toggle */}
+                        {settlementData.breakdown.notice_buyout.shortfall_days > 0 && selectedResignation.status !== 'completed' && (
+                          <div className="waive-notice-toggle">
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={selectedResignation.notice_waived || false}
+                                onChange={handleWaiveNotice}
+                              />
+                              Waive Notice Shortfall (RM {parseFloat(settlementData.breakdown.notice_buyout.amount || 0).toFixed(2)})
+                            </label>
+                          </div>
+                        )}
+
+                        <div className="settlement-section">
+                          <h4>Employer Contributions (for reference)</h4>
+                          <div className="calc-table">
+                            <div className="calc-row employer">
+                              <span>EPF (Employer)</span>
+                              <strong>{formatAmount(settlementData.breakdown.statutory_deductions.epf_employer)}</strong>
+                            </div>
+                            <div className="calc-row employer">
+                              <span>SOCSO (Employer)</span>
+                              <strong>{formatAmount(settlementData.breakdown.statutory_deductions.socso_employer)}</strong>
+                            </div>
+                            <div className="calc-row employer">
+                              <span>EIS (Employer)</span>
+                              <strong>{formatAmount(settlementData.breakdown.statutory_deductions.eis_employer)}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="settlement-section">
+                          <div className="calc-table">
+                            <div className="calc-row total">
+                              <span>Net Final Settlement</span>
+                              <strong>{formatAmount(settlementData.breakdown.totals.net)}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="settlement-actions">
+                          <button onClick={handlePrintSummary} className="action-btn view">
+                            Print Summary
+                          </button>
+                          {selectedResignation.status === 'clearing' && (
+                            <button
+                              onClick={handleProcessFinalPay}
+                              className="save-btn process"
+                              disabled={!selectedResignation.clearance_completed && selectedResignation.status === 'clearing'}
+                              title={!selectedResignation.clearance_completed ? 'Complete all clearance items first' : 'Process final pay'}
+                            >
+                              {selectedResignation.clearance_completed
+                                ? 'Process Final Pay'
+                                : 'Clearance Incomplete'
+                              }
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="no-data">
+                        <p>Click the Settlement tab to calculate</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action bar */}
+              <div className="modal-actions">
+                {selectedResignation.status === 'pending' && (
+                  <>
+                    <button onClick={() => handleApprove(selectedResignation.id)} className="save-btn" style={{ background: '#22c55e' }}>
+                      Approve
+                    </button>
+                    <button onClick={() => { setRejectionReason(''); setShowRejectModal(true); }} className="save-btn" style={{ background: '#ef4444' }}>
+                      Reject
+                    </button>
+                    <button onClick={() => handleWithdraw(selectedResignation.id)} className="cancel-btn">
+                      Withdraw
+                    </button>
+                  </>
+                )}
+                {selectedResignation.status === 'clearing' && (
+                  <button onClick={() => handleCancel(selectedResignation.id)} className="cancel-btn">
+                    Cancel Resignation
+                  </button>
+                )}
+                <button onClick={() => setShowDetailsModal(false)} className="cancel-btn">
+                  Close
                 </button>
               </div>
             </div>

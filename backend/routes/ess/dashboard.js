@@ -69,14 +69,23 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
   );
 
   // Get resignation info if any
+  // Show resignation status banner for notice/clearing/resigned employees
   const resignationResult = await pool.query(
-    `SELECT id, notice_date, last_working_day, reason, status
+    `SELECT id, notice_date, last_working_day, reason, status,
+            clearance_completed, required_notice_days, actual_notice_days
      FROM resignations
-     WHERE employee_id = $1 AND status = 'pending'
+     WHERE employee_id = $1 AND status IN ('pending', 'clearing', 'completed')
      ORDER BY created_at DESC
      LIMIT 1`,
     [req.employee.id]
   );
+
+  // Get employee employment_status for banner display
+  const empStatusResult = await pool.query(
+    'SELECT employment_status, last_working_day FROM employees WHERE id = $1',
+    [req.employee.id]
+  );
+  const employmentStatus = empStatusResult.rows[0]?.employment_status;
 
   let resignationInfo = null;
   if (resignationResult.rows.length > 0) {
@@ -92,7 +101,10 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
       notice_date: r.notice_date,
       last_working_day: r.last_working_day,
       reason: r.reason,
-      days_remaining: daysRemaining
+      resignation_status: r.status,
+      employment_status: employmentStatus,
+      days_remaining: daysRemaining,
+      clearance_completed: r.clearance_completed
     };
   }
 

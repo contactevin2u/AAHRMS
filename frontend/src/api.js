@@ -316,9 +316,27 @@ export const resignationsApi = {
   update: (id, data) => api.put(`/resignations/${id}`, data),
   delete: (id) => api.delete(`/resignations/${id}`),
 
+  // Approval workflow
+  approve: (id) => api.post(`/resignations/${id}/approve`),
+  reject: (id, data) => api.post(`/resignations/${id}/reject`, data),
+  withdraw: (id) => api.post(`/resignations/${id}/withdraw`),
+
+  // Exit clearance
+  getClearance: (id) => api.get(`/resignations/${id}/clearance`),
+  updateClearanceItem: (id, itemId, data) => api.put(`/resignations/${id}/clearance/${itemId}`, data),
+  generateClearance: (id) => api.post(`/resignations/${id}/clearance/generate`),
+
+  // Notice waiver
+  waiveNotice: (id, data) => api.post(`/resignations/${id}/waive-notice`, data),
+
+  // Settlement
+  getSettlement: (id, params) => api.get(`/resignations/${id}/settlement`, { params }),
+  saveSettlement: (id, data) => api.post(`/resignations/${id}/settlement`, data),
+  calculateSettlement: (data) => api.post('/resignations/calculate-settlement', data),
+
+  // Process & cleanup
   process: (id, data) => api.post(`/resignations/${id}/process`, data),
   cancel: (id) => api.post(`/resignations/${id}/cancel`),
-  calculateSettlement: (data) => api.post('/resignations/calculate-settlement', data),
   checkLeaves: (id) => api.get(`/resignations/${id}/check-leaves`),
   cleanupLeaves: (id) => api.post(`/resignations/${id}/cleanup-leaves`),
 };

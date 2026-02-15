@@ -155,12 +155,23 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     });
   }
 
-  // Get employee's company_id for Cloudinary folder organization
+  // Get employee's company_id and resignation info
   const empResult = await pool.query(
-    'SELECT company_id FROM employees WHERE id = $1',
+    'SELECT company_id, employment_status, last_working_day FROM employees WHERE id = $1',
     [req.employee.id]
   );
   const companyId = empResult.rows[0]?.company_id || 0;
+
+  // ESS restriction: reject claims with expense_date after last working day
+  if (empResult.rows[0]?.last_working_day && ['notice', 'resigned_pending'].includes(empResult.rows[0]?.employment_status)) {
+    const lwdDate = new Date(empResult.rows[0].last_working_day);
+    lwdDate.setHours(0, 0, 0, 0);
+    const expenseDate = new Date(claim_date);
+    expenseDate.setHours(0, 0, 0, 0);
+    if (expenseDate > lwdDate) {
+      throw new ValidationError(`Cannot submit claims for dates beyond your last working day (${empResult.rows[0].last_working_day.toISOString().split('T')[0]})`);
+    }
+  }
 
   // Get the base64 data for AI processing
   const receiptData = receipt_base64 || receipt_url;

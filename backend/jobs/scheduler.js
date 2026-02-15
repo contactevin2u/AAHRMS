@@ -8,6 +8,7 @@ const cron = require('node-cron');
 const { runAutoClockOut } = require('./autoClockOut');
 const { runPublicHolidayNotifier } = require('./publicHolidayNotifier');
 const { runDriverSync, syncDriverAttendance } = require('./driverSync');
+const { runResignationStatusUpdater } = require('./resignationStatusUpdater');
 
 /**
  * Initialize all scheduled jobs
@@ -81,6 +82,23 @@ function initScheduler() {
 
   console.log('[Scheduler] Driver sync scheduled for 10:00 daily (MYT)');
 
+  // Resignation Status Updater - Runs at 00:30 AM daily (after auto clock-out)
+  // Transitions employees past their last working day from 'notice' to 'resigned_pending'
+  const resignationUpdaterJob = cron.schedule('30 0 * * *', async () => {
+    console.log('[Scheduler] Running resignation status updater at', new Date().toISOString());
+    try {
+      const results = await runResignationStatusUpdater();
+      console.log('[Scheduler] Resignation updater completed:', results);
+    } catch (error) {
+      console.error('[Scheduler] Resignation status updater failed:', error);
+    }
+  }, {
+    scheduled: true,
+    timezone: 'Asia/Kuala_Lumpur'
+  });
+
+  console.log('[Scheduler] Resignation status updater scheduled for 00:30 daily (MYT)');
+
   // Note: Auto-Approve Leave is now done immediately upon application (not via cron)
   // See: backend/routes/ess/leave.js - Annual Leave for AA Alive is auto-approved instantly
 
@@ -89,7 +107,8 @@ function initScheduler() {
     autoClockOutJob,
     publicHolidayJob,
     driverSyncMorningJob,
-    driverSyncDayJob
+    driverSyncDayJob,
+    resignationUpdaterJob
   };
 }
 
@@ -156,9 +175,24 @@ async function triggerDriverSync(date = null) {
   }
 }
 
+/**
+ * Run resignation status updater manually
+ */
+async function triggerResignationUpdater() {
+  console.log('[Scheduler] Manually triggering resignation status updater');
+  try {
+    const results = await runResignationStatusUpdater();
+    return { success: true, ...results };
+  } catch (error) {
+    console.error('[Scheduler] Manual resignation updater failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   initScheduler,
   triggerAutoClockOut,
   triggerPublicHolidayNotifier,
-  triggerDriverSync
+  triggerDriverSync,
+  triggerResignationUpdater
 };

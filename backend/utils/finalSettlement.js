@@ -102,9 +102,12 @@ async function getCompanySettlementSettings(companyId) {
  * Calculate final settlement for a resignation
  *
  * @param {number} resignationId - Resignation record ID
+ * @param {Object} options - Optional parameters
+ * @param {boolean} options.waiveNotice - If true, skip notice buyout deduction
  * @returns {Object} Complete settlement calculation breakdown
  */
-async function calculateFinalSettlement(resignationId) {
+async function calculateFinalSettlement(resignationId, options = {}) {
+  const { waiveNotice = false } = options;
   const client = await pool.connect();
 
   try {
@@ -241,14 +244,18 @@ async function calculateFinalSettlement(resignationId) {
     // ========================================
     // 5. NOTICE PERIOD BUYOUT
     // ========================================
-    const requiredNoticeDays = settings.settlement_notice_period_days;
-    const actualNoticeDays = Math.ceil((lastWorkingDay - noticeDate) / (1000 * 60 * 60 * 24));
+    // Use resignation-level notice days if available, fallback to company settings
+    const requiredNoticeDays = r.required_notice_days || settings.settlement_notice_period_days;
+    const actualNoticeDays = r.actual_notice_days || Math.ceil((lastWorkingDay - noticeDate) / (1000 * 60 * 60 * 24));
     const shortfallDays = Math.max(0, requiredNoticeDays - actualNoticeDays);
+
+    // Check if notice is waived (from option param or resignation record)
+    const isNoticeWaived = waiveNotice || r.notice_waived === true;
 
     let noticeBuyoutAmount = 0;
     let noticeBuyoutType = null;
 
-    if (shortfallDays > 0) {
+    if (shortfallDays > 0 && !isNoticeWaived) {
       noticeBuyoutAmount = Math.round(shortfallDays * dailyRate * 100) / 100;
       noticeBuyoutType = 'employee_pays'; // Employee didn't serve full notice
     }
@@ -382,7 +389,8 @@ async function calculateFinalSettlement(resignationId) {
         shortfall_days: shortfallDays,
         type: noticeBuyoutType,
         daily_rate: Math.round(dailyRate * 100) / 100,
-        amount: noticeBuyoutAmount
+        amount: noticeBuyoutAmount,
+        waived: isNoticeWaived
       },
       statutory_deductions: statutoryDeductions,
       totals: {
