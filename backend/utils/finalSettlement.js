@@ -12,6 +12,7 @@
 
 const pool = require('../db');
 const { calculateAllStatutory, calculateAgeFromIC } = require('./statutory');
+const { calculateDetailedLeaveEntitlement } = require('./leaveProration');
 
 /**
  * Working Days Calculation Helpers
@@ -179,34 +180,25 @@ async function calculateFinalSettlement(resignationId, options = {}) {
     }
 
     // ========================================
-    // 2. LEAVE ENCASHMENT
+    // 2. LEAVE ENCASHMENT (YTD-prorated)
     // ========================================
-    const leaveBalances = await client.query(`
-      SELECT lb.*, lt.code, lt.name as leave_type_name, lt.is_paid
-      FROM leave_balances lb
-      JOIN leave_types lt ON lb.leave_type_id = lt.id
-      WHERE lb.employee_id = $1 AND lb.year = $2
-    `, [r.emp_id, lastYear]);
+    const detailedLeave = await calculateDetailedLeaveEntitlement(
+      r.emp_id, r.company_id, lastWorkingDay, r.join_date
+    );
 
-    let totalLeaveEncashDays = 0;
-    const leaveBreakdown = [];
-
-    for (const lb of leaveBalances.rows) {
-      if (lb.is_paid) {
-        const remainingDays = parseFloat(lb.entitled_days) + parseFloat(lb.carried_forward || 0) - parseFloat(lb.used_days);
-        if (remainingDays > 0) {
-          totalLeaveEncashDays += remainingDays;
-          leaveBreakdown.push({
-            type: lb.code,
-            name: lb.leave_type_name,
-            entitled: parseFloat(lb.entitled_days),
-            used: parseFloat(lb.used_days),
-            carried_forward: parseFloat(lb.carried_forward || 0),
-            remaining: remainingDays
-          });
-        }
-      }
-    }
+    let totalLeaveEncashDays = detailedLeave.summary.total_encashable_days;
+    const leaveBreakdown = detailedLeave.leaveTypes
+      .filter(lt => lt.is_paid && lt.encashable_days > 0)
+      .map(lt => ({
+        type: lt.code,
+        name: lt.name,
+        entitled: lt.full_year_entitlement,
+        ytd_earned: lt.ytd_earned,
+        used: lt.ytd_taken + lt.future_taken,
+        carried_forward: lt.carried_forward,
+        remaining: lt.encashable_days,
+        advance_used: lt.advance_used
+      }));
 
     const encashmentRate = settings.settlement_leave_encashment_rate;
     const leaveEncashmentAmount = Math.round(totalLeaveEncashDays * dailyRate * encashmentRate * 100) / 100;
@@ -447,7 +439,7 @@ async function saveFinalSettlement(resignationId, settlement) {
   `, [
     resignationId,
     settlement.breakdown.prorated_salary.amount,
-    settlement.breakdown.prorated_salary.days_worked,
+    settlement.breakdown.prorated_salary.working_days_worked,
     settlement.breakdown.leave_encashment.total_days,
     settlement.breakdown.leave_encashment.amount,
     settlement.breakdown.pending_claims.amount,

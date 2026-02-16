@@ -281,10 +281,10 @@ const calculateSOCSO = (grossSalary, age = 30) => {
     return { employee: 0, employer: 0 };
   }
 
-  // SOCSO ceiling is RM5000
-  if (grossSalary > 5000) {
-    // Max contribution for salary > RM5000
-    return { employee: 24.75, employer: 86.65 };
+  // SOCSO ceiling is RM6000 (effective Oct 2024)
+  if (grossSalary > 6000) {
+    // Max contribution for salary > RM6000
+    return { employee: 29.75, employer: 104.15 };
   }
 
   const bracket = SOCSO_TABLE.find(b => grossSalary >= b.min && grossSalary <= b.max);
@@ -386,10 +386,10 @@ const calculateEIS = (grossSalary, age = 30) => {
     return { employee: 0, employer: 0 };
   }
 
-  // EIS ceiling is RM5000
-  if (grossSalary > 5000) {
-    // Max contribution for salary > RM5000
-    return { employee: 9.90, employer: 9.90 };
+  // EIS ceiling is RM6000 (effective Oct 2024)
+  if (grossSalary > 6000) {
+    // Max contribution for salary > RM6000
+    return { employee: 11.90, employer: 11.90 };
   }
 
   const bracket = EIS_TABLE.find(b => grossSalary >= b.min && grossSalary <= b.max);
@@ -1057,7 +1057,7 @@ const SELANGOR_PUBLIC_HOLIDAYS = {
     '2024-07-07', // Awal Muharram
     '2024-08-31', // Merdeka Day
     '2024-09-16', // Malaysia Day
-    '2024-09-16', // Prophet Muhammad's Birthday
+    '2024-09-17', // Prophet Muhammad's Birthday (replacement)
     '2024-10-31', // Deepavali
     '2024-12-11', // Sultan of Selangor's Birthday
     '2024-12-25', // Christmas
@@ -1082,24 +1082,80 @@ const SELANGOR_PUBLIC_HOLIDAYS = {
     '2025-10-20', // Deepavali (estimated)
     '2025-12-11', // Sultan of Selangor's Birthday
     '2025-12-25', // Christmas
+  ],
+  2026: [
+    '2026-01-01', // New Year's Day
+    '2026-02-17', // Chinese New Year
+    '2026-03-21', // Hari Raya Aidilfitri
+    '2026-03-22', // Hari Raya Aidilfitri (2nd day)
+    '2026-05-01', // Labour Day
+    '2026-05-27', // Hari Raya Haji (Aidiladha)
+    '2026-06-01', // Agong's Birthday
+    '2026-08-31', // National Day (Hari Merdeka)
+    '2026-09-16', // Malaysia Day
+    '2026-11-08', // Deepavali
+    '2026-12-11', // Sultan of Selangor's Birthday
+    '2026-12-25', // Christmas Day
   ]
 };
 
-// Check if a date is a public holiday in Selangor
-const isPublicHoliday = (dateStr, year = null) => {
+// Kuala Lumpur Public Holidays (for KL outlets: 275, 291, 296, 307, 665)
+const KL_PUBLIC_HOLIDAYS = {
+  2025: [
+    '2025-01-01', // New Year's Day
+    '2025-01-14', // Thaipusam
+    '2025-01-29', // Chinese New Year
+    '2025-01-30', // Chinese New Year (2nd day)
+    '2025-02-01', // Federal Territory Day
+    '2025-03-17', // Nuzul Al-Quran
+    '2025-03-31', // Hari Raya Aidilfitri
+    '2025-04-01', // Hari Raya Aidilfitri (2nd day)
+    '2025-05-01', // Labour Day
+    '2025-06-02', // Agong's Birthday
+    '2025-06-07', // Hari Raya Haji
+    '2025-08-31', // Merdeka Day
+    '2025-09-16', // Malaysia Day
+    '2025-12-25', // Christmas
+  ],
+  2026: [
+    '2026-01-01', // New Year's Day
+    '2026-02-01', // Federal Territory Day
+    '2026-02-17', // Chinese New Year
+    '2026-03-21', // Hari Raya Aidilfitri
+    '2026-03-22', // Hari Raya Aidilfitri (2nd day)
+    '2026-05-01', // Labour Day
+    '2026-05-27', // Hari Raya Haji (Aidiladha)
+    '2026-06-01', // Agong's Birthday
+    '2026-08-31', // National Day (Hari Merdeka)
+    '2026-09-16', // Malaysia Day
+    '2026-11-08', // Deepavali
+    '2026-12-25', // Christmas Day
+  ]
+};
+
+// Get holiday list by state (defaults to selangor for backward compatibility)
+const getHolidayList = (year, state = 'selangor') => {
+  if (state === 'kl') {
+    return KL_PUBLIC_HOLIDAYS[year] || [];
+  }
+  return SELANGOR_PUBLIC_HOLIDAYS[year] || [];
+};
+
+// Check if a date is a public holiday
+const isPublicHoliday = (dateStr, year = null, state = 'selangor') => {
   if (!dateStr) return false;
 
   const date = new Date(dateStr);
   const y = year || date.getFullYear();
   const dateFormatted = date.toISOString().split('T')[0];
 
-  const holidays = SELANGOR_PUBLIC_HOLIDAYS[y] || [];
+  const holidays = getHolidayList(y, state);
   return holidays.includes(dateFormatted);
 };
 
 // Count public holidays in a given month
-const countPublicHolidaysInMonth = (year, month) => {
-  const holidays = SELANGOR_PUBLIC_HOLIDAYS[year] || [];
+const countPublicHolidaysInMonth = (year, month, state = 'selangor') => {
+  const holidays = getHolidayList(year, state);
   return holidays.filter(h => {
     const d = new Date(h);
     return d.getMonth() + 1 === month;
@@ -1107,8 +1163,8 @@ const countPublicHolidaysInMonth = (year, month) => {
 };
 
 // Get list of public holidays in a month
-const getPublicHolidaysInMonth = (year, month) => {
-  const holidays = SELANGOR_PUBLIC_HOLIDAYS[year] || [];
+const getPublicHolidaysInMonth = (year, month, state = 'selangor') => {
+  const holidays = getHolidayList(year, state);
   return holidays.filter(h => {
     const d = new Date(h);
     return d.getMonth() + 1 === month;
@@ -1222,6 +1278,8 @@ module.exports = {
   countPublicHolidaysInMonth,
   getPublicHolidaysInMonth,
   SELANGOR_PUBLIC_HOLIDAYS,
+  KL_PUBLIC_HOLIDAYS,
+  getHolidayList,
   // IC formatting and detection
   formatIC,
   detectIDType,
