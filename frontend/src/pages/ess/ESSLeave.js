@@ -14,6 +14,7 @@ function ESSLeave({ embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [mcFile, setMcFile] = useState(null);
   const [applyForm, setApplyForm] = useState({
     leave_type_id: '',
     start_date: '',
@@ -48,20 +49,38 @@ function ESSLeave({ embedded = false }) {
     }
   };
 
+  // Check if selected leave type requires MC attachment
+  const selectedLeaveType = leaveTypes.find(lt => lt.id === parseInt(applyForm.leave_type_id));
+  const requiresMC = selectedLeaveType?.requires_attachment || false;
+
   const handleApply = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const payload = {
-        leave_type_id: parseInt(applyForm.leave_type_id, 10),
-        start_date: applyForm.start_date,
-        end_date: applyForm.end_date,
-        reason: applyForm.reason
-      };
-      console.log('[Leave Apply] Submitting:', payload);
-      const response = await essApi.applyLeave(payload);
+      let response;
+      if (requiresMC && mcFile) {
+        // Use FormData for MC file upload
+        const formData = new FormData();
+        formData.append('leave_type_id', parseInt(applyForm.leave_type_id, 10));
+        formData.append('start_date', applyForm.start_date);
+        formData.append('end_date', applyForm.end_date);
+        formData.append('reason', applyForm.reason);
+        formData.append('mc_file', mcFile);
+        console.log('[Leave Apply] Submitting with MC file');
+        response = await essApi.applyLeaveWithFile(formData);
+      } else {
+        const payload = {
+          leave_type_id: parseInt(applyForm.leave_type_id, 10),
+          start_date: applyForm.start_date,
+          end_date: applyForm.end_date,
+          reason: applyForm.reason
+        };
+        console.log('[Leave Apply] Submitting:', payload);
+        response = await essApi.applyLeave(payload);
+      }
       setShowApplyModal(false);
       setApplyForm({ leave_type_id: '', start_date: '', end_date: '', reason: '' });
+      setMcFile(null);
 
       // Show different message based on auto-approval status
       if (response.data?.autoApproved) {
@@ -277,11 +296,11 @@ function ESSLeave({ embedded = false }) {
 
         {/* Apply Modal */}
         {showApplyModal && (
-          <div className="modal-overlay" onClick={() => setShowApplyModal(false)}>
+          <div className="modal-overlay" onClick={() => { setShowApplyModal(false); setMcFile(null); }}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>{t('leave.applyLeave')}</h2>
-                <button className="close-btn" onClick={() => setShowApplyModal(false)}>&times;</button>
+                <button className="close-btn" onClick={() => { setShowApplyModal(false); setMcFile(null); }}>&times;</button>
               </div>
               <form onSubmit={handleApply}>
                 <div className="modal-body">
@@ -315,9 +334,27 @@ function ESSLeave({ embedded = false }) {
                     <label>{t('leave.reason')} *</label>
                     <textarea value={applyForm.reason} onChange={e => setApplyForm({...applyForm, reason: e.target.value})} rows={3} required placeholder={t('leave.reasonPlaceholder')} />
                   </div>
+                  {requiresMC && (
+                    <div className="form-group">
+                      <label>Medical Certificate (MC) *</label>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/jpg,application/pdf"
+                        onChange={e => setMcFile(e.target.files[0] || null)}
+                        required
+                        style={{ padding: '8px', border: '1px solid #e2e8f0', borderRadius: '8px', width: '100%' }}
+                      />
+                      <small style={{ color: '#64748b', fontSize: '12px' }}>Upload JPG, PNG, or PDF (max 5MB)</small>
+                      {mcFile && (
+                        <div style={{ marginTop: '4px', fontSize: '12px', color: '#059669' }}>
+                          Selected: {mcFile.name}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="cancel-btn" onClick={() => setShowApplyModal(false)}>{t('common.cancel')}</button>
+                  <button type="button" className="cancel-btn" onClick={() => { setShowApplyModal(false); setMcFile(null); }}>{t('common.cancel')}</button>
                   <button type="submit" className="submit-btn" disabled={submitting}>
                     {submitting ? t('leave.submitting') : t('common.submit')}
                   </button>

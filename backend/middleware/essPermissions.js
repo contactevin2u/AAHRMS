@@ -249,7 +249,12 @@ const getManagedOutlets = async (employee) => {
       'SELECT outlet_id FROM employee_outlets WHERE employee_id = $1',
       [employee.id]
     );
-    return result.rows.map(r => r.outlet_id);
+    const outlets = result.rows.map(r => r.outlet_id);
+    // Fallback: include manager's own outlet_id if not already in list
+    if (employee.outlet_id && !outlets.includes(employee.outlet_id)) {
+      outlets.push(employee.outlet_id);
+    }
+    return outlets;
   }
 
   return [];

@@ -206,9 +206,10 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   let approvedAt = null;
   let autoApprovalReason = null;
 
-  // Check for outstation meal allowance (RM20/day policy)
+  // Check for outstation meal allowance (RM20/day policy) - AA Alive only
+  // Mimix claims require manual boss/director approval
   const upperCategory = (category || '').toUpperCase();
-  if (upperCategory === 'MEAL' || upperCategory === 'FOOD' || upperCategory === 'MAKAN') {
+  if (companyId !== 3 && (upperCategory === 'MEAL' || upperCategory === 'FOOD' || upperCategory === 'MAKAN')) {
     const mealAllowance = await getEmployeeMealAllowance(req.employee.id);
     if (mealAllowance && parseFloat(amount) <= parseFloat(mealAllowance)) {
       claimStatus = 'approved';

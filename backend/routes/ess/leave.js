@@ -278,11 +278,9 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
   }
 
   // Cannot apply for past dates (only admin can)
+  // Exception: Medical/Sick leave (requires_attachment types) can be applied up to 7 days in the past
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  if (start < today) {
-    throw new ValidationError('Cannot apply leave for past dates');
-  }
 
   // Get employee info
   const empResult = await pool.query(
@@ -335,6 +333,22 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
   }
 
   const leaveType = leaveTypeResult.rows[0];
+
+  // Past date validation - moved here so we know the leave type
+  // Medical leave types (requires_attachment) can be applied up to 7 days in the past
+  // Other leave types cannot be applied for past dates
+  if (start < today) {
+    const isMedicalLeave = leaveType.requires_attachment || ['ML', 'SL', 'HL'].includes(leaveType.code);
+    if (!isMedicalLeave) {
+      throw new ValidationError('Cannot apply leave for past dates');
+    }
+    // Medical leave: allow up to 7 days in the past
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    if (start < sevenDaysAgo) {
+      throw new ValidationError('Medical leave can only be applied up to 7 days in the past. Please contact HR for earlier dates.');
+    }
+  }
 
   // Check eligibility (gender, service, occurrences)
   const eligibility = await checkLeaveEligibility(
