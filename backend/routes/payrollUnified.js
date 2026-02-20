@@ -1007,8 +1007,9 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
           total_deductions, net_pay, employer_total_cost,
           sales_amount, salary_calculation_method,
           upsell_commission, order_commission, trip_allowance, trip_allowance_days,
-          ot_extra_days, ot_extra_days_amount, employee_role_type
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
+          ot_extra_days, ot_extra_days_amount, employee_role_type,
+          sort_order
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)
       `, [
         runId, emp.id, basicSalary, wages, partTimeHoursWorked, totalAllowances, commissionAmount, claimsAmount,
         otHours, otAmount, phDaysWorked, phPay,
@@ -1021,7 +1022,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
         totalDeductions, netPay, employerCost,
         salesAmount, salaryCalculationMethod,
         upsellCommission, orderCommission, tripAllowance, tripAllowanceDays,
-        otExtraDays, otExtraDaysAmount, employeeRoleType
+        otExtraDays, otExtraDaysAmount, employeeRoleType,
+        (stats.created + 1) * 10
       ]);
 
       stats.created++;
@@ -1564,15 +1566,17 @@ router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
               gross_salary,
               epf_employee, epf_employer, socso_employee, socso_employer,
               eis_employee, eis_employer, pcb,
-              total_deductions, net_pay, employer_total_cost
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+              total_deductions, net_pay, employer_total_cost,
+              sort_order
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
           `, [
             runId, emp.id, basicSalary, totalAllowances, flexCommissions, claimsAmount,
             otHours, otAmount, phDaysWorked, phPay, grossSalary,
             statutory.epf.employee, statutory.epf.employer,
             statutory.socso.employee, statutory.socso.employer,
             statutory.eis.employee, statutory.eis.employer, statutory.pcb,
-            totalDeductionsForEmp, netPay, employerCost
+            totalDeductionsForEmp, netPay, employerCost,
+            (employeeCount + 1) * 10
           ]);
 
           totalGross += grossSalary;
@@ -1719,7 +1723,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN outlets eo ON e.outlet_id = eo.id
       WHERE pi.payroll_run_id = $1
-      ORDER BY eo.name NULLS FIRST, e.name
+      ORDER BY pi.sort_order ASC, eo.name NULLS FIRST, e.name
     `, [id, run.period_start_date, run.period_end_date, isOutletBased]);
 
     const workDaysPerMonth = settings.rates.standard_work_days || 22;
@@ -2472,8 +2476,9 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           total_deductions, net_pay, employer_total_cost,
           sales_amount, salary_calculation_method,
           ytd_gross, ytd_epf, ytd_pcb,
-          prev_month_net, variance_amount, variance_percent
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43)
+          prev_month_net, variance_amount, variance_percent,
+          sort_order
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44)
       `, [
         runId, emp.id,
         basicSalary, totalAllowances, commissionAmount, claimsAmount,
@@ -2491,7 +2496,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
         totalDeductions, netPay, employerCost,
         salesAmount, salaryCalculationMethod,
         ytdData?.ytdGross || 0, ytdData?.ytdEPF || 0, ytdData?.ytdPCB || 0,
-        prevMonthNet, varianceAmount, variancePercent
+        prevMonthNet, varianceAmount, variancePercent,
+        (stats.created + 1) * 10
       ]);
 
       stats.created++;
@@ -3524,6 +3530,13 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
     let addedCount = 0;
     const addedEmployees = [];
 
+    // Get max sort_order for this run to append new employees after existing ones
+    const maxSortResult = await client.query(
+      'SELECT COALESCE(MAX(sort_order), 0) as max_sort FROM payroll_items WHERE payroll_run_id = $1',
+      [id]
+    );
+    let nextSortOrder = maxSortResult.rows[0].max_sort;
+
     // Get employees to add
     const empResult = await client.query(`
       SELECT e.*, e.default_basic_salary as basic_salary, e.default_allowance as fixed_allowance
@@ -3678,8 +3691,9 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
           gross_salary, statutory_base,
           epf_employee, epf_employer, socso_employee, socso_employer,
           eis_employee, eis_employer, pcb,
-          total_deductions, net_pay, employer_total_cost
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+          total_deductions, net_pay, employer_total_cost,
+          sort_order
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
       `, [
         id, emp.id, basicSalary, fixedAllowance, otHours, otAmount,
         phDaysWorked, phPay,
@@ -3687,7 +3701,8 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
         eisEmployee, eisEmployer, pcb,
-        totalDeductions, netPay, employerCost
+        totalDeductions, netPay, employerCost,
+        (nextSortOrder += 10)
       ]);
 
       addedCount++;
@@ -4799,6 +4814,53 @@ router.get('/items/:id/attendance-details', authenticateAdmin, async (req, res) 
   } catch (error) {
     console.error('Error fetching attendance details:', error);
     res.status(500).json({ error: 'Failed to fetch attendance details' });
+  }
+});
+
+/**
+ * PUT /api/payroll/runs/:id/reorder
+ * Reorder payroll items within a draft run
+ */
+router.put('/runs/:id/reorder', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { items } = req.body;
+
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'items array is required' });
+    }
+
+    // Verify run exists and is draft
+    const runResult = await pool.query('SELECT id, status FROM payroll_runs WHERE id = $1', [id]);
+    if (runResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll run not found' });
+    }
+    if (runResult.rows[0].status !== 'draft') {
+      return res.status(400).json({ error: 'Can only reorder items in draft runs' });
+    }
+
+    // Batch update sort_order
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const item of items) {
+        await client.query(
+          'UPDATE payroll_items SET sort_order = $1 WHERE id = $2 AND payroll_run_id = $3',
+          [item.sort_order, item.id, id]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error reordering payroll items:', error);
+    res.status(500).json({ error: 'Failed to reorder payroll items' });
   }
 });
 

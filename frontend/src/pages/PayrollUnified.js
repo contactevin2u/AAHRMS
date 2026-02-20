@@ -882,6 +882,29 @@ function PayrollUnified() {
     }
   };
 
+  const handleMoveItem = async (index, direction) => {
+    const items = [...selectedRun.items];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= items.length) return;
+
+    // Swap items
+    [items[index], items[targetIndex]] = [items[targetIndex], items[index]];
+
+    // Reassign sort_order (10, 20, 30...)
+    const reorderPayload = items.map((item, i) => ({ id: item.id, sort_order: (i + 1) * 10 }));
+
+    // Update local state immediately
+    setSelectedRun(prev => ({ ...prev, items }));
+
+    try {
+      await payrollV2Api.reorderItems(selectedRun.id, reorderPayload);
+    } catch (error) {
+      // Revert on failure
+      fetchRunDetails(selectedRun.id);
+      alert('Failed to reorder');
+    }
+  };
+
   const handleViewPayslip = async (itemId) => {
     try {
       const res = await payrollV2Api.getItemPayslip(itemId);
@@ -1471,7 +1494,7 @@ function PayrollUnified() {
                           </tr>
                         </thead>
                         <tbody>
-                          {selectedRun.items?.map(item => (
+                          {selectedRun.items?.map((item, itemIndex) => (
                             <tr key={item.id}>
                               <td className="employee-cell" style={{ cursor: 'pointer' }} onClick={() => setExpandedEmployee(expandedEmployee === item.id ? null : item.id)}>
                                 <strong>{item.emp_code}</strong>
@@ -1512,6 +1535,8 @@ function PayrollUnified() {
                               <td>
                                 {isDraft ? (
                                   <>
+                                    {itemIndex > 0 && <button onClick={() => handleMoveItem(itemIndex, 'up')} className="action-btn" title="Move up" style={{ fontSize: '0.75rem', padding: '2px 5px' }}>▲</button>}
+                                    {itemIndex < selectedRun.items.length - 1 && <button onClick={() => handleMoveItem(itemIndex, 'down')} className="action-btn" title="Move down" style={{ fontSize: '0.75rem', padding: '2px 5px' }}>▼</button>}
                                     <button onClick={() => handleRecalculateItem(item.id)} className="action-btn recalc" title="Recalculate">↻</button>
                                     <button onClick={() => handleEditItem(item)} className="action-btn edit" title="Full Edit">✎</button>
                                     <button onClick={() => handleDeleteItem(item)} className="action-btn delete" title="Remove from payroll">🗑</button>

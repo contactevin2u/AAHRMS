@@ -217,6 +217,7 @@ export const payrollV2Api = {
   recalculateAll: (runId) => api.post(`/payroll/runs/${runId}/recalculate-all`),
   addEmployees: (runId, employeeIds) => api.post(`/payroll/runs/${runId}/add-employees`, { employee_ids: employeeIds }),
   getAttendanceDetails: (id) => api.get(`/payroll/items/${id}/attendance-details`),
+  reorderItems: (runId, items) => api.put(`/payroll/runs/${runId}/reorder`, { items }),
 
   // AI Payroll Assistant
   aiAnalyze: (data) => api.post('/payroll/ai/analyze', data),
