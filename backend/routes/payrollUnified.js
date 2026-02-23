@@ -4193,6 +4193,135 @@ router.get('/runs/:id/bank-file', authenticateAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/payroll/runs/:id/perkeso-file
+ * Generate PERKESO ASSIST submission file (fixed-width .txt)
+ * Format: 278 chars per line with employer SOCSO code, IC, name, month, wages, SOCSO & EIS contributions
+ */
+router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Get payroll run with outlet info
+    const runResult = await pool.query(`
+      SELECT pr.*, o.socso_code as outlet_socso_code, o.name as outlet_name,
+             c.name as company_name, c.payroll_config
+      FROM payroll_runs pr
+      JOIN companies c ON pr.company_id = c.id
+      LEFT JOIN outlets o ON pr.outlet_id = o.id
+      WHERE pr.id = $1
+    `, [id]);
+
+    if (runResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll run not found' });
+    }
+    const run = runResult.rows[0];
+
+    if (run.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied: payroll run belongs to another company' });
+    }
+
+    // Get SOCSO employer code: from outlet first, then company payroll_config
+    const socsoCode = run.outlet_socso_code || (run.payroll_config && run.payroll_config.socso_code) || '';
+    if (!socsoCode) {
+      return res.status(400).json({ error: 'SOCSO employer code not configured for this outlet/company' });
+    }
+
+    // Get payroll items with employee details
+    const itemsResult = await pool.query(`
+      SELECT pi.*, e.name as employee_name, e.ic_number
+      FROM payroll_items pi
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pi.payroll_run_id = $1
+      ORDER BY e.name
+    `, [id]);
+
+    if (itemsResult.rows.length === 0) {
+      return res.status(400).json({ error: 'No employees found in this payroll run' });
+    }
+
+    // Generate PERKESO fixed-width file
+    // Format: 278 chars per line
+    // Pos 0-11:   Employer SOCSO code (12 chars)
+    // Pos 12-31:  Spaces (20 chars)
+    // Pos 32-43:  IC number (12 chars, no dashes)
+    // Pos 44-193: Employee name (150 chars, left-aligned, padded)
+    // Pos 194-199: Contribution month MMYYYY (6 chars)
+    // Pos 200-213: Wages in sen (14 chars, right-aligned)
+    // Pos 214-219: SOCSO employer in sen (6 chars, right-aligned)
+    // Pos 220-225: SOCSO employee in sen (6 chars, right-aligned)
+    // Pos 226-231: EIS employer in sen (6 chars, right-aligned)
+    // Pos 232-237: EIS employee in sen (6 chars, right-aligned)
+    // Pos 238-277: Trailing spaces (40 chars)
+
+    const monthStr = String(run.month).padStart(2, '0') + String(run.year);
+    const lines = [];
+
+    for (const item of itemsResult.rows) {
+      const ic = (item.ic_number || '').replace(/-/g, '').trim();
+      const name = (item.employee_name || '').toUpperCase().trim();
+
+      const statutoryBase = parseFloat(item.statutory_base) || 0;
+      const socsoEr = parseFloat(item.socso_employer) || 0;
+      const socsoEe = parseFloat(item.socso_employee) || 0;
+      const eisEr = parseFloat(item.eis_employer) || 0;
+      const eisEe = parseFloat(item.eis_employee) || 0;
+
+      // Convert to sen (cents)
+      const wagesSen = Math.round(statutoryBase * 100);
+      const socsoErSen = Math.round(socsoEr * 100);
+      const socsoEeSen = Math.round(socsoEe * 100);
+      const eisErSen = Math.round(eisEr * 100);
+      const eisEeSen = Math.round(eisEe * 100);
+
+      const line =
+        socsoCode.padEnd(12, ' ') +
+        ' '.repeat(20) +
+        ic.padEnd(12, ' ') +
+        name.padEnd(150, ' ') +
+        monthStr +
+        String(wagesSen).padStart(14, ' ') +
+        String(socsoErSen).padStart(6, ' ') +
+        String(socsoEeSen).padStart(6, ' ') +
+        String(eisErSen).padStart(6, ' ') +
+        String(eisEeSen).padStart(6, ' ') +
+        ' '.repeat(40);
+
+      lines.push(line);
+    }
+
+    const content = lines.join('\r\n') + '\r\n';
+
+    // Generate filename
+    const outletName = run.outlet_name || run.company_name || 'COMPANY';
+    // Extract short name (e.g., "Langkah ATD - Taman Putra" -> "ATD")
+    let shortName = outletName;
+    const dashIdx = outletName.indexOf(' - ');
+    if (dashIdx > 0) {
+      shortName = outletName.substring(0, dashIdx);
+    }
+    // Remove common prefixes
+    shortName = shortName.replace(/^(Langkah|Miksu|Kopi Antarabangsa|Marina Charisma|Mimix A|Minuman Aisu)\s*/i, '').trim();
+    if (!shortName) shortName = outletName.split(' ')[0];
+    shortName = shortName.toUpperCase().replace(/\s+/g, ' ').trim();
+
+    const filename = `${shortName} PERKESOS.txt`;
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(content);
+
+  } catch (error) {
+    console.error('Error generating PERKESO file:', error);
+    res.status(500).json({ error: 'Failed to generate PERKESO file: ' + error.message });
+  }
+});
+
+/**
  * GET /api/payroll/runs/:id/salary-report
  * Generate salary report with all employee details and bank info
  * Returns CSV for draft, or data for PDF generation

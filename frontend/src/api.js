@@ -200,6 +200,9 @@ export const payrollV2Api = {
     params: { format },
     responseType: 'blob'
   }),
+  getPerkesoFile: (id) => api.get(`/payroll/runs/${id}/perkeso-file`, {
+    responseType: 'blob'
+  }),
   getSalaryReport: (id, format = 'csv') => api.get(`/payroll/runs/${id}/salary-report`, {
     params: { format },
     responseType: format === 'csv' ? 'blob' : 'json'
