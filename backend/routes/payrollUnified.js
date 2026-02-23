@@ -4233,7 +4233,7 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
     // Get payroll items with employee details
     const itemsResult = await pool.query(`
       SELECT pi.*, e.name as employee_name, e.ic_number, e.epf_number,
-             e.employment_type, e.epf_employee as emp_epf_rate
+             e.employment_type
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       WHERE pi.payroll_run_id = $1
