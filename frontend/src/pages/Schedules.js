@@ -723,7 +723,7 @@ function Schedules({ outletId: propOutletId, embedded = false }) {
                         ) : (
                           roster.map(emp => (
                             <tr key={emp.employee_id}>
-                              <td className="staff-name">{emp.name.split(' ')[0]}</td>
+                              <td className="staff-name" title={emp.name}>{emp.employee_code}</td>
                               {weekDates.map((d, idx) => {
                                 const shift = emp.shifts.find(s => s.date === d.date);
                                 const display = getShiftDisplay(shift);
