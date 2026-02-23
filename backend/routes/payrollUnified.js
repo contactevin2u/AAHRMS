@@ -1723,7 +1723,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN outlets eo ON e.outlet_id = eo.id
       WHERE pi.payroll_run_id = $1
-      ORDER BY pi.sort_order ASC, eo.name NULLS FIRST, e.name
+      ORDER BY pi.sort_order ASC, eo.name NULLS FIRST, e.employee_id
     `, [id, run.period_start_date, run.period_end_date, isOutletBased]);
 
     const workDaysPerMonth = settings.rates.standard_work_days || 22;
@@ -4248,7 +4248,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN outlets o ON e.outlet_id = o.id
       WHERE pi.payroll_run_id = $1
-      ORDER BY e.name
+      ORDER BY e.employee_id
     `, [id]);
 
     // Calculate totals
@@ -4470,7 +4470,7 @@ router.get('/ot-summary/:year/:month', authenticateAdmin, async (req, res) => {
       paramIndex++;
     }
 
-    employeeQuery += ' ORDER BY d.name, e.name';
+    employeeQuery += ' ORDER BY d.name, e.employee_id';
 
     const employees = await pool.query(employeeQuery, params);
 

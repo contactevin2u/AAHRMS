@@ -66,7 +66,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
       params.push(status);
     }
 
-    query += ' ORDER BY e.name';
+    query += ' ORDER BY e.employee_id';
 
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -91,7 +91,7 @@ router.get('/available-employees/:year/:month', authenticateAdmin, async (req, r
         AND e.id NOT IN (
           SELECT employee_id FROM payroll WHERE year = $1 AND month = $2
         )
-      ORDER BY e.name
+      ORDER BY e.employee_id
     `, [year, month]);
 
     res.json(result.rows);
@@ -174,7 +174,7 @@ router.get('/payslips/:year/:month', authenticateAdmin, async (req, res) => {
       JOIN employees e ON p.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
       WHERE p.year = $1 AND p.month = $2 AND e.status = 'active'
-      ORDER BY e.name
+      ORDER BY e.employee_id
     `, [year, month]);
 
     res.json({
