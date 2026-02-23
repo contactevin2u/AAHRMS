@@ -4209,7 +4209,7 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
     // Get payroll run with outlet info
     const runResult = await pool.query(`
       SELECT pr.*, o.socso_code as outlet_socso_code, o.name as outlet_name,
-             c.name as company_name, c.payroll_config
+             c.name as company_name, c.payroll_config, c.socso_code as company_socso_code
       FROM payroll_runs pr
       JOIN companies c ON pr.company_id = c.id
       LEFT JOIN outlets o ON pr.outlet_id = o.id
@@ -4225,8 +4225,8 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Access denied: payroll run belongs to another company' });
     }
 
-    // Get SOCSO employer code: from outlet first, then company payroll_config
-    const socsoCode = run.outlet_socso_code || (run.payroll_config && run.payroll_config.socso_code) || '';
+    // Get SOCSO employer code: from outlet first, then company table, then company payroll_config
+    const socsoCode = run.outlet_socso_code || run.company_socso_code || (run.payroll_config && run.payroll_config.socso_code) || '';
     if (!socsoCode) {
       return res.status(400).json({ error: 'SOCSO employer code not configured for this outlet/company' });
     }
