@@ -807,8 +807,15 @@ function PayrollUnified() {
   };
 
   const calculatePHPay = (basicSalary, phDaysWorked, workingDays) => {
-    const wd = workingDays || selectedRun?.work_days_per_month || 22;
     if (!basicSalary || !phDaysWorked || phDaysWorked <= 0) return 0;
+    // AA Alive drivers: PH rate = basic / calendar days in month × 1.0
+    if (isAAAlive && editingItem?.employee_role_type === 'driver') {
+      const calendarDays = selectedRun?.month && selectedRun?.year
+        ? new Date(selectedRun.year, selectedRun.month, 0).getDate()
+        : 30;
+      return Math.round((basicSalary / calendarDays) * phDaysWorked * 1.0 * 100) / 100;
+    }
+    const wd = workingDays || selectedRun?.work_days_per_month || 22;
     return Math.round((basicSalary / wd) * phDaysWorked * 100) / 100;
   };
 
@@ -1971,16 +1978,19 @@ function PayrollUnified() {
                   )}
                   <div className="form-row">
                     <div className="form-group">
-                      <label>PH Days Worked (Double Pay)</label>
+                      <label>PH Days Worked {isAAAlive && editingItem?.employee_role_type === 'driver' ? '(1x)' : '(Double Pay)'}</label>
                       <input type="number" step="0.5" value={itemForm.ph_days_worked} onChange={(e) => handlePHDaysChange(parseFloat(e.target.value) || 0)} />
                       {itemForm.basic_salary > 0 && (
                         <small style={{color: '#666', fontSize: '0.75rem'}}>
-                          Daily rate: RM {(parseFloat(itemForm.basic_salary) / (selectedRun?.work_days_per_month || 22)).toFixed(2)} x 2 = RM {((parseFloat(itemForm.basic_salary) / (selectedRun?.work_days_per_month || 22)) * 2).toFixed(2)}/day
+                          {isAAAlive && editingItem?.employee_role_type === 'driver'
+                            ? `Daily rate: RM ${(parseFloat(itemForm.basic_salary) / (selectedRun?.month && selectedRun?.year ? new Date(selectedRun.year, selectedRun.month, 0).getDate() : 30)).toFixed(2)} (basic/${selectedRun?.month && selectedRun?.year ? new Date(selectedRun.year, selectedRun.month, 0).getDate() : 30} days) x 1.0`
+                            : `Daily rate: RM ${(parseFloat(itemForm.basic_salary) / (selectedRun?.work_days_per_month || 22)).toFixed(2)} x 2 = RM ${((parseFloat(itemForm.basic_salary) / (selectedRun?.work_days_per_month || 22)) * 2).toFixed(2)}/day`
+                          }
                         </small>
                       )}
                     </div>
                     <div className="form-group">
-                      <label>PH Pay (2x)</label>
+                      <label>PH Pay {isAAAlive && editingItem?.employee_role_type === 'driver' ? '(1x)' : '(2x)'}</label>
                       <input type="number" step="0.01" value={itemForm.ph_pay} onChange={(e) => setItemForm({ ...itemForm, ph_pay: parseFloat(e.target.value) || 0 })} />
                     </div>
                   </div>

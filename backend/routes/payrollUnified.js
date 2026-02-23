@@ -822,11 +822,20 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
 
       if (otAmount === 0 && fixedOT > 0) otAmount = fixedOT;
 
-      // PH pay calculation (not for AA Alive drivers - PH is 1.0x, included in daily OT)
+      // PH pay calculation
       if (isAAAlive && employeeRoleType === 'driver') {
-        // AA Alive drivers: PH at 1.0x = same as normal OT, already included
-        phPay = 0;
-        phDaysWorked = 0;
+        // AA Alive drivers: PH at 1.0x using calendar daily rate (basic / 30 or 31 days)
+        try {
+          phDaysWorked = await calculatePHDaysWorked(
+            emp.id, companyId,
+            period.start.toISOString().split('T')[0],
+            period.end.toISOString().split('T')[0]
+          );
+          if (phDaysWorked > 0 && basicSalary > 0) {
+            const calendarDays = new Date(year, month, 0).getDate();
+            phPay = Math.round(phDaysWorked * (basicSalary / calendarDays) * 1.0 * 100) / 100;
+          }
+        } catch (e) { console.warn(`PH calculation failed for ${emp.name}:`, e.message); }
       } else if (isPartTime) {
         // Part-time: PH pay already calculated in calculatePartTimeHours
         phPay = partTimePhPay;
