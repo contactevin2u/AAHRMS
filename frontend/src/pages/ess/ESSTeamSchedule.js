@@ -495,9 +495,9 @@ function ESSTeamSchedule({ embedded = false }) {
                             key={i}
                             className="ts-avatar"
                             style={{ backgroundColor: s.shift_color || '#3B82F6' }}
-                            title={`${s.employee_name} (${s.shift_code || 'Work'})`}
+                            title={`${s.emp_code || s.employee_name} (${s.shift_code || 'Work'})`}
                           >
-                            {getInitials(s.employee_name)}
+                            {s.emp_code || getInitials(s.employee_name)}
                           </div>
                         ))}
                         {workingSchedules.length > 3 && (
@@ -514,9 +514,9 @@ function ESSTeamSchedule({ embedded = false }) {
                             key={`lv-${i}`}
                             className="ts-avatar on-leave"
                             style={{ backgroundColor: '#F59E0B' }}
-                            title={`${s.employee_name} (${s.leave_code || s.shift_code})`}
+                            title={`${s.emp_code || s.employee_name} (${s.leave_code || s.shift_code})`}
                           >
-                            {getInitials(s.employee_name)}
+                            {s.emp_code || getInitials(s.employee_name)}
                           </div>
                         ))}
                         {leaveSchedules.length > 2 && (
@@ -556,9 +556,9 @@ function ESSTeamSchedule({ embedded = false }) {
                   key={emp.id}
                   className={`ts-team-member ${empStats?.warning ? 'warning' : ''}`}
                 >
-                  <div className="ts-member-avatar">{getInitials(emp.name)}</div>
+                  <div className="ts-member-avatar">{emp.employee_id || getInitials(emp.name)}</div>
                   <div className="ts-member-info">
-                    <div className="ts-member-name">{emp.name}</div>
+                    <div className="ts-member-name" title={emp.name}>{emp.employee_id || emp.name}</div>
                     {empStats && (
                       <div className="ts-member-stats">
                         {empStats.work_days}d work · {empStats.off_days}d off
@@ -607,10 +607,10 @@ function ESSTeamSchedule({ embedded = false }) {
                         className="ts-day-avatar"
                         style={{ backgroundColor: isLeave ? '#F59E0B' : (s.status === 'off' ? '#fecaca' : (s.shift_color || '#3B82F6')) }}
                       >
-                        {getInitials(s.employee_name)}
+                        {s.emp_code || getInitials(s.employee_name)}
                       </div>
                       <div className="ts-day-info">
-                        <div className="ts-day-name">{s.employee_name}</div>
+                        <div className="ts-day-name" title={s.employee_name}>{s.emp_code || s.employee_name}</div>
                         <div className="ts-day-shift">
                           {isLeave ? (
                             <>
@@ -723,8 +723,8 @@ function ESSTeamSchedule({ embedded = false }) {
                         onClick={() => !alreadyScheduled && toggleEmployeeSelection(emp)}
                         disabled={alreadyScheduled}
                       >
-                        <span className="ts-emp-initials">{getInitials(emp.name)}</span>
-                        <span className="ts-emp-name">{emp.name}</span>
+                        <span className="ts-emp-initials">{emp.employee_id || getInitials(emp.name)}</span>
+                        <span className="ts-emp-name" title={emp.name}>{emp.employee_id || emp.name}</span>
                         {alreadyScheduled && <span className="ts-scheduled-badge">✓</span>}
                         {isSelected && !alreadyScheduled && <span className="ts-selected-check">✓</span>}
                       </button>
@@ -736,7 +736,7 @@ function ESSTeamSchedule({ embedded = false }) {
               {/* Selected employees summary */}
               {selectedEmployees.length > 0 && selectedShift && (
                 <div className="ts-selection-summary">
-                  Assign <strong>{selectedShift.code}</strong> to: {selectedEmployees.map(e => e.name.split(' ')[0]).join(', ')}
+                  Assign <strong>{selectedShift.code}</strong> to: {selectedEmployees.map(e => e.employee_id || e.name.split(' ')[0]).join(', ')}
                 </div>
               )}
 
@@ -781,7 +781,7 @@ function ESSTeamSchedule({ embedded = false }) {
                   <div className="ts-warnings-header">⚠️ Attention Needed</div>
                   {weeklyStats.warnings.map((w, i) => (
                     <div key={i} className="ts-warning-item">
-                      <span className="ts-warning-name">{w.name}</span>
+                      <span className="ts-warning-name">{w.emp_code || w.name}</span>
                       <span className="ts-warning-text">{w.warning}</span>
                     </div>
                   ))}
@@ -792,7 +792,7 @@ function ESSTeamSchedule({ embedded = false }) {
               <div className="ts-emp-stats-list">
                 {weeklyStats.employees?.map(emp => (
                   <div key={emp.id} className={`ts-emp-stat-row ${emp.warning ? 'warning' : ''}`}>
-                    <div className="ts-emp-stat-name">{emp.name}</div>
+                    <div className="ts-emp-stat-name" title={emp.name}>{emp.emp_code || emp.name}</div>
                     <div className="ts-emp-stat-bars">
                       <div className="ts-stat-bar work" style={{ width: `${(emp.work_days / 7) * 100}%` }}>
                         {emp.work_days}d

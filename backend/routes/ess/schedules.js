@@ -694,7 +694,7 @@ router.get('/weekly-stats', authenticateEmployee, asyncHandler(async (req, res) 
     week_end: endDateStr,
     employees: stats,
     shift_summary: shiftsByDate,
-    warnings: stats.filter(s => s.warning).map(s => ({ name: s.name, warning: s.warning }))
+    warnings: stats.filter(s => s.warning).map(s => ({ name: s.name, emp_code: s.emp_code, warning: s.warning }))
   });
 }));
 

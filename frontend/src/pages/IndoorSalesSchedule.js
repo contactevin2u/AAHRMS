@@ -436,7 +436,7 @@ function IndoorSalesSchedule({ departmentId: propDeptId, embedded = false }) {
                                 style={{ backgroundColor: emp.shift?.shift_color || '#94a3b8' }}
                                 title={emp.name}
                               >
-                                {emp.name.split(' ')[0].slice(0, 3)}
+                                {emp.employee_code || emp.name.split(' ')[0].slice(0, 3)}
                               </span>
                             ))}
                           </div>
@@ -500,7 +500,7 @@ function IndoorSalesSchedule({ departmentId: propDeptId, embedded = false }) {
                               >
                                 {emp.shift?.shift_code}
                               </span>
-                              <span className="staff-name">{emp.name}</span>
+                              <span className="staff-name" title={emp.name}>{emp.employee_code || emp.name}</span>
                               {emp.shift?.is_public_holiday && (
                                 <span className="ph-indicator">PH</span>
                               )}
@@ -526,7 +526,7 @@ function IndoorSalesSchedule({ departmentId: propDeptId, embedded = false }) {
                           className={`employee-item ${selectedEmployee === emp.employee_id ? 'active' : ''}`}
                           onClick={() => setSelectedEmployee(emp.employee_id)}
                         >
-                          <span className="emp-name">{emp.name}</span>
+                          <span className="emp-name" title={emp.name}>{emp.employee_code || emp.name}</span>
                           <span className="emp-days">{totals.total} days</span>
                         </button>
                       );
