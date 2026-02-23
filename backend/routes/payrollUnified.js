@@ -4331,7 +4331,17 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
     const lines = [rec00, rec01, ...empLines, rec99];
     const content = lines.join('\r\n') + '\r\n';
 
-    const filename = `EPF_${epfCode}_${dateStr}.txt`;
+    const outletName = run.outlet_name || run.company_name || 'COMPANY';
+    let shortName = outletName;
+    const dashIdx = outletName.indexOf(' - ');
+    if (dashIdx > 0) shortName = outletName.substring(0, dashIdx);
+    shortName = shortName.replace(/^(Langkah|Miksu|Kopi Antarabangsa|Marina Charisma|Mimix A|Minuman Aisu)\s*/i, '').trim();
+    if (!shortName) shortName = outletName.split(' ')[0];
+    shortName = shortName.toUpperCase().replace(/\s+/g, ' ').trim();
+
+    const monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const monthLabel = monthNames[run.month - 1] || String(run.month).padStart(2, '0');
+    const filename = `KWSP ${shortName} ${monthLabel} ${run.year}.txt`;
 
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -4460,7 +4470,9 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
     if (!shortName) shortName = outletName.split(' ')[0];
     shortName = shortName.toUpperCase().replace(/\s+/g, ' ').trim();
 
-    const filename = `${shortName} PERKESOS.txt`;
+    const monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const monthLabel = monthNames[run.month - 1] || String(run.month).padStart(2, '0');
+    const filename = `PERKESO ${shortName} ${monthLabel} ${run.year}.txt`;
 
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
