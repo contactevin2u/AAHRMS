@@ -187,7 +187,7 @@ async function calculateFinalSettlement(resignationId, options = {}) {
     );
 
     let totalLeaveEncashDays = detailedLeave.summary.total_encashable_days;
-    const leaveBreakdown = detailedLeave.leaveTypes
+    const leaveBreakdown = detailedLeave.leave_types
       .filter(lt => lt.is_paid && lt.encashable_days > 0)
       .map(lt => ({
         type: lt.code,
@@ -202,6 +202,10 @@ async function calculateFinalSettlement(resignationId, options = {}) {
 
     const encashmentRate = settings.settlement_leave_encashment_rate;
     const leaveEncashmentAmount = Math.round(totalLeaveEncashDays * dailyRate * encashmentRate * 100) / 100;
+
+    // Advance leave deduction
+    const totalAdvanceUsed = detailedLeave.summary.total_advance_used || 0;
+    const advanceLeaveDeduction = Math.round(totalAdvanceUsed * dailyRate * 100) / 100;
 
     // ========================================
     // 3. PENDING APPROVED CLAIMS
@@ -331,7 +335,7 @@ async function calculateFinalSettlement(resignationId, options = {}) {
     const grossSettlement = proratedSalary + leaveEncashmentAmount +
                             pendingClaimsAmount + proratedBonus;
 
-    let totalDeductions = statutoryDeductions.total;
+    let totalDeductions = statutoryDeductions.total + advanceLeaveDeduction;
     let netSettlement;
 
     if (noticeBuyoutType === 'employee_pays') {
@@ -340,9 +344,9 @@ async function calculateFinalSettlement(resignationId, options = {}) {
       netSettlement = grossSettlement - totalDeductions;
     } else if (noticeBuyoutType === 'company_pays') {
       // Company pays employee (termination scenario)
-      netSettlement = grossSettlement - statutoryDeductions.total + noticeBuyoutAmount;
+      netSettlement = grossSettlement - statutoryDeductions.total - advanceLeaveDeduction + noticeBuyoutAmount;
     } else {
-      netSettlement = grossSettlement - statutoryDeductions.total;
+      netSettlement = grossSettlement - statutoryDeductions.total - advanceLeaveDeduction;
     }
 
     // Round final amount
@@ -383,6 +387,11 @@ async function calculateFinalSettlement(resignationId, options = {}) {
         daily_rate: Math.round(dailyRate * 100) / 100,
         amount: noticeBuyoutAmount,
         waived: isNoticeWaived
+      },
+      advance_leave_deduction: {
+        days: totalAdvanceUsed,
+        daily_rate: Math.round(dailyRate * 100) / 100,
+        amount: advanceLeaveDeduction
       },
       statutory_deductions: statutoryDeductions,
       totals: {
@@ -433,6 +442,7 @@ async function saveFinalSettlement(resignationId, settlement) {
       total_deductions = $10,
       final_salary_amount = $11,
       settlement_breakdown = $12,
+      advance_leave_deduction = $13,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = $1
     RETURNING *
@@ -448,7 +458,8 @@ async function saveFinalSettlement(resignationId, settlement) {
     settlement.breakdown.notice_buyout.type,
     settlement.breakdown.totals.deductions,
     settlement.final_amount,
-    JSON.stringify(settlement.breakdown)
+    JSON.stringify(settlement.breakdown),
+    settlement.breakdown.advance_leave_deduction.amount
   ]);
 
   return result.rows[0];

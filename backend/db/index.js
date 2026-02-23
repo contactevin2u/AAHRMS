@@ -2064,6 +2064,9 @@ Human Resources Department
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='clearance_completed_at') THEN
           ALTER TABLE resignations ADD COLUMN clearance_completed_at TIMESTAMP;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='resignations' AND column_name='advance_leave_deduction') THEN
+          ALTER TABLE resignations ADD COLUMN advance_leave_deduction DECIMAL(10,2) DEFAULT 0;
+        END IF;
       END $$;
 
       -- ALTER employees: add last_working_day

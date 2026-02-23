@@ -56,6 +56,10 @@ function LeaveBalances() {
   const [unpaidData, setUnpaidData] = useState(null);
   const [loadingUnpaid, setLoadingUnpaid] = useState(false);
 
+  // AL breakdown popup
+  const [showAlBreakdown, setShowAlBreakdown] = useState(false);
+  const [alBreakdownEmployee, setAlBreakdownEmployee] = useState(null);
+
   useEffect(() => {
     fetchData();
   }, [year, filter]);
@@ -189,6 +193,12 @@ function LeaveBalances() {
     }
   };
 
+  // Show AL breakdown popup
+  const handleAlClick = (emp) => {
+    setAlBreakdownEmployee(emp);
+    setShowAlBreakdown(true);
+  };
+
   // Format number - remove unnecessary decimals
   const formatNum = (num) => {
     const n = parseFloat(num) || 0;
@@ -200,12 +210,60 @@ function LeaveBalances() {
     return `${formatNum(available)}/${formatNum(entitled)}`;
   };
 
+  // Render AL earned cell
+  const renderAlEarned = (emp) => {
+    const ytdEarned = parseFloat(emp.al_ytd_earned) || 0;
+    const entitled = parseFloat(emp.al_entitled) || 0;
+    return (
+      <span className="clickable" onClick={() => handleAlClick(emp)}>
+        {formatNum(ytdEarned)}/{formatNum(entitled)}
+      </span>
+    );
+  };
+
+  // Render advance cell
+  const renderAdvance = (emp) => {
+    const adv = parseFloat(emp.al_advance_used) || 0;
+    if (adv > 0) {
+      return <span className="advance-value">{formatNum(adv)}</span>;
+    }
+    return '0';
+  };
+
   // Generate year options
   const yearOptions = [];
   const currentYear = new Date().getFullYear();
   for (let y = currentYear - 2; y <= currentYear + 1; y++) {
     yearOptions.push(y);
   }
+
+  // Render employee row (shared between grouped and flat views)
+  const renderEmployeeRow = (emp, showDept = false) => {
+    const ulDays = parseFloat(emp.ul_days) || 0;
+    const isNegativeUL = ulDays > 0;
+    const advUsed = parseFloat(emp.al_advance_used) || 0;
+    return (
+      <tr key={emp.id}>
+        <td className="col-id">{emp.emp_code}</td>
+        {showDept && <td className="col-dept">{emp.department_name || emp.outlet_name || '-'}</td>}
+        <td className="col-name">{emp.name}</td>
+        <td className="balance-cell al">{renderAlEarned(emp)}</td>
+        <td className={`balance-cell advance-cell ${advUsed > 0 ? 'has-advance' : ''}`}>{renderAdvance(emp)}</td>
+        <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
+        <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
+        <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>
+          {isNegativeUL ? (
+            <span className="clickable" onClick={() => handleViewUnpaid(emp)}>
+              -{formatNum(ulDays)}
+            </span>
+          ) : '0'}
+        </td>
+        <td className="col-actions">
+          <button className="edit-btn" onClick={() => handleEdit(emp)}>Edit</button>
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <Layout>
@@ -278,7 +336,7 @@ function LeaveBalances() {
               >
                 <div className="group-header" onClick={() => toggleGroup(groupKey)}>
                   <span className="collapse-icon">
-                    {expandedGroups[groupKey] ? '▼' : '▶'}
+                    {expandedGroups[groupKey] ? '\u25BC' : '\u25B6'}
                   </span>
                   <span className="group-name">{group.group_name}</span>
                   <span className="group-count">({group.employees.length} employees)</span>
@@ -290,7 +348,8 @@ function LeaveBalances() {
                         <tr>
                           <th className="col-id">ID</th>
                           <th className="col-name">Name</th>
-                          <th className="col-balance">AL</th>
+                          <th className="col-balance">AL Earned</th>
+                          <th className="col-balance">Adv</th>
                           <th className="col-balance">ML</th>
                           <th className="col-balance">HL</th>
                           <th className="col-balance">UL</th>
@@ -298,29 +357,7 @@ function LeaveBalances() {
                         </tr>
                       </thead>
                       <tbody>
-                        {group.employees.map(emp => {
-                          const ulDays = parseFloat(emp.ul_days) || 0;
-                          const isNegativeUL = ulDays > 0;
-                          return (
-                            <tr key={emp.id}>
-                              <td className="col-id">{emp.emp_code}</td>
-                              <td className="col-name">{emp.name}</td>
-                              <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
-                              <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
-                              <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
-                              <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>
-                                {isNegativeUL ? (
-                                  <span className="clickable" onClick={() => handleViewUnpaid(emp)}>
-                                    -{formatNum(ulDays)}
-                                  </span>
-                                ) : '0'}
-                              </td>
-                              <td className="col-actions">
-                                <button className="edit-btn" onClick={() => handleEdit(emp)}>Edit</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                        {group.employees.map(emp => renderEmployeeRow(emp, false))}
                       </tbody>
                     </table>
                   </div>
@@ -340,7 +377,8 @@ function LeaveBalances() {
                   <th className="col-id">ID</th>
                   <th className="col-dept">Dept/Outlet</th>
                   <th className="col-name">Name</th>
-                  <th className="col-balance">AL</th>
+                  <th className="col-balance">AL Earned</th>
+                  <th className="col-balance">Adv</th>
                   <th className="col-balance">ML</th>
                   <th className="col-balance">HL</th>
                   <th className="col-balance">UL</th>
@@ -349,32 +387,9 @@ function LeaveBalances() {
               </thead>
               <tbody>
                 {employees.length === 0 ? (
-                  <tr><td colSpan="8" className="no-data">No employees found</td></tr>
+                  <tr><td colSpan="9" className="no-data">No employees found</td></tr>
                 ) : (
-                  employees.map(emp => {
-                    const ulDays = parseFloat(emp.ul_days) || 0;
-                    const isNegativeUL = ulDays > 0;
-                    return (
-                      <tr key={emp.id}>
-                        <td className="col-id">{emp.emp_code}</td>
-                        <td className="col-dept">{emp.department_name || emp.outlet_name || '-'}</td>
-                        <td className="col-name">{emp.name}</td>
-                        <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
-                        <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
-                        <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
-                        <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>
-                          {isNegativeUL ? (
-                            <span className="clickable" onClick={() => handleViewUnpaid(emp)}>
-                              -{formatNum(ulDays)}
-                            </span>
-                          ) : '0'}
-                        </td>
-                        <td className="col-actions">
-                          <button className="edit-btn" onClick={() => handleEdit(emp)}>Edit</button>
-                        </td>
-                      </tr>
-                    );
-                  })
+                  employees.map(emp => renderEmployeeRow(emp, true))
                 )}
               </tbody>
             </table>
@@ -477,6 +492,49 @@ function LeaveBalances() {
                 <button className="save-btn" onClick={handleSaveEdit} disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AL Breakdown Popup */}
+        {showAlBreakdown && alBreakdownEmployee && (
+          <div className="modal-overlay" onClick={() => setShowAlBreakdown(false)}>
+            <div className="modal al-breakdown-popup" onClick={(e) => e.stopPropagation()}>
+              <h2>Annual Leave Breakdown</h2>
+              <p className="modal-subtitle">{alBreakdownEmployee.name} ({alBreakdownEmployee.emp_code})</p>
+
+              <div className="breakdown-table">
+                <div className="breakdown-row">
+                  <span>Full Year Entitlement</span>
+                  <strong>{formatNum(alBreakdownEmployee.al_entitled)} days</strong>
+                </div>
+                {parseFloat(alBreakdownEmployee.al_carried_forward) > 0 && (
+                  <div className="breakdown-row">
+                    <span>Carried Forward</span>
+                    <strong>{formatNum(alBreakdownEmployee.al_carried_forward)} days</strong>
+                  </div>
+                )}
+                <div className="breakdown-row">
+                  <span>YTD Earned (as of current month)</span>
+                  <strong>{formatNum(alBreakdownEmployee.al_ytd_earned)} days</strong>
+                </div>
+                <div className="breakdown-row">
+                  <span>Used</span>
+                  <strong>{formatNum(alBreakdownEmployee.al_used)} days</strong>
+                </div>
+                <div className="breakdown-row">
+                  <span>Available (full year)</span>
+                  <strong>{formatNum(alBreakdownEmployee.al_available)} days</strong>
+                </div>
+                <div className={`breakdown-row ${parseFloat(alBreakdownEmployee.al_advance_used) > 0 ? 'advance-highlight' : ''}`}>
+                  <span>Advance Used</span>
+                  <strong>{formatNum(alBreakdownEmployee.al_advance_used)} days</strong>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button className="cancel-btn" onClick={() => setShowAlBreakdown(false)}>Close</button>
               </div>
             </div>
           </div>

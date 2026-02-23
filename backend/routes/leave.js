@@ -7,7 +7,8 @@ const {
   initializeLeaveBalances,
   initializeYearlyLeaveBalances,
   calculateYearsOfService,
-  getEntitlementByServiceYears
+  getEntitlementByServiceYears,
+  getCompanyLeaveSettings
 } = require('../utils/leaveProration');
 
 // =====================================================
@@ -1008,6 +1009,7 @@ router.get('/balances-table', authenticateAdmin, async (req, res) => {
         e.employee_id as emp_code,
         e.name,
         e.employee_role,
+        e.join_date,
         d.id as department_id,
         d.name as department_name,
         o.id as outlet_id,
@@ -1016,6 +1018,7 @@ router.get('/balances-table', authenticateAdmin, async (req, res) => {
         COALESCE(al_bal.entitled_days, 0) as al_entitled,
         COALESCE(al_bal.used_days, 0) as al_used,
         COALESCE(al_bal.entitled_days, 0) - COALESCE(al_bal.used_days, 0) as al_available,
+        COALESCE(al_bal.carried_forward, 0) as al_carried_forward,
         al_bal.id as al_balance_id,
         -- Medical Leave (ML)
         COALESCE(ml_bal.entitled_days, 0) as ml_entitled,
@@ -1088,8 +1091,54 @@ router.get('/balances-table', authenticateAdmin, async (req, res) => {
     `;
 
     const result = await pool.query(query, params);
+
+    // Post-process: calculate AL YTD earned and advance used
+    const now = new Date();
+    const yearInt = parseInt(currentYear);
+    const settings = await getCompanyLeaveSettings(companyId || 1);
+
+    for (const row of result.rows) {
+      const alEntitled = parseFloat(row.al_entitled) || 0;
+      const alUsed = parseFloat(row.al_used) || 0;
+      const alCarriedForward = parseFloat(row.al_carried_forward) || 0;
+
+      // Calculate completed months
+      let completedMonths;
+      if (row.join_date) {
+        const joinDate = new Date(row.join_date);
+        if (joinDate.getFullYear() === yearInt) {
+          // Mid-year joiner
+          completedMonths = now.getMonth() - joinDate.getMonth();
+          if (completedMonths < 0) completedMonths = 0;
+        } else {
+          // Full-year employee
+          completedMonths = now.getMonth();
+        }
+      } else {
+        completedMonths = now.getMonth();
+      }
+
+      // Calculate YTD earned with company rounding
+      let ytdEarnedRaw = alEntitled * completedMonths / 12;
+      let alYtdEarned;
+      switch (settings.leave_proration_rounding) {
+        case 'up':
+          alYtdEarned = Math.ceil(ytdEarnedRaw);
+          break;
+        case 'down':
+          alYtdEarned = Math.floor(ytdEarnedRaw);
+          break;
+        case 'nearest':
+        default:
+          alYtdEarned = Math.round(ytdEarnedRaw * 2) / 2;
+      }
+
+      row.al_ytd_earned = alYtdEarned;
+      row.al_advance_used = Math.max(0, alUsed - (alCarriedForward + alYtdEarned));
+    }
+
     res.json({
-      year: parseInt(currentYear),
+      year: yearInt,
       employees: result.rows
     });
   } catch (error) {

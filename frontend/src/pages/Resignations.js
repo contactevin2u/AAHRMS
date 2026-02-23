@@ -943,6 +943,12 @@ function Resignations({ outletId: propOutletId, embedded = false }) {
                                 </strong>
                               </div>
                             )}
+                            {settlementData.breakdown.advance_leave_deduction && settlementData.breakdown.advance_leave_deduction.days > 0 && (
+                              <div className="calc-row deduction">
+                                <span>Advance Leave Deduction ({settlementData.breakdown.advance_leave_deduction.days} days)</span>
+                                <strong>-{formatAmount(settlementData.breakdown.advance_leave_deduction.amount)}</strong>
+                              </div>
+                            )}
                           </div>
                         </div>
 
