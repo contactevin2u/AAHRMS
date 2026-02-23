@@ -14,6 +14,7 @@ import Attendance from './Attendance';
 import IndoorSalesSchedule from './IndoorSalesSchedule';
 import IndoorSalesCommission from './IndoorSalesCommission';
 import OutstationAllowance from './OutstationAllowance';
+import DriverAdvanced from './DriverAdvanced';
 
 import './DepartmentHub.css';
 
@@ -27,7 +28,8 @@ const TAB_COMPONENTS = {
   'schedule': IndoorSalesSchedule,
   'commission': IndoorSalesCommission,
   'trip-allowance': OutstationAllowance,
-  'upsell-commission': null // placeholder
+  'upsell-commission': null, // placeholder
+  'advanced': DriverAdvanced
 };
 
 function DepartmentHub() {

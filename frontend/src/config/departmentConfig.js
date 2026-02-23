@@ -30,7 +30,7 @@ export const DEPARTMENT_CONFIG = {
   'driver': {
     name: 'Driver',
     icon: '🚛',
-    tabs: ['employees', 'claims', 'leave', 'trip-allowance', 'upsell-commission', 'attendance']
+    tabs: ['employees', 'claims', 'leave', 'trip-allowance', 'upsell-commission', 'attendance', 'advanced']
   },
   'security': {
     name: 'Security',
@@ -60,7 +60,8 @@ export const TAB_CONFIG = {
   'schedule': { label: 'Schedule', icon: '📆' },
   'commission': { label: 'Commission', icon: '💵' },
   'trip-allowance': { label: 'Trip Allowance', icon: '🗺️' },
-  'upsell-commission': { label: 'Upsell Commission', icon: '📈' }
+  'upsell-commission': { label: 'Upsell Commission', icon: '📈' },
+  'advanced': { label: 'Advanced', icon: '💸' }
 };
 
 // Resolve department name from API → slug
