@@ -145,7 +145,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
       paramIndex++;
     }
 
-    query += ' ORDER BY s.schedule_date ASC, e.name ASC';
+    query += ' ORDER BY s.schedule_date ASC, e.employee_id ASC';
 
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -197,7 +197,7 @@ router.get('/calendar', authenticateAdmin, async (req, res) => {
       paramIndex++;
     }
 
-    query += ' ORDER BY s.schedule_date ASC, e.name ASC';
+    query += ' ORDER BY s.schedule_date ASC, e.employee_id ASC';
 
     const result = await pool.query(query, params);
 
@@ -784,7 +784,7 @@ router.get('/roster/weekly', authenticateAdmin, async (req, res) => {
       empParams.push(companyId);
     }
 
-    empQuery += ' ORDER BY e.name';
+    empQuery += ' ORDER BY e.employee_id';
 
     const employees = await pool.query(empQuery, empParams);
 
@@ -1133,7 +1133,7 @@ router.get('/roster/department/weekly', authenticateAdmin, async (req, res) => {
       empParams.push(companyId);
     }
 
-    empQuery += ' ORDER BY e.name';
+    empQuery += ' ORDER BY e.employee_id';
 
     const employees = await pool.query(empQuery, empParams);
 
@@ -1255,7 +1255,7 @@ router.get('/roster/department/monthly', authenticateAdmin, async (req, res) => 
       empParams.push(companyId);
     }
 
-    empQuery += ' ORDER BY e.name';
+    empQuery += ' ORDER BY e.employee_id';
 
     const employees = await pool.query(empQuery, empParams);
 

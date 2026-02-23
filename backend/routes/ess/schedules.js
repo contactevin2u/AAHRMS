@@ -483,7 +483,7 @@ router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res
          AND e.id = $3
          AND e.status = 'active'
          AND e.company_id = $2
-       ORDER BY outlet_name, name`,
+       ORDER BY outlet_name, employee_id`,
       [managedOutlets, req.employee.company_id, req.employee.id]
     );
 
@@ -514,7 +514,7 @@ router.get('/team-employees', authenticateEmployee, asyncHandler(async (req, res
        WHERE e.department_id = ANY($1)
          AND e.status = 'active'
          AND e.company_id = $2
-       ORDER BY d.name, e.name`,
+       ORDER BY d.name, e.employee_id`,
       [managedDepartments, req.employee.company_id]
     );
 
@@ -613,7 +613,7 @@ router.get('/weekly-stats', authenticateEmployee, asyncHandler(async (req, res) 
       AND s.schedule_date BETWEEN $1 AND $2
     WHERE e.status = 'active' ${employeeFilter}
     GROUP BY e.id, e.name, e.employee_id
-    ORDER BY e.name
+    ORDER BY e.employee_id
   `;
 
   const statsResult = await pool.query(statsQuery, params);
@@ -741,7 +741,7 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
          AND s.shift_template_id IS NULL
        WHERE s.outlet_id = ANY($1)
          AND s.schedule_date BETWEEN $2 AND $3
-       ORDER BY s.schedule_date, e.name`,
+       ORDER BY s.schedule_date, e.employee_id`,
       [outletFilter, startDate, endDate]
     );
 
@@ -763,7 +763,7 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
        FROM employees e
        LEFT JOIN outlets o ON e.outlet_id = o.id
        WHERE e.outlet_id = ANY($1) AND e.status = 'active'
-       ORDER BY e.name`,
+       ORDER BY e.employee_id`,
       [outletFilter]
     );
 
@@ -880,7 +880,7 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
            AND s.shift_template_id IS NULL
          WHERE s.employee_id = ANY($1)
            AND s.schedule_date BETWEEN $2 AND $3
-         ORDER BY s.schedule_date, e.name`,
+         ORDER BY s.schedule_date, e.employee_id`,
         [empIds, startDate, endDate]
       );
 
@@ -902,7 +902,7 @@ router.get('/team-schedules', authenticateEmployee, asyncHandler(async (req, res
        FROM employees e
        LEFT JOIN departments d ON e.department_id = d.id
        WHERE e.department_id = ANY($1) AND e.status = 'active' AND e.company_id = $2
-       ORDER BY e.name`,
+       ORDER BY e.employee_id`,
       [deptFilter, req.employee.company_id]
     );
 
