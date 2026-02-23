@@ -582,6 +582,32 @@ function PayrollUnified() {
     }
   };
 
+  const handleDownloadEpfFile = async (id) => {
+    try {
+      const res = await payrollV2Api.getEpfFile(id);
+      const blob = new Blob([res.data], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const disposition = res.headers['content-disposition'];
+      let filename = 'EPF.txt';
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      const errorMsg = error.response?.data instanceof Blob
+        ? await error.response.data.text().then(t => { try { return JSON.parse(t).error; } catch { return t; } })
+        : (error.response?.data?.error || error.message);
+      alert('Failed to download EPF file: ' + errorMsg);
+    }
+  };
+
   const handleDownloadSalaryReport = async (id, format) => {
     try {
       if (format === 'csv') {
@@ -1262,6 +1288,7 @@ function PayrollUnified() {
                           <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'csv')} className="download-btn">Download Excel</button>
                           <button onClick={() => handleDownloadBankFile(selectedRun.id, 'maybankBulk')} className="download-btn" style={{marginLeft: '8px'}}>Maybank CSV</button>
                           <button onClick={() => handleDownloadPerkesoFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>PERKESO</button>
+                          <button onClick={() => handleDownloadEpfFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>KWSP</button>
                           <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate Statutory</button>
                           <button onClick={() => handleFinalizeRun(selectedRun.id)} className="finalize-btn">Finalize</button>
                           <button onClick={() => handleDeleteRun(selectedRun.id)} className="delete-btn">Delete</button>
@@ -1272,6 +1299,7 @@ function PayrollUnified() {
                           <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'pdf')} className="download-btn">Download PDF</button>
                           <button onClick={() => handleDownloadBankFile(selectedRun.id, 'maybankBulk')} className="download-btn" style={{marginLeft: '8px'}}>Maybank CSV</button>
                           <button onClick={() => handleDownloadPerkesoFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>PERKESO</button>
+                          <button onClick={() => handleDownloadEpfFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>KWSP</button>
                           <button onClick={() => handleDownloadBankFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>Bank File</button>
                         </>
                       )}

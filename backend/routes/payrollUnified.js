@@ -4193,6 +4193,157 @@ router.get('/runs/:id/bank-file', authenticateAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/payroll/runs/:id/epf-file
+ * Generate KWSP/EPF e-Caruman submission file (fixed-width .txt, 129 chars per line)
+ * Records: 00 (header), 01 (body header), 02 (employee detail), 99 (trailer)
+ */
+router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.companyId;
+
+    if (!companyId) {
+      return res.status(403).json({ error: 'Company context required' });
+    }
+
+    // Get payroll run with outlet info
+    const runResult = await pool.query(`
+      SELECT pr.*, o.epf_code as outlet_epf_code, o.name as outlet_name,
+             c.name as company_name, c.epf_code as company_epf_code
+      FROM payroll_runs pr
+      JOIN companies c ON pr.company_id = c.id
+      LEFT JOIN outlets o ON pr.outlet_id = o.id
+      WHERE pr.id = $1
+    `, [id]);
+
+    if (runResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll run not found' });
+    }
+    const run = runResult.rows[0];
+
+    if (run.company_id !== companyId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const epfCode = run.outlet_epf_code || run.company_epf_code || '';
+    if (!epfCode) {
+      return res.status(400).json({ error: 'EPF employer code not configured for this outlet/company' });
+    }
+
+    // Get payroll items with employee details
+    const itemsResult = await pool.query(`
+      SELECT pi.*, e.name as employee_name, e.ic_number, e.epf_number,
+             e.employment_type, e.epf_employee as emp_epf_rate
+      FROM payroll_items pi
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pi.payroll_run_id = $1
+      ORDER BY e.name
+    `, [id]);
+
+    if (itemsResult.rows.length === 0) {
+      return res.status(400).json({ error: 'No employees found in this payroll run' });
+    }
+
+    // Map employment types to EPF codes
+    const empTypeMap = { confirmed: 'CS', full_time: 'FT', part_time: 'PT', probation: 'FT' };
+
+    // Generate alias from first name
+    function getAlias(name) {
+      const parts = (name || '').toUpperCase().trim().split(/\s+/);
+      // Skip common prefixes
+      const skip = ['MUHAMMAD', 'MUHAMAD', 'NUR', 'NURUL', 'SITI', 'WAN', 'NIK', 'AHMAD'];
+      let alias = parts[0] || '';
+      if (skip.includes(alias) && parts.length > 1) alias = parts[1];
+      return alias.substring(0, 18);
+    }
+
+    const monthStr = String(run.month).padStart(2, '0') + String(run.year);
+    const today = new Date();
+    const dateStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
+
+    let totalEr = 0, totalEe = 0, sumMemberNos = 0;
+    const empLines = [];
+
+    for (const item of itemsResult.rows) {
+      const ic = (item.ic_number || '').replace(/-/g, '').trim();
+      const name = (item.employee_name || '').toUpperCase().trim();
+      const memberNo = parseInt(item.epf_number) || 0;
+      const empType = empTypeMap[item.employment_type] || 'FT';
+      const alias = getAlias(item.employee_name);
+
+      const epfEr = Math.round((parseFloat(item.epf_employer) || 0) * 100);
+      const epfEe = Math.round((parseFloat(item.epf_employee) || 0) * 100);
+      const wages = Math.round((parseFloat(item.statutory_base) || 0) * 100);
+
+      totalEr += epfEr;
+      totalEe += epfEe;
+      sumMemberNos += memberNo;
+
+      // Record 02: 129 chars
+      const line =
+        '02' +
+        String(memberNo).padStart(19, '0') +
+        ic.padEnd(12, ' ') +
+        '   ' +
+        name.substring(0, 40).padEnd(40, ' ') +
+        empType.padEnd(2, ' ') +
+        alias.padEnd(18, ' ') +
+        String(epfEr).padStart(9, '0') +
+        String(epfEe).padStart(9, '0') +
+        String(wages).padStart(15, '0');
+
+      empLines.push(line);
+    }
+
+    const epfCodePadded = String(epfCode).padStart(19, '0');
+    const empCount = empLines.length;
+
+    // Record 00: Header
+    const rec00 =
+      '00' +
+      'EPF MONTHLY FORM A' +
+      dateStr +
+      '00001' +
+      String(totalEr).padStart(15, '0') +
+      String(totalEe).padStart(15, '0') +
+      epfCodePadded +
+      ' '.repeat(47);
+
+    // Record 01: Body header
+    const rec01 =
+      '01' +
+      epfCodePadded +
+      monthStr +
+      'DSK' +
+      '00001' +
+      '00000000' +
+      ' '.repeat(86);
+
+    // Record 99: Trailer
+    const rec99 =
+      '99' +
+      String(empCount).padStart(7, '0') +
+      String(totalEr).padStart(15, '0') +
+      String(totalEe).padStart(15, '0') +
+      String(sumMemberNos).padStart(21, '0') +
+      ' '.repeat(69);
+
+    const lines = [rec00, rec01, ...empLines, rec99];
+    const content = lines.join('\r\n') + '\r\n';
+
+    const filename = `EPF_${epfCode}_${dateStr}.txt`;
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(content);
+
+  } catch (error) {
+    console.error('Error generating EPF file:', error);
+    res.status(500).json({ error: 'Failed to generate EPF file: ' + error.message });
+  }
+});
+
+/**
  * GET /api/payroll/runs/:id/perkeso-file
  * Generate PERKESO ASSIST submission file (fixed-width .txt)
  * Format: 278 chars per line with employer SOCSO code, IC, name, month, wages, SOCSO & EIS contributions
