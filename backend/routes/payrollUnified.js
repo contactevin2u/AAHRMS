@@ -4194,8 +4194,8 @@ router.get('/runs/:id/bank-file', authenticateAdmin, async (req, res) => {
 
 /**
  * GET /api/payroll/runs/:id/epf-file
- * Generate KWSP/EPF e-Caruman submission file (fixed-width .txt, 129 chars per line)
- * Records: 00 (header), 01 (body header), 02 (employee detail), 99 (trailer)
+ * Generate KWSP/EPF CSV matching e-Caruman portal format
+ * Columns: No., Member No., Identification No., Name, Wage (RM), Employer (RM), Employee (RM)
  */
 router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
   try {
@@ -4206,7 +4206,6 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Company context required' });
     }
 
-    // Get payroll run with outlet info
     const runResult = await pool.query(`
       SELECT pr.*, o.epf_code as outlet_epf_code, o.name as outlet_name,
              c.name as company_name, c.epf_code as company_epf_code
@@ -4225,15 +4224,8 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const epfCode = run.outlet_epf_code || run.company_epf_code || '';
-    if (!epfCode) {
-      return res.status(400).json({ error: 'EPF employer code not configured for this outlet/company' });
-    }
-
-    // Get payroll items with employee details
     const itemsResult = await pool.query(`
-      SELECT pi.*, e.name as employee_name, e.ic_number, e.epf_number,
-             e.employment_type
+      SELECT pi.*, e.name as employee_name, e.ic_number, e.epf_number
       FROM payroll_items pi
       JOIN employees e ON pi.employee_id = e.id
       WHERE pi.payroll_run_id = $1
@@ -4244,98 +4236,35 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'No employees found in this payroll run' });
     }
 
-    // Map employment types to EPF codes
-    const empTypeMap = { confirmed: 'CS', full_time: 'FT', part_time: 'PT', probation: 'FT' };
+    const rows = [['No.', 'Member No.', 'Identification No.', 'Name', 'Wage (RM)', 'Employer (RM)', 'Employee (RM)']];
 
-    // Generate alias from first name
-    function getAlias(name) {
-      const parts = (name || '').toUpperCase().trim().split(/\s+/);
-      // Skip common prefixes
-      const skip = ['MUHAMMAD', 'MUHAMAD', 'NUR', 'NURUL', 'SITI', 'WAN', 'NIK', 'AHMAD'];
-      let alias = parts[0] || '';
-      if (skip.includes(alias) && parts.length > 1) alias = parts[1];
-      return alias.substring(0, 18);
-    }
-
-    const monthStr = String(run.month).padStart(2, '0') + String(run.year);
-    const today = new Date();
-    const dateStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
-
-    let totalEr = 0, totalEe = 0, sumMemberNos = 0;
-    const empLines = [];
-
-    for (const item of itemsResult.rows) {
+    itemsResult.rows.forEach((item, idx) => {
+      const memberNo = (item.epf_number || '').trim();
       const ic = (item.ic_number || '').replace(/-/g, '').trim();
       const name = (item.employee_name || '').toUpperCase().trim();
-      const memberNo = parseInt(item.epf_number) || 0;
-      const empType = empTypeMap[item.employment_type] || 'FT';
-      const alias = getAlias(item.employee_name);
+      const wages = (parseFloat(item.statutory_base) || 0).toFixed(2);
+      const epfEr = (parseFloat(item.epf_employer) || 0).toFixed(2);
+      const epfEe = (parseFloat(item.epf_employee) || 0).toFixed(2);
 
-      const epfEr = Math.round((parseFloat(item.epf_employer) || 0) * 100);
-      const epfEe = Math.round((parseFloat(item.epf_employee) || 0) * 100);
-      const wages = Math.round((parseFloat(item.statutory_base) || 0) * 100);
+      rows.push([
+        String(idx + 1),
+        memberNo,
+        `MyKad No. ${ic}`,
+        name,
+        wages,
+        epfEr,
+        epfEe
+      ]);
+    });
 
-      totalEr += epfEr;
-      totalEe += epfEe;
-      sumMemberNos += memberNo;
+    const csvContent = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\r\n') + '\r\n';
 
-      // Record 02: 129 chars
-      const line =
-        '02' +
-        String(memberNo).padStart(19, '0') +
-        ic.padEnd(12, ' ') +
-        '   ' +
-        name.substring(0, 40).padEnd(40, ' ') +
-        empType.padEnd(2, ' ') +
-        alias.padEnd(18, ' ') +
-        String(epfEr).padStart(9, '0') +
-        String(epfEe).padStart(9, '0') +
-        String(wages).padStart(15, '0');
+    const epfCode = run.outlet_epf_code || run.company_epf_code || 'KWSP';
+    const filename = `KWSP_${epfCode}_${run.year}_${String(run.month).padStart(2, '0')}.csv`;
 
-      empLines.push(line);
-    }
-
-    const epfCodePadded = String(epfCode).padStart(19, '0');
-    const empCount = empLines.length;
-
-    // Record 00: Header
-    const rec00 =
-      '00' +
-      'EPF MONTHLY FORM A' +
-      dateStr +
-      '00001' +
-      String(totalEr).padStart(15, '0') +
-      String(totalEe).padStart(15, '0') +
-      epfCodePadded +
-      ' '.repeat(47);
-
-    // Record 01: Body header
-    const rec01 =
-      '01' +
-      epfCodePadded +
-      monthStr +
-      'DSK' +
-      '00001' +
-      '00000000' +
-      ' '.repeat(86);
-
-    // Record 99: Trailer
-    const rec99 =
-      '99' +
-      String(empCount).padStart(7, '0') +
-      String(totalEr).padStart(15, '0') +
-      String(totalEe).padStart(15, '0') +
-      String(sumMemberNos).padStart(21, '0') +
-      ' '.repeat(69);
-
-    const lines = [rec00, rec01, ...empLines, rec99];
-    const content = lines.join('\r\n') + '\r\n';
-
-    const filename = `EPF_${epfCode}_${dateStr}.txt`;
-
-    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(content);
+    res.send(csvContent);
 
   } catch (error) {
     console.error('Error generating EPF file:', error);
@@ -4345,8 +4274,8 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
 
 /**
  * GET /api/payroll/runs/:id/perkeso-file
- * Generate PERKESO ASSIST submission file (fixed-width .txt)
- * Format: 278 chars per line with employer SOCSO code, IC, name, month, wages, SOCSO & EIS contributions
+ * Generate PERKESO CSV matching portal format
+ * Columns: No., IC No., Name, Wage (RM), SOCSO Employer (RM), SOCSO Employee (RM), EIS Employer (RM), EIS Employee (RM)
  */
 router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
   try {
@@ -4357,7 +4286,6 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Company context required' });
     }
 
-    // Get payroll run with outlet info
     const runResult = await pool.query(`
       SELECT pr.*, o.socso_code as outlet_socso_code, o.name as outlet_name,
              c.name as company_name, c.payroll_config, c.socso_code as company_socso_code
@@ -4373,16 +4301,9 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
     const run = runResult.rows[0];
 
     if (run.company_id !== companyId) {
-      return res.status(403).json({ error: 'Access denied: payroll run belongs to another company' });
+      return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get SOCSO employer code: from outlet first, then company table, then company payroll_config
-    const socsoCode = run.outlet_socso_code || run.company_socso_code || (run.payroll_config && run.payroll_config.socso_code) || '';
-    if (!socsoCode) {
-      return res.status(400).json({ error: 'SOCSO employer code not configured for this outlet/company' });
-    }
-
-    // Get payroll items with employee details
     const itemsResult = await pool.query(`
       SELECT pi.*, e.name as employee_name, e.ic_number
       FROM payroll_items pi
@@ -4395,76 +4316,44 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'No employees found in this payroll run' });
     }
 
-    // Generate PERKESO fixed-width file
-    // Format: 278 chars per line
-    // Pos 0-11:   Employer SOCSO code (12 chars)
-    // Pos 12-31:  Spaces (20 chars)
-    // Pos 32-43:  IC number (12 chars, no dashes)
-    // Pos 44-193: Employee name (150 chars, left-aligned, padded)
-    // Pos 194-199: Contribution month MMYYYY (6 chars)
-    // Pos 200-213: Wages in sen (14 chars, right-aligned)
-    // Pos 214-219: SOCSO employer in sen (6 chars, right-aligned)
-    // Pos 220-225: SOCSO employee in sen (6 chars, right-aligned)
-    // Pos 226-231: EIS employer in sen (6 chars, right-aligned)
-    // Pos 232-237: EIS employee in sen (6 chars, right-aligned)
-    // Pos 238-277: Trailing spaces (40 chars)
+    const rows = [['No.', 'IC No.', 'Name', 'Wage (RM)', 'SOCSO Employer (RM)', 'SOCSO Employee (RM)', 'EIS Employer (RM)', 'EIS Employee (RM)']];
 
-    const monthStr = String(run.month).padStart(2, '0') + String(run.year);
-    const lines = [];
-
-    for (const item of itemsResult.rows) {
+    itemsResult.rows.forEach((item, idx) => {
       const ic = (item.ic_number || '').replace(/-/g, '').trim();
       const name = (item.employee_name || '').toUpperCase().trim();
+      const wages = (parseFloat(item.statutory_base) || 0).toFixed(2);
+      const socsoEr = (parseFloat(item.socso_employer) || 0).toFixed(2);
+      const socsoEe = (parseFloat(item.socso_employee) || 0).toFixed(2);
+      const eisEr = (parseFloat(item.eis_employer) || 0).toFixed(2);
+      const eisEe = (parseFloat(item.eis_employee) || 0).toFixed(2);
 
-      const statutoryBase = parseFloat(item.statutory_base) || 0;
-      const socsoEr = parseFloat(item.socso_employer) || 0;
-      const socsoEe = parseFloat(item.socso_employee) || 0;
-      const eisEr = parseFloat(item.eis_employer) || 0;
-      const eisEe = parseFloat(item.eis_employee) || 0;
+      rows.push([
+        String(idx + 1),
+        ic,
+        name,
+        wages,
+        socsoEr,
+        socsoEe,
+        eisEr,
+        eisEe
+      ]);
+    });
 
-      // Convert to sen (cents)
-      const wagesSen = Math.round(statutoryBase * 100);
-      const socsoErSen = Math.round(socsoEr * 100);
-      const socsoEeSen = Math.round(socsoEe * 100);
-      const eisErSen = Math.round(eisEr * 100);
-      const eisEeSen = Math.round(eisEe * 100);
+    const csvContent = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\r\n') + '\r\n';
 
-      const line =
-        socsoCode.padEnd(12, ' ') +
-        ' '.repeat(20) +
-        ic.padEnd(12, ' ') +
-        name.padEnd(150, ' ') +
-        monthStr +
-        String(wagesSen).padStart(14, ' ') +
-        String(socsoErSen).padStart(6, ' ') +
-        String(socsoEeSen).padStart(6, ' ') +
-        String(eisErSen).padStart(6, ' ') +
-        String(eisEeSen).padStart(6, ' ') +
-        ' '.repeat(40);
-
-      lines.push(line);
-    }
-
-    const content = lines.join('\r\n') + '\r\n';
-
-    // Generate filename
     const outletName = run.outlet_name || run.company_name || 'COMPANY';
-    // Extract short name (e.g., "Langkah ATD - Taman Putra" -> "ATD")
     let shortName = outletName;
     const dashIdx = outletName.indexOf(' - ');
-    if (dashIdx > 0) {
-      shortName = outletName.substring(0, dashIdx);
-    }
-    // Remove common prefixes
+    if (dashIdx > 0) shortName = outletName.substring(0, dashIdx);
     shortName = shortName.replace(/^(Langkah|Miksu|Kopi Antarabangsa|Marina Charisma|Mimix A|Minuman Aisu)\s*/i, '').trim();
     if (!shortName) shortName = outletName.split(' ')[0];
     shortName = shortName.toUpperCase().replace(/\s+/g, ' ').trim();
 
-    const filename = `${shortName} PERKESOS.txt`;
+    const filename = `PERKESO_${shortName}_${run.year}_${String(run.month).padStart(2, '0')}.csv`;
 
-    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(content);
+    res.send(csvContent);
 
   } catch (error) {
     console.error('Error generating PERKESO file:', error);

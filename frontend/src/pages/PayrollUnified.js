@@ -558,13 +558,12 @@ function PayrollUnified() {
   const handleDownloadPerkesoFile = async (id) => {
     try {
       const res = await payrollV2Api.getPerkesoFile(id);
-      const blob = new Blob([res.data], { type: 'text/plain' });
+      const blob = new Blob([res.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      // Extract filename from content-disposition header or use default
       const disposition = res.headers['content-disposition'];
-      let filename = 'PERKESOS.txt';
+      let filename = 'PERKESO.csv';
       if (disposition) {
         const match = disposition.match(/filename="?([^"]+)"?/);
         if (match) filename = match[1];
@@ -585,12 +584,12 @@ function PayrollUnified() {
   const handleDownloadEpfFile = async (id) => {
     try {
       const res = await payrollV2Api.getEpfFile(id);
-      const blob = new Blob([res.data], { type: 'text/plain' });
+      const blob = new Blob([res.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       const disposition = res.headers['content-disposition'];
-      let filename = 'EPF.txt';
+      let filename = 'KWSP.csv';
       if (disposition) {
         const match = disposition.match(/filename="?([^"]+)"?/);
         if (match) filename = match[1];
