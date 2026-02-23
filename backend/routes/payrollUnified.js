@@ -861,8 +861,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let lateDays = 0, attendanceBonus = 0;
 
       // Short hours calculation for ALL companies (full-time only)
-      // AA Alive drivers: skip short hours (they have 9hr days, OT handles extra)
-      if (!isPartTime && basicSalary > 0 && !(isAAAlive && employeeRoleType === 'driver')) {
+      if (!isPartTime && basicSalary > 0) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];
@@ -906,8 +905,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       }
 
       // Calculate absent days from clock-in records (ALL companies including outlet)
-      // AA Alive drivers: skip absent day deduction (salary covers 22 days, extra days = OT)
-      if (!isPartTime && !(isAAAlive && employeeRoleType === 'driver')) {
+      if (!isPartTime) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];
@@ -954,8 +952,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       const totalAllowances = fixedAllowance + flexAllowance;
 
       if (isAAAlive && employeeRoleType === 'driver' && !isPartTime) {
-        // AA Alive Driver: basic + daily_ot + monthly_ot + commissions + trip_allowance
-        const grossBeforeDeductions = basicSalary + otAmount + otExtraDaysAmount +
+        // AA Alive Driver: basic + daily_ot + monthly_ot + PH pay + commissions + trip_allowance
+        const grossBeforeDeductions = basicSalary + otAmount + otExtraDaysAmount + phPay +
           upsellCommission + orderCommission + tripAllowance + commissionAmount +
           totalAllowances + claimsAmount;
         grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
@@ -997,7 +995,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
       const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
 
-      const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction;
+      const zakat = 0; // Zakat is manually set later via edit
+      const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + zakat;
       const netPay = grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction + shortHoursDeduction;
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
@@ -1012,13 +1011,13 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
           attendance_bonus, late_days,
           gross_salary, statutory_base,
           epf_employee, epf_employer, socso_employee, socso_employer,
-          eis_employee, eis_employer, pcb,
+          eis_employee, eis_employer, pcb, zakat,
           total_deductions, net_pay, employer_total_cost,
           sales_amount, salary_calculation_method,
           upsell_commission, order_commission, trip_allowance, trip_allowance_days,
           ot_extra_days, ot_extra_days_amount, employee_role_type,
           sort_order
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44)
       `, [
         runId, emp.id, basicSalary, wages, partTimeHoursWorked, totalAllowances, commissionAmount, claimsAmount,
         otHours, otAmount, phDaysWorked, phPay,
@@ -1027,7 +1026,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
         attendanceBonus, lateDays,
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
-        eisEmployee, eisEmployer, pcb,
+        eisEmployee, eisEmployer, pcb, zakat,
         totalDeductions, netPay, employerCost,
         salesAmount, salaryCalculationMethod,
         upsellCommission, orderCommission, tripAllowance, tripAllowanceDays,
@@ -2856,6 +2855,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     const outstationAmount = parseFloat(updates.outstation_amount ?? item.outstation_amount) || 0;
     const bonus = parseFloat(updates.bonus ?? item.bonus) || 0;
     const otherDeductions = parseFloat(updates.other_deductions ?? item.other_deductions) || 0;
+    const zakat = parseFloat(updates.zakat ?? item.zakat) || 0;
     const shortHours = parseFloat(updates.short_hours ?? item.short_hours) || 0;
     // Short hours deduction: Allow manual override
     const shortHoursDeduction = updates.short_override !== undefined && updates.short_override !== null && updates.short_override !== ''
@@ -2923,8 +2923,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
     let grossSalary, statutoryBase;
 
     if (isAAAlive && employeeRoleType === 'driver') {
-      // AA Alive Driver: basic + daily_ot + monthly_ot + commissions + trip_allowance
-      grossSalary = basicSalary + otAmount + otExtraDaysAmount +
+      // AA Alive Driver: basic + daily_ot + monthly_ot + PH pay + commissions + trip_allowance
+      grossSalary = basicSalary + otAmount + otExtraDaysAmount + phPay +
         upsellCommission + orderCommission + tripAllowanceAmount +
         commissionAmount + fixedAllowance + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
       // Statutory base = basic + commission only (NOT OT, NOT trip allowance)
@@ -2983,7 +2983,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       ? parseFloat(updates.pcb_override) || 0
       : (statutory.pcb_enabled ? statutoryResult.pcb : 0);
 
-    const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + otherDeductions;
+    const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + otherDeductions + zakat;
     const netPay = grossSalary + unpaidDeduction + absentDayDeduction + shortHoursDeduction - totalDeductions;
     const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
@@ -3010,6 +3010,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
         upsell_commission = $37, order_commission = $38,
         trip_allowance = $39, trip_allowance_days = $40,
         ot_extra_days = $41, ot_extra_days_amount = $42,
+        zakat = $43,
         updated_at = NOW()
       WHERE id = $28
       RETURNING *
@@ -3033,7 +3034,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       wages, partTimeHours,
       upsellCommission, orderCommission,
       tripAllowanceAmount, tripAllowanceDays,
-      otExtraDays, otExtraDaysAmount
+      otExtraDays, otExtraDaysAmount,
+      zakat
     ]);
 
     // Update run totals
@@ -3188,6 +3190,7 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const advanceDeduction = parseFloat(item.advance_deduction) || 0;
     const unpaidDeduction = parseFloat(item.unpaid_leave_deduction) || 0;
     const otherDeductions = parseFloat(item.other_deductions) || 0;
+    const zakat = parseFloat(item.zakat) || 0;
     let shortHoursDeduction = parseFloat(item.short_hours_deduction) || 0;
     let shortHours = parseFloat(item.short_hours) || 0;
 
@@ -3236,7 +3239,7 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
     const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
 
-    const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
+    const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions + zakat;
     const netPay = grossSalary + unpaidDeduction + absentDayDeduction + shortHoursDeduction - totalDeductions;
     const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
@@ -3395,6 +3398,7 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const advanceDeduction = parseFloat(i.advance_deduction) || 0;
         const unpaidDeduction = parseFloat(i.unpaid_leave_deduction) || 0;
         const otherDeductions = parseFloat(i.other_deductions) || 0;
+        const zakat = parseFloat(i.zakat) || 0;
         const shortHoursDeduction = parseFloat(i.short_hours_deduction) || 0;
         const absentDayDeduction = parseFloat(i.absent_day_deduction) || 0;
 
@@ -3434,7 +3438,7 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
         const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
 
-        const totalDeductions = unpaidDeduction + shortHoursDeduction + absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions;
+        const totalDeductions = unpaidDeduction + shortHoursDeduction + absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions + zakat;
         const netPay = grossSalary + unpaidDeduction + shortHoursDeduction + absentDayDeduction - totalDeductions;
         const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
@@ -4243,6 +4247,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
         pi.socso_employee,
         pi.eis_employee,
         pi.pcb,
+        pi.zakat,
         pi.unpaid_leave_deduction,
         pi.advance_deduction,
         pi.other_deductions,
@@ -4265,7 +4270,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
       basic_salary: 0, fixed_allowance: 0, ot_amount: 0, ph_pay: 0,
       commission_amount: 0, incentive_amount: 0, outstation_amount: 0, claims_amount: 0,
       bonus: 0, attendance_bonus: 0, gross_salary: 0,
-      epf_employee: 0, socso_employee: 0, eis_employee: 0, pcb: 0,
+      epf_employee: 0, socso_employee: 0, eis_employee: 0, pcb: 0, zakat: 0,
       total_deductions: 0, net_pay: 0,
       epf_employer: 0, socso_employer: 0, eis_employer: 0, employer_total_cost: 0
     };
@@ -4286,6 +4291,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
       totals.socso_employee += parseFloat(row.socso_employee) || 0;
       totals.eis_employee += parseFloat(row.eis_employee) || 0;
       totals.pcb += parseFloat(row.pcb) || 0;
+      totals.zakat += parseFloat(row.zakat) || 0;
       totals.total_deductions += parseFloat(row.total_deductions) || 0;
       totals.net_pay += parseFloat(row.net_pay) || 0;
       totals.epf_employer += parseFloat(row.epf_employer) || 0;
@@ -4316,7 +4322,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
       'No', 'Emp Code', 'Name', 'IC Number', 'Dept/Outlet',
       'Basic', 'Allowance', 'OT Hrs', 'OT Amt', 'PH Pay',
       'Commission', 'Incentive', 'Outstation', 'Claims', 'Bonus', 'Gross',
-      'EE EPF', 'EE SOCSO', 'EE EIS', 'PERKESO', 'PCB', 'Other Ded', 'Total Ded', 'Net Pay',
+      'EE EPF', 'EE SOCSO', 'EE EIS', 'PERKESO', 'PCB', 'Zakat', 'Other Ded', 'Total Ded', 'Net Pay',
       'ER EPF', 'ER SOCSO', 'ER EIS', 'Employer Cost',
       'Bank', 'Account No'
     ];
@@ -4347,6 +4353,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
         parseFloat(row.eis_employee || 0).toFixed(2),
         perkeso.toFixed(2),
         parseFloat(row.pcb || 0).toFixed(2),
+        parseFloat(row.zakat || 0).toFixed(2),
         parseFloat(row.other_deductions || 0).toFixed(2),
         parseFloat(row.total_deductions || 0).toFixed(2),
         parseFloat(row.net_pay || 0).toFixed(2),
@@ -4377,6 +4384,7 @@ router.get('/runs/:id/salary-report', authenticateAdmin, async (req, res) => {
       totals.eis_employee.toFixed(2),
       totalPerkeso.toFixed(2),
       totals.pcb.toFixed(2),
+      totals.zakat.toFixed(2),
       '',
       totals.total_deductions.toFixed(2),
       totals.net_pay.toFixed(2),

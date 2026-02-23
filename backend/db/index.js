@@ -1044,6 +1044,9 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='sort_order') THEN
           ALTER TABLE payroll_items ADD COLUMN sort_order INTEGER DEFAULT 0;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='zakat') THEN
+          ALTER TABLE payroll_items ADD COLUMN zakat DECIMAL(10,2) DEFAULT 0;
+        END IF;
       END $$;
 
       -- Resignations / Employment Status History

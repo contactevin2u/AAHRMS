@@ -602,6 +602,7 @@ function PayrollUnified() {
         const showSOCSO = hasValue('socso_employee');
         const showEIS = hasValue('eis_employee');
         const showPCB = hasValue('pcb');
+        const showZakat = hasValue('zakat');
         // AA Alive columns
         const showExtraDays = hasValue('ot_extra_days_amount');
         const showUpsellComm = hasValue('upsell_commission');
@@ -628,6 +629,7 @@ function PayrollUnified() {
         if (showSOCSO) headers.push('SOCSO');
         if (showEIS) headers.push('EIS');
         if (showPCB) headers.push('PCB');
+        if (showZakat) headers.push('Zakat');
         headers.push('Ded', 'Net', 'Bank', 'Account');
 
         // Table data with dynamic columns
@@ -656,6 +658,7 @@ function PayrollUnified() {
           if (showSOCSO) row.push(parseFloat(emp.socso_employee || 0).toFixed(2));
           if (showEIS) row.push(parseFloat(emp.eis_employee || 0).toFixed(2));
           if (showPCB) row.push(parseFloat(emp.pcb || 0).toFixed(2));
+          if (showZakat) row.push(parseFloat(emp.zakat || 0).toFixed(2));
           row.push(
             parseFloat(emp.total_deductions || 0).toFixed(2),
             parseFloat(emp.net_pay || 0).toFixed(2),
@@ -755,7 +758,7 @@ function PayrollUnified() {
       ph_days_worked: item.ph_days_worked || 0, ph_pay: item.ph_pay || 0,
       incentive_amount: item.incentive_amount || 0, commission_amount: item.commission_amount || 0,
       trade_commission_amount: item.trade_commission_amount || 0, outstation_amount: item.outstation_amount || 0,
-      bonus: item.bonus || 0, other_deductions: item.other_deductions || 0,
+      bonus: item.bonus || 0, zakat: item.zakat || 0, other_deductions: item.other_deductions || 0,
       deduction_remarks: item.deduction_remarks || '', notes: item.notes || '',
       short_hours: item.short_hours || 0, short_hours_deduction: item.short_hours_deduction || 0,
       days_not_worked: daysNotWorked, total_unpaid_deduction: totalUnpaidDeduction,
@@ -962,6 +965,7 @@ function PayrollUnified() {
       <tr><td>EIS (Employee)</td><td class="amount">RM ${formatNum(deductions.eis_employee)}</td></tr>
       <tr><td style="padding-left:20px;font-style:italic;color:#666">→ PERKESO Total</td><td class="amount" style="color:#666">RM ${formatNum(perkeso)}</td></tr>
       <tr><td>PCB (Tax)</td><td class="amount">RM ${formatNum(deductions.pcb)}</td></tr>
+      ${deductions.zakat > 0 ? `<tr><td>Zakat</td><td class="amount">RM ${formatNum(deductions.zakat)}</td></tr>` : ''}
       ${deductions.advance_deduction > 0 ? `<tr><td>Advance Deduction</td><td class="amount">RM ${formatNum(deductions.advance_deduction)}</td></tr>` : ''}
       <tr class="total-row"><td>TOTAL DEDUCTIONS</td><td class="amount">RM ${formatNum(totals.total_deductions)}</td></tr></table>
       <table><tr style="background:#1e293b;color:white"><td><strong>NET PAY</strong></td><td class="amount" style="font-size:1.3em"><strong>RM ${formatNum(totals.net_pay)}</strong></td></tr></table>
@@ -1128,6 +1132,7 @@ function PayrollUnified() {
       socso: hasValue('socso_employee'),
       eis: hasValue('eis_employee'),
       pcb: hasValue('pcb'),
+      zakat: hasValue('zakat'),
       // AA Alive specific columns
       otExtraDays: hasValue('ot_extra_days_amount'),
       upsellComm: hasValue('upsell_commission'),
@@ -1495,7 +1500,7 @@ function PayrollUnified() {
                             {vis.claims && <th>Claims</th>}
                             {vis.bonus && <th>Bonus</th>}
                             {vis.attendanceBonus && <th>Att. Bonus</th>}
-                            <th>Gross</th>{vis.epf && <th title="Statutory">EPF</th>}{vis.socso && <th title="Statutory">SOCSO</th>}{vis.eis && <th title="Statutory">EIS</th>}{vis.pcb && <th title="Statutory">PCB</th>}
+                            <th>Gross</th>{vis.epf && <th title="Statutory">EPF</th>}{vis.socso && <th title="Statutory">SOCSO</th>}{vis.eis && <th title="Statutory">EIS</th>}{vis.pcb && <th title="Statutory">PCB</th>}{vis.zakat && <th>Zakat</th>}
                             {vis.adv && <th title="Non-statutory">Adv</th>}
                             <th>Net</th><th></th>
                           </tr>
@@ -1537,6 +1542,7 @@ function PayrollUnified() {
                               {vis.socso && <td>{formatAmount(item.socso_employee)}</td>}
                               {vis.eis && <td>{formatAmount(item.eis_employee)}</td>}
                               {vis.pcb && renderCell(item, 'pcb', item.pcb)}
+                              {vis.zakat && <td>{formatAmount(item.zakat)}</td>}
                               {vis.adv && <td>{formatAmount(item.advance_deduction)}</td>}
                               <td><strong>{formatAmount(item.net_pay)}</strong></td>
                               <td>
@@ -2151,6 +2157,13 @@ function PayrollUnified() {
                       <label>Other Deductions</label>
                       <input type="number" step="0.01" value={itemForm.other_deductions} onChange={(e) => setItemForm({ ...itemForm, other_deductions: parseFloat(e.target.value) || 0 })} />
                     </div>
+                    <div className="form-group">
+                      <label>Zakat (Employee)</label>
+                      <input type="number" step="0.01" value={itemForm.zakat} onChange={(e) => setItemForm({ ...itemForm, zakat: parseFloat(e.target.value) || 0 })} />
+                      <small style={{color: '#666', fontSize: '0.75rem'}}>Monthly zakat deduction</small>
+                    </div>
+                  </div>
+                  <div className="form-row">
                     <div className="form-group">
                       <label>EPF Override (KWSP)</label>
                       <input
