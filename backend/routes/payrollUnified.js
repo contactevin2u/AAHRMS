@@ -4345,6 +4345,7 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     res.send(content);
 
   } catch (error) {
@@ -4476,6 +4477,7 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     res.send(content);
 
   } catch (error) {
