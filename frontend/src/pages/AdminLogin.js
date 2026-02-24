@@ -91,6 +91,8 @@ function AdminLogin() {
                 placeholder="Enter password"
                 autoComplete="new-password"
                 required
+                onCopy={(e) => e.preventDefault()}
+                onCut={(e) => e.preventDefault()}
               />
               <button
                 type="button"
