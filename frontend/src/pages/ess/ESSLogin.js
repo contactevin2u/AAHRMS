@@ -23,6 +23,7 @@ function ESSLogin() {
   const [rememberMe, setRememberMe] = useState(true); // Default to remember
   const [autoLogging, setAutoLogging] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Check if already logged in OR auto-login with saved credentials
   useEffect(() => {
@@ -336,15 +337,25 @@ function ESSLogin() {
               </div>
               <div className="form-group">
                 <label>{t('login.passwordLabel')}</label>
-                <input
-                  type="password"
-                  name="password_field"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder={t('login.passwordPlaceholder')}
-                  required
-                  autoComplete="new-password"
-                />
+                <div className="password-wrapper">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="password_field"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder={t('login.passwordPlaceholder')}
+                    required
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? '🙈' : '👁'}
+                  </button>
+                </div>
               </div>
               <div className="login-hint">
                 <span className="hint-icon">💡</span>
