@@ -3129,10 +3129,12 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
              pr.period_start_date, pr.period_end_date,
              e.id as emp_id, e.department_id, e.default_basic_salary, e.fixed_ot_amount,
              e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
-             e.residency_status, e.allowance_pcb, e.work_type, e.employment_type, e.hourly_rate
+             e.residency_status, e.allowance_pcb, e.work_type, e.employment_type, e.hourly_rate,
+             d.name as department_name
       FROM payroll_items pi
       JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
       JOIN employees e ON pi.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
       WHERE pi.id = $1
     `, [id]);
 
@@ -3162,6 +3164,25 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
 
     // Calculate wages for part-time employees
     let wages = 0, partTimeHoursWorked = 0, phPay = parseFloat(item.ph_pay) || 0;
+
+    // Recalculate PH for AA Alive drivers using calendar daily rate
+    const isDriverItem = item.employee_role_type === 'driver' || (item.department_name || '').toLowerCase().includes('driver');
+    if (companyId === AA_ALIVE_COMPANY_ID && isDriverItem && !isPartTime) {
+      try {
+        const phDaysWorked = await calculatePHDaysWorked(
+          item.emp_id, companyId,
+          item.period_start_date.toISOString().split('T')[0],
+          item.period_end_date.toISOString().split('T')[0]
+        );
+        const basicForPH = parseFloat(item.basic_salary) || 0;
+        if (phDaysWorked > 0 && basicForPH > 0) {
+          const calendarDays = new Date(item.year, item.month, 0).getDate();
+          phPay = Math.round(phDaysWorked * (basicForPH / calendarDays) * 1.0 * 100) / 100;
+        } else {
+          phPay = 0;
+        }
+      } catch (e) { console.warn('PH recalc failed:', e.message); }
+    }
     if (isPartTime) {
       try {
         const partTimeData = await calculatePartTimeHours(
@@ -3348,10 +3369,12 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
           SELECT pi.*, pr.month, pr.year, pr.period_start_date, pr.period_end_date,
                  e.id as emp_id, e.department_id, e.fixed_ot_amount,
                  e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
-                 e.residency_status, e.allowance_pcb, e.work_type, e.employment_type, e.hourly_rate
+                 e.residency_status, e.allowance_pcb, e.work_type, e.employment_type, e.hourly_rate,
+                 d.name as department_name
           FROM payroll_items pi
           JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
           JOIN employees e ON pi.employee_id = e.id
+          LEFT JOIN departments d ON e.department_id = d.id
           WHERE pi.id = $1
         `, [item.id]);
 
@@ -3369,6 +3392,25 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         let wages = parseFloat(i.wages) || 0;
         let partTimeHoursWorked = parseFloat(i.part_time_hours) || 0;
         let phPay = parseFloat(i.ph_pay) || 0;
+
+        // Recalculate PH for AA Alive drivers using calendar daily rate
+        const isDriverItem = i.employee_role_type === 'driver' || (i.department_name || '').toLowerCase().includes('driver');
+        if (companyId === AA_ALIVE_COMPANY_ID && isDriverItem && !isPartTime) {
+          try {
+            const phDaysWorked = await calculatePHDaysWorked(
+              i.emp_id, companyId,
+              i.period_start_date.toISOString().split('T')[0],
+              i.period_end_date.toISOString().split('T')[0]
+            );
+            const basicForPH = parseFloat(i.basic_salary) || 0;
+            if (phDaysWorked > 0 && basicForPH > 0) {
+              const calendarDays = new Date(i.year, i.month, 0).getDate();
+              phPay = Math.round(phDaysWorked * (basicForPH / calendarDays) * 1.0 * 100) / 100;
+            } else {
+              phPay = 0;
+            }
+          } catch (e) { console.warn('PH recalc failed:', e.message); }
+        }
 
         if (isPartTime) {
           try {
