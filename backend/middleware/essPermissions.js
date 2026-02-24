@@ -154,12 +154,13 @@ const isSupervisor = (employee, outletId) => {
 
 /**
  * Check if employee is a manager for a given outlet
- * Managers can manage multiple outlets via employee_outlets table
  */
 const isManager = async (employee, outletId) => {
   if (employee.employee_role !== ROLES.MANAGER) return false;
 
-  // Check if manager is assigned to this outlet
+  // Check outlet_id first (primary), fallback to employee_outlets
+  if (employee.outlet_id === parseInt(outletId)) return true;
+
   const result = await pool.query(
     'SELECT 1 FROM employee_outlets WHERE employee_id = $1 AND outlet_id = $2',
     [employee.id, outletId]
@@ -245,16 +246,24 @@ const getManagedOutlets = async (employee) => {
   }
 
   if (employee.employee_role === ROLES.MANAGER) {
+    // Use outlet_id first (primary), fallback to employee_outlets for multi-outlet
+    if (employee.outlet_id) {
+      const result = await pool.query(
+        'SELECT outlet_id FROM employee_outlets WHERE employee_id = $1',
+        [employee.id]
+      );
+      const outlets = result.rows.map(r => r.outlet_id);
+      if (!outlets.includes(employee.outlet_id)) {
+        outlets.push(employee.outlet_id);
+      }
+      return outlets.length > 0 ? outlets : [employee.outlet_id];
+    }
+    // Fallback for managers without outlet_id
     const result = await pool.query(
       'SELECT outlet_id FROM employee_outlets WHERE employee_id = $1',
       [employee.id]
     );
-    const outlets = result.rows.map(r => r.outlet_id);
-    // Fallback: include manager's own outlet_id if not already in list
-    if (employee.outlet_id && !outlets.includes(employee.outlet_id)) {
-      outlets.push(employee.outlet_id);
-    }
-    return outlets;
+    return result.rows.map(r => r.outlet_id);
   }
 
   return [];

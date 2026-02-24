@@ -1191,11 +1191,11 @@ router.put('/:id/outlets', authenticateAdmin, async (req, res) => {
         );
       }
 
-      // If employee is a manager, set outlet_id to NULL (managers don't have a single outlet)
-      if (['manager', 'supervisor'].includes(employee.employee_role)) {
+      // Set outlet_id to the first assigned outlet (keep in sync)
+      if (outlet_ids.length > 0) {
         await client.query(
-          'UPDATE employees SET outlet_id = NULL WHERE id = $1',
-          [id]
+          'UPDATE employees SET outlet_id = $1 WHERE id = $2',
+          [outlet_ids[0], id]
         );
       }
 

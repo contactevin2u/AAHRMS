@@ -110,16 +110,23 @@ router.get('/:id', authenticateEmployee, asyncHandler(async (req, res) => {
       commission_amount: parseFloat(item.commission_amount) || 0,
       trade_commission_amount: parseFloat(item.trade_commission_amount) || 0,
       outstation_amount: parseFloat(item.outstation_amount) || 0,
+      trip_allowance: parseFloat(item.trip_allowance) || 0,
       claims_amount: parseFloat(item.claims_amount) || 0,
-      bonus: parseFloat(item.bonus) || 0
+      bonus: parseFloat(item.bonus) || 0,
+      attendance_bonus: parseFloat(item.attendance_bonus) || 0
     },
     deductions: {
       unpaid_leave_days: parseFloat(item.unpaid_leave_days) || 0,
       unpaid_leave_deduction: parseFloat(item.unpaid_leave_deduction) || 0,
+      absent_days: parseFloat(item.absent_days) || 0,
+      absent_day_deduction: parseFloat(item.absent_day_deduction) || 0,
+      short_hours: parseFloat(item.short_hours) || 0,
+      short_hours_deduction: parseFloat(item.short_hours_deduction) || 0,
       epf_employee: parseFloat(item.epf_employee) || 0,
       socso_employee: parseFloat(item.socso_employee) || 0,
       eis_employee: parseFloat(item.eis_employee) || 0,
       pcb: parseFloat(item.pcb) || 0,
+      zakat: parseFloat(item.zakat) || 0,
       advance_deduction: parseFloat(item.advance_deduction) || 0,
       other_deductions: parseFloat(item.other_deductions) || 0
     },

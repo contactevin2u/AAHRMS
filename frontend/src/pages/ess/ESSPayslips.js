@@ -270,6 +270,12 @@ function ESSPayslips() {
                   <span className="ess-row-amount">{formatCurrency(payslipDetail.earnings.outstation_amount)}</span>
                 </div>
               )}
+              {payslipDetail.earnings.trip_allowance > 0 && (
+                <div className="ess-payslip-row">
+                  <span className="ess-row-label">{t('payslip.tripAllowance') || 'Trip Allowance'}</span>
+                  <span className="ess-row-amount">{formatCurrency(payslipDetail.earnings.trip_allowance)}</span>
+                </div>
+              )}
               {payslipDetail.earnings.claims_amount > 0 && (
                 <div className="ess-payslip-row">
                   <span className="ess-row-label">{t('payslip.claims')}</span>
@@ -280,6 +286,12 @@ function ESSPayslips() {
                 <div className="ess-payslip-row">
                   <span className="ess-row-label">{t('payslip.bonus')}</span>
                   <span className="ess-row-amount">{formatCurrency(payslipDetail.earnings.bonus)}</span>
+                </div>
+              )}
+              {payslipDetail.earnings.attendance_bonus > 0 && (
+                <div className="ess-payslip-row">
+                  <span className="ess-row-label">{t('payslip.attendanceBonus') || 'Attendance Bonus'}</span>
+                  <span className="ess-row-amount">{formatCurrency(payslipDetail.earnings.attendance_bonus)}</span>
                 </div>
               )}
               <div className="ess-payslip-total">
@@ -315,6 +327,18 @@ function ESSPayslips() {
                   <span className="ess-row-amount">{formatCurrency(payslipDetail.deductions.pcb)}</span>
                 </div>
               )}
+              {payslipDetail.deductions.absent_day_deduction > 0 && (
+                <div className="ess-payslip-row">
+                  <span className="ess-row-label">{t('payslip.absentDays') || 'Absent Days'} {payslipDetail.deductions.absent_days > 0 && `(${payslipDetail.deductions.absent_days} ${t('payslip.days')})`}</span>
+                  <span className="ess-row-amount">{formatCurrency(payslipDetail.deductions.absent_day_deduction)}</span>
+                </div>
+              )}
+              {payslipDetail.deductions.short_hours_deduction > 0 && (
+                <div className="ess-payslip-row">
+                  <span className="ess-row-label">{t('payslip.shortHours') || 'Short Hours'} {payslipDetail.deductions.short_hours > 0 && `(${parseFloat(payslipDetail.deductions.short_hours).toFixed(1)} hrs)`}</span>
+                  <span className="ess-row-amount">{formatCurrency(payslipDetail.deductions.short_hours_deduction)}</span>
+                </div>
+              )}
               {payslipDetail.deductions.unpaid_leave_deduction > 0 && (
                 <div className="ess-payslip-row">
                   <span className="ess-row-label">{t('payslip.unpaidLeave')} {payslipDetail.deductions.unpaid_leave_days > 0 && `(${payslipDetail.deductions.unpaid_leave_days} ${t('payslip.days')})`}</span>
@@ -325,6 +349,12 @@ function ESSPayslips() {
                 <div className="ess-payslip-row">
                   <span className="ess-row-label">{t('payslip.advanceDeduction')}</span>
                   <span className="ess-row-amount">{formatCurrency(payslipDetail.deductions.advance_deduction)}</span>
+                </div>
+              )}
+              {payslipDetail.deductions.zakat > 0 && (
+                <div className="ess-payslip-row">
+                  <span className="ess-row-label">{t('payslip.zakat') || 'Zakat'}</span>
+                  <span className="ess-row-amount">{formatCurrency(payslipDetail.deductions.zakat)}</span>
                 </div>
               )}
               {payslipDetail.deductions.other_deductions > 0 && (
