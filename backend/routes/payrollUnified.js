@@ -3817,6 +3817,34 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
 });
 
 /**
+ * POST /api/payroll/runs/:id/publish-draft-payslips
+ * Toggle draft payslip visibility for employees in ESS
+ */
+router.post('/runs/:id/publish-draft-payslips', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.admin.company_id;
+
+    // Get current state
+    const run = await pool.query('SELECT id, status, draft_payslips_visible FROM payroll_runs WHERE id = $1 AND company_id = $2', [id, companyId]);
+    if (run.rows.length === 0) {
+      return res.status(404).json({ error: 'Payroll run not found' });
+    }
+    if (run.rows[0].status !== 'draft') {
+      return res.status(400).json({ error: 'Only draft payroll runs can toggle payslip visibility' });
+    }
+
+    const newVisibility = !run.rows[0].draft_payslips_visible;
+    await pool.query('UPDATE payroll_runs SET draft_payslips_visible = $1, updated_at = NOW() WHERE id = $2', [newVisibility, id]);
+
+    res.json({ message: newVisibility ? 'Draft payslips are now visible to employees' : 'Draft payslips are now hidden from employees', draft_payslips_visible: newVisibility });
+  } catch (error) {
+    console.error('Error toggling draft payslip visibility:', error);
+    res.status(500).json({ error: 'Failed to toggle draft payslip visibility' });
+  }
+});
+
+/**
  * POST /api/payroll/runs/:id/finalize
  * Finalize a payroll run
  */
@@ -3913,6 +3941,7 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
       UPDATE payroll_runs SET
         status = 'finalized',
         finalized_at = NOW(),
+        draft_payslips_visible = false,
         updated_at = NOW()
       WHERE id = $1
     `, [id]);

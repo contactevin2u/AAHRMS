@@ -534,6 +534,22 @@ function PayrollUnified() {
     }
   };
 
+  const handlePublishDraftPayslips = async (id) => {
+    const isCurrentlyVisible = selectedRun?.draft_payslips_visible;
+    const msg = isCurrentlyVisible
+      ? 'Hide draft payslips from employees?'
+      : 'Publish draft payslips so employees can preview them in ESS? (A DRAFT watermark will be shown)';
+    if (window.confirm(msg)) {
+      try {
+        const res = await payrollV2Api.publishDraftPayslips(id);
+        alert(res.data.message);
+        fetchRunDetails(id);
+      } catch (error) {
+        alert(error.response?.data?.error || 'Failed to toggle draft payslip visibility');
+      }
+    }
+  };
+
   const handleDownloadBankFile = async (id, format = 'csv') => {
     try {
       const res = await payrollV2Api.getBankFile(id, format);
@@ -1319,6 +1335,9 @@ function PayrollUnified() {
                           <button onClick={() => openExclusionModal('perkeso')} className="download-btn" style={{marginLeft: '8px'}}>PERKESO</button>
                           <button onClick={() => openExclusionModal('epf')} className="download-btn" style={{marginLeft: '8px'}}>KWSP</button>
                           <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate Statutory</button>
+                          <button onClick={() => handlePublishDraftPayslips(selectedRun.id)} className="download-btn" style={{marginLeft: '8px', background: selectedRun.draft_payslips_visible ? '#f59e0b' : '#8b5cf6', color: 'white', border: 'none'}}>
+                            {selectedRun.draft_payslips_visible ? 'Hide Draft Payslip' : 'Publish Draft Payslip'}
+                          </button>
                           <button onClick={() => handleFinalizeRun(selectedRun.id)} className="finalize-btn">Finalize</button>
                           <button onClick={() => handleDeleteRun(selectedRun.id)} className="delete-btn">Delete</button>
                         </>

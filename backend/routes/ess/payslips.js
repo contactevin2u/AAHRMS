@@ -18,7 +18,7 @@ router.get('/', authenticateEmployee, asyncHandler(async (req, res) => {
     FROM payroll_items pi
     JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
     WHERE pi.employee_id = $1
-      AND pr.status = 'finalized'
+      AND (pr.status = 'finalized' OR pr.draft_payslips_visible = true)
   `;
   const params = [req.employee.id];
 
@@ -75,6 +75,7 @@ router.get('/:id', authenticateEmployee, asyncHandler(async (req, res) => {
 
   // Format payslip in the same structure as admin endpoint
   const payslip = {
+    run_status: item.run_status,
     company: {
       id: item.company_id,
       name: item.company_name || 'AA ALIVE SDN BHD',

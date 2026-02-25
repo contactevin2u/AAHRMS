@@ -265,6 +265,29 @@
   padding: 20px;
   border: 1px solid #e2e8f0;
   box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Draft Watermark */
+.ess-payslip-draft {
+  border-color: #f59e0b;
+}
+
+.ess-draft-watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-35deg);
+  font-size: 120px;
+  font-weight: 900;
+  color: rgba(245, 158, 11, 0.15);
+  letter-spacing: 20px;
+  pointer-events: none;
+  z-index: 10;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Letterhead */
@@ -534,6 +557,14 @@
     box-shadow: none;
     border: none;
     padding: 10mm;
+    overflow: hidden;
+  }
+
+  .ess-draft-watermark {
+    font-size: 100px;
+    color: rgba(245, 158, 11, 0.12) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* Compact spacing for one-page fit */

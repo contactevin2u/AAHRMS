@@ -76,7 +76,7 @@ function ESSPayslips() {
     try {
       // Clone element into an off-screen container with fixed A4-like width
       const clone = element.cloneNode(true);
-      clone.style.cssText = 'position:absolute;left:-9999px;top:0;width:700px;padding:30px;background:#fff;font-size:13px;';
+      clone.style.cssText = 'position:absolute;left:-9999px;top:0;width:700px;padding:30px;background:#fff;font-size:13px;overflow:hidden;';
       // Ensure all tables in clone show amounts properly
       clone.querySelectorAll('table').forEach(t => {
         t.style.width = '100%';
@@ -155,7 +155,11 @@ function ESSPayslips() {
             </button>
           </div>
 
-          <div className="ess-payslip-container" ref={printRef}>
+          <div className={`ess-payslip-container ${payslipDetail.run_status === 'draft' ? 'ess-payslip-draft' : ''}`} ref={printRef}>
+            {/* Draft Watermark */}
+            {payslipDetail.run_status === 'draft' && (
+              <div className="ess-draft-watermark">DRAFT</div>
+            )}
             {/* Letterhead */}
             <div className="ess-letterhead">
               <div className="ess-letterhead-logo">

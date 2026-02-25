@@ -196,6 +196,7 @@ export const payrollV2Api = {
   deleteRun: (id) => api.delete(`/payroll/runs/${id}`),
   deleteAllDrafts: (month, year) => api.delete(`/payroll/runs/drafts/${year}/${month}`),
   finalizeRun: (id) => api.post(`/payroll/runs/${id}/finalize`),
+  publishDraftPayslips: (id) => api.post(`/payroll/runs/${id}/publish-draft-payslips`),
   getBankFile: (id, format = 'csv') => api.get(`/payroll/runs/${id}/bank-file`, {
     params: { format },
     responseType: 'blob'
