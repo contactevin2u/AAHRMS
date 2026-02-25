@@ -10,7 +10,7 @@ const { authenticateEmployee } = require('../../middleware/auth');
 const { asyncHandler, ValidationError } = require('../../middleware/errorHandler');
 const { uploadClaim } = require('../../utils/cloudinaryStorage');
 const { isSupervisorOrManager, canApproveForEmployee, canApproveClaimsForMimix, isMimixCompany, isBossOrDirector } = require('../../middleware/essPermissions');
-const { verifyReceipt, generateReceiptHash, extractReceiptData } = require('../../utils/receiptAI');
+const { verifyReceipt, generateReceiptHash, extractReceiptData, checkDuplicateReceipt } = require('../../utils/receiptAI');
 const { getEmployeeMealAllowance } = require('../../utils/claimsAutomation');
 
 // Get claims history
@@ -197,13 +197,27 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
 
   // Run AI verification if not already done on frontend
   // NOTE: AI verification is only enabled for AA Alive (company_id = 1)
-  // Skip AI verification for drivers (they submit without amount)
+  // For drivers: only check duplicate (hash), skip full AI amount verification
   let verification = ai_verification;
-  if (!isDriver && companyId === 1 && !verification && receiptData && receiptData.startsWith('data:') && amount) {
+  if (isDriver && receiptData && receiptData.startsWith('data:')) {
+    // Drivers: duplicate detection only (no amount verification)
+    const receiptHash = generateReceiptHash(receiptData);
+    const dupCheck = await checkDuplicateReceipt(receiptHash, companyId);
+    if (dupCheck.isDuplicate) {
+      return res.status(400).json({
+        error: 'Claim rejected',
+        reason: `Duplicate receipt detected. This receipt was already submitted by ${dupCheck.originalClaim.employeeName} on claim #${dupCheck.originalClaim.id}.`,
+        duplicateInfo: dupCheck.originalClaim,
+        autoRejected: true
+      });
+    }
+    // Store the hash for future duplicate checks
+    verification = { receiptHash };
+  } else if (!isDriver && companyId === 1 && !verification && receiptData && receiptData.startsWith('data:') && amount) {
     verification = await verifyReceipt(receiptData, parseFloat(amount), companyId);
   }
 
-  // Check if this is a duplicate - auto reject
+  // Check if this is a duplicate - auto reject (non-driver full AI check)
   if (verification && verification.isRejected) {
     return res.status(400).json({
       error: 'Claim rejected',
