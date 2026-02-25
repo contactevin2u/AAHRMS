@@ -24,6 +24,7 @@ function DriverClaimsDashboard() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectingIds, setRejectingIds] = useState([]);
+  const [editingAmount, setEditingAmount] = useState(null); // { id, value }
 
   // Month/year filter
   const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -160,6 +161,19 @@ function DriverClaimsDashboard() {
       showMsg(err.response?.data?.error || 'Failed to reject', 'error');
     } finally {
       setApproving(false);
+    }
+  };
+
+  // ===== Edit amount =====
+  const handleSaveAmount = async (claimId, newAmount) => {
+    try {
+      await driverClaimsApi.updateAmount(claimId, parseFloat(newAmount));
+      setEditingAmount(null);
+      // Update local state
+      setDriverClaims(prev => prev.map(c => c.id === claimId ? { ...c, amount: parseFloat(newAmount) } : c));
+      showMsg('Amount updated');
+    } catch (err) {
+      showMsg(err.response?.data?.error || 'Failed to update amount', 'error');
     }
   };
 
@@ -540,7 +554,34 @@ function DriverClaimsDashboard() {
                       <td>{formatDate(claim.claim_date)}</td>
                       <td><span className="dc-badge">{claim.category}</span></td>
                       <td className="dc-desc-cell">{claim.description || '-'}</td>
-                      <td className="dc-amount">{formatRM(claim.amount)}</td>
+                      <td className="dc-amount">
+                        {(activeTab === 'pending' || activeTab === 'approved') && editingAmount?.id === claim.id ? (
+                          <div className="dc-edit-amount">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editingAmount.value}
+                              onChange={e => setEditingAmount({ ...editingAmount, value: e.target.value })}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleSaveAmount(claim.id, editingAmount.value);
+                                if (e.key === 'Escape') setEditingAmount(null);
+                              }}
+                              autoFocus
+                              className="dc-amount-input"
+                            />
+                            <button className="dc-btn dc-btn-primary dc-btn-xs" onClick={() => handleSaveAmount(claim.id, editingAmount.value)}>Save</button>
+                            <button className="dc-btn dc-btn-xs" onClick={() => setEditingAmount(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <span
+                            className={(activeTab === 'pending' || activeTab === 'approved') ? 'dc-amount-editable' : ''}
+                            onClick={() => (activeTab === 'pending' || activeTab === 'approved') && setEditingAmount({ id: claim.id, value: parseFloat(claim.amount).toFixed(2) })}
+                          >
+                            {formatRM(claim.amount)}
+                          </span>
+                        )}
+                      </td>
                       <td className="dc-ai-detected">
                         {claim.ai_extracted_amount ? (
                           <span className="dc-ai-info">

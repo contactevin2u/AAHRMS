@@ -286,17 +286,28 @@ function ESSClaims({ embedded = false }) {
     return new Intl.NumberFormat('en-MY', { style: 'currency', currency: 'MYR' }).format(amount);
   };
 
-  const getStatusBadge = (status, autoApproved) => {
+  const getStatusBadge = (status, autoApproved, claim) => {
     const styles = {
       pending: { bg: '#fef3c7', color: '#d97706' },
       approved: { bg: '#d1fae5', color: '#059669' },
-      rejected: { bg: '#fee2e2', color: '#dc2626' }
+      rejected: { bg: '#fee2e2', color: '#dc2626' },
+      paid: { bg: '#dbeafe', color: '#1d4ed8' }
     };
+    // For drivers: approved but not released = "Approved (Pending Cash)"
+    let label = status.charAt(0).toUpperCase() + status.slice(1);
+    if (isAAAliveDriver && status === 'approved' && !claim?.cash_paid_at) {
+      label = 'Approved - Pending Cash';
+    } else if (isAAAliveDriver && status === 'approved' && claim?.cash_paid_at && !claim?.driver_signature) {
+      label = 'Pending Signature';
+    } else if (status === 'paid' || (claim?.cash_paid_at && claim?.driver_signature)) {
+      label = 'Paid (Cash)';
+    } else if (autoApproved && status === 'approved') {
+      label = 'Approved (Auto)';
+    }
     const s = styles[status] || styles.pending;
     return (
       <span style={{ background: s.bg, color: s.color, padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' }}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-        {autoApproved && status === 'approved' && ' (Auto)'}
+        {label}
       </span>
     );
   };
@@ -384,10 +395,17 @@ function ESSClaims({ embedded = false }) {
               <div key={claim.id} style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <span style={{ fontWeight: '600', color: '#1e293b' }}>{claim.category}</span>
-                  {getStatusBadge(claim.status, claim.auto_approved)}
+                  {getStatusBadge(claim.status, claim.auto_approved, claim)}
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: '700', color: '#1976d2', marginBottom: '8px' }}>{formatCurrency(claim.amount)}</div>
-                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>{formatDate(claim.claim_date)} - {claim.description}</div>
+                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>{formatDate(claim.claim_date)}{claim.description ? ` - ${claim.description}` : ''}</div>
+                {isAAAliveDriver && claim.receipt_url && (
+                  <div style={{ marginTop: '8px', marginBottom: '4px' }}>
+                    <a href={claim.receipt_url} target="_blank" rel="noopener noreferrer">
+                      <img src={claim.receipt_url} alt="Receipt" style={{ maxWidth: '100%', maxHeight: '120px', borderRadius: '8px', border: '1px solid #e5e7eb', objectFit: 'contain' }} />
+                    </a>
+                  </div>
+                )}
                 {(claim.payroll_month && claim.payroll_year) && (
                   <div style={{ marginTop: '4px' }}>
                     {getPayrollMonthBadge(claim.payroll_month, claim.payroll_year)}

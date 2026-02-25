@@ -372,6 +372,40 @@ router.post('/bulk-reject', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Update claim amount
+router.post('/update-amount/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body;
+
+    if (amount === undefined || amount === null || isNaN(parseFloat(amount)) || parseFloat(amount) < 0) {
+      return res.status(400).json({ error: 'Valid amount is required' });
+    }
+
+    const result = await pool.query(`
+      UPDATE claims c
+      SET amount = $1, updated_at = NOW()
+      FROM employees e
+      JOIN departments d ON e.department_id = d.id
+      WHERE c.id = $2
+        AND c.employee_id = e.id
+        AND e.company_id = 1
+        AND LOWER(d.name) = 'driver'
+        AND c.status IN ('pending', 'approved')
+      RETURNING c.id, c.amount
+    `, [parseFloat(amount), id]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Claim not found or cannot be edited' });
+    }
+
+    res.json({ message: 'Amount updated', claim: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating claim amount:', error);
+    res.status(500).json({ error: 'Failed to update amount' });
+  }
+});
+
 // =====================================================
 // PAYMENT RELEASE
 // =====================================================

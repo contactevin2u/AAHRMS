@@ -839,6 +839,7 @@ export const driverClaimsApi = {
   getPendingSignature: (employeeId) => api.get(`/driver-claims/pending-signature/${employeeId}`),
   sign: (employeeId, data) => api.post(`/driver-claims/sign/${employeeId}`, data),
   getHistory: (params) => api.get('/driver-claims/history', { params }),
+  updateAmount: (id, amount) => api.post(`/driver-claims/update-amount/${id}`, { amount }),
 };
 
 export default api;
