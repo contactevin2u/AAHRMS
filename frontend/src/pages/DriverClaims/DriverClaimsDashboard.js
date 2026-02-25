@@ -517,6 +517,7 @@ function DriverClaimsDashboard() {
                     <th>Category</th>
                     <th>Description</th>
                     <th>Amount</th>
+                    <th>AI Detected</th>
                     {showReleasedBy && <th>Released By</th>}
                     {showPaidDate && <th>Paid Date</th>}
                     {showRejectionReason && <th>Reason</th>}
@@ -540,6 +541,18 @@ function DriverClaimsDashboard() {
                       <td><span className="dc-badge">{claim.category}</span></td>
                       <td className="dc-desc-cell">{claim.description || '-'}</td>
                       <td className="dc-amount">{formatRM(claim.amount)}</td>
+                      <td className="dc-ai-detected">
+                        {claim.ai_extracted_amount ? (
+                          <span className="dc-ai-info">
+                            <span className="dc-ai-amount">{formatRM(claim.ai_extracted_amount)}</span>
+                            {claim.ai_extracted_merchant && (
+                              <span className="dc-ai-merchant">{claim.ai_extracted_merchant}</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="dc-ai-none">-</span>
+                        )}
+                      </td>
                       {showReleasedBy && (
                         <td><span className="dc-released-by">{claim.paid_by_name || '-'}</span></td>
                       )}
@@ -572,6 +585,7 @@ function DriverClaimsDashboard() {
                     {showCheckbox && <td></td>}
                     <td colSpan={3}><strong>Total</strong></td>
                     <td className="dc-amount"><strong>{formatRM(driverClaims.reduce((s, c) => s + parseFloat(c.amount), 0))}</strong></td>
+                    <td></td>
                     {showReleasedBy && <td></td>}
                     {showPaidDate && <td></td>}
                     {showRejectionReason && <td></td>}

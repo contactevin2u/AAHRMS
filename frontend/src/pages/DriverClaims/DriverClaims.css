@@ -909,3 +909,32 @@
     font-size: 12px;
   }
 }
+
+/* === AI DETECTED COLUMN === */
+.dc-ai-detected {
+  font-size: 13px;
+}
+
+.dc-ai-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-ai-amount {
+  font-weight: 600;
+  color: #059669;
+}
+
+.dc-ai-merchant {
+  font-size: 11px;
+  color: #6b7280;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-ai-none {
+  color: #9ca3af;
+}
