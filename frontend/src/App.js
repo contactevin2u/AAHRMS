@@ -41,6 +41,7 @@ import OutstationAllowance from './pages/OutstationAllowance';
 import PayrollSettings from './pages/PayrollSettings';
 import DepartmentHub from './pages/DepartmentHub';
 import OutletHub from './pages/OutletHub';
+import { DriverClaimsLogin, DriverClaimsDashboard } from './pages/DriverClaims';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -105,6 +106,12 @@ function ESSManagerProtectedRoute({ children }) {
   }
 
   return <LanguageProvider>{children}</LanguageProvider>;
+}
+
+// Driver Claims Portal Protected Route
+function DriverClaimsProtectedRoute({ children }) {
+  const token = localStorage.getItem('driverClaimsToken');
+  return token ? children : <Navigate to="/driver-claims/login" replace />;
 }
 
 function App() {
@@ -527,6 +534,17 @@ function App() {
             <ESSManagerProtectedRoute>
               <ESSManagerOverview />
             </ESSManagerProtectedRoute>
+          }
+        />
+
+        {/* Driver Claims Portal */}
+        <Route path="/driver-claims/login" element={<DriverClaimsLogin />} />
+        <Route
+          path="/driver-claims"
+          element={
+            <DriverClaimsProtectedRoute>
+              <DriverClaimsDashboard />
+            </DriverClaimsProtectedRoute>
           }
         />
 

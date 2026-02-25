@@ -37,6 +37,7 @@ const positionsRoutes = require('./routes/positions');
 // const shiftSwapRoutes = require('./routes/shiftSwap');
 const commissionRoutes = require('./routes/commission');  // Indoor Sales commissions
 const advancesRoutes = require('./routes/advances');  // Salary Advances
+const driverClaimsRoutes = require('./routes/driverClaims');  // Driver Claims Cash Payment Portal
 const payrollAIRoutes = require('./routes/payrollAI');  // AI Payroll Assistant
 const analyticsRoutes = require('./routes/analytics');  // Analytics Dashboard
 const publicHolidaysRoutes = require('./routes/publicHolidays');  // Public Holidays Management
@@ -94,6 +95,7 @@ app.use('/api/positions', positionsRoutes);  // Job Positions
 // app.use('/api/shift-swap', shiftSwapRoutes);
 app.use('/api/commission', commissionRoutes);  // Indoor Sales commissions
 app.use('/api/advances', advancesRoutes);  // Salary Advances
+app.use('/api/driver-claims', driverClaimsRoutes);  // Driver Claims Cash Payment Portal
 app.use('/api/payroll/ai', payrollAIRoutes);  // AI Payroll Assistant
 app.use('/api/analytics', analyticsRoutes);  // Analytics Dashboard
 app.use('/api/public-holidays', publicHolidaysRoutes);  // Public Holidays Management

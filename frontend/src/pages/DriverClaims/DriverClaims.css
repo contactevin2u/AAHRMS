@@ -1,0 +1,764 @@
+/* =====================================================
+   DRIVER CLAIMS PORTAL - CSS
+   ===================================================== */
+
+/* === LOGIN PAGE === */
+.dc-login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #1e3a5f 100%);
+  padding: 20px;
+}
+
+.dc-login-card {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.dc-login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.dc-login-logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  margin-bottom: 16px;
+}
+
+.dc-login-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin: 0 0 4px;
+}
+
+.dc-login-header p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.dc-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* === SHARED FORM ELEMENTS === */
+.dc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dc-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.dc-field input {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.dc-field input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.dc-password-wrapper {
+  position: relative;
+}
+
+.dc-password-wrapper input {
+  width: 100%;
+  padding-right: 60px;
+  box-sizing: border-box;
+}
+
+.dc-toggle-pw {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.dc-error {
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid #fecaca;
+}
+
+/* === BUTTONS === */
+.dc-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dc-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dc-btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.dc-btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.dc-btn-outline {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.dc-btn-outline:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.dc-btn-full {
+  width: 100%;
+}
+
+.dc-btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.dc-btn-back {
+  background: none;
+  color: #3b82f6;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dc-btn-back:hover {
+  color: #2563eb;
+}
+
+/* === MAIN PAGE === */
+.dc-page {
+  min-height: 100vh;
+  background: #f1f5f9;
+}
+
+.dc-loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* === HEADER === */
+.dc-header {
+  background: white;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.dc-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dc-header-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.dc-header-left h1 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin: 0;
+}
+
+.dc-header-sub {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.dc-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dc-admin-name {
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* === MESSAGE === */
+.dc-message {
+  margin: 12px 24px 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dc-message-success {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.dc-message-error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+/* === FILTERS === */
+.dc-filters {
+  padding: 16px 24px 0;
+  display: flex;
+  gap: 8px;
+}
+
+.dc-filters select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+}
+
+/* === SUMMARY CARDS === */
+.dc-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 16px 24px;
+}
+
+.dc-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border-left: 4px solid transparent;
+}
+
+.dc-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.dc-card-blue { border-left-color: #3b82f6; }
+.dc-card-orange { border-left-color: #f59e0b; }
+.dc-card-green { border-left-color: #10b981; }
+
+.dc-card-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.dc-card-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.dc-card-amount {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* === TABS === */
+.dc-tabs {
+  display: flex;
+  padding: 0 24px;
+  gap: 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dc-tab {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dc-tab:hover {
+  color: #374151;
+}
+
+.dc-tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+/* === DRIVER LIST === */
+.dc-driver-list {
+  padding: 16px 24px;
+}
+
+.dc-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.dc-driver-row {
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #e2e8f0;
+}
+
+.dc-driver-row:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.dc-driver-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.dc-driver-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.dc-avatar-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 22px;
+}
+
+.dc-driver-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.dc-driver-code {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.dc-driver-stats {
+  text-align: right;
+  margin-right: 12px;
+}
+
+.dc-driver-count {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.dc-driver-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.dc-driver-arrow {
+  font-size: 24px;
+  color: #94a3b8;
+}
+
+/* === DETAIL VIEW === */
+.dc-detail {
+  padding: 16px 24px;
+}
+
+.dc-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.dc-detail-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.dc-detail-total {
+  margin-left: auto;
+  text-align: right;
+}
+
+.dc-detail-total-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.dc-detail-total-amount {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* === ACTIONS BAR === */
+.dc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  border-radius: 12px;
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.dc-select-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.dc-select-all input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* === CLAIMS TABLE === */
+.dc-claims-table {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.dc-claims-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dc-claims-table th {
+  background: #f8fafc;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dc-claims-table td {
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #374151;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dc-claims-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.dc-claims-table tbody tr.selected {
+  background: #eff6ff;
+}
+
+.dc-claims-table tfoot td {
+  background: #f8fafc;
+  border-top: 2px solid #e2e8f0;
+}
+
+.dc-claims-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.dc-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.dc-receipt-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.dc-receipt-link:hover {
+  text-decoration: underline;
+}
+
+/* === SIGNATURE MODAL === */
+.dc-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.dc-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dc-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dc-modal-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.dc-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.dc-modal-close:hover {
+  color: #374151;
+}
+
+.dc-modal-body {
+  padding: 20px;
+}
+
+.dc-sign-summary {
+  margin-bottom: 20px;
+}
+
+.dc-sign-summary p {
+  font-size: 13px;
+  color: #374151;
+  margin: 0 0 12px;
+}
+
+.dc-sign-claims-list {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.dc-sign-claim-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.dc-sign-total {
+  text-align: right;
+  font-size: 15px;
+  color: #1e293b;
+  padding: 8px 0;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 8px;
+}
+
+.dc-sign-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.dc-canvas-wrapper {
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafafa;
+  display: flex;
+  justify-content: center;
+}
+
+.dc-signature-canvas {
+  border-radius: 4px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.dc-sign-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  .dc-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .dc-header {
+    padding: 12px 16px;
+  }
+
+  .dc-header-left h1 {
+    font-size: 15px;
+  }
+
+  .dc-admin-name {
+    display: none;
+  }
+
+  .dc-filters,
+  .dc-driver-list,
+  .dc-detail {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .dc-tabs {
+    padding: 0 16px;
+    overflow-x: auto;
+  }
+
+  .dc-claims-table {
+    overflow-x: auto;
+  }
+
+  .dc-claims-table table {
+    min-width: 500px;
+  }
+
+  .dc-detail-header {
+    flex-wrap: wrap;
+  }
+
+  .dc-detail-total {
+    width: 100%;
+    text-align: left;
+    margin-left: 0;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e2e8f0;
+  }
+}
+
+@media (max-width: 480px) {
+  .dc-login-card {
+    padding: 28px 24px;
+  }
+
+  .dc-card-value {
+    font-size: 22px;
+  }
+
+  .dc-summary {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+}

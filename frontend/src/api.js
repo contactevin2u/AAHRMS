@@ -16,6 +16,8 @@ api.interceptors.request.use((config) => {
 
   if (config.url?.startsWith('/ess')) {
     token = localStorage.getItem('employeeToken');
+  } else if (config.url?.startsWith('/driver-claims')) {
+    token = localStorage.getItem('driverClaimsToken');
   } else {
     token = localStorage.getItem('adminToken');
 
@@ -56,7 +58,7 @@ api.interceptors.response.use(
       const path = window.location.pathname;
       const requestUrl = error.config?.url || '';
 
-      const isLoginPage = path === '/ess/login' || path === '/' || path === '/login';
+      const isLoginPage = path === '/ess/login' || path === '/' || path === '/login' || path === '/driver-claims/login';
       const isLoginRequest = requestUrl.includes('/login') || requestUrl.includes('/ess/login');
       const isRefreshRequest = requestUrl.includes('/refresh');
 
@@ -100,6 +102,10 @@ api.interceptors.response.use(
         localStorage.removeItem('employeeToken');
         localStorage.removeItem('employeeInfo');
         window.location.href = '/ess/login';
+      } else if (path.startsWith('/driver-claims')) {
+        localStorage.removeItem('driverClaimsToken');
+        localStorage.removeItem('driverClaimsAdmin');
+        window.location.href = '/driver-claims/login';
       } else if (path.startsWith('/admin')) {
         localStorage.removeItem('adminToken');
         window.location.href = '/';
@@ -818,6 +824,18 @@ export const analyticsApi = {
   getHeadcount: () => api.get('/analytics/headcount'),
   getAttendanceSummary: () => api.get('/analytics/attendance-summary'),
   getAiInsights: () => api.get('/analytics/ai-insights'),
+};
+
+// Driver Claims Portal
+export const driverClaimsApi = {
+  login: (credentials) => api.post('/driver-claims/login', credentials),
+  getSummary: (params) => api.get('/driver-claims/summary', { params }),
+  getByDriver: (params) => api.get('/driver-claims/by-driver', { params }),
+  getDriverClaims: (employeeId, params) => api.get(`/driver-claims/driver/${employeeId}`, { params }),
+  release: (data) => api.post('/driver-claims/release', data),
+  getPendingSignature: (employeeId) => api.get(`/driver-claims/pending-signature/${employeeId}`),
+  sign: (employeeId, data) => api.post(`/driver-claims/sign/${employeeId}`, data),
+  getHistory: (params) => api.get('/driver-claims/history', { params }),
 };
 
 export default api;
