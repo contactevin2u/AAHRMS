@@ -835,7 +835,7 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
     const allowedFields = [
       'employee_id', 'outlet_id', 'position_id', 'position', 'employment_type', 'status',
       'department_id', 'name', 'email', 'phone', 'address', 'gender', 'clock_in_required',
-      'employee_role'
+      'employee_role', 'include_in_epf', 'include_in_perkeso'
     ];
 
     // Build dynamic SET clause

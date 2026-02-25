@@ -200,10 +200,12 @@ export const payrollV2Api = {
     params: { format },
     responseType: 'blob'
   }),
-  getPerkesoFile: (id) => api.get(`/payroll/runs/${id}/perkeso-file`, {
+  getPerkesoFile: (id, exclude = []) => api.get(`/payroll/runs/${id}/perkeso-file`, {
+    params: exclude.length ? { exclude: exclude.join(',') } : {},
     responseType: 'blob'
   }),
-  getEpfFile: (id) => api.get(`/payroll/runs/${id}/epf-file`, {
+  getEpfFile: (id, exclude = []) => api.get(`/payroll/runs/${id}/epf-file`, {
+    params: exclude.length ? { exclude: exclude.join(',') } : {},
     responseType: 'blob'
   }),
   getSalaryReport: (id, format = 'csv') => api.get(`/payroll/runs/${id}/salary-report`, {

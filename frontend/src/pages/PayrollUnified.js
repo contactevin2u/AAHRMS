@@ -38,6 +38,10 @@ function PayrollUnified() {
   const [showAttendanceDetails, setShowAttendanceDetails] = useState(false);
   const [attendanceDetails, setAttendanceDetails] = useState(null);
   const [loadingAttendanceDetails, setLoadingAttendanceDetails] = useState(false);
+
+  // EPF/PERKESO exclusion modal state
+  const [showExclusionModal, setShowExclusionModal] = useState(null); // 'epf' | 'perkeso' | null
+  const [exclusionSelections, setExclusionSelections] = useState({}); // { employee_id: boolean }
   const [attendanceDetailsTab, setAttendanceDetailsTab] = useState('days_worked');
 
   // AI Assistant state
@@ -555,9 +559,9 @@ function PayrollUnified() {
     }
   };
 
-  const handleDownloadPerkesoFile = async (id) => {
+  const handleDownloadPerkesoFile = async (id, exclude = []) => {
     try {
-      const res = await payrollV2Api.getPerkesoFile(id);
+      const res = await payrollV2Api.getPerkesoFile(id, exclude);
       const blob = new Blob([res.data], { type: 'text/plain' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -582,9 +586,9 @@ function PayrollUnified() {
     }
   };
 
-  const handleDownloadEpfFile = async (id) => {
+  const handleDownloadEpfFile = async (id, exclude = []) => {
     try {
-      const res = await payrollV2Api.getEpfFile(id);
+      const res = await payrollV2Api.getEpfFile(id, exclude);
       const blob = new Blob([res.data], { type: 'text/plain' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -606,6 +610,31 @@ function PayrollUnified() {
         : (error.response?.data?.error || error.message);
       alert('Failed to download EPF file: ' + errorMsg);
     }
+  };
+
+  const openExclusionModal = (type) => {
+    if (!selectedRun?.items) return;
+    const flagField = type === 'epf' ? 'include_in_epf' : 'include_in_perkeso';
+    const selections = {};
+    selectedRun.items.forEach(item => {
+      // Default to true (included) if flag is null/undefined
+      selections[item.employee_id] = item[flagField] !== false;
+    });
+    setExclusionSelections(selections);
+    setShowExclusionModal(type);
+  };
+
+  const handleExclusionDownload = () => {
+    if (!selectedRun || !showExclusionModal) return;
+    const excludeIds = Object.entries(exclusionSelections)
+      .filter(([, included]) => !included)
+      .map(([id]) => Number(id));
+    if (showExclusionModal === 'epf') {
+      handleDownloadEpfFile(selectedRun.id, excludeIds);
+    } else {
+      handleDownloadPerkesoFile(selectedRun.id, excludeIds);
+    }
+    setShowExclusionModal(null);
   };
 
   const handleDownloadSalaryReport = async (id, format) => {
@@ -1287,8 +1316,8 @@ function PayrollUnified() {
                         <>
                           <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'csv')} className="download-btn">Download Excel</button>
                           <button onClick={() => handleDownloadBankFile(selectedRun.id, 'maybankBulk')} className="download-btn" style={{marginLeft: '8px'}}>Maybank CSV</button>
-                          <button onClick={() => handleDownloadPerkesoFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>PERKESO</button>
-                          <button onClick={() => handleDownloadEpfFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>KWSP</button>
+                          <button onClick={() => openExclusionModal('perkeso')} className="download-btn" style={{marginLeft: '8px'}}>PERKESO</button>
+                          <button onClick={() => openExclusionModal('epf')} className="download-btn" style={{marginLeft: '8px'}}>KWSP</button>
                           <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate Statutory</button>
                           <button onClick={() => handleFinalizeRun(selectedRun.id)} className="finalize-btn">Finalize</button>
                           <button onClick={() => handleDeleteRun(selectedRun.id)} className="delete-btn">Delete</button>
@@ -1298,8 +1327,8 @@ function PayrollUnified() {
                         <>
                           <button onClick={() => handleDownloadSalaryReport(selectedRun.id, 'pdf')} className="download-btn">Download PDF</button>
                           <button onClick={() => handleDownloadBankFile(selectedRun.id, 'maybankBulk')} className="download-btn" style={{marginLeft: '8px'}}>Maybank CSV</button>
-                          <button onClick={() => handleDownloadPerkesoFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>PERKESO</button>
-                          <button onClick={() => handleDownloadEpfFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>KWSP</button>
+                          <button onClick={() => openExclusionModal('perkeso')} className="download-btn" style={{marginLeft: '8px'}}>PERKESO</button>
+                          <button onClick={() => openExclusionModal('epf')} className="download-btn" style={{marginLeft: '8px'}}>KWSP</button>
                           <button onClick={() => handleDownloadBankFile(selectedRun.id)} className="download-btn" style={{marginLeft: '8px'}}>Bank File</button>
                         </>
                       )}
@@ -2591,6 +2620,99 @@ function PayrollUnified() {
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowAttendanceDetails(false)} className="btn-secondary">
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* EPF/PERKESO Exclusion Modal */}
+        {showExclusionModal && selectedRun?.items && (
+          <div className="modal-overlay" onClick={() => setShowExclusionModal(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth: '600px'}}>
+              <div className="modal-header">
+                <h2>{showExclusionModal === 'epf' ? 'KWSP (EPF)' : 'PERKESO'} - Select Employees</h2>
+                <button className="close-btn" onClick={() => setShowExclusionModal(null)}>&times;</button>
+              </div>
+              <div style={{padding: '10px 20px', display: 'flex', gap: '10px', borderBottom: '1px solid #eee'}}>
+                <button
+                  className="btn-secondary"
+                  style={{fontSize: '0.8rem', padding: '4px 12px'}}
+                  onClick={() => {
+                    const all = {};
+                    selectedRun.items.forEach(item => { all[item.employee_id] = true; });
+                    setExclusionSelections(all);
+                  }}
+                >
+                  Select All
+                </button>
+                <button
+                  className="btn-secondary"
+                  style={{fontSize: '0.8rem', padding: '4px 12px'}}
+                  onClick={() => {
+                    const none = {};
+                    selectedRun.items.forEach(item => { none[item.employee_id] = false; });
+                    setExclusionSelections(none);
+                  }}
+                >
+                  Deselect All
+                </button>
+                <span style={{marginLeft: 'auto', fontSize: '0.85rem', color: '#666', alignSelf: 'center'}}>
+                  {Object.values(exclusionSelections).filter(Boolean).length} / {selectedRun.items.length} selected
+                </span>
+              </div>
+              <div className="modal-scroll-content" style={{maxHeight: '400px', overflowY: 'auto', padding: '10px 20px'}}>
+                <table className="data-table" style={{width: '100%'}}>
+                  <thead>
+                    <tr>
+                      <th style={{width: '40px', textAlign: 'center'}}>Include</th>
+                      <th>Employee</th>
+                      <th style={{textAlign: 'right'}}>
+                        {showExclusionModal === 'epf' ? 'EPF (Employee)' : 'SOCSO (Employee)'}
+                      </th>
+                      <th style={{textAlign: 'right'}}>
+                        {showExclusionModal === 'epf' ? 'EPF (Employer)' : 'SOCSO (Employer)'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedRun.items
+                      .slice()
+                      .sort((a, b) => (a.employee_name || '').localeCompare(b.employee_name || ''))
+                      .map(item => (
+                      <tr key={item.employee_id} style={{opacity: exclusionSelections[item.employee_id] ? 1 : 0.5}}>
+                        <td style={{textAlign: 'center'}}>
+                          <input
+                            type="checkbox"
+                            checked={!!exclusionSelections[item.employee_id]}
+                            onChange={(e) => setExclusionSelections(prev => ({
+                              ...prev,
+                              [item.employee_id]: e.target.checked
+                            }))}
+                          />
+                        </td>
+                        <td>{item.employee_name}</td>
+                        <td style={{textAlign: 'right'}}>
+                          {showExclusionModal === 'epf'
+                            ? `RM ${parseFloat(item.epf_employee || 0).toFixed(2)}`
+                            : `RM ${parseFloat(item.socso_employee || 0).toFixed(2)}`}
+                        </td>
+                        <td style={{textAlign: 'right'}}>
+                          {showExclusionModal === 'epf'
+                            ? `RM ${parseFloat(item.epf_employer || 0).toFixed(2)}`
+                            : `RM ${parseFloat(item.socso_employer || 0).toFixed(2)}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowExclusionModal(null)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="button" onClick={handleExclusionDownload} className="btn-primary">
+                  Download {showExclusionModal === 'epf' ? 'KWSP' : 'PERKESO'} File
                 </button>
               </div>
             </div>

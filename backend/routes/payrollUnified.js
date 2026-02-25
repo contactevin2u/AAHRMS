@@ -1678,6 +1678,8 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
              e.work_type,
              e.employment_type,
              e.hourly_rate,
+             e.include_in_epf,
+             e.include_in_perkeso,
              d.name as department_name,
              eo.name as outlet_name,
              -- Days worked: for outlet-based (Mimix), only count days WITH schedule
@@ -4272,6 +4274,10 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'EPF employer code not configured for this outlet/company' });
     }
 
+    // Parse excluded employee IDs from query param
+    const excludeParam = req.query.exclude;
+    const excludeIds = excludeParam ? excludeParam.split(',').map(Number).filter(n => !isNaN(n)) : [];
+
     // Get payroll items with employee details
     const itemsResult = await pool.query(`
       SELECT pi.*, e.name as employee_name, e.ic_number, e.epf_number,
@@ -4282,7 +4288,12 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
       ORDER BY e.name
     `, [id]);
 
-    if (itemsResult.rows.length === 0) {
+    // Filter out excluded employees
+    const filteredItems = excludeIds.length > 0
+      ? itemsResult.rows.filter(item => !excludeIds.includes(item.employee_id))
+      : itemsResult.rows;
+
+    if (filteredItems.length === 0) {
       return res.status(400).json({ error: 'No employees found in this payroll run' });
     }
 
@@ -4306,7 +4317,7 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
     let totalEr = 0, totalEe = 0, sumMemberNos = 0;
     const empLines = [];
 
-    for (const item of itemsResult.rows) {
+    for (const item of filteredItems) {
       const ic = (item.ic_number || '').replace(/-/g, '').trim();
       const name = (item.employee_name || '').toUpperCase().trim();
       const memberNo = parseInt(item.epf_number) || 0;
@@ -4435,6 +4446,10 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'SOCSO employer code not configured for this outlet/company' });
     }
 
+    // Parse excluded employee IDs from query param
+    const excludeParam = req.query.exclude;
+    const excludeIds = excludeParam ? excludeParam.split(',').map(Number).filter(n => !isNaN(n)) : [];
+
     // Get payroll items with employee details
     const itemsResult = await pool.query(`
       SELECT pi.*, e.name as employee_name, e.ic_number
@@ -4444,7 +4459,12 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
       ORDER BY e.name
     `, [id]);
 
-    if (itemsResult.rows.length === 0) {
+    // Filter out excluded employees
+    const filteredItems = excludeIds.length > 0
+      ? itemsResult.rows.filter(item => !excludeIds.includes(item.employee_id))
+      : itemsResult.rows;
+
+    if (filteredItems.length === 0) {
       return res.status(400).json({ error: 'No employees found in this payroll run' });
     }
 
@@ -4465,7 +4485,7 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
     const monthStr = String(run.month).padStart(2, '0') + String(run.year);
     const lines = [];
 
-    for (const item of itemsResult.rows) {
+    for (const item of filteredItems) {
       const ic = (item.ic_number || '').replace(/-/g, '').trim();
       const name = (item.employee_name || '').toUpperCase().trim();
 

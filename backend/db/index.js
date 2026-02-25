@@ -1639,6 +1639,14 @@ Human Resources Department
           UPDATE employees SET clock_in_required = TRUE WHERE company_id = 3;
           UPDATE employees SET clock_in_required = FALSE WHERE company_id = 1;
         END IF;
+        -- Include in EPF file: default TRUE (all employees included)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='include_in_epf') THEN
+          ALTER TABLE employees ADD COLUMN include_in_epf BOOLEAN DEFAULT TRUE;
+        END IF;
+        -- Include in PERKESO file: default TRUE (all employees included)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='include_in_perkeso') THEN
+          ALTER TABLE employees ADD COLUMN include_in_perkeso BOOLEAN DEFAULT TRUE;
+        END IF;
       END $$;
 
       -- =====================================================

@@ -1558,6 +1558,8 @@ function Employees() {
                     <th>SOCSO No</th>
                     <th>Tax No</th>
                     <th>Marital</th>
+                    <th>EPF</th>
+                    <th>PERKESO</th>
                     <th>Status</th>
                     <th className="sticky-col-right">Actions</th>
                   </tr>
@@ -1565,7 +1567,7 @@ function Employees() {
                 <tbody>
                   {employees.length === 0 ? (
                     <tr>
-                      <td colSpan="20" className="no-data">No employees found</td>
+                      <td colSpan="22" className="no-data">No employees found</td>
                     </tr>
                   ) : (
                     employees.map(emp => (
@@ -1612,6 +1614,22 @@ function Employees() {
                         <td>{emp.socso_number || '-'}</td>
                         <td>{emp.tax_number || '-'}</td>
                         <td>{emp.marital_status || '-'}</td>
+                        <td className="checkbox-col">
+                          <input
+                            type="checkbox"
+                            checked={emp.include_in_epf !== false}
+                            onChange={(e) => handleInlineUpdate(emp.id, 'include_in_epf', e.target.checked)}
+                            disabled={updatingCell === `${emp.id}-include_in_epf`}
+                          />
+                        </td>
+                        <td className="checkbox-col">
+                          <input
+                            type="checkbox"
+                            checked={emp.include_in_perkeso !== false}
+                            onChange={(e) => handleInlineUpdate(emp.id, 'include_in_perkeso', e.target.checked)}
+                            disabled={updatingCell === `${emp.id}-include_in_perkeso`}
+                          />
+                        </td>
                         <td>
                           <span className={`status-badge ${emp.status}`}>
                             {emp.status}
