@@ -195,26 +195,18 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   // Get the base64 data for AI processing
   const receiptData = receipt_base64 || receipt_url;
 
-  // Run AI verification if not already done on frontend
-  // NOTE: AI verification is only enabled for AA Alive (company_id = 1)
-  // For drivers: only check duplicate (hash), skip full AI amount verification
+  // Run AI verification for all AA Alive claims (company_id = 1)
+  // For drivers: AI extracts amount from receipt (driver doesn't enter amount)
+  // For non-drivers: AI verifies amount matches receipt
   let verification = ai_verification;
-  if (isDriver && receiptData && receiptData.startsWith('data:')) {
-    // Drivers: duplicate detection only (no amount verification)
-    const receiptHash = generateReceiptHash(receiptData);
-    const dupCheck = await checkDuplicateReceipt(receiptHash, companyId);
-    if (dupCheck.isDuplicate) {
-      return res.status(400).json({
-        error: 'Claim rejected',
-        reason: `Duplicate receipt detected. This receipt was already submitted by ${dupCheck.originalClaim.employeeName} on claim #${dupCheck.originalClaim.id}.`,
-        duplicateInfo: dupCheck.originalClaim,
-        autoRejected: true
-      });
+  if (companyId === 1 && !verification && receiptData && receiptData.startsWith('data:')) {
+    if (isDriver) {
+      // Drivers: run AI to extract amount from receipt, use 0 as comparison amount
+      // AI will extract the real amount which we'll use as claim amount
+      verification = await verifyReceipt(receiptData, 0, companyId);
+    } else if (amount) {
+      verification = await verifyReceipt(receiptData, parseFloat(amount), companyId);
     }
-    // Store the hash for future duplicate checks
-    verification = { receiptHash };
-  } else if (!isDriver && companyId === 1 && !verification && receiptData && receiptData.startsWith('data:') && amount) {
-    verification = await verifyReceipt(receiptData, parseFloat(amount), companyId);
   }
 
   // Check if this is a duplicate - auto reject (non-driver full AI check)
@@ -254,16 +246,26 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   }
 
   // If not already auto-approved by meal allowance, check AI verification (AA Alive only)
-  if (!autoApproved && companyId === 1 && verification && verification.canAutoApprove && !amount_mismatch_ignored) {
-    claimStatus = 'approved';
-    autoApproved = true;
-    approvedAt = new Date();
-    autoApprovalReason = 'AI verification passed';
+  if (!autoApproved && companyId === 1 && verification) {
+    if (isDriver && verification.aiData?.amount) {
+      // Drivers: AI extracted amount from receipt - auto-approve with AI amount
+      claimStatus = 'approved';
+      autoApproved = true;
+      approvedAt = new Date();
+      autoApprovalReason = `AI extracted: RM${verification.aiData.amount.toFixed(2)} from ${verification.aiData.merchant || 'receipt'}`;
+    } else if (!isDriver && verification.canAutoApprove && !amount_mismatch_ignored) {
+      claimStatus = 'approved';
+      autoApproved = true;
+      approvedAt = new Date();
+      autoApprovalReason = 'AI verification passed';
+    }
   }
 
-  // For drivers: default claim_date to today, amount to 0 if not provided
+  // For drivers: use AI-extracted amount if available, default claim_date to today
   const finalClaimDate = claim_date || new Date().toISOString().split('T')[0];
-  const finalAmount = amount || (isDriver ? 0 : 0);
+  const finalAmount = isDriver
+    ? (verification?.aiData?.amount || parseFloat(amount) || 0)
+    : (parseFloat(amount) || 0);
 
   // Insert claim with AI data
   const result = await pool.query(
