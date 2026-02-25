@@ -434,17 +434,48 @@ function ESSClaims({ embedded = false }) {
                   </>
                 )}
 
-                {/* Receipt - always shown */}
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{isAAAliveDriver ? 'Photo / Receipt' : t('claims.receipt')} *</label>
-                  <input type="file" accept="image/*,.pdf,application/pdf" capture="environment" onChange={handleReceiptChange} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{isAAAliveDriver ? 'Take a photo or upload receipt image' : t('claims.receiptHint')}</div>
-                </div>
-
-                {/* Receipt preview for drivers */}
-                {isAAAliveDriver && submitForm.receipt && (
-                  <div style={{ marginBottom: '16px', textAlign: 'center' }}>
-                    <img src={submitForm.receipt} alt="Receipt preview" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                {/* Receipt - driver version with camera + upload buttons */}
+                {isAAAliveDriver ? (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '10px' }}>Photo / Receipt *</label>
+                    {/* Hidden file inputs */}
+                    <input type="file" accept="image/*" capture="environment" onChange={handleReceiptChange} ref={el => { if (el) el.id = 'driver-camera-input'; }} style={{ display: 'none' }} />
+                    <input type="file" accept="image/*,.pdf,application/pdf" onChange={handleReceiptChange} ref={el => { if (el) el.id = 'driver-upload-input'; }} style={{ display: 'none' }} />
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('driver-camera-input')?.click()}
+                        style={{ flex: 1, padding: '14px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                      >
+                        <span style={{ fontSize: '20px' }}>📷</span> Take Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('driver-upload-input')?.click()}
+                        style={{ flex: 1, padding: '14px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                      >
+                        <span style={{ fontSize: '20px' }}>📁</span> Upload
+                      </button>
+                    </div>
+                    {/* Preview */}
+                    {submitForm.receipt ? (
+                      <div style={{ textAlign: 'center', position: 'relative' }}>
+                        <img src={submitForm.receipt} alt="Receipt preview" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                        <button
+                          type="button"
+                          onClick={() => setSubmitForm({...submitForm, receipt: null})}
+                          style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: '28px', height: '28px', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >&times;</button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>No photo selected</div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.receipt')} *</label>
+                    <input type="file" accept="image/*,.pdf,application/pdf" onChange={handleReceiptChange} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{t('claims.receiptHint')}</div>
                   </div>
                 )}
 
