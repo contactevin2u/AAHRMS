@@ -136,18 +136,37 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     ai_verification
   } = req.body;
 
-  if (!claim_date || !category || !amount) {
-    throw new ValidationError('Claim date, category, and amount are required');
+  // Check if employee is an AA Alive driver (simplified submission)
+  const driverCheck = await pool.query(`
+    SELECT e.id, d.name as dept_name
+    FROM employees e
+    LEFT JOIN departments d ON e.department_id = d.id
+    WHERE e.id = $1 AND e.company_id = 1
+  `, [req.employee.id]);
+  const isDriver = driverCheck.rows[0] && driverCheck.rows[0].dept_name?.toLowerCase() === 'driver';
+
+  if (isDriver) {
+    // Drivers only need category + receipt photo
+    if (!category) {
+      throw new ValidationError('Category is required');
+    }
+    if (!receipt_base64 && !receipt_url) {
+      throw new ValidationError('Receipt photo is required');
+    }
+  } else {
+    // Non-drivers need full form
+    if (!claim_date || !category || !amount) {
+      throw new ValidationError('Claim date, category, and amount are required');
+    }
+    if (!receipt_base64 && !receipt_url) {
+      throw new ValidationError('Receipt is required');
+    }
   }
 
-  if (!receipt_base64 && !receipt_url) {
-    throw new ValidationError('Receipt is required');
-  }
-
-  // Auto-reject toll claims - toll is not claimable
+  // Auto-reject toll claims - NOT for drivers (drivers can claim toll)
   const descLower = (description || '').toLowerCase();
   const categoryLower = (category || '').toLowerCase();
-  if (categoryLower.includes('toll') || descLower.includes('toll')) {
+  if (!isDriver && (categoryLower.includes('toll') || descLower.includes('toll'))) {
     return res.status(400).json({
       error: 'Claim rejected',
       reason: 'Toll expenses are not claimable. Please contact HR if you have questions.',
@@ -163,7 +182,7 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   const companyId = empResult.rows[0]?.company_id || 0;
 
   // ESS restriction: reject claims with expense_date after last working day
-  if (empResult.rows[0]?.last_working_day && ['notice', 'resigned_pending'].includes(empResult.rows[0]?.employment_status)) {
+  if (claim_date && empResult.rows[0]?.last_working_day && ['notice', 'resigned_pending'].includes(empResult.rows[0]?.employment_status)) {
     const lwdDate = new Date(empResult.rows[0].last_working_day);
     lwdDate.setHours(0, 0, 0, 0);
     const expenseDate = new Date(claim_date);
@@ -178,8 +197,9 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
 
   // Run AI verification if not already done on frontend
   // NOTE: AI verification is only enabled for AA Alive (company_id = 1)
+  // Skip AI verification for drivers (they submit without amount)
   let verification = ai_verification;
-  if (companyId === 1 && !verification && receiptData && receiptData.startsWith('data:')) {
+  if (!isDriver && companyId === 1 && !verification && receiptData && receiptData.startsWith('data:') && amount) {
     verification = await verifyReceipt(receiptData, parseFloat(amount), companyId);
   }
 
@@ -227,6 +247,10 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     autoApprovalReason = 'AI verification passed';
   }
 
+  // For drivers: default claim_date to today, amount to 0 if not provided
+  const finalClaimDate = claim_date || new Date().toISOString().split('T')[0];
+  const finalAmount = amount || (isDriver ? 0 : 0);
+
   // Insert claim with AI data
   const result = await pool.query(
     `INSERT INTO claims (
@@ -238,10 +262,10 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
      RETURNING *`,
     [
       req.employee.id,
-      claim_date,
+      finalClaimDate,
       category,
       description,
-      amount,
+      finalAmount,
       finalReceiptUrl,
       claimStatus,
       verification?.receiptHash || null,

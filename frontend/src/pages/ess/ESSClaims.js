@@ -26,7 +26,14 @@ function ESSClaims({ embedded = false }) {
   const [verification, setVerification] = useState(null);
   const [showMismatchWarning, setShowMismatchWarning] = useState(false);
 
-  const claimTypes = ['Transport', 'Meal', 'Parking', 'Medical', 'Phone', 'Other'];
+  // Check if employee is an AA Alive driver
+  const isDriver = employeeInfo?.department?.toLowerCase() === 'driver' ||
+                   employeeInfo?.department_name?.toLowerCase() === 'driver';
+  const isAAAlive = parseInt(employeeInfo?.company_id) === 1;
+  const isAAAliveDriver = isDriver && isAAAlive;
+
+  const driverClaimTypes = ['Toll (TNG)', 'Petrol', 'Hotel', 'Lorry Service', 'Others'];
+  const claimTypes = isAAAliveDriver ? driverClaimTypes : ['Transport', 'Meal', 'Parking', 'Medical', 'Phone', 'Other'];
 
   useEffect(() => {
     fetchClaims();
@@ -97,33 +104,53 @@ function ESSClaims({ embedded = false }) {
       return;
     }
 
-    // Run verification if not done yet
-    let verificationResult = verification;
-    if (!verificationResult) {
-      verificationResult = await verifyReceipt();
-    }
+    // For drivers: only need category + receipt
+    let verificationResult = null;
+    if (isAAAliveDriver) {
+      if (!submitForm.category) {
+        alert('Please select a category');
+        return;
+      }
+      // Skip AI verification for drivers, go straight to submit
+    } else {
+      // Run verification if not done yet (non-drivers)
+      verificationResult = verification;
+      if (!verificationResult) {
+        verificationResult = await verifyReceipt();
+      }
 
-    // If duplicate detected, don't submit
-    if (verificationResult?.isRejected) {
-      return;
-    }
+      // If duplicate detected, don't submit
+      if (verificationResult?.isRejected) {
+        return;
+      }
 
-    // If amount mismatch and user hasn't acknowledged
-    if (verificationResult && !verificationResult.amountMatch && verificationResult.aiData?.amount !== null && !showMismatchWarning) {
-      setShowMismatchWarning(true);
-      return;
+      // If amount mismatch and user hasn't acknowledged
+      if (verificationResult && !verificationResult.amountMatch && verificationResult.aiData?.amount !== null && !showMismatchWarning) {
+        setShowMismatchWarning(true);
+        return;
+      }
     }
 
     setSubmitting(true);
     try {
-      const response = await essApi.submitClaim({
+      const claimData = {
         category: submitForm.category,
-        amount: parseFloat(submitForm.amount),
-        claim_date: submitForm.claim_date,
-        description: submitForm.description,
         receipt_base64: submitForm.receipt,
-        amount_mismatch_ignored: showMismatchWarning && !verificationResult?.amountMatch
-      });
+      };
+
+      if (isAAAliveDriver) {
+        // Drivers: only category + receipt, no amount/date/description needed
+        claimData.amount = 0;
+        claimData.claim_date = new Date().toISOString().split('T')[0];
+        claimData.description = '';
+      } else {
+        claimData.amount = parseFloat(submitForm.amount);
+        claimData.claim_date = submitForm.claim_date;
+        claimData.description = submitForm.description;
+        claimData.amount_mismatch_ignored = showMismatchWarning && !verificationResult?.amountMatch;
+      }
+
+      const response = await essApi.submitClaim(claimData);
 
       setShowSubmitModal(false);
       setSubmitForm({ category: '', amount: '', claim_date: '', description: '', receipt: null });
@@ -362,33 +389,49 @@ function ESSClaims({ embedded = false }) {
                 <button onClick={() => { setShowSubmitModal(false); setVerification(null); setShowMismatchWarning(false); }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#64748b' }}>&times;</button>
               </div>
               <form onSubmit={handleSubmit} style={{ padding: '20px' }}>
+                {/* Category - always shown */}
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.claimType')} *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{isAAAliveDriver ? 'Category' : t('claims.claimType')} *</label>
                   <select value={submitForm.category} onChange={e => setSubmitForm({...submitForm, category: e.target.value})} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px' }}>
-                    <option value="">{t('claims.selectType')}</option>
+                    <option value="">{isAAAliveDriver ? 'Select category' : t('claims.selectType')}</option>
                     {claimTypes.map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </div>
+
+                {/* Amount, Date, Description - only for non-drivers */}
+                {!isAAAliveDriver && (
+                  <>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.amount')} (RM) *</label>
+                      <input type="number" step="0.01" value={submitForm.amount} onChange={handleAmountChange} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} placeholder="0.00" />
+                    </div>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.claimDate')} *</label>
+                      <input type="date" value={submitForm.claim_date} onChange={e => setSubmitForm({...submitForm, claim_date: e.target.value})} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
+                    </div>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.description')} *</label>
+                      <textarea value={submitForm.description} onChange={e => setSubmitForm({...submitForm, description: e.target.value})} required rows={3} style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} placeholder={t('claims.descriptionPlaceholder')} />
+                    </div>
+                  </>
+                )}
+
+                {/* Receipt - always shown */}
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.amount')} (RM) *</label>
-                  <input type="number" step="0.01" value={submitForm.amount} onChange={handleAmountChange} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} placeholder="0.00" />
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.claimDate')} *</label>
-                  <input type="date" value={submitForm.claim_date} onChange={e => setSubmitForm({...submitForm, claim_date: e.target.value})} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.description')} *</label>
-                  <textarea value={submitForm.description} onChange={e => setSubmitForm({...submitForm, description: e.target.value})} required rows={3} style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} placeholder={t('claims.descriptionPlaceholder')} />
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{t('claims.receipt')} *</label>
-                  <input type="file" accept="image/*,.pdf,application/pdf" onChange={handleReceiptChange} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{t('claims.receiptHint')}</div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>{isAAAliveDriver ? 'Photo / Receipt' : t('claims.receipt')} *</label>
+                  <input type="file" accept="image/*,.pdf,application/pdf" capture="environment" onChange={handleReceiptChange} required style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} />
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{isAAAliveDriver ? 'Take a photo or upload receipt image' : t('claims.receiptHint')}</div>
                 </div>
 
-                {/* Verify Receipt Button */}
-                {submitForm.receipt && submitForm.amount && !verification && (
+                {/* Receipt preview for drivers */}
+                {isAAAliveDriver && submitForm.receipt && (
+                  <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+                    <img src={submitForm.receipt} alt="Receipt preview" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                  </div>
+                )}
+
+                {/* Verify Receipt Button - not for drivers */}
+                {!isAAAliveDriver && submitForm.receipt && submitForm.amount && !verification && (
                   <button
                     type="button"
                     onClick={verifyReceipt}
@@ -399,8 +442,8 @@ function ESSClaims({ embedded = false }) {
                   </button>
                 )}
 
-                {/* Verification Result */}
-                {verification && (
+                {/* Verification Result - not for drivers */}
+                {!isAAAliveDriver && verification && (
                   <div style={{ marginBottom: '16px', padding: '12px', borderRadius: '8px', background: verification.isRejected ? '#fef2f2' : verification.canAutoApprove ? '#f0fdf4' : '#fffbeb', border: `1px solid ${verification.isRejected ? '#fecaca' : verification.canAutoApprove ? '#bbf7d0' : '#fde68a'}` }}>
                     {verification.isRejected ? (
                       <div style={{ color: '#dc2626', fontSize: '14px' }}>
@@ -431,8 +474,8 @@ function ESSClaims({ embedded = false }) {
                   </div>
                 )}
 
-                {/* Amount Mismatch Warning */}
-                {showMismatchWarning && verification && !verification.amountMatch && verification.aiData?.amount !== null && (
+                {/* Amount Mismatch Warning - not for drivers */}
+                {!isAAAliveDriver && showMismatchWarning && verification && !verification.amountMatch && verification.aiData?.amount !== null && (
                   <div style={{ marginBottom: '16px', padding: '12px', borderRadius: '8px', background: '#fef3c7', border: '1px solid #fcd34d' }}>
                     <div style={{ color: '#92400e', fontSize: '14px', marginBottom: '8px' }}>
                       <strong>Amount Mismatch!</strong>
