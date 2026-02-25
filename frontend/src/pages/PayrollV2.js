@@ -57,6 +57,9 @@ function PayrollV2() {
     notes: ''
   });
 
+  // Sidebar grouped collapse state - default all collapsed, expand on click
+  const [expandedMonth, setExpandedMonth] = useState(null);
+
   // Statutory preview state
   const [statutoryPreview, setStatutoryPreview] = useState(null);
   const [loadingStatutory, setLoadingStatutory] = useState(false);
@@ -651,24 +654,64 @@ Please adjust the changes based on this feedback.`;
               <div className="no-data">No payroll runs yet</div>
             ) : (
               <div className="runs-list">
-                {runs.map(run => (
-                  <div
-                    key={run.id}
-                    className={`run-card ${selectedRun?.id === run.id ? 'selected' : ''}`}
-                    onClick={() => fetchRunDetails(run.id)}
-                  >
-                    <div className="run-period">
-                      {getMonthName(run.month)} {run.year}
-                      {run.department_name && (
-                        <span className="run-dept"> - {run.department_name}</span>
-                      )}
-                    </div>
-                    <div className="run-meta">
-                      {getStatusBadge(run.status)}
-                      <span className="run-total">{formatAmount(run.total_net)}</span>
-                    </div>
-                  </div>
-                ))}
+                {(() => {
+                  // Group runs by month-year
+                  const grouped = {};
+                  runs.forEach(run => {
+                    const key = `${run.year}-${String(run.month).padStart(2, '0')}`;
+                    if (!grouped[key]) {
+                      grouped[key] = { month: run.month, year: run.year, runs: [] };
+                    }
+                    grouped[key].runs.push(run);
+                  });
+                  const sortedKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+                  // Auto-expand the month that contains selectedRun
+                  const activeKey = expandedMonth || (selectedRun
+                    ? `${selectedRun.year}-${String(selectedRun.month).padStart(2, '0')}`
+                    : sortedKeys[0]);
+
+                  return sortedKeys.map(key => {
+                    const group = grouped[key];
+                    const isOpen = key === activeKey;
+                    const allFinalized = group.runs.every(r => r.status === 'finalized');
+                    const hasDraft = group.runs.some(r => r.status === 'draft');
+
+                    return (
+                      <div key={key} className={`month-group ${isOpen ? 'open' : ''}`}>
+                        <div
+                          className="month-header"
+                          onClick={() => setExpandedMonth(isOpen ? null : key)}
+                        >
+                          <span className={`month-chevron ${!isOpen ? 'collapsed' : ''}`}>▾</span>
+                          <span className="month-label">
+                            {getMonthName(group.month).substring(0, 3)} {group.year}
+                          </span>
+                          <span className={`month-status ${allFinalized ? 'done' : hasDraft ? 'has-draft' : ''}`}>
+                            {allFinalized ? '✓' : group.runs.length}
+                          </span>
+                        </div>
+                        {isOpen && (
+                          <div className="month-runs">
+                            {group.runs.map(run => (
+                              <div
+                                key={run.id}
+                                className={`run-card ${selectedRun?.id === run.id ? 'selected' : ''}`}
+                                onClick={() => fetchRunDetails(run.id)}
+                              >
+                                <div className="run-row">
+                                  <span className="run-dept-name">{run.department_name || 'All'}</span>
+                                  {getStatusBadge(run.status)}
+                                </div>
+                                <div className="run-amount">{formatAmount(run.total_net)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
