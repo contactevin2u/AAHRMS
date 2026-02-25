@@ -26,14 +26,32 @@ function ESSClaims({ embedded = false }) {
   const [verification, setVerification] = useState(null);
   const [showMismatchWarning, setShowMismatchWarning] = useState(false);
 
-  // Check if employee is an AA Alive driver
-  const isDriver = employeeInfo?.department?.toLowerCase() === 'driver' ||
-                   employeeInfo?.department_name?.toLowerCase() === 'driver';
-  const isAAAlive = parseInt(employeeInfo?.company_id) === 1;
+  // Check if employee is an AA Alive driver (use fresh info from state, fallback to localStorage)
+  const [freshEmployeeInfo, setFreshEmployeeInfo] = useState(employeeInfo);
+  const isDriver = freshEmployeeInfo?.department?.toLowerCase() === 'driver' ||
+                   freshEmployeeInfo?.department_name?.toLowerCase() === 'driver';
+  const isAAAlive = parseInt(freshEmployeeInfo?.company_id) === 1;
   const isAAAliveDriver = isDriver && isAAAlive;
 
   const driverClaimTypes = ['Toll (TNG)', 'Petrol', 'Hotel', 'Lorry Service', 'Others'];
   const claimTypes = isAAAliveDriver ? driverClaimTypes : ['Transport', 'Meal', 'Parking', 'Medical', 'Phone', 'Other'];
+
+  // Fetch fresh employee info to get department_name
+  useEffect(() => {
+    const fetchEmployeeInfo = async () => {
+      try {
+        const response = await essApi.me();
+        if (response.data?.employee) {
+          setFreshEmployeeInfo(response.data.employee);
+          // Update localStorage so it's fresh for next time
+          localStorage.setItem('employeeInfo', JSON.stringify(response.data.employee));
+        }
+      } catch (error) {
+        console.error('Error fetching employee info:', error);
+      }
+    };
+    fetchEmployeeInfo();
+  }, []);
 
   useEffect(() => {
     fetchClaims();
