@@ -443,6 +443,7 @@ function DriverClaimsDashboard() {
                     <th>Category</th>
                     <th>Description</th>
                     <th>Amount</th>
+                    {(activeTab === 'pending_signature' || activeTab === 'paid') && <th>Released By</th>}
                     {activeTab === 'paid' && <th>Paid Date</th>}
                     <th>Receipt</th>
                   </tr>
@@ -465,6 +466,9 @@ function DriverClaimsDashboard() {
                       <td><span className="dc-badge">{claim.category}</span></td>
                       <td>{claim.description || '-'}</td>
                       <td className="dc-amount">{formatRM(claim.amount)}</td>
+                      {(activeTab === 'pending_signature' || activeTab === 'paid') && (
+                        <td><span className="dc-released-by">{claim.paid_by_name || '-'}</span></td>
+                      )}
                       {activeTab === 'paid' && <td>{formatDate(claim.cash_paid_at)}</td>}
                       <td>
                         {claim.receipt_url && (
@@ -479,8 +483,9 @@ function DriverClaimsDashboard() {
                 <tfoot>
                   <tr>
                     {activeTab === 'approved' && <td></td>}
-                    <td colSpan={activeTab === 'paid' ? 4 : 3}><strong>Total</strong></td>
+                    <td colSpan={3}><strong>Total</strong></td>
                     <td className="dc-amount"><strong>{formatRM(driverClaims.reduce((s, c) => s + parseFloat(c.amount), 0))}</strong></td>
+                    {(activeTab === 'pending_signature' || activeTab === 'paid') && <td></td>}
                     {activeTab === 'paid' && <td></td>}
                     <td></td>
                   </tr>
