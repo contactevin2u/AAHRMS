@@ -229,24 +229,41 @@ function ESSLeave({ embedded = false }) {
               displayBalances.filter(balance => balance.is_paid !== false).map((balance, idx) => {
                 const entitled = parseFloat(balance.entitled_days || balance.entitled || balance.balance) || 0;
                 const used = parseFloat(balance.used_days || balance.used) || 0;
-                const available = parseFloat(balance.available) || (entitled - used);
+                const cf = parseFloat(balance.carried_forward) || 0;
+                const hasProration = balance.ytd_earned !== undefined && balance.ytd_earned !== null;
+                const ytdEarned = hasProration ? parseFloat(balance.ytd_earned) : entitled;
+                const advanceLeave = hasProration ? (parseFloat(balance.advance_leave) || 0) : 0;
+                const earnedBalance = hasProration ? parseFloat(balance.earned_balance) : (entitled + cf - used);
+                const isNegative = earnedBalance < 0;
+                const hasAdvance = advanceLeave > 0;
                 return (
                   <div key={idx} className="balance-card">
                     <div className="balance-type">{balance.leave_type_name || balance.leave_type || balance.name}</div>
-                    <div className="balance-info">
+                    <div className="balance-info balance-info-grid">
                       <div className="balance-item">
-                        <span className="label">{t('leave.entitled')}</span>
-                        <span className="value">{entitled}</span>
+                        <span className="label">{t('leave.earned')}</span>
+                        <span className="value">{ytdEarned}{cf > 0 ? ` +${cf}` : ''}</span>
                       </div>
+                      {hasAdvance && (
+                        <div className="balance-item advance">
+                          <span className="label">{t('leave.advanceLeave')}</span>
+                          <span className="value">{advanceLeave}</span>
+                        </div>
+                      )}
                       <div className="balance-item">
                         <span className="label">{t('leave.used')}</span>
                         <span className="value">{used}</span>
                       </div>
-                      <div className="balance-item highlight">
-                        <span className="label">{t('leave.available')}</span>
-                        <span className="value">{available}</span>
+                      <div className={`balance-item highlight ${isNegative ? 'negative' : ''}`}>
+                        <span className="label">{t('leave.balance')}</span>
+                        <span className="value">{earnedBalance}</span>
                       </div>
                     </div>
+                    {isNegative && (
+                      <div className="advance-warning">
+                        {t('leave.advanceWarning', { days: Math.abs(earnedBalance) })}
+                      </div>
+                    )}
                   </div>
                 );
               })

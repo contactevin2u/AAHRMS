@@ -25,7 +25,8 @@ const {
   getEntitlementByServiceYears,
   checkLeaveEligibility,
   initializeLeaveBalances,
-  initializeYearlyLeaveBalances
+  initializeYearlyLeaveBalances,
+  getCompanyLeaveSettings
 } = require('../../utils/leaveProration');
 const { revertAutoApprovedLeave, AA_ALIVE_COMPANY_ID } = require('../../jobs/autoApproveLeave');
 
@@ -108,6 +109,22 @@ router.get('/balance', authenticateEmployee, asyncHandler(async (req, res) => {
     [employeeId, currentYear]
   );
 
+  // Get company settings for rounding
+  const settings = await getCompanyLeaveSettings(employee.company_id);
+
+  // Calculate completed months for YTD earned
+  const now = new Date();
+  const joinDate = new Date(employee.join_date);
+  let completedMonths;
+  if (joinDate.getFullYear() === currentYear) {
+    // Mid-year joiner: count from join month to current month
+    completedMonths = now.getMonth() - joinDate.getMonth();
+    if (completedMonths < 0) completedMonths = 0;
+  } else {
+    // Full-year employee: completed months = current month index (Jan=0 means 0 completed, Feb=1 means 1 completed, etc.)
+    completedMonths = now.getMonth();
+  }
+
   // Calculate expected entitlement based on current service years
   const balances = result.rows.map(lb => {
     const baseEntitlement = getEntitlementByServiceYears(
@@ -115,16 +132,46 @@ router.get('/balance', authenticateEmployee, asyncHandler(async (req, res) => {
       yearsOfService
     );
 
+    const entitled = parseFloat(lb.entitled_days) || 0;
+    const used = parseFloat(lb.used_days) || 0;
+    const carriedForward = parseFloat(lb.carried_forward) || 0;
+
+    // Calculate YTD earned (prorated) with company rounding
+    let ytdEarnedRaw = entitled * completedMonths / 12;
+    let ytdEarned;
+    switch (settings.leave_proration_rounding) {
+      case 'up':
+        ytdEarned = Math.ceil(ytdEarnedRaw);
+        break;
+      case 'down':
+        ytdEarned = Math.floor(ytdEarnedRaw);
+        break;
+      case 'nearest':
+      default:
+        ytdEarned = Math.round(ytdEarnedRaw * 2) / 2;
+    }
+
+    // Advance leave = what hasn't been earned yet
+    const advanceLeave = entitled - ytdEarned;
+
+    // Earned balance = earned + carried_forward - used (can be negative)
+    const earnedBalance = ytdEarned + carriedForward - used;
+
     return {
       ...lb,
-      years_of_service: Math.floor(yearsOfService * 10) / 10, // 1 decimal
-      base_entitlement: baseEntitlement
+      years_of_service: Math.floor(yearsOfService * 10) / 10,
+      base_entitlement: baseEntitlement,
+      ytd_earned: ytdEarned,
+      advance_leave: advanceLeave,
+      earned_balance: earnedBalance,
+      completed_months: completedMonths
     };
   });
 
   res.json({
     year: currentYear,
     years_of_service: Math.floor(yearsOfService * 10) / 10,
+    completed_months: completedMonths,
     balances
   });
 }));

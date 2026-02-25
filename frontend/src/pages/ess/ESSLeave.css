@@ -151,8 +151,32 @@
   color: #1e293b;
 }
 
+.balance-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
 .balance-item.highlight .value {
   color: #059669;
+}
+
+.balance-item.highlight.negative .value {
+  color: #dc2626;
+}
+
+.balance-item.advance .value {
+  color: #d97706;
+}
+
+.advance-warning {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #fef3c7;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #92400e;
+  line-height: 1.4;
 }
 
 /* History Section */
