@@ -110,9 +110,9 @@
 
 .runs-panel h3 {
   margin: 0 0 12px 0;
-  color: #111;
+  color: #1e3a5f;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -127,31 +127,41 @@
 
 /* Month Group - Accordion */
 .month-group {
-  border-radius: 4px;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .month-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 7px 10px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   user-select: none;
-  background: #f5f5f5;
+  background: linear-gradient(135deg, #e8edf5, #f0f4fa);
+  border: 1px solid #d5dce8;
+  transition: all 0.15s;
 }
 
 .month-header:hover {
-  background: #eee;
+  background: linear-gradient(135deg, #dce3f0, #e8eef8);
+  border-color: #c0cade;
 }
 
 .month-group.open > .month-header {
-  background: #e8e8e8;
+  background: linear-gradient(135deg, #1e3a5f, #2a5298);
+  border-color: #1e3a5f;
+}
+
+.month-group.open > .month-header .month-chevron,
+.month-group.open > .month-header .month-label {
+  color: #fff;
 }
 
 .month-chevron {
   font-size: 0.6rem;
-  color: #999;
+  color: #6b7c9a;
   transition: transform 0.15s;
   display: inline-block;
 }
@@ -161,24 +171,24 @@
 }
 
 .month-label {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.78rem;
-  color: #333;
+  color: #2c3e5a;
   flex: 1;
 }
 
 .month-status {
   font-size: 0.6rem;
   font-weight: 700;
-  min-width: 16px;
-  height: 16px;
+  min-width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: #ddd;
-  color: #666;
-  padding: 0 5px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.85);
+  color: #555;
+  padding: 0 6px;
 }
 
 .month-status.done {
@@ -186,32 +196,42 @@
   color: #155724;
 }
 
+.month-group.open .month-status.done {
+  background: rgba(212, 237, 218, 0.9);
+}
+
 .month-status.has-draft {
   background: #fff3cd;
   color: #856404;
 }
 
+.month-group.open .month-status.has-draft {
+  background: rgba(255, 243, 205, 0.9);
+}
+
 .month-runs {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 3px 0 2px 0;
+  gap: 2px;
+  padding: 6px 0 4px 0;
 }
 
 .run-card {
-  padding: 5px 8px 5px 16px;
+  padding: 6px 8px 6px 14px;
   cursor: pointer;
-  border-left: 2px solid transparent;
-  border-radius: 0;
+  border-left: 3px solid #d5dce8;
+  border-radius: 0 4px 4px 0;
+  transition: all 0.12s;
 }
 
 .run-card:hover {
-  background: #f5f5f5;
+  background: #f0f4fa;
+  border-left-color: #7b9acc;
 }
 
 .run-card.selected {
-  background: #eef2ff;
-  border-left-color: #111;
+  background: linear-gradient(90deg, #eef3ff, #f8faff);
+  border-left-color: #2a5298;
 }
 
 .run-row {
@@ -222,7 +242,7 @@
 
 .run-dept-name {
   font-weight: 600;
-  color: #333;
+  color: #2c3e5a;
   font-size: 0.75rem;
   white-space: nowrap;
   overflow: hidden;
@@ -232,7 +252,7 @@
 
 .run-amount {
   font-size: 0.7rem;
-  color: #888;
+  color: #7b8da6;
   font-weight: 500;
 }
 
