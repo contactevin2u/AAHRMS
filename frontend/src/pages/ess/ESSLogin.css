@@ -417,11 +417,16 @@
   }
 }
 
-/* Help Button */
-.help-btn {
+/* Help & Refresh Buttons */
+.login-top-btns {
   position: absolute;
   top: 16px;
   right: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.help-btn, .refresh-btn {
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -436,9 +441,13 @@
   transition: all 0.2s;
 }
 
-.help-btn:hover {
+.help-btn:hover, .refresh-btn:hover {
   background: #e2e8f0;
   color: #1976d2;
+}
+
+.refresh-btn {
+  font-size: 22px;
 }
 
 .login-card {

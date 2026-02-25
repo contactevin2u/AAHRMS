@@ -282,10 +282,15 @@ function ESSLogin() {
       )}
 
       <div className="login-card">
-        {/* Help Button */}
-        <button className="help-btn" onClick={() => setShowHelp(true)} title={language === 'ms' ? 'Bantuan' : 'Help'}>
-          &#x2753;
-        </button>
+        {/* Help & Refresh Buttons */}
+        <div className="login-top-btns">
+          <button className="refresh-btn" onClick={() => { window.location.reload(true); }} title={language === 'ms' ? 'Muat semula' : 'Refresh'}>
+            &#x21BB;
+          </button>
+          <button className="help-btn" onClick={() => setShowHelp(true)} title={language === 'ms' ? 'Bantuan' : 'Help'}>
+            &#x2753;
+          </button>
+        </div>
 
         {/* Logo */}
         <div className="login-header">
