@@ -97,20 +97,22 @@ router.get('/summary', authenticateAdmin, async (req, res) => {
 
     const result = await pool.query(`
       SELECT
+        COUNT(*) FILTER (WHERE c.status = 'pending') as pending_approval,
+        COALESCE(SUM(c.amount) FILTER (WHERE c.status = 'pending'), 0) as pending_approval_amount,
         COUNT(*) FILTER (WHERE c.status = 'approved' AND c.cash_paid_at IS NULL) as pending_release,
         COALESCE(SUM(c.amount) FILTER (WHERE c.status = 'approved' AND c.cash_paid_at IS NULL), 0) as pending_amount,
         COUNT(*) FILTER (WHERE c.status = 'approved' AND c.cash_paid_at IS NOT NULL AND c.driver_signature IS NULL) as pending_signature,
         COALESCE(SUM(c.amount) FILTER (WHERE c.status = 'approved' AND c.cash_paid_at IS NOT NULL AND c.driver_signature IS NULL), 0) as signature_amount,
         COUNT(*) FILTER (WHERE c.status = 'paid') as paid_count,
         COALESCE(SUM(c.amount) FILTER (WHERE c.status = 'paid'), 0) as paid_amount,
-        COUNT(*) as total_claims,
-        COALESCE(SUM(c.amount), 0) as total_amount
+        COUNT(*) FILTER (WHERE c.status = 'rejected') as rejected_count,
+        COALESCE(SUM(c.amount) FILTER (WHERE c.status = 'rejected'), 0) as rejected_amount
       FROM claims c
       JOIN employees e ON c.employee_id = e.id
       JOIN departments d ON e.department_id = d.id
       WHERE e.company_id = 1
         AND LOWER(d.name) = 'driver'
-        AND c.status IN ('approved', 'paid')
+        AND c.status IN ('pending', 'approved', 'paid', 'rejected')
         ${dateFilter}
     `, params);
 
@@ -141,12 +143,16 @@ router.get('/by-driver', authenticateAdmin, async (req, res) => {
 
     // Default: show approved claims not yet paid
     let statusFilter = "AND c.status = 'approved' AND c.cash_paid_at IS NULL";
-    if (status === 'pending_signature') {
+    if (status === 'pending') {
+      statusFilter = "AND c.status = 'pending'";
+    } else if (status === 'pending_signature') {
       statusFilter = "AND c.status = 'approved' AND c.cash_paid_at IS NOT NULL AND c.driver_signature IS NULL";
     } else if (status === 'paid') {
       statusFilter = "AND c.status = 'paid'";
+    } else if (status === 'rejected') {
+      statusFilter = "AND c.status = 'rejected'";
     } else if (status === 'all') {
-      statusFilter = "AND c.status IN ('approved', 'paid')";
+      statusFilter = "AND c.status IN ('pending', 'approved', 'paid', 'rejected')";
     }
 
     const result = await pool.query(`
@@ -196,12 +202,16 @@ router.get('/driver/:employeeId', authenticateAdmin, async (req, res) => {
     }
 
     let statusFilter = "AND c.status IN ('approved', 'paid')";
-    if (status === 'approved') {
+    if (status === 'pending') {
+      statusFilter = "AND c.status = 'pending'";
+    } else if (status === 'approved') {
       statusFilter = "AND c.status = 'approved' AND c.cash_paid_at IS NULL";
     } else if (status === 'pending_signature') {
       statusFilter = "AND c.status = 'approved' AND c.cash_paid_at IS NOT NULL AND c.driver_signature IS NULL";
     } else if (status === 'paid') {
       statusFilter = "AND c.status = 'paid'";
+    } else if (status === 'rejected') {
+      statusFilter = "AND c.status = 'rejected'";
     }
 
     const result = await pool.query(`
@@ -232,6 +242,133 @@ router.get('/driver/:employeeId', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error fetching driver claims:', error);
     res.status(500).json({ error: 'Failed to fetch claims' });
+  }
+});
+
+// =====================================================
+// APPROVE / REJECT CLAIMS
+// =====================================================
+
+// Bulk approve claims
+router.post('/approve', authenticateAdmin, async (req, res) => {
+  try {
+    const { claim_ids } = req.body;
+
+    if (!claim_ids || !Array.isArray(claim_ids) || claim_ids.length === 0) {
+      return res.status(400).json({ error: 'Claim IDs are required' });
+    }
+
+    const result = await pool.query(`
+      UPDATE claims c
+      SET status = 'approved',
+          approver_id = $1,
+          approved_at = NOW(),
+          updated_at = NOW()
+      FROM employees e
+      JOIN departments d ON e.department_id = d.id
+      WHERE c.employee_id = e.id
+        AND e.company_id = 1
+        AND LOWER(d.name) = 'driver'
+        AND c.id = ANY($2)
+        AND c.status = 'pending'
+      RETURNING c.id, c.amount
+    `, [req.admin.id, claim_ids]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'No eligible pending claims found' });
+    }
+
+    const totalAmount = result.rows.reduce((sum, r) => sum + parseFloat(r.amount), 0);
+
+    res.json({
+      message: `${result.rows.length} claims approved`,
+      approved_count: result.rows.length,
+      total_amount: totalAmount,
+      approved_ids: result.rows.map(r => r.id)
+    });
+  } catch (error) {
+    console.error('Error approving claims:', error);
+    res.status(500).json({ error: 'Failed to approve claims' });
+  }
+});
+
+// Reject a single claim
+router.post('/reject/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason) {
+      return res.status(400).json({ error: 'Rejection reason is required' });
+    }
+
+    const result = await pool.query(`
+      UPDATE claims c
+      SET status = 'rejected',
+          approver_id = $1,
+          rejection_reason = $2,
+          updated_at = NOW()
+      FROM employees e
+      JOIN departments d ON e.department_id = d.id
+      WHERE c.employee_id = e.id
+        AND e.company_id = 1
+        AND LOWER(d.name) = 'driver'
+        AND c.id = $3
+        AND c.status = 'pending'
+      RETURNING c.id
+    `, [req.admin.id, reason, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Claim not found or not pending' });
+    }
+
+    res.json({ message: 'Claim rejected', id: result.rows[0].id });
+  } catch (error) {
+    console.error('Error rejecting claim:', error);
+    res.status(500).json({ error: 'Failed to reject claim' });
+  }
+});
+
+// Bulk reject claims
+router.post('/bulk-reject', authenticateAdmin, async (req, res) => {
+  try {
+    const { claim_ids, reason } = req.body;
+
+    if (!claim_ids || !Array.isArray(claim_ids) || claim_ids.length === 0) {
+      return res.status(400).json({ error: 'Claim IDs are required' });
+    }
+    if (!reason) {
+      return res.status(400).json({ error: 'Rejection reason is required' });
+    }
+
+    const result = await pool.query(`
+      UPDATE claims c
+      SET status = 'rejected',
+          approver_id = $1,
+          rejection_reason = $2,
+          updated_at = NOW()
+      FROM employees e
+      JOIN departments d ON e.department_id = d.id
+      WHERE c.employee_id = e.id
+        AND e.company_id = 1
+        AND LOWER(d.name) = 'driver'
+        AND c.id = ANY($3)
+        AND c.status = 'pending'
+      RETURNING c.id
+    `, [req.admin.id, reason, claim_ids]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'No eligible pending claims found' });
+    }
+
+    res.json({
+      message: `${result.rows.length} claims rejected`,
+      rejected_count: result.rows.length,
+      rejected_ids: result.rows.map(r => r.id)
+    });
+  } catch (error) {
+    console.error('Error bulk rejecting claims:', error);
+    res.status(500).json({ error: 'Failed to reject claims' });
   }
 });
 
