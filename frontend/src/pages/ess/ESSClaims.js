@@ -21,6 +21,10 @@ function ESSClaims({ embedded = false }) {
     receipt: null
   });
 
+  // Edit amount state for drivers
+  const [editingClaimId, setEditingClaimId] = useState(null);
+  const [editAmount, setEditAmount] = useState('');
+
   // AI Verification states
   const [verifying, setVerifying] = useState(false);
   const [verification, setVerification] = useState(null);
@@ -69,6 +73,22 @@ function ESSClaims({ embedded = false }) {
       setClaims([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Save edited amount for driver claims
+  const handleSaveClaimAmount = async (claimId) => {
+    const amt = parseFloat(editAmount);
+    if (isNaN(amt) || amt < 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    try {
+      await essApi.updateClaimAmount(claimId, amt);
+      setClaims(prev => prev.map(c => c.id === claimId ? { ...c, amount: amt } : c));
+      setEditingClaimId(null);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to update amount');
     }
   };
 
@@ -397,7 +417,42 @@ function ESSClaims({ embedded = false }) {
                   <span style={{ fontWeight: '600', color: '#1e293b' }}>{claim.category}</span>
                   {getStatusBadge(claim.status, claim.auto_approved, claim)}
                 </div>
-                <div style={{ fontSize: '20px', fontWeight: '700', color: '#1976d2', marginBottom: '8px' }}>{formatCurrency(claim.amount)}</div>
+                {/* Amount - editable for drivers on pending/approved claims */}
+                {isAAAliveDriver && (claim.status === 'pending' || claim.status === 'approved') && editingClaimId === claim.id ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '16px', fontWeight: '600', color: '#64748b' }}>RM</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editAmount}
+                      onChange={e => setEditAmount(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleSaveClaimAmount(claim.id);
+                        if (e.key === 'Escape') setEditingClaimId(null);
+                      }}
+                      autoFocus
+                      style={{ width: '120px', padding: '8px 10px', border: '2px solid #2563eb', borderRadius: '8px', fontSize: '18px', fontWeight: '700', color: '#1976d2', outline: 'none' }}
+                    />
+                    <button onClick={() => handleSaveClaimAmount(claim.id)} style={{ padding: '8px 14px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Save</button>
+                    <button onClick={() => setEditingClaimId(null)} style={{ padding: '8px 14px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                  </div>
+                ) : (
+                  <div
+                    style={{ fontSize: '20px', fontWeight: '700', color: '#1976d2', marginBottom: '8px', cursor: isAAAliveDriver && (claim.status === 'pending' || claim.status === 'approved') ? 'pointer' : 'default' }}
+                    onClick={() => {
+                      if (isAAAliveDriver && (claim.status === 'pending' || claim.status === 'approved')) {
+                        setEditingClaimId(claim.id);
+                        setEditAmount(parseFloat(claim.amount).toFixed(2));
+                      }
+                    }}
+                  >
+                    {formatCurrency(claim.amount)}
+                    {isAAAliveDriver && (claim.status === 'pending' || claim.status === 'approved') && (
+                      <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '400', marginLeft: '8px' }}>tap to edit</span>
+                    )}
+                  </div>
+                )}
                 <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>{formatDate(claim.claim_date)}{claim.description ? ` - ${claim.description}` : ''}</div>
                 {isAAAliveDriver && claim.receipt_url && (
                   <div style={{ marginTop: '8px', marginBottom: '4px' }}>
@@ -433,6 +488,15 @@ function ESSClaims({ embedded = false }) {
                     {claimTypes.map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </div>
+
+                {/* Amount for drivers (optional - AI will extract if not entered) */}
+                {isAAAliveDriver && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '6px' }}>Amount (RM)</label>
+                    <input type="number" step="0.01" value={submitForm.amount} onChange={e => setSubmitForm({...submitForm, amount: e.target.value})} style={{ width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '15px', boxSizing: 'border-box' }} placeholder="0.00 (optional - AI will detect)" />
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>Leave empty to let AI detect from receipt</div>
+                  </div>
+                )}
 
                 {/* Amount, Date, Description - only for non-drivers */}
                 {!isAAAliveDriver && (

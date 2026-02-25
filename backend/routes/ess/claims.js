@@ -310,6 +310,31 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   });
 }));
 
+// Update claim amount (drivers can edit pending/approved claims)
+router.put('/:id/amount', authenticateEmployee, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { amount } = req.body;
+
+  if (amount === undefined || amount === null || isNaN(parseFloat(amount)) || parseFloat(amount) < 0) {
+    throw new ValidationError('Valid amount is required');
+  }
+
+  const result = await pool.query(`
+    UPDATE claims
+    SET amount = $1, updated_at = NOW()
+    WHERE id = $2
+      AND employee_id = $3
+      AND status IN ('pending', 'approved')
+    RETURNING id, amount, status
+  `, [parseFloat(amount), id, req.employee.id]);
+
+  if (result.rows.length === 0) {
+    return res.status(400).json({ error: 'Claim not found or cannot be edited' });
+  }
+
+  res.json({ message: 'Amount updated', claim: result.rows[0] });
+}));
+
 // =====================================================
 // TEAM CLAIMS (Supervisor/Manager)
 // =====================================================
