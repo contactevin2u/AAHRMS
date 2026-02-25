@@ -28,6 +28,8 @@ function PayrollUnified() {
   const [viewMode, setViewMode] = useState(false); // true = read-only view, false = edit mode
   const [departments, setDepartments] = useState([]);
   const [outlets, setOutlets] = useState([]);
+  const [expandedMonth, setExpandedMonth] = useState(null);
+  const [expandedContribMonth, setExpandedContribMonth] = useState(null);
 
   // OT Summary state
   const [otSummary, setOtSummary] = useState(null);
@@ -1295,21 +1297,51 @@ function PayrollUnified() {
                 <div className="no-data">No payroll runs yet</div>
               ) : (
                 <div className="runs-list">
-                  {runs.map(run => (
-                    <div key={run.id} className={`run-card ${selectedRun?.id === run.id ? 'selected' : ''}`}
-                      onClick={() => fetchRunDetails(run.id)}>
-                      <div className="run-period">
-                        {getMonthName(run.month)} {run.year}
-                        {(run.outlet_name || run.department_name) && (
-                          <span className="run-dept"> - {run.outlet_name || run.department_name}</span>
-                        )}
-                      </div>
-                      <div className="run-meta">
-                        {getStatusBadge(run.status)}
-                        <span className="run-total">{formatAmount(run.total_net)}</span>
-                      </div>
-                    </div>
-                  ))}
+                  {(() => {
+                    const grouped = {};
+                    runs.forEach(run => {
+                      const key = `${run.year}-${String(run.month).padStart(2, '0')}`;
+                      if (!grouped[key]) grouped[key] = { month: run.month, year: run.year, runs: [] };
+                      grouped[key].runs.push(run);
+                    });
+                    const sortedKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+                    const activeKey = expandedMonth || (selectedRun
+                      ? `${selectedRun.year}-${String(selectedRun.month).padStart(2, '0')}`
+                      : sortedKeys[0]);
+
+                    return sortedKeys.map(key => {
+                      const group = grouped[key];
+                      const isOpen = key === activeKey;
+                      const allFinalized = group.runs.every(r => r.status === 'finalized');
+                      const hasDraft = group.runs.some(r => r.status === 'draft');
+
+                      return (
+                        <div key={key} className={`month-group ${isOpen ? 'open' : ''}`}>
+                          <div className="month-header" onClick={() => setExpandedMonth(isOpen ? null : key)}>
+                            <span className={`month-chevron ${!isOpen ? 'collapsed' : ''}`}>▾</span>
+                            <span className="month-label">{getMonthName(group.month).substring(0, 3)} {group.year}</span>
+                            <span className={`month-status ${allFinalized ? 'done' : hasDraft ? 'has-draft' : ''}`}>
+                              {allFinalized ? '✓' : group.runs.length}
+                            </span>
+                          </div>
+                          {isOpen && (
+                            <div className="month-runs">
+                              {group.runs.map(run => (
+                                <div key={run.id} className={`run-card ${selectedRun?.id === run.id ? 'selected' : ''}`}
+                                  onClick={() => fetchRunDetails(run.id)}>
+                                  <div className="run-row">
+                                    <span className="run-dept-name">{run.outlet_name || run.department_name || 'All'}</span>
+                                    {getStatusBadge(run.status)}
+                                  </div>
+                                  <div className="run-amount">{formatAmount(run.total_net)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>
@@ -1753,13 +1785,44 @@ function PayrollUnified() {
                   <h3>Finalized Runs</h3>
                   {contribRuns.length === 0 ? <div className="no-data">No finalized runs</div> : (
                     <div className="runs-list">
-                      {contribRuns.map(run => (
-                        <div key={run.id} className={`run-card ${selectedContribRunId === run.id ? 'selected' : ''}`}
-                          onClick={() => handleContribRunSelect(run.id)}>
-                          <div className="run-period">{getMonthName(run.month)} {run.year}</div>
-                          <div className="run-meta"><span className="run-count">{run.item_count} emp</span></div>
-                        </div>
-                      ))}
+                      {(() => {
+                        const grouped = {};
+                        contribRuns.forEach(run => {
+                          const key = `${run.year}-${String(run.month).padStart(2, '0')}`;
+                          if (!grouped[key]) grouped[key] = { month: run.month, year: run.year, runs: [] };
+                          grouped[key].runs.push(run);
+                        });
+                        const sortedKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+                        const activeKey = expandedContribMonth || sortedKeys[0];
+
+                        return sortedKeys.map(key => {
+                          const group = grouped[key];
+                          const isOpen = key === activeKey;
+
+                          return (
+                            <div key={key} className={`month-group ${isOpen ? 'open' : ''}`}>
+                              <div className="month-header" onClick={() => setExpandedContribMonth(isOpen ? null : key)}>
+                                <span className={`month-chevron ${!isOpen ? 'collapsed' : ''}`}>▾</span>
+                                <span className="month-label">{getMonthName(group.month).substring(0, 3)} {group.year}</span>
+                                <span className="month-status done">{group.runs.length}</span>
+                              </div>
+                              {isOpen && (
+                                <div className="month-runs">
+                                  {group.runs.map(run => (
+                                    <div key={run.id} className={`run-card ${selectedContribRunId === run.id ? 'selected' : ''}`}
+                                      onClick={() => handleContribRunSelect(run.id)}>
+                                      <div className="run-row">
+                                        <span className="run-dept-name">{run.outlet_name || run.department_name || 'All'}</span>
+                                        <span className="run-count">{run.item_count} emp</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
                 </div>
