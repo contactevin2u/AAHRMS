@@ -281,7 +281,7 @@ export const leaveApi = {
 // Claims
 export const claimsApi = {
   getAll: (params) => api.get('/claims', { params }),
-  getPendingCount: () => api.get('/claims/pending-count'),
+  getPendingCount: (params) => api.get('/claims/pending-count', { params }),
   getSummary: (params) => api.get('/claims/summary', { params }),
   getCategories: () => api.get('/claims/categories'),
   getRestrictions: () => api.get('/claims/restrictions'),

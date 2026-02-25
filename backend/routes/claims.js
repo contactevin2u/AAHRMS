@@ -84,17 +84,34 @@ router.get('/', authenticateAdmin, async (req, res) => {
 // Get pending claims count
 router.get('/pending-count', authenticateAdmin, async (req, res) => {
   try {
+    const { department_id, outlet_id } = req.query;
     const companyId = req.companyId;
     if (!companyId) {
       return res.status(403).json({ error: 'Company context required' });
     }
 
-    const result = await pool.query(`
+    let query = `
       SELECT COUNT(*) as count
       FROM claims c
       JOIN employees e ON c.employee_id = e.id
       WHERE c.status = 'pending' AND e.company_id = $1
-    `, [companyId]);
+    `;
+    const params = [companyId];
+    let paramCount = 1;
+
+    if (department_id) {
+      paramCount++;
+      query += ` AND e.department_id = $${paramCount}`;
+      params.push(department_id);
+    }
+
+    if (outlet_id) {
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
+    }
+
+    const result = await pool.query(query, params);
     res.json({ count: parseInt(result.rows[0].count) });
   } catch (error) {
     console.error('Error fetching pending count:', error);
@@ -105,7 +122,7 @@ router.get('/pending-count', authenticateAdmin, async (req, res) => {
 // Get claims summary by category
 router.get('/summary', authenticateAdmin, async (req, res) => {
   try {
-    const { month, year } = req.query;
+    const { month, year, department_id, outlet_id } = req.query;
     const companyId = req.companyId;
     if (!companyId) {
       return res.status(403).json({ error: 'Company context required' });
@@ -125,10 +142,24 @@ router.get('/summary', authenticateAdmin, async (req, res) => {
       WHERE e.company_id = $1
     `;
     const params = [companyId];
+    let paramCount = 1;
 
     if (month && year) {
-      query += ` AND EXTRACT(MONTH FROM c.claim_date) = $2 AND EXTRACT(YEAR FROM c.claim_date) = $3`;
+      query += ` AND EXTRACT(MONTH FROM c.claim_date) = $${paramCount + 1} AND EXTRACT(YEAR FROM c.claim_date) = $${paramCount + 2}`;
       params.push(month, year);
+      paramCount += 2;
+    }
+
+    if (department_id) {
+      paramCount++;
+      query += ` AND e.department_id = $${paramCount}`;
+      params.push(department_id);
+    }
+
+    if (outlet_id) {
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
     }
 
     query += ' GROUP BY c.category ORDER BY c.category';

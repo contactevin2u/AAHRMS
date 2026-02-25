@@ -83,7 +83,7 @@ function Claims({ departmentId: propDeptId, outletId: propOutletId, embedded = f
       const [empRes, catRes, countRes, outletsRes, deptsRes, restrictionsRes] = await Promise.all([
         employeeApi.getAll(empParams),
         claimsApi.getCategories(),
-        claimsApi.getPendingCount(),
+        claimsApi.getPendingCount(propDeptId ? { department_id: propDeptId } : propOutletId ? { outlet_id: propOutletId } : {}),
         outletsApi.getAll().catch(() => ({ data: [] })),
         departmentApi.getAll().catch(() => ({ data: [] })),
         claimsApi.getRestrictions().catch(() => ({ data: [] }))
@@ -113,7 +113,10 @@ function Claims({ departmentId: propDeptId, outletId: propOutletId, embedded = f
 
   const fetchSummary = async () => {
     try {
-      const res = await claimsApi.getSummary({ month: filter.month, year: filter.year });
+      const params = { month: filter.month, year: filter.year };
+      if (filter.department_id) params.department_id = filter.department_id;
+      if (filter.outlet_id) params.outlet_id = filter.outlet_id;
+      const res = await claimsApi.getSummary(params);
       setSummary(res.data);
     } catch (error) {
       console.error('Error fetching summary:', error);
@@ -122,9 +125,12 @@ function Claims({ departmentId: propDeptId, outletId: propOutletId, embedded = f
 
   const fetchAdvances = async () => {
     try {
+      const params = { month: filter.month, year: filter.year };
+      if (filter.department_id) params.department_id = filter.department_id;
+      if (filter.outlet_id) params.outlet_id = filter.outlet_id;
       const [advRes, sumRes] = await Promise.all([
-        advancesApi.getAll({ month: filter.month, year: filter.year }).catch(() => ({ data: [] })),
-        advancesApi.getSummary({ month: filter.month, year: filter.year }).catch(() => ({ data: [] }))
+        advancesApi.getAll(params).catch(() => ({ data: [] })),
+        advancesApi.getSummary(params).catch(() => ({ data: [] }))
       ]);
       setAdvances(advRes.data || []);
       setAdvancesSummary(sumRes.data || []);

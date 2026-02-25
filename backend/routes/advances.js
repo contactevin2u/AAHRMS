@@ -13,7 +13,7 @@ const { authenticateAdmin } = require('../middleware/auth');
 // Get all advances (with filters)
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { employee_id, status, month, year } = req.query;
+    const { employee_id, status, month, year, department_id, outlet_id } = req.query;
     const companyId = req.companyId;
 
     if (!companyId) {
@@ -56,6 +56,18 @@ router.get('/', authenticateAdmin, async (req, res) => {
       params.push(year);
     }
 
+    if (department_id) {
+      paramCount++;
+      query += ` AND e.department_id = $${paramCount}`;
+      params.push(department_id);
+    }
+
+    if (outlet_id) {
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
+    }
+
     query += ' ORDER BY sa.created_at DESC';
 
     const result = await pool.query(query, params);
@@ -69,7 +81,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
 // Get advances summary for payroll period
 router.get('/summary', authenticateAdmin, async (req, res) => {
   try {
-    const { month, year } = req.query;
+    const { month, year, department_id, outlet_id } = req.query;
     const companyId = req.companyId;
 
     if (!companyId) {
@@ -77,7 +89,7 @@ router.get('/summary', authenticateAdmin, async (req, res) => {
     }
 
     // Get pending advances per employee for the given month
-    const result = await pool.query(`
+    let query = `
       SELECT
         sa.employee_id,
         e.name as employee_name,
@@ -100,9 +112,28 @@ router.get('/summary', authenticateAdmin, async (req, res) => {
           (sa.expected_deduction_year < $2) OR
           (sa.expected_deduction_year = $2 AND sa.expected_deduction_month <= $3)
         )
+    `;
+    const params = [companyId, year, month];
+    let paramCount = 3;
+
+    if (department_id) {
+      paramCount++;
+      query += ` AND e.department_id = $${paramCount}`;
+      params.push(department_id);
+    }
+
+    if (outlet_id) {
+      paramCount++;
+      query += ` AND e.outlet_id = $${paramCount}`;
+      params.push(outlet_id);
+    }
+
+    query += `
       GROUP BY sa.employee_id, e.name, e.employee_id
       ORDER BY e.name
-    `, [companyId, year, month]);
+    `;
+
+    const result = await pool.query(query, params);
 
     res.json(result.rows);
   } catch (error) {
