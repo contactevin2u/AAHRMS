@@ -210,22 +210,23 @@ function LeaveBalances() {
     return `${formatNum(available)}/${formatNum(entitled)}`;
   };
 
-  // Render AL earned cell
+  // Render AL earned balance cell (earned - used, can be negative)
   const renderAlEarned = (emp) => {
-    const ytdEarned = parseFloat(emp.al_ytd_earned) || 0;
+    const earnedBalance = parseFloat(emp.al_earned_balance) || 0;
     const entitled = parseFloat(emp.al_entitled) || 0;
+    const isNegative = earnedBalance < 0;
     return (
-      <span className="clickable" onClick={() => handleAlClick(emp)}>
-        {formatNum(ytdEarned)}/{formatNum(entitled)}
+      <span className={`clickable ${isNegative ? 'negative-text' : ''}`} onClick={() => handleAlClick(emp)}>
+        {formatNum(earnedBalance)}/{formatNum(entitled)}
       </span>
     );
   };
 
-  // Render advance cell
+  // Render advance leave cell (unearned portion)
   const renderAdvance = (emp) => {
-    const adv = parseFloat(emp.al_advance_used) || 0;
-    if (adv > 0) {
-      return <span className="advance-value">{formatNum(adv)}</span>;
+    const advLeave = parseFloat(emp.al_advance_leave) || 0;
+    if (advLeave > 0) {
+      return <span className="advance-value">{formatNum(advLeave)}</span>;
     }
     return '0';
   };
@@ -241,14 +242,14 @@ function LeaveBalances() {
   const renderEmployeeRow = (emp, showDept = false) => {
     const ulDays = parseFloat(emp.ul_days) || 0;
     const isNegativeUL = ulDays > 0;
-    const advUsed = parseFloat(emp.al_advance_used) || 0;
+    const advLeave = parseFloat(emp.al_advance_leave) || 0;
     return (
       <tr key={emp.id}>
         <td className="col-id">{emp.emp_code}</td>
         {showDept && <td className="col-dept">{emp.department_name || emp.outlet_name || '-'}</td>}
         <td className="col-name">{emp.name}</td>
         <td className="balance-cell al">{renderAlEarned(emp)}</td>
-        <td className={`balance-cell advance-cell ${advUsed > 0 ? 'has-advance' : ''}`}>{renderAdvance(emp)}</td>
+        <td className={`balance-cell advance-cell ${advLeave > 0 ? 'has-advance' : ''}`}>{renderAdvance(emp)}</td>
         <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
         <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
         <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>
@@ -516,21 +517,29 @@ function LeaveBalances() {
                   </div>
                 )}
                 <div className="breakdown-row">
-                  <span>YTD Earned (as of current month)</span>
+                  <span>Earned (as of current month)</span>
                   <strong>{formatNum(alBreakdownEmployee.al_ytd_earned)} days</strong>
+                </div>
+                <div className="breakdown-row advance-highlight">
+                  <span>Advance Leave (not yet earned)</span>
+                  <strong>{formatNum(alBreakdownEmployee.al_advance_leave)} days</strong>
                 </div>
                 <div className="breakdown-row">
                   <span>Used</span>
                   <strong>{formatNum(alBreakdownEmployee.al_used)} days</strong>
                 </div>
-                <div className="breakdown-row">
-                  <span>Available (full year)</span>
-                  <strong>{formatNum(alBreakdownEmployee.al_available)} days</strong>
+                <div className={`breakdown-row ${parseFloat(alBreakdownEmployee.al_earned_balance) < 0 ? 'advance-highlight' : ''}`}>
+                  <span>Balance (Earned - Used)</span>
+                  <strong className={parseFloat(alBreakdownEmployee.al_earned_balance) < 0 ? 'negative-text' : ''}>
+                    {formatNum(alBreakdownEmployee.al_earned_balance)} days
+                  </strong>
                 </div>
-                <div className={`breakdown-row ${parseFloat(alBreakdownEmployee.al_advance_used) > 0 ? 'advance-highlight' : ''}`}>
-                  <span>Advance Used</span>
-                  <strong>{formatNum(alBreakdownEmployee.al_advance_used)} days</strong>
-                </div>
+                {parseFloat(alBreakdownEmployee.al_advance_used) > 0 && (
+                  <div className="breakdown-row advance-highlight">
+                    <span>Advance Used</span>
+                    <strong>{formatNum(alBreakdownEmployee.al_advance_used)} days</strong>
+                  </div>
+                )}
               </div>
 
               <div className="modal-actions">

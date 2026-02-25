@@ -1134,6 +1134,8 @@ router.get('/balances-table', authenticateAdmin, async (req, res) => {
       }
 
       row.al_ytd_earned = alYtdEarned;
+      row.al_advance_leave = alEntitled - alYtdEarned; // Unearned portion
+      row.al_earned_balance = alYtdEarned + alCarriedForward - alUsed; // Can be negative
       row.al_advance_used = Math.max(0, alUsed - (alCarriedForward + alYtdEarned));
     }
 

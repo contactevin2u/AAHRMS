@@ -474,8 +474,12 @@
 }
 
 .leave-balances-page .advance-cell .advance-value {
-  color: #dc2626;
+  color: #d97706;
   font-weight: 700;
+}
+
+.leave-balances-page .negative-text {
+  color: #dc2626 !important;
 }
 
 /* AL Breakdown Popup */
@@ -508,14 +512,18 @@
 }
 
 .leave-balances-page .al-breakdown-popup .breakdown-row.advance-highlight {
-  background: #fef2f2;
+  background: #fffbeb;
   border-radius: 6px;
   margin-top: 4px;
 }
 
 .leave-balances-page .al-breakdown-popup .breakdown-row.advance-highlight span,
 .leave-balances-page .al-breakdown-popup .breakdown-row.advance-highlight strong {
-  color: #dc2626;
+  color: #d97706;
+}
+
+.leave-balances-page .al-breakdown-popup .negative-text {
+  color: #dc2626 !important;
 }
 
 /* Responsive */
