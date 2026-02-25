@@ -664,7 +664,8 @@ function Leave({ departmentId: propDeptId, outletId: propOutletId, embedded = fa
                             <tr>
                               <th className="col-id">ID</th>
                               <th className="col-name">Name</th>
-                              <th className="col-balance">AL</th>
+                              <th className="col-balance">AL Earned</th>
+                              <th className="col-balance">Adv</th>
                               <th className="col-balance">ML</th>
                               <th className="col-balance">HL</th>
                               <th className="col-balance">UL</th>
@@ -675,11 +676,19 @@ function Leave({ departmentId: propDeptId, outletId: propOutletId, embedded = fa
                             {group.employees.map(emp => {
                               const ulDays = parseFloat(emp.ul_days) || 0;
                               const isNegativeUL = ulDays > 0;
+                              const earnedBalance = parseFloat(emp.al_earned_balance) || 0;
+                              const advLeave = parseFloat(emp.al_advance_leave) || 0;
+                              const isNegativeAL = earnedBalance < 0;
                               return (
                                 <tr key={emp.id}>
                                   <td className="col-id">{emp.emp_code}</td>
                                   <td className="col-name">{emp.name}</td>
-                                  <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
+                                  <td className={`balance-cell al ${isNegativeAL ? 'negative' : ''}`}>
+                                    {formatNum(earnedBalance)}/{formatNum(emp.al_entitled)}
+                                  </td>
+                                  <td className={`balance-cell advance-cell ${advLeave > 0 ? 'has-advance' : ''}`}>
+                                    {advLeave > 0 ? <span className="advance-value">{formatNum(advLeave)}</span> : '0'}
+                                  </td>
                                   <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
                                   <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
                                   <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>
@@ -714,7 +723,8 @@ function Leave({ departmentId: propDeptId, outletId: propOutletId, embedded = fa
                       <th className="col-id">ID</th>
                       <th className="col-dept">Dept/Outlet</th>
                       <th className="col-name">Name</th>
-                      <th className="col-balance">AL</th>
+                      <th className="col-balance">AL Earned</th>
+                      <th className="col-balance">Adv</th>
                       <th className="col-balance">ML</th>
                       <th className="col-balance">HL</th>
                       <th className="col-balance">UL</th>
@@ -723,17 +733,25 @@ function Leave({ departmentId: propDeptId, outletId: propOutletId, embedded = fa
                   </thead>
                   <tbody>
                     {balances.length === 0 ? (
-                      <tr><td colSpan="8" className="no-data">No employees found</td></tr>
+                      <tr><td colSpan="9" className="no-data">No employees found</td></tr>
                     ) : (
                       balances.map(emp => {
                         const ulDays = parseFloat(emp.ul_days) || 0;
                         const isNegativeUL = ulDays > 0;
+                        const earnedBalance = parseFloat(emp.al_earned_balance) || 0;
+                        const advLeave = parseFloat(emp.al_advance_leave) || 0;
+                        const isNegativeAL = earnedBalance < 0;
                         return (
                           <tr key={emp.id}>
                             <td className="col-id">{emp.emp_code}</td>
                             <td className="col-dept">{emp.department_name || emp.outlet_name || '-'}</td>
                             <td className="col-name">{emp.name}</td>
-                            <td className="balance-cell al">{formatBalance(emp.al_available, emp.al_entitled)}</td>
+                            <td className={`balance-cell al ${isNegativeAL ? 'negative' : ''}`}>
+                              {formatNum(earnedBalance)}/{formatNum(emp.al_entitled)}
+                            </td>
+                            <td className={`balance-cell advance-cell ${advLeave > 0 ? 'has-advance' : ''}`}>
+                              {advLeave > 0 ? <span className="advance-value">{formatNum(advLeave)}</span> : '0'}
+                            </td>
                             <td className="balance-cell ml">{formatBalance(emp.ml_available, emp.ml_entitled)}</td>
                             <td className="balance-cell hl">{formatBalance(emp.hl_available, emp.hl_entitled)}</td>
                             <td className={`balance-cell ul ${isNegativeUL ? 'negative' : ''}`}>

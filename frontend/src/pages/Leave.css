@@ -831,6 +831,16 @@
   color: #dc2626;
 }
 
+.leave-page .balance-cell.al.negative {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.leave-page .advance-cell .advance-value {
+  color: #d97706;
+  font-weight: 700;
+}
+
 .leave-page .balance-cell .clickable {
   cursor: pointer;
   text-decoration: underline;
