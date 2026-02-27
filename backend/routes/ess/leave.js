@@ -763,7 +763,7 @@ router.get('/team-pending', authenticateEmployee, asyncHandler(async (req, res) 
        WHERE e.outlet_id = ANY($1)
          AND lr.status = 'pending'
          AND (
-           (lr.approval_level = 1 AND $2 = 'supervisor')
+           (lr.approval_level = 1 AND $2 IN ('supervisor', 'manager'))
            OR (lr.approval_level = 2 AND $2 = 'manager')
          )
        ORDER BY lr.created_at ASC`,
@@ -841,8 +841,8 @@ router.post('/:id/approve', authenticateEmployee, asyncHandler(async (req, res) 
   }
 
   // Verify approval level matches approver's role (for supervisor/manager)
-  if (leaveRequest.approval_level === 1 && approver.employee_role !== 'supervisor') {
-    return res.status(400).json({ error: 'This leave request requires supervisor approval first' });
+  if (leaveRequest.approval_level === 1 && !['supervisor', 'manager'].includes(approver.employee_role)) {
+    return res.status(400).json({ error: 'This leave request requires supervisor or manager approval first' });
   }
   if (leaveRequest.approval_level === 2 && approver.employee_role !== 'manager') {
     return res.status(400).json({ error: 'This leave request requires manager approval' });
@@ -869,14 +869,26 @@ router.post('/:id/approve', authenticateEmployee, asyncHandler(async (req, res) 
     res.json({ message: 'Leave approved by supervisor. Pending manager/admin approval.' });
 
   } else if (approver.employee_role === 'manager') {
-    // Manager approves - move to admin level
-    await pool.query(
-      `UPDATE leave_requests
-       SET manager_id = $1, manager_approved = true, manager_approved_at = NOW(),
-           approval_level = 3
-       WHERE id = $2`,
-      [req.employee.id, id]
-    );
+    if (leaveRequest.approval_level === 1) {
+      // Manager approves level 1 request (bypassing supervisor) - fill both supervisor and manager fields
+      await pool.query(
+        `UPDATE leave_requests
+         SET supervisor_id = $1, supervisor_approved = true, supervisor_approved_at = NOW(),
+             manager_id = $1, manager_approved = true, manager_approved_at = NOW(),
+             approval_level = 3
+         WHERE id = $2`,
+        [req.employee.id, id]
+      );
+    } else {
+      // Manager approves level 2 request (normal flow)
+      await pool.query(
+        `UPDATE leave_requests
+         SET manager_id = $1, manager_approved = true, manager_approved_at = NOW(),
+             approval_level = 3
+         WHERE id = $2`,
+        [req.employee.id, id]
+      );
+    }
 
     // Create notification for employee
     await pool.query(
@@ -1014,7 +1026,7 @@ router.get('/team-pending-count', authenticateEmployee, asyncHandler(async (req,
        WHERE e.outlet_id = ANY($1)
          AND lr.status = 'pending'
          AND (
-           (lr.approval_level = 1 AND $2 = 'supervisor')
+           (lr.approval_level = 1 AND $2 IN ('supervisor', 'manager'))
            OR (lr.approval_level = 2 AND $2 = 'manager')
          )`,
       [outletIds, employee.employee_role]
