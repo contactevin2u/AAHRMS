@@ -1296,7 +1296,7 @@ function PayrollUnified() {
               ) : runs.length === 0 ? (
                 <div className="no-data">No payroll runs yet</div>
               ) : (
-                <div className="runs-list">
+                <div className="runs-list" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
                   {(() => {
                     const grouped = {};
                     runs.forEach(run => {

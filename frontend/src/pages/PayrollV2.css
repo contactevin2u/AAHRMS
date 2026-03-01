@@ -104,8 +104,6 @@
   border-radius: 8px;
   padding: 16px;
   border: 1px solid #e5e5e5;
-  max-height: calc(100vh - 100px);
-  overflow-y: auto;
   position: sticky;
   top: 20px;
 }
@@ -123,8 +121,6 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: calc(100vh - 200px);
-  overflow-y: auto;
 }
 
 /* Month Group - Accordion */
