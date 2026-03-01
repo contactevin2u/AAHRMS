@@ -867,6 +867,7 @@ function PayrollUnified() {
       short_override: '', // Empty means use calculated value, set value to override short hours deduction
       deduction_override: '', // Empty means use calculated value, set value to override days not worked deduction
       epf_override: '',  // Empty means use calculated value, set value to override from KWSP table
+      socso_override: '',  // Empty means use calculated value, set value to override SOCSO amount
       pcb_override: '',  // Empty means use calculated value, set value to override from MyTax
       claims_override: '', // Empty means use calculated value, set value to override claims amount
       part_time_hours: partTimeHours, // For part-time: hours worked
@@ -2346,6 +2347,17 @@ function PayrollUnified() {
                         placeholder={`Calculated: ${statutoryPreview?.epf?.employee?.toFixed(0) || editingItem?.epf_employee || '0'}`}
                       />
                       <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated EPF. Enter value from KWSP table to override.</small>
+                    </div>
+                    <div className="form-group">
+                      <label>SOCSO Override (PERKESO)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={itemForm.socso_override}
+                        onChange={(e) => setItemForm({ ...itemForm, socso_override: e.target.value })}
+                        placeholder={`Calculated: ${statutoryPreview?.socso?.employee?.toFixed(2) || editingItem?.socso_employee || '0.00'}`}
+                      />
+                      <small style={{color: '#666', fontSize: '0.75rem'}}>Leave empty to use calculated SOCSO. Enter value to override.</small>
                     </div>
                   </div>
                   <div className="form-row">

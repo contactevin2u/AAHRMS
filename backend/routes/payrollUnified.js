@@ -2984,8 +2984,18 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       ? Math.round((parseFloat(updates.epf_override) / 0.11) * epfEmployerRate) // Calculate employer based on same wage bracket
       : (statutory.epf_enabled ? statutoryResult.epf.employer : 0);
 
-    const socsoEmployee = statutory.socso_enabled ? statutoryResult.socso.employee : 0;
-    const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
+    // SOCSO: Allow manual override, otherwise use calculated value
+    const socsoEmployee = updates.socso_override !== undefined && updates.socso_override !== null && updates.socso_override !== ''
+      ? parseFloat(updates.socso_override) || 0
+      : (statutory.socso_enabled ? statutoryResult.socso.employee : 0);
+    const socsoEmployer = updates.socso_override !== undefined && updates.socso_override !== null && updates.socso_override !== ''
+      ? (() => {
+          const calcEmp = statutoryResult.socso.employee || 0;
+          const calcEmpr = statutoryResult.socso.employer || 0;
+          const ratio = calcEmp > 0 ? calcEmpr / calcEmp : 1;
+          return Math.round(parseFloat(updates.socso_override) * ratio * 100) / 100;
+        })()
+      : (statutory.socso_enabled ? statutoryResult.socso.employer : 0);
     const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
     const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
 
