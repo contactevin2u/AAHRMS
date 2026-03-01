@@ -1289,14 +1289,14 @@ function PayrollUnified() {
         {mainTab === 'payroll' && (
           <div className="payroll-layout">
             {/* Runs List */}
-            <div className="runs-panel">
+            <div className="runs-panel" style={{ maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', position: 'sticky', top: '20px' }}>
               <h3>Payroll Runs</h3>
               {loading ? (
                 <div className="loading">Loading...</div>
               ) : runs.length === 0 ? (
                 <div className="no-data">No payroll runs yet</div>
               ) : (
-                <div className="runs-list" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+                <div className="runs-list">
                   {(() => {
                     const grouped = {};
                     runs.forEach(run => {
