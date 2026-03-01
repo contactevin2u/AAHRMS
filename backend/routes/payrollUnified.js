@@ -2996,8 +2996,13 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
           return Math.round(parseFloat(updates.socso_override) * ratio * 100) / 100;
         })()
       : (statutory.socso_enabled ? statutoryResult.socso.employer : 0);
-    const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
-    const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
+    // EIS: Allow manual override, otherwise use calculated value
+    const eisEmployee = updates.eis_override !== undefined && updates.eis_override !== null && updates.eis_override !== ''
+      ? parseFloat(updates.eis_override) || 0
+      : (statutory.eis_enabled ? statutoryResult.eis.employee : 0);
+    const eisEmployer = updates.eis_override !== undefined && updates.eis_override !== null && updates.eis_override !== ''
+      ? parseFloat(updates.eis_override) || 0
+      : (statutory.eis_enabled ? statutoryResult.eis.employer : 0);
 
     // PCB: Allow manual override (for matching MyTax), otherwise use calculated value
     // pcb_override can be provided to set exact PCB amount from MyTax
