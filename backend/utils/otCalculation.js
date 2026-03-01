@@ -189,7 +189,7 @@ function roundOTHours(otHours, minOtHours = 1.0) {
  * @param {number} basicSalary - Employee's basic salary (for amount calculation)
  * @returns {Object} OT calculation result
  */
-async function calculateOTFromClockIn(employeeId, companyId, departmentId, periodStart, periodEnd, basicSalary) {
+async function calculateOTFromClockIn(employeeId, companyId, departmentId, periodStart, periodEnd, basicSalary, workingDaysOverride) {
   // Get OT rules
   const rules = await getOTRules(companyId, departmentId);
 
@@ -329,8 +329,20 @@ async function calculateOTFromClockIn(employeeId, companyId, departmentId, perio
     breakdown.push(dailyBreakdown);
   }
 
-  // Calculate OT amount
-  const workingDaysPerMonth = 22;
+  // Calculate OT amount - use provided working days or calculate from period
+  let workingDaysPerMonth = workingDaysOverride;
+  if (!workingDaysPerMonth) {
+    const pStart = new Date(periodStart);
+    const year = pStart.getFullYear();
+    const month = pStart.getMonth() + 1;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    // Default to 5-day week calculation (Mon-Fri)
+    let wd = 0;
+    for (let d = new Date(year, month - 1, 1); d.getMonth() === month - 1; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() !== 0 && d.getDay() !== 6) wd++;
+    }
+    workingDaysPerMonth = wd;
+  }
   const dailyRate = basicSalary / workingDaysPerMonth;
   const hourlyRate = dailyRate / rules.normal_hours_per_day;
 

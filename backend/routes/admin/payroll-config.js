@@ -11,7 +11,7 @@ const { authenticateAdmin } = require('../../middleware/auth');
 // Default payroll config values (used when keys are missing from DB)
 const DEFAULT_PAYROLL_CONFIG = {
   work_hours_per_day: 8,
-  work_days_per_month: 22,
+  work_days_per_week: 5,
   part_time_hourly_rate: 8.72,
   part_time_ph_multiplier: 2.0,
   indoor_sales_basic: 4000,

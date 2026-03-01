@@ -1951,7 +1951,7 @@ function PayrollUnified() {
                 {editingItem.days_worked != null && (() => {
                   // Use backend-calculated values - no frontend recalculation
                   const daysWorked = parseInt(editingItem.days_worked) || 0;
-                  const standardDays = selectedRun?.work_days_per_month || 26;
+                  const standardDays = selectedRun?.work_days_per_month || 22;
                   const absentDays = parseFloat(editingItem.absent_days) || 0;
                   const unpaidLeaveDays = parseFloat(editingItem.unpaid_leave_days) || 0;
                   const daysNotWorked = absentDays + unpaidLeaveDays;
@@ -2132,11 +2132,11 @@ function PayrollUnified() {
                         <input type="number" step="0.5" value={itemForm.ot_hours} onChange={(e) => handleOTHoursChange(parseFloat(e.target.value) || 0)} />
                         {itemForm.basic_salary > 0 && (() => {
                           const basic = parseFloat(itemForm.basic_salary) || 0;
-                          if (isAAAlive) {
-                            const hourlyRate = basic / 26 / 8;
-                            return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {basic.toFixed(0)} / 26 days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.0 = RM {hourlyRate.toFixed(2)}/hr OT</small>;
-                          }
                           const wd = selectedRun?.work_days_per_month || 22;
+                          if (isAAAlive) {
+                            const hourlyRate = basic / wd / 8;
+                            return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {basic.toFixed(0)} / {wd} days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.0 = RM {hourlyRate.toFixed(2)}/hr OT</small>;
+                          }
                           const hourlyRate = basic / wd / 8;
                           return <small style={{color: '#666', fontSize: '0.75rem'}}>RM {basic.toFixed(0)} / {wd} days / 8h = RM {hourlyRate.toFixed(2)}/hr x 1.5 = RM {(hourlyRate * 1.5).toFixed(2)}/hr OT</small>;
                         })()}
@@ -2265,7 +2265,7 @@ function PayrollUnified() {
                       <label>Days Not Worked (Unpaid)</label>
                       <input type="number" step="0.5" value={itemForm.days_not_worked} onChange={(e) => {
                         const days = parseFloat(e.target.value) || 0;
-                        const wd = selectedRun?.work_days_per_month || 26;
+                        const wd = selectedRun?.work_days_per_month || 22;
                         const deduction = days > 0 ? Math.round((itemForm.basic_salary / wd) * days * 100) / 100 : 0;
                         // Recalculate attendance bonus for Mimix
                         const lateDays = itemForm.late_days || 0;
@@ -2282,7 +2282,7 @@ function PayrollUnified() {
                       }} />
                       {editingItem?.days_worked != null && editingItem?.work_type !== 'part_time' && editingItem?.employment_type !== 'part_time' && (
                         <small style={{color: '#666', fontSize: '0.75rem'}}>
-                          Deduct = days × RM {((itemForm.basic_salary || 0) / (selectedRun?.work_days_per_month || 26)).toFixed(2)}/day
+                          Deduct = days × RM {((itemForm.basic_salary || 0) / (selectedRun?.work_days_per_month || 22)).toFixed(2)}/day
                         </small>
                       )}
                       {(editingItem?.work_type === 'part_time' || editingItem?.employment_type === 'part_time') && <small style={{color: '#666', fontSize: '0.75rem'}}>Part-time: paid by hours worked</small>}

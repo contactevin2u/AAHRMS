@@ -67,7 +67,8 @@ const DEFAULT_PAYROLL_SETTINGS = {
     indoor_sales_basic: 4000,
     indoor_sales_commission_rate: 6,
     standard_work_hours: 8,
-    standard_work_days: 22
+    standard_work_days: 22,
+    work_days_per_week: 5
   },
   period: {
     type: 'calendar_month',
@@ -123,6 +124,7 @@ async function getCompanySettings(companyId) {
       indoor_sales_commission_rate: payrollConfig.indoor_sales_commission_rate ?? legacySettings.indoor_sales_commission_rate ?? payrollSettings.rates?.indoor_sales_commission_rate ?? 6,
       standard_work_hours: payrollConfig.work_hours_per_day ?? payrollSettings.rates?.standard_work_hours ?? 8,
       standard_work_days: payrollConfig.work_days_per_month ?? payrollSettings.rates?.standard_work_days ?? 22,
+      work_days_per_week: payrollConfig.work_days_per_week ?? payrollSettings.rates?.work_days_per_week ?? 5,
       part_time_hourly_rate: payrollConfig.part_time_hourly_rate ?? 8.72,
       part_time_ph_multiplier: payrollConfig.part_time_ph_multiplier ?? 2.0,
       outstation_per_day: payrollConfig.outstation_per_day ?? 100,
@@ -330,11 +332,19 @@ function calculateMimixAttendanceBonus(lateDays, absentDays) {
 /**
  * Get working days in a month (excluding weekends)
  */
-function getWorkingDaysInMonth(year, month) {
+function getWorkingDaysInMonth(year, month, workDaysPerWeek = 5) {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0);
-  let workingDays = 0;
+  const calendarDays = endDate.getDate();
 
+  if (workDaysPerWeek === 6) {
+    // 6-day work week with no fixed rest day: calculate proportionally
+    // Each week has 1 rest day, distributed across the month
+    return Math.round(calendarDays * 6 / 7);
+  }
+
+  // 5-day work week (Mon-Fri): count actual weekdays
+  let workingDays = 0;
   for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
     if (day !== 0 && day !== 6) {
@@ -482,7 +492,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
 
     // Get period dates
     const period = getPayrollPeriod(month, year, periodConfig);
-    const workingDays = rates.standard_work_days || getWorkingDaysInMonth(year, month);
+    const workingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
 
     // Create payroll run
     const runResult = await client.query(`
@@ -780,7 +790,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
           if (features.auto_ot_from_clockin) {
             try {
               const otResult = await calculateOTFromClockIn(
-                emp.id, companyId, emp.department_id, periodStart, periodEnd, basicSalary
+                emp.id, companyId, emp.department_id, periodStart, periodEnd, basicSalary, workingDays
               );
               otHours = otResult.total_ot_hours || 0;
               otAmount = otResult.total_ot_amount || 0;
@@ -798,7 +808,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
             const otResult = await calculateOTFromClockIn(
               emp.id, companyId, emp.department_id,
               period.start.toISOString().split('T')[0],
-              period.end.toISOString().split('T')[0], basicSalary
+              period.end.toISOString().split('T')[0], basicSalary, workingDays
             );
             otHours = otResult.total_ot_hours || 0;
             otAmount = otResult.total_ot_amount || 0;
@@ -1381,7 +1391,7 @@ router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
     await client.query('BEGIN');
 
     const period = getPayrollPeriod(month, year, periodConfig);
-    const workingDays = rates.standard_work_days || 22;
+    const workingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
 
     // Shared lookups
     let commissionsMap = {};
@@ -1527,7 +1537,7 @@ router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
               const otResult = await calculateOTFromClockIn(
                 emp.id, companyId, emp.department_id,
                 period.start.toISOString().split('T')[0],
-                period.end.toISOString().split('T')[0], basicSalary
+                period.end.toISOString().split('T')[0], basicSalary, workingDays
               );
               otHours = otResult.total_ot_hours || 0;
               otAmount = otResult.total_ot_amount || 0;
@@ -1736,7 +1746,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
       ORDER BY pi.sort_order ASC, eo.name NULLS FIRST, e.employee_id
     `, [id, run.period_start_date, run.period_end_date, isOutletBased]);
 
-    const workDaysPerMonth = settings.rates.standard_work_days || 22;
+    const workDaysPerMonth = getWorkingDaysInMonth(run.year, run.month, settings.rates.work_days_per_week);
 
     res.json({
       run: { ...run, work_days_per_month: workDaysPerMonth, part_time_hourly_rate: settings.rates.part_time_hourly_rate || 8.72 },
@@ -1825,7 +1835,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
     // Get period dates
     const period = getPayrollPeriod(month, year, periodConfig);
-    const workingDays = rates.standard_work_days || getWorkingDaysInMonth(year, month);
+    const workingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
 
     // Create payroll run with appropriate grouping column
     const runResult = await client.query(`
@@ -2137,7 +2147,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
             emp.id, companyId, emp.department_id,
             period.start.toISOString().split('T')[0],
             period.end.toISOString().split('T')[0],
-            basicSalary
+            basicSalary, workingDays
           );
           otHours = otResult.total_ot_hours || 0;
           otAmount = otResult.total_ot_amount || 0;
@@ -2302,12 +2312,12 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       }
 
       // Auto-calculate absent days and short hours
-      // Absent = standard working days (26) - days actually worked
+      // Absent = working days in month - days actually worked
       // Days worked = must have BOTH schedule AND clock-in record
       let absentDays = 0;
       let absentDayDeduction = 0;
 
-      // For outlet-based companies: absent days = 26 - total clock-in days
+      // For outlet-based companies: absent days = working days - total clock-in days
       // (The "schedule requirement" affects short hours deduction and "No Schedule" display, not absent days)
       // We still use scheduleBasedPay for late days, short hours, attendance bonus calculation
 
@@ -2588,7 +2598,7 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
 
     // Get period dates
     const period = getPayrollPeriod(month, year, periodConfig);
-    const workingDays = rates.standard_work_days || getWorkingDaysInMonth(year, month);
+    const workingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
 
     // Build employee query
     const periodStart = period.start.toISOString().split('T')[0];
@@ -2677,7 +2687,7 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
             emp.id, companyId, emp.department_id,
             period.start.toISOString().split('T')[0],
             period.end.toISOString().split('T')[0],
-            basicSalary
+            basicSalary, workingDays
           );
           otHours = otResult.total_ot_hours || 0;
           otAmount = otResult.total_ot_amount || 0;
@@ -2874,7 +2884,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
 
     // Combined deduction for days not worked (unpaid + absent)
     // deduction_override can be provided to set exact deduction amount (even 0)
-    const workingDays = rates.standard_work_days || 26;
+    const workingDays = getWorkingDaysInMonth(item.year, item.month, rates.work_days_per_week);
     const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
     const calculatedDeduction = Math.round(dailyRate * daysNotWorked * 100) / 100;
     const combinedDeduction = updates.deduction_override !== undefined && updates.deduction_override !== null && updates.deduction_override !== ''
@@ -3220,7 +3230,7 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     // PRESERVE absent days values - don't recalculate
     // Users can manually edit absent days/deduction in the edit form
     // The recalculate endpoint should only recalculate OT and statutory
-    const workingDays = rates.standard_work_days || 26;
+    const workingDays = getWorkingDaysInMonth(item.year, item.month, rates.work_days_per_week);
     let absentDays = parseFloat(item.absent_days) || 0;
     let absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
 
@@ -3580,7 +3590,7 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
       start: new Date(run.period_start_date),
       end: new Date(run.period_end_date)
     };
-    const workingDays = rates.standard_work_days || 26;
+    const workingDays = getWorkingDaysInMonth(run.year, run.month, rates.work_days_per_week);
 
     await client.query('BEGIN');
 
@@ -3623,7 +3633,7 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
           const otResult = await calculateOTFromClockIn(
             emp.id, companyId, emp.department_id,
             period.start.toISOString().split('T')[0],
-            period.end.toISOString().split('T')[0], basicSalary
+            period.end.toISOString().split('T')[0], basicSalary, workingDays
           );
           otHours = otResult.total_ot_hours || 0;
           otAmount = otResult.total_ot_amount || 0;

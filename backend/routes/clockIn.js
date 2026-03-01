@@ -1533,14 +1533,27 @@ router.get('/ot-for-payroll/:year/:month', authenticateAdmin, async (req, res) =
 
     const result = await pool.query(query, params);
 
+    // Get company work_days_per_week setting for dynamic working days calculation
+    const companyResult = await pool.query('SELECT payroll_config FROM companies WHERE id = $1', [companyId]);
+    const payrollConfig = companyResult.rows[0]?.payroll_config || {};
+    const workDaysPerWeek = payrollConfig.work_days_per_week || 5;
+    const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+    const workingDaysInMonth = workDaysPerWeek === 6 ? Math.round(daysInMonth * 6 / 7) : (() => {
+      let wd = 0;
+      for (let d = new Date(parseInt(year), parseInt(month) - 1, 1); d.getMonth() === parseInt(month) - 1; d.setDate(d.getDate() + 1)) {
+        if (d.getDay() !== 0 && d.getDay() !== 6) wd++;
+      }
+      return wd;
+    })();
+
     // Calculate OT pay for each employee
     const withOTCalc = result.rows.map(r => {
       const basicSalary = parseFloat(r.basic_salary) || 0;
       const otHours = parseFloat(r.total_ot_hours) || 0;
       const otRate = parseFloat(r.employee_ot_rate) || 1.0;
 
-      // OT pay = (basic salary / 26 days / 8 hours) * OT hours * OT rate
-      const hourlyRate = basicSalary / 26 / 8;
+      // OT pay = (basic salary / working days / 8 hours) * OT hours * OT rate
+      const hourlyRate = basicSalary / workingDaysInMonth / 8;
       const otPay = Math.round(hourlyRate * otHours * otRate * 100) / 100;
 
       return {

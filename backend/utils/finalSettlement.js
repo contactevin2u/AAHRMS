@@ -26,14 +26,18 @@ const { calculateDetailedLeaveEntitlement } = require('./leaveProration');
  * @param {number} month - Month (1-12)
  * @returns {number} Number of working days
  */
-function getWorkingDaysInMonth(year, month) {
+function getWorkingDaysInMonth(year, month, workDaysPerWeek = 5) {
   const firstDay = new Date(year, month - 1, 1);
   const lastDay = new Date(year, month, 0);
-  let workingDays = 0;
+  const calendarDays = lastDay.getDate();
 
+  if (workDaysPerWeek === 6) {
+    return Math.round(calendarDays * 6 / 7);
+  }
+
+  let workingDays = 0;
   for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
     const dayOfWeek = d.getDay();
-    // 0 = Sunday, 6 = Saturday
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
       workingDays++;
     }
