@@ -291,7 +291,12 @@ function Layout({ children }) {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <span style={{ marginRight: '6px' }}>🏪</span>
-                {outlet.name}
+                <span>
+                  {outlet.name}
+                  {outlet.epf_code && (
+                    <span style={{ display: 'block', fontSize: '0.65rem', opacity: 0.6, marginTop: '1px' }}>KWSP: {outlet.epf_code}</span>
+                  )}
+                </span>
               </NavLink>
             ))}
           </div>
