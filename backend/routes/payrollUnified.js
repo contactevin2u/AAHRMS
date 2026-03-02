@@ -67,7 +67,7 @@ const DEFAULT_PAYROLL_SETTINGS = {
     indoor_sales_basic: 4000,
     indoor_sales_commission_rate: 6,
     standard_work_hours: 8,
-    standard_work_days: 22,
+    standard_work_days: 26,
     work_days_per_week: 5
   },
   period: {
@@ -123,7 +123,7 @@ async function getCompanySettings(companyId) {
       indoor_sales_basic: payrollConfig.indoor_sales_basic ?? legacySettings.indoor_sales_basic ?? payrollSettings.rates?.indoor_sales_basic ?? 4000,
       indoor_sales_commission_rate: payrollConfig.indoor_sales_commission_rate ?? legacySettings.indoor_sales_commission_rate ?? payrollSettings.rates?.indoor_sales_commission_rate ?? 6,
       standard_work_hours: payrollConfig.work_hours_per_day ?? payrollSettings.rates?.standard_work_hours ?? 8,
-      standard_work_days: payrollConfig.work_days_per_month ?? payrollSettings.rates?.standard_work_days ?? 22,
+      standard_work_days: payrollConfig.work_days_per_month ?? payrollSettings.rates?.standard_work_days ?? 26,
       work_days_per_week: payrollConfig.work_days_per_week ?? payrollSettings.rates?.work_days_per_week ?? 5,
       part_time_hourly_rate: payrollConfig.part_time_hourly_rate ?? 8.72,
       part_time_ph_multiplier: payrollConfig.part_time_ph_multiplier ?? 2.0,
@@ -857,7 +857,9 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
             period.end.toISOString().split('T')[0]
           );
           if (phDaysWorked > 0) {
-            phPay = Math.round(phDaysWorked * (basicSalary / workingDays) * rates.ph_multiplier * 100) / 100;
+            // Malaysian EA: Ordinary Daily Rate = Monthly Salary ÷ 26 (fixed statutory divisor)
+            const odr = basicSalary / 26;
+            phPay = Math.round(phDaysWorked * odr * rates.ph_multiplier * 100) / 100;
           }
         } catch (e) { console.warn(`PH calculation failed for ${emp.name}:`, e.message); }
       }
@@ -1553,7 +1555,9 @@ router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
                 period.end.toISOString().split('T')[0]
               );
               if (phDaysWorked > 0 && basicSalary > 0) {
-                phPay = phDaysWorked * (basicSalary / workingDays) * rates.ph_multiplier;
+                // Malaysian EA: Ordinary Daily Rate = Monthly Salary ÷ 26
+                const odr = basicSalary / 26;
+                phPay = phDaysWorked * odr * rates.ph_multiplier;
               }
             } catch (e) { console.error(`PH calc error for ${emp.name}:`, e.message); }
           }
@@ -3678,7 +3682,9 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
             period.end.toISOString().split('T')[0]
           );
           if (phDaysWorked > 0) {
-            phPay = Math.round(phDaysWorked * (basicSalary / workingDays) * (rates.ph_multiplier || 2) * 100) / 100;
+            // Malaysian EA: Ordinary Daily Rate = Monthly Salary ÷ 26
+            const odr = basicSalary / 26;
+            phPay = Math.round(phDaysWorked * odr * (rates.ph_multiplier || 2) * 100) / 100;
           }
         } catch (e) { console.warn(`PH calc failed for ${emp.name}:`, e.message); }
       }
