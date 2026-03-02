@@ -93,7 +93,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, address, latitude, longitude, min_staff } = req.body;
+    const { name, address, latitude, longitude, min_staff, epf_code } = req.body;
     const companyId = getCompanyFilter(req);
 
     // Verify outlet belongs to user's company
@@ -110,10 +110,10 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE outlets SET name = $1, address = $2, latitude = $3, longitude = $4, min_staff = $5
+      `UPDATE outlets SET name = $1, address = $2, latitude = $3, longitude = $4, min_staff = $5, epf_code = $7
        WHERE id = $6
        RETURNING *`,
-      [name, address, latitude, longitude, min_staff || 2, id]
+      [name, address, latitude, longitude, min_staff || 2, id, epf_code || null]
     );
 
     res.json(result.rows[0]);

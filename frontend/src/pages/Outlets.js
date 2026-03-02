@@ -10,7 +10,7 @@ function Outlets() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingOutlet, setEditingOutlet] = useState(null);
-  const [form, setForm] = useState({ name: '', address: '', min_staff: 2 });
+  const [form, setForm] = useState({ name: '', address: '', min_staff: 2, epf_code: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -34,7 +34,8 @@ function Outlets() {
     setForm({
       name: outlet.name || '',
       address: outlet.address || '',
-      min_staff: outlet.min_staff || 2
+      min_staff: outlet.min_staff || 2,
+      epf_code: outlet.epf_code || ''
     });
     setShowModal(true);
   };
@@ -42,7 +43,7 @@ function Outlets() {
   const closeModal = () => {
     setShowModal(false);
     setEditingOutlet(null);
-    setForm({ name: '', address: '', min_staff: 2 });
+    setForm({ name: '', address: '', min_staff: 2, epf_code: '' });
   };
 
   const handleSave = async () => {
@@ -55,7 +56,8 @@ function Outlets() {
         address: form.address.trim(),
         latitude: editingOutlet.latitude,
         longitude: editingOutlet.longitude,
-        min_staff: parseInt(form.min_staff) || 2
+        min_staff: parseInt(form.min_staff) || 2,
+        epf_code: form.epf_code.trim()
       });
       closeModal();
       fetchOutlets();
@@ -150,6 +152,10 @@ function Outlets() {
                     <div className="outlet-address">{outlet.address}</div>
                   )}
 
+                  {outlet.epf_code && (
+                    <div className="outlet-address" style={{fontSize: '0.75rem', color: '#888'}}>KWSP: {outlet.epf_code}</div>
+                  )}
+
                   <div className="outlet-metrics">
                     <div
                       className={`metric-badge ${isUnderstaffed ? 'warning' : isOverstaffed ? 'info' : 'good'}`}
@@ -241,6 +247,19 @@ function Outlets() {
                       +
                     </button>
                   </div>
+                </div>
+
+                <div className="form-field">
+                  <label>
+                    KWSP Employer Code
+                    <span className="field-hint">Used for KWSP file generation</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.epf_code}
+                    onChange={e => setForm({ ...form, epf_code: e.target.value })}
+                    placeholder="e.g. 12345678"
+                  />
                 </div>
               </div>
 
