@@ -41,6 +41,8 @@ function OutletHub() {
   const [outlets, setOutlets] = useState([]);
   const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editingEpfCode, setEditingEpfCode] = useState(false);
+  const [epfCodeValue, setEpfCodeValue] = useState('');
 
   const isAll = id === 'all';
 
@@ -101,6 +103,26 @@ function OutletHub() {
     );
   }
 
+  const handleSaveEpfCode = async () => {
+    if (!selectedOutlet) return;
+    try {
+      await outletsApi.update(selectedOutlet.id, {
+        name: selectedOutlet.name,
+        address: selectedOutlet.address,
+        latitude: selectedOutlet.latitude,
+        longitude: selectedOutlet.longitude,
+        min_staff: selectedOutlet.min_staff,
+        epf_code: epfCodeValue.trim()
+      });
+      setSelectedOutlet({ ...selectedOutlet, epf_code: epfCodeValue.trim() });
+      setOutlets(prev => prev.map(o => o.id === selectedOutlet.id ? { ...o, epf_code: epfCodeValue.trim() } : o));
+      setEditingEpfCode(false);
+    } catch (error) {
+      console.error('Error saving EPF code:', error);
+      alert('Failed to save KWSP code');
+    }
+  };
+
   const outletId = isAll ? undefined : selectedOutlet?.id?.toString();
   const outletName = isAll ? 'All Outlets' : (selectedOutlet?.name || 'Outlet');
   const ActiveComponent = TAB_COMPONENTS[activeTab];
@@ -115,6 +137,36 @@ function OutletHub() {
             <div>
               <h1>{outletName}</h1>
               <p>{isAll ? 'View all employees and data across outlets' : `Manage ${outletName}`}</p>
+              {!isAll && selectedOutlet && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                  {editingEpfCode ? (
+                    <>
+                      <span style={{ fontSize: '0.8rem', color: '#666' }}>KWSP:</span>
+                      <input
+                        type="text"
+                        value={epfCodeValue}
+                        onChange={e => setEpfCodeValue(e.target.value)}
+                        placeholder="Enter KWSP employer code"
+                        style={{ fontSize: '0.8rem', padding: '2px 8px', border: '1px solid #ccc', borderRadius: '4px', width: '160px' }}
+                        autoFocus
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEpfCode(); if (e.key === 'Escape') setEditingEpfCode(false); }}
+                      />
+                      <button onClick={handleSaveEpfCode} style={{ fontSize: '0.75rem', padding: '2px 10px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Save</button>
+                      <button onClick={() => setEditingEpfCode(false)} style={{ fontSize: '0.75rem', padding: '2px 10px', background: '#eee', color: '#666', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '0.8rem', color: '#888' }}>
+                        KWSP: {selectedOutlet.epf_code || <span style={{ color: '#ccc' }}>Not set</span>}
+                      </span>
+                      <button
+                        onClick={() => { setEpfCodeValue(selectedOutlet.epf_code || ''); setEditingEpfCode(true); }}
+                        style={{ fontSize: '0.7rem', padding: '1px 8px', background: 'transparent', color: '#4a90d9', border: '1px solid #4a90d9', borderRadius: '4px', cursor: 'pointer' }}
+                      >Edit</button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
