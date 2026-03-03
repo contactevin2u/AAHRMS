@@ -389,12 +389,7 @@ router.post('/apply', authenticateEmployee, upload.single('mc_file'), asyncHandl
     if (!isMedicalLeave) {
       throw new ValidationError('Cannot apply leave for past dates');
     }
-    // Medical leave: allow up to 7 days in the past
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    if (start < sevenDaysAgo) {
-      throw new ValidationError('Medical leave can only be applied up to 7 days in the past. Please contact HR for earlier dates.');
-    }
+    // Medical leave: allow any past date
   }
 
   // Check eligibility (gender, service, occurrences)
