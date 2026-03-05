@@ -1009,7 +1009,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
 
       const zakat = 0; // Zakat is manually set later via edit
       const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + zakat;
-      const netPay = grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction + shortHoursDeduction;
+      const netPay = Math.max(0, grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction + shortHoursDeduction);
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       // Insert payroll item (with AA Alive columns)
@@ -1577,7 +1577,7 @@ router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
 
           const totalDeductionsForEmp = statutory.epf.employee + statutory.socso.employee + statutory.eis.employee + statutory.pcb;
           const advanceDeduction = advancesMap[emp.id] || 0;
-          const netPay = grossSalary - totalDeductionsForEmp - advanceDeduction;
+          const netPay = Math.max(0, grossSalary - totalDeductionsForEmp - advanceDeduction);
           const employerCost = grossSalary + statutory.epf.employer + statutory.socso.employer + statutory.eis.employer;
 
           await client.query(`
@@ -2325,8 +2325,9 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       // (The "schedule requirement" affects short hours deduction and "No Schedule" display, not absent days)
       // We still use scheduleBasedPay for late days, short hours, attendance bonus calculation
 
-      // For non-outlet companies (or any company without schedule-based absent days),
-      // calculate absent days from clock-in records
+      // For non-outlet companies, calculate absent days from clock-in records
+      // For outlet companies, schedule-based unpaidDeduction already handles absent days
+      // so we skip absentDayDeduction to avoid double-deducting
       if (!isPartTime) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
@@ -2345,8 +2346,9 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
           const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
           const totalHoursWorked = parseFloat(clockInResult.rows[0]?.total_hours) || 0;
 
-          // Calculate absent days from clock-in records (all companies)
-          if (daysWorked < workingDays) {
+          // Calculate absent days only for non-outlet companies
+          // Outlet companies already deduct via schedule-based unpaidDeduction
+          if (settings.groupingType !== 'outlet' && daysWorked < workingDays) {
             // Count approved paid leave days in the period (these count as "attended")
             const paidLeaveResult = await client.query(`
               SELECT COALESCE(SUM(
@@ -2470,7 +2472,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       const pcbAdditional = statutoryResult.pcbBreakdown?.additionalSTD || 0;
 
       const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction;
-      const netPay = grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction + shortHoursDeduction; // these already subtracted from gross
+      const netPay = Math.max(0, grossSalary - totalDeductions + unpaidDeduction + absentDayDeduction + shortHoursDeduction); // floor at 0
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       // Variance calculation
@@ -2478,7 +2480,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
       let varianceAmount = null, variancePercent = null;
       if (prevMonthNet !== null && prevMonthNet > 0) {
         varianceAmount = netPay - prevMonthNet;
-        variancePercent = (varianceAmount / prevMonthNet) * 100;
+        variancePercent = Math.max(-99999999, Math.min(99999999, (varianceAmount / prevMonthNet) * 100));
       }
 
       // Insert payroll item
@@ -2741,7 +2743,7 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
       const pcb = statutory.pcb_enabled ? (statutoryResult.pcb || 0) : 0;
 
       const totalDeductionsEmp = epfEmployee + socsoEmployee + eisEmployee + pcb;
-      const netPay = grossSalary - totalDeductionsEmp;
+      const netPay = Math.max(0, grossSalary - totalDeductionsEmp);
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       // Variance calculation
@@ -2749,7 +2751,7 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
       let varianceAmount = null, variancePercent = null;
       if (prevMonthNet !== null && prevMonthNet > 0) {
         varianceAmount = netPay - prevMonthNet;
-        variancePercent = (varianceAmount / prevMonthNet) * 100;
+        variancePercent = Math.max(-99999999, Math.min(99999999, (varianceAmount / prevMonthNet) * 100));
       }
 
       previewItems.push({
@@ -3015,7 +3017,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       : (statutory.pcb_enabled ? statutoryResult.pcb : 0);
 
     const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + otherDeductions + zakat;
-    const netPay = grossSalary + unpaidDeduction + absentDayDeduction + shortHoursDeduction - totalDeductions;
+    const netPay = Math.max(0, grossSalary + unpaidDeduction + absentDayDeduction + shortHoursDeduction - totalDeductions);
     const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
     // Update item - combined approach clears unpaid_leave fields
@@ -3292,7 +3294,7 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
 
     const totalDeductions = unpaidDeduction + absentDayDeduction + shortHoursDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions + zakat;
-    const netPay = grossSalary + unpaidDeduction + absentDayDeduction + shortHoursDeduction - totalDeductions;
+    const netPay = Math.max(0, grossSalary + unpaidDeduction + absentDayDeduction + shortHoursDeduction - totalDeductions);
     const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
     // Update item
@@ -3475,8 +3477,8 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const shortHoursDeduction = parseFloat(i.short_hours_deduction) || 0;
         const absentDayDeduction = parseFloat(i.absent_day_deduction) || 0;
 
-        const grossSalary = basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
-                          commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction;
+        const grossSalary = Math.max(0, basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
+                          commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
 
         // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
         const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
@@ -3512,7 +3514,7 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
         const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
 
         const totalDeductions = unpaidDeduction + shortHoursDeduction + absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions + zakat;
-        const netPay = grossSalary + unpaidDeduction + shortHoursDeduction + absentDayDeduction - totalDeductions;
+        const netPay = Math.max(0, grossSalary + unpaidDeduction + shortHoursDeduction + absentDayDeduction - totalDeductions);
         const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
         await pool.query(`
@@ -3766,7 +3768,7 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
       const pcb = statutory.pcb_enabled ? (statutoryResult.pcb || 0) : 0;
 
       const totalDeductions = absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb;
-      const netPay = grossSalary + absentDayDeduction - totalDeductions;
+      const netPay = Math.max(0, grossSalary + absentDayDeduction - totalDeductions);
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       // Insert payroll item

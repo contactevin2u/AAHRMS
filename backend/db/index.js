@@ -1018,7 +1018,7 @@ const initDb = async () => {
           ALTER TABLE payroll_items ADD COLUMN variance_amount DECIMAL(10,2);
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='variance_percent') THEN
-          ALTER TABLE payroll_items ADD COLUMN variance_percent DECIMAL(6,2);
+          ALTER TABLE payroll_items ADD COLUMN variance_percent DECIMAL(10,2);
         END IF;
         -- EPF breakdown for MyTax (Saraan Biasa vs Saraan Tambahan)
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='epf_on_normal') THEN
@@ -1046,6 +1046,14 @@ const initDb = async () => {
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payroll_items' AND column_name='zakat') THEN
           ALTER TABLE payroll_items ADD COLUMN zakat DECIMAL(10,2) DEFAULT 0;
+        END IF;
+        -- Widen variance_percent to prevent numeric overflow when previous month net is very small
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='payroll_items' AND column_name='variance_percent'
+            AND numeric_precision = 5
+        ) THEN
+          ALTER TABLE payroll_items ALTER COLUMN variance_percent TYPE DECIMAL(10,2);
         END IF;
       END $$;
 

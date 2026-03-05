@@ -30,12 +30,17 @@ const formatters = {
       const monthIndex = (parseInt(options.month) || 1) - 1;
       const paymentRef = `SALARY${monthNames[monthIndex]}${options.year || new Date().getFullYear()}`;
 
-      // Format crediting date as DD/MM/YYYY - must be at least tomorrow (can't submit same day after 3:30pm)
+      // Format crediting date as DD/MM/YYYY - must be next business day
+      // Maybank rejects weekends (Sat/Sun) as crediting dates
       let creditDate = options.creditingDate;
       if (!creditDate) {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        creditDate = `${String(tomorrow.getDate()).padStart(2, '0')}/${String(tomorrow.getMonth() + 1).padStart(2, '0')}/${tomorrow.getFullYear()}`;
+        const nextBizDay = new Date();
+        nextBizDay.setDate(nextBizDay.getDate() + 1);
+        // Skip Saturday (6) and Sunday (0)
+        while (nextBizDay.getDay() === 0 || nextBizDay.getDay() === 6) {
+          nextBizDay.setDate(nextBizDay.getDate() + 1);
+        }
+        creditDate = `${String(nextBizDay.getDate()).padStart(2, '0')}/${String(nextBizDay.getMonth() + 1).padStart(2, '0')}/${nextBizDay.getFullYear()}`;
       }
 
       // Header section (6 rows)
@@ -49,8 +54,11 @@ const formatters = {
       // Column headers
       lines.push('Beneficiary Name,Beneficiary Bank,Beneficiary Account No,ID Type,ID Number,Payment Amount,Payment Reference,Payment Description');
 
-      // Data rows
+      // Data rows - skip employees with zero/negative net pay (Maybank rejects RM 0.00 amounts)
       payrollItems.forEach(item => {
+        const netPay = parseFloat(item.net_pay) || 0;
+        if (netPay <= 0) return;
+
         const bankName = getMaybankBulkBankName(item.bank_name);
         // Strip dashes from IC number (e.g., 061009-14-1125 -> 061009141125)
         const icNumber = (item.ic_number || '').replace(/-/g, '');
