@@ -41,6 +41,8 @@ const {
   getAAAliveConfig,
   getEmployeeRoleType,
   calculateDriverPayroll,
+  calculateSecurityPayroll,
+  SECURITY_DAILY_RATE,
 } = require('../utils/aaalivePayroll');
 
 // =============================================================================
@@ -784,6 +786,26 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
           } catch (e) {
             console.warn(`AA Alive driver payroll failed for ${emp.name}:`, e.message);
           }
+        } else if (employeeRoleType === 'security') {
+          // Security guards: wage-based, RM10/hr × 12hrs/shift
+          // Auto-detect shift (day/night) from clock-in time
+          // No OT, deduction for short hours
+          try {
+            const securityPayroll = await calculateSecurityPayroll(
+              emp, periodStart, periodEnd, workingDays
+            );
+            // Security uses wages instead of basic salary
+            wages = securityPayroll.totalWages;
+            partTimeHoursWorked = securityPayroll.totalHoursWorked;
+            basicSalary = 0; // Security uses wages, not basic salary
+            // No OT for security
+            otHours = 0;
+            otAmount = 0;
+            // Short hours already factored into wages (paid only for actual hours, capped at 12)
+            // No separate short hours deduction needed - wages reflect actual paid hours
+          } catch (e) {
+            console.warn(`Security payroll failed for ${emp.name}:`, e.message);
+          }
         } else {
           // Office staff: standard calculation, commissions from flexible system
           // OT from standard clock-in calculation
@@ -872,8 +894,9 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let shortHours = 0, shortHoursDeduction = 0;
       let lateDays = 0, attendanceBonus = 0;
 
-      // Short hours calculation for ALL companies (full-time only)
-      if (!isPartTime && basicSalary > 0) {
+      // Short hours calculation for ALL companies (full-time only, not security - wages already reflect days worked)
+      const isSecurity = isAAAlive && employeeRoleType === 'security';
+      if (!isPartTime && !isSecurity && basicSalary > 0) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];
@@ -916,8 +939,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
         } catch (e) { console.warn(`Short hours calc failed for ${emp.name}:`, e.message); }
       }
 
-      // Calculate absent days from clock-in records (ALL companies including outlet)
-      if (!isPartTime) {
+      // Calculate absent days from clock-in records (ALL companies including outlet, not security)
+      if (!isPartTime && !isSecurity) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];

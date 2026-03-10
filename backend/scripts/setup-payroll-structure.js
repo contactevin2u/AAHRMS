@@ -2,7 +2,7 @@
  * Setup Script: Multi-Company Payroll Structure
  *
  * This script sets up:
- * 1. AA Alive Sdn Bhd (Company ID 1) with 5 departments
+ * 1. AA Alive Sdn Bhd (Company ID 1) with 6 departments
  * 2. Mimix A Sdn Bhd (Company ID 2) with 1 General department
  * 3. Department payroll components for each department
  *
@@ -81,6 +81,15 @@ const AA_ALIVE_DEPARTMENTS = [
       { component_name: 'allowance', is_enabled: true, is_required: false, display_order: 2, calculation_type: 'fixed' },
       { component_name: 'ot_amount', is_enabled: true, is_required: false, display_order: 3, calculation_type: 'hourly', calculation_config: { rate: 1.0, description: 'OT at 1.0x rate' } },
       { component_name: 'bonus', is_enabled: true, is_required: false, display_order: 4, calculation_type: 'fixed' }
+    ]
+  },
+  {
+    name: 'Security',
+    payroll_structure_code: 'security',
+    salary_type: 'hourly_wages',
+    components: [
+      { component_name: 'wages', is_enabled: true, is_required: true, display_order: 1, calculation_type: 'hourly', calculation_config: { hourly_rate: 10, shift_hours: 12, no_ot: true, no_break: true, shifts: ['07:00-19:00', '19:00-07:00'], description: 'RM10/hour × 12hrs/shift, no OT, deduction for short hours' } },
+      { component_name: 'allowance', is_enabled: true, is_required: false, display_order: 2, calculation_type: 'fixed' }
     ]
   }
 ];

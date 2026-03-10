@@ -519,7 +519,8 @@ const initDb = async () => {
         ('Driver', 'basic_trip_upsell_outstation_ot', 'driver', 1),
         ('Indoor Sales', 'basic_or_commission_higher', 'indoor_sales', 1),
         ('Office', 'basic_allowance_commission', 'office', 1),
-        ('Outdoor Sales', 'basic_allowance_commission_tier', 'outdoor_sales', 1)
+        ('Outdoor Sales', 'basic_allowance_commission_tier', 'outdoor_sales', 1),
+        ('Security', 'hourly_wages', 'security', 1)
       ON CONFLICT (name, company_id) DO NOTHING;
 
       -- =====================================================
