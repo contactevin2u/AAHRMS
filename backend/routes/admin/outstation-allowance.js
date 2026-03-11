@@ -140,14 +140,20 @@ router.get('/report', async (req, res) => {
     const totalShiftsFetched = shifts.length;
     console.log(`Outstation report: ${totalShiftsFetched} shifts fetched from OrderOps for ${start_date} to ${end_date}`);
 
-    // Group shifts by driver
+    // Log sample shift for debugging field names
+    if (shifts.length > 0) {
+      console.log('Outstation report: sample shift fields:', JSON.stringify(shifts[0], null, 2));
+    }
+
+    // Group shifts by driver - use driver_name as key since OrderOps may not have driver_id
     const driverShifts = {};
     for (const shift of shifts) {
-      const id = shift.driver_id;
+      const name = shift.driver_name || shift.name || 'Unknown';
+      const id = shift.driver_id || name;
       if (!driverShifts[id]) {
         driverShifts[id] = {
           driver_id: id,
-          driver_name: shift.driver_name || shift.name || `Driver ${id}`,
+          driver_name: name,
           base_warehouse: shift.warehouse || 'BATU_CAVES',
           shifts: []
         };
@@ -159,17 +165,31 @@ router.get('/report', async (req, res) => {
 
     for (const driver of Object.values(driverShifts)) {
       // Sort shifts by date
-      driver.shifts.sort((a, b) => (a.date || a.shift_date || '').localeCompare(b.date || b.shift_date || ''));
+      driver.shifts.sort((a, b) => {
+        const dateA = a.date || a.shift_date || (a.clock_in_at_myt || '').split(' ')[0] || '';
+        const dateB = b.date || b.shift_date || (b.clock_in_at_myt || '').split(' ')[0] || '';
+        return dateA.localeCompare(dateB);
+      });
+
+      // Deduplicate by date (keep first per date)
+      const shiftsByDate = {};
+      for (const s of driver.shifts) {
+        const d = s.date || s.shift_date || (s.clock_in_at_myt || '').split(' ')[0];
+        if (d && !shiftsByDate[d]) shiftsByDate[d] = s;
+      }
+      const uniqueShifts = Object.values(shiftsByDate);
 
       const warehouse = WAREHOUSES[driver.base_warehouse] || WAREHOUSES.BATU_CAVES;
       const qualifyingDays = [];
 
-      for (let i = 0; i < driver.shifts.length - 1; i++) {
-        const day1 = driver.shifts[i];
-        const day2 = driver.shifts[i + 1];
+      for (let i = 0; i < uniqueShifts.length - 1; i++) {
+        const day1 = uniqueShifts[i];
+        const day2 = uniqueShifts[i + 1];
 
-        const day1Date = day1.date || day1.shift_date;
-        const day2Date = day2.date || day2.shift_date;
+        const day1Date = day1.date || day1.shift_date || (day1.clock_in_at_myt || '').split(' ')[0];
+        const day2Date = day2.date || day2.shift_date || (day2.clock_in_at_myt || '').split(' ')[0];
+
+        if (!day1Date || !day2Date) continue;
 
         // Must be consecutive days
         const d1 = new Date(day1Date);
@@ -177,54 +197,59 @@ router.get('/report', async (req, res) => {
         const diffDays = (d2 - d1) / (1000 * 60 * 60 * 24);
         if (diffDays !== 1) continue;
 
-        const day1ClockOutLat = parseFloat(day1.clock_out_lat || day1.clock_out_latitude);
-        const day1ClockOutLng = parseFloat(day1.clock_out_lng || day1.clock_out_longitude);
-        const day2ClockInLat = parseFloat(day2.clock_in_lat || day2.clock_in_latitude);
-        const day2ClockInLng = parseFloat(day2.clock_in_lng || day2.clock_in_longitude);
-
-        if (isNaN(day1ClockOutLat) || isNaN(day1ClockOutLng) ||
-            isNaN(day2ClockInLat) || isNaN(day2ClockInLng)) continue;
-
-        // 1. Distance check: clock_out must be >180km from warehouse
-        const distKm = haversineKm(warehouse.lat, warehouse.lng, day1ClockOutLat, day1ClockOutLng);
-        if (distKm < minDistanceKm) continue;
-
-        // 2. Location check: is_outstation flag AND outside state bounds
+        // Check outstation flag
         const day1Outstation = day1.is_outstation === true || day1.is_outstation === 'true';
         const day2Outstation = day2.is_outstation === true || day2.is_outstation === 'true';
         if (!day1Outstation || !day2Outstation) continue;
-        if (isInsideStateBounds(day1ClockOutLat, day1ClockOutLng)) continue;
-        if (isInsideStateBounds(day2ClockInLat, day2ClockInLng)) continue;
 
-        // 3. Overnight check: clock_out ≈ clock_in next day (within 500m)
-        const overnightDist = haversineKm(day1ClockOutLat, day1ClockOutLng, day2ClockInLat, day2ClockInLng);
-        if (overnightDist > OVERNIGHT_TOLERANCE_KM) continue;
+        // Try GPS coordinates if available
+        const day1ClockOutLat = parseFloat(day1.clock_out_lat || day1.clock_out_latitude || 0);
+        const day1ClockOutLng = parseFloat(day1.clock_out_lng || day1.clock_out_longitude || 0);
+        const day2ClockInLat = parseFloat(day2.clock_in_lat || day2.clock_in_latitude || 0);
+        const day2ClockInLng = parseFloat(day2.clock_in_lng || day2.clock_in_longitude || 0);
 
-        // 4. Orders check: Day2 must have >3 successful deliveries
-        let ordersDay2 = 0;
+        let distKm = 0;
+        const hasGps = day1ClockOutLat !== 0 && day1ClockOutLng !== 0;
+
+        if (hasGps) {
+          // GPS-based distance check
+          distKm = haversineKm(warehouse.lat, warehouse.lng, day1ClockOutLat, day1ClockOutLng);
+          if (distKm < minDistanceKm) continue;
+          if (isInsideStateBounds(day1ClockOutLat, day1ClockOutLng)) continue;
+          if (day2ClockInLat !== 0 && day2ClockInLng !== 0) {
+            if (isInsideStateBounds(day2ClockInLat, day2ClockInLng)) continue;
+            const overnightDist = haversineKm(day1ClockOutLat, day1ClockOutLng, day2ClockInLat, day2ClockInLng);
+            if (overnightDist > OVERNIGHT_TOLERANCE_KM) continue;
+          }
+        }
+        // If no GPS, trust the is_outstation flag from OrderOps
+
+        // Orders check: Day2 deliveries (skip if API doesn't support it)
+        let ordersDay2 = null;
         try {
           const deliveries = await fetchApi('/deliveries', {
             driver_id: driver.driver_id,
             date: day2Date
           });
-          const deliveryList = deliveries.deliveries || deliveries.data || deliveries || [];
+          const deliveryList = deliveries.deliveries || deliveries.data || [];
           ordersDay2 = Array.isArray(deliveryList)
-            ? deliveryList.filter(d => d.status === 'delivered' || d.status === 'completed' || d.status === 'success').length
+            ? deliveryList.filter(d => ['delivered', 'completed', 'success'].includes(d.status)).length
             : 0;
         } catch (err) {
-          console.error(`Failed to fetch deliveries for driver ${driver.driver_id} on ${day2Date}:`, err.message);
-          continue;
+          // Deliveries endpoint may not exist - skip this check
+          ordersDay2 = null;
         }
 
-        if (ordersDay2 <= MIN_DELIVERIES_DAY2) continue;
+        // Only enforce delivery count if we got data
+        if (ordersDay2 !== null && ordersDay2 <= MIN_DELIVERIES_DAY2) continue;
 
         qualifyingDays.push({
           date: day1Date,
           next_date: day2Date,
-          distance_km: Math.round(distKm * 10) / 10,
-          clock_out_location: day1.clock_out_location || day1.location || 'Unknown',
-          clock_in_location: day2.clock_in_location || day2.location || 'Unknown',
-          orders_delivered_day2: ordersDay2,
+          distance_km: hasGps ? Math.round(distKm * 10) / 10 : 'N/A (no GPS)',
+          clock_out_location: day1.clock_out_location || day1.location || 'Outstation',
+          clock_in_location: day2.clock_in_location || day2.location || 'Outstation',
+          orders_delivered_day2: ordersDay2 !== null ? ordersDay2 : 'N/A',
           allowance: allowancePerDay
         });
       }
