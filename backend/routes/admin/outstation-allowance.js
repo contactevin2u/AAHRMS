@@ -9,8 +9,8 @@ const router = express.Router();
 const https = require('https');
 const pool = require('../../db');
 
-const API_BASE = process.env.ORDEROPS_API_URL || 'https://orderops-api-v1.onrender.com/_api/external/hrms';
-const API_KEY = process.env.ORDEROPS_API_KEY || 'aahrms-orderops-integration-key';
+const API_BASE = process.env.AAALIVE_API_URL || 'https://orderops-api-v1.onrender.com/_api/external';
+const API_KEY = process.env.AAALIVE_API_KEY;
 
 const WAREHOUSES = {
   BATU_CAVES: { lat: 3.2374, lng: 101.6878 },
@@ -114,21 +114,30 @@ router.get('/report', async (req, res) => {
       }
     } catch (e) { /* use defaults */ }
 
-    // Fetch shifts from OrderOps
-    const shiftParams = { start_date, end_date };
-    if (driver_id) shiftParams.driver_id = driver_id;
+    // Fetch shifts from OrderOps day by day (API uses shift_date param)
+    if (!API_KEY) {
+      return res.status(500).json({ error: 'AAALIVE_API_KEY not configured' });
+    }
 
-    let shiftsData;
+    let allShifts = [];
     let apiError = null;
     try {
-      shiftsData = await fetchApi('/shifts', shiftParams);
+      const startD = new Date(start_date);
+      const endD = new Date(end_date);
+      for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        const params = { shift_date: dateStr };
+        if (driver_id) params.driver_id = driver_id;
+        const dayData = await fetchApi('/shifts', params);
+        const dayShifts = dayData.shifts || dayData.data || [];
+        if (Array.isArray(dayShifts)) allShifts = allShifts.concat(dayShifts);
+      }
     } catch (err) {
       console.error('OrderOps API error:', err.message);
       apiError = err.message;
-      shiftsData = {};
     }
-    const shifts = shiftsData.shifts || shiftsData.data || shiftsData || [];
-    const totalShiftsFetched = Array.isArray(shifts) ? shifts.length : 0;
+    const shifts = allShifts;
+    const totalShiftsFetched = shifts.length;
     console.log(`Outstation report: ${totalShiftsFetched} shifts fetched from OrderOps for ${start_date} to ${end_date}`);
 
     // Group shifts by driver
