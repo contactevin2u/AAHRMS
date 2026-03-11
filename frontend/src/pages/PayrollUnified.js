@@ -630,6 +630,46 @@ function PayrollUnified() {
     }
   };
 
+  const handleCombinedDownload = async (type) => {
+    if (!selectedRun) return;
+    const params = { month: selectedRun.month, year: selectedRun.year };
+    try {
+      let res, fallbackFilename, mimeType = 'text/plain';
+      if (type === 'epf') {
+        res = await payrollV2Api.getCombinedEpfFile(params);
+        fallbackFilename = `KWSP_All_${params.month}_${params.year}.txt`;
+      } else if (type === 'perkeso') {
+        res = await payrollV2Api.getCombinedPerkesoFile(params);
+        fallbackFilename = `PERKESO_All_${params.month}_${params.year}.txt`;
+      } else if (type === 'pcb') {
+        res = await contributionsApi.exportCombinedPCB(params);
+        fallbackFilename = `PCB_All_${params.month}_${params.year}.csv`;
+        mimeType = 'text/csv';
+      } else return;
+
+      const blob = new Blob([res.data], { type: mimeType });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const disposition = res.headers['content-disposition'];
+      let filename = fallbackFilename;
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      const errorMsg = error.response?.data instanceof Blob
+        ? await error.response.data.text().then(t => { try { return JSON.parse(t).error; } catch { return t; } })
+        : (error.response?.data?.error || error.message);
+      alert('Failed to download file: ' + errorMsg);
+    }
+  };
+
   const openExclusionModal = (type) => {
     if (!selectedRun?.items) return;
     const flagField = type === 'epf' ? 'include_in_epf' : 'include_in_perkeso';
@@ -1344,6 +1384,19 @@ function PayrollUnified() {
                       );
                     });
                   })()}
+                </div>
+              )}
+              {/* Combined Downloads for AA Alive */}
+              {isAAAlive && selectedRun && (
+                <div style={{ marginTop: '12px', padding: '12px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>
+                    All Departments - {getMonthName(selectedRun.month)} {selectedRun.year}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <button onClick={() => handleCombinedDownload('epf')} className="download-btn" style={{ fontSize: '12px', padding: '6px 10px', width: '100%' }}>KWSP .txt (All Staff)</button>
+                    <button onClick={() => handleCombinedDownload('perkeso')} className="download-btn" style={{ fontSize: '12px', padding: '6px 10px', width: '100%' }}>PERKESO .txt (All Staff)</button>
+                    <button onClick={() => handleCombinedDownload('pcb')} className="download-btn" style={{ fontSize: '12px', padding: '6px 10px', width: '100%' }}>PCB CSV (All Staff)</button>
+                  </div>
                 </div>
               )}
             </div>
