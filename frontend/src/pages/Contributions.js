@@ -112,6 +112,7 @@ function Contributions() {
       let res;
       let fallbackFilename;
 
+      let mimeType = 'text/plain';
       switch (type) {
         case 'epf':
           res = await payrollV2Api.getCombinedEpfFile(params);
@@ -121,11 +122,16 @@ function Contributions() {
           res = await payrollV2Api.getCombinedPerkesoFile(params);
           fallbackFilename = `PERKESO_All_${combinedMonth}_${combinedYear}.txt`;
           break;
+        case 'pcb':
+          res = await contributionsApi.exportCombinedPCB(params);
+          fallbackFilename = `PCB_All_${combinedMonth}_${combinedYear}.csv`;
+          mimeType = 'text/csv';
+          break;
         default:
           return;
       }
 
-      const blob = new Blob([res.data], { type: 'text/plain' });
+      const blob = new Blob([res.data], { type: mimeType });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -296,6 +302,7 @@ function Contributions() {
                   <div className="contribution-card pcb">
                     <div className="card-header">
                       <h3>PCB (LHDN)</h3>
+                      <button onClick={() => handleCombinedExport('pcb')} className="export-btn">Download CSV</button>
                     </div>
                     <div className="card-body">
                       <div className="contrib-row total"><span>Total Tax</span><span>{formatAmount(combinedSummary.contributions.pcb.total)}</span></div>
