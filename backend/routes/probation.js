@@ -2,22 +2,31 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
+const { getCompanyFilter } = require('../middleware/tenant');
 
 // Get employees with probation ending soon (within 7 days or already past)
 router.get('/pending', authenticateAdmin, async (req, res) => {
   try {
+    const companyId = getCompanyFilter(req);
+
     // First, auto-update probation_status to 'pending_review' for employees within 7 days
-    await pool.query(`
+    let updateQuery = `
       UPDATE employees
       SET probation_status = 'pending_review', updated_at = NOW()
       WHERE status = 'active'
         AND employment_type = 'probation'
         AND probation_status = 'ongoing'
         AND probation_end_date <= CURRENT_DATE + INTERVAL '7 days'
-    `);
+    `;
+    const updateParams = [];
+    if (companyId !== null) {
+      updateParams.push(companyId);
+      updateQuery += ` AND company_id = $${updateParams.length}`;
+    }
+    await pool.query(updateQuery, updateParams);
 
     // Get all employees pending review
-    const result = await pool.query(`
+    let selectQuery = `
       SELECT e.*, d.name as department_name
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.id
@@ -28,8 +37,15 @@ router.get('/pending', authenticateAdmin, async (req, res) => {
           OR (e.probation_status = 'ongoing' AND e.probation_end_date <= CURRENT_DATE + INTERVAL '7 days')
           OR (e.probation_status = 'extended' AND e.probation_end_date <= CURRENT_DATE + INTERVAL '7 days')
         )
-      ORDER BY e.probation_end_date ASC
-    `);
+    `;
+    const selectParams = [];
+    if (companyId !== null) {
+      selectParams.push(companyId);
+      selectQuery += ` AND e.company_id = $${selectParams.length}`;
+    }
+    selectQuery += ` ORDER BY e.probation_end_date ASC`;
+
+    const result = await pool.query(selectQuery, selectParams);
 
     res.json(result.rows);
   } catch (error) {
@@ -41,6 +57,7 @@ router.get('/pending', authenticateAdmin, async (req, res) => {
 // Get all employees with probation info
 router.get('/all', authenticateAdmin, async (req, res) => {
   try {
+    const companyId = getCompanyFilter(req);
     const { employment_type, probation_status } = req.query;
 
     let query = `
@@ -51,6 +68,12 @@ router.get('/all', authenticateAdmin, async (req, res) => {
     `;
     const params = [];
     let paramCount = 0;
+
+    if (companyId !== null) {
+      paramCount++;
+      query += ` AND e.company_id = $${paramCount}`;
+      params.push(companyId);
+    }
 
     if (employment_type) {
       paramCount++;
