@@ -4634,6 +4634,240 @@ router.get('/runs/:id/perkeso-file', authenticateAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/payroll/combined-epf-file
+ * Generate combined KWSP/EPF e-Caruman file for ALL departments of a company in a month/year
+ * Same fixed-width format as per-run EPF file (129 chars per line)
+ */
+router.get('/combined-epf-file', authenticateAdmin, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const companyId = req.companyId;
+
+    if (!companyId || !month || !year) {
+      return res.status(400).json({ error: 'Company, month, and year are required' });
+    }
+
+    // Get company EPF code
+    const compResult = await pool.query(
+      'SELECT name, epf_code FROM companies WHERE id = $1', [companyId]
+    );
+    if (compResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    const company = compResult.rows[0];
+    const epfCode = company.epf_code || '';
+    if (!epfCode) {
+      return res.status(400).json({ error: 'EPF employer code not configured for this company' });
+    }
+
+    // Get ALL payroll items across all department runs for this month/year
+    const itemsResult = await pool.query(`
+      SELECT pi.*, e.name as employee_name, e.ic_number, e.epf_number,
+             e.employment_type
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pr.company_id = $1 AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('draft', 'finalized')
+      ORDER BY e.name
+    `, [companyId, month, year]);
+
+    if (itemsResult.rows.length === 0) {
+      return res.status(400).json({ error: 'No payroll data found for this period' });
+    }
+
+    const empTypeMap = { confirmed: 'CS', full_time: 'FT', part_time: 'PT', probation: 'FT' };
+
+    function getAlias(name) {
+      const parts = (name || '').toUpperCase().trim().split(/\s+/);
+      const skip = ['MUHAMMAD', 'MUHAMAD', 'NUR', 'NURUL', 'SITI', 'WAN', 'NIK', 'AHMAD'];
+      let alias = parts[0] || '';
+      if (skip.includes(alias) && parts.length > 1) alias = parts[1];
+      return alias.substring(0, 18);
+    }
+
+    const monthStr = String(month).padStart(2, '0') + String(year);
+    const today = new Date();
+    const dateStr = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
+
+    let totalEr = 0, totalEe = 0, sumMemberNos = 0;
+    const empLines = [];
+
+    for (const item of itemsResult.rows) {
+      const ic = (item.ic_number || '').replace(/-/g, '').trim();
+      const name = (item.employee_name || '').toUpperCase().trim();
+      const memberNo = parseInt(item.epf_number) || 0;
+      const empType = empTypeMap[item.employment_type] || 'FT';
+      const alias = getAlias(item.employee_name);
+
+      const epfEr = Math.round((parseFloat(item.epf_employer) || 0) * 100);
+      const epfEe = Math.round((parseFloat(item.epf_employee) || 0) * 100);
+      const wages = Math.round((parseFloat(item.statutory_base) || 0) * 100);
+
+      totalEr += epfEr;
+      totalEe += epfEe;
+      sumMemberNos += memberNo;
+
+      const line =
+        '02' +
+        String(memberNo).padStart(19, '0') +
+        ic.padEnd(12, ' ') +
+        '   ' +
+        name.substring(0, 40).padEnd(40, ' ') +
+        empType.padEnd(2, ' ') +
+        alias.padEnd(18, ' ') +
+        String(epfEr).padStart(9, '0') +
+        String(epfEe).padStart(9, '0') +
+        String(wages).padStart(15, '0');
+
+      empLines.push(line);
+    }
+
+    const epfCodePadded = String(epfCode).padStart(19, '0');
+    const empCount = empLines.length;
+
+    const rec00 =
+      '00' +
+      'EPF MONTHLY FORM A' +
+      dateStr +
+      '00001' +
+      String(totalEr).padStart(15, '0') +
+      String(totalEe).padStart(15, '0') +
+      epfCodePadded +
+      ' '.repeat(47);
+
+    const rec01 =
+      '01' +
+      epfCodePadded +
+      monthStr +
+      'DSK' +
+      '00001' +
+      '00000000' +
+      ' '.repeat(86);
+
+    const rec99 =
+      '99' +
+      String(empCount).padStart(7, '0') +
+      String(totalEr).padStart(15, '0') +
+      String(totalEe).padStart(15, '0') +
+      String(sumMemberNos).padStart(21, '0') +
+      ' '.repeat(69);
+
+    const lines = [rec00, rec01, ...empLines, rec99];
+    const content = lines.join('\r\n') + '\r\n';
+
+    const monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const monthLabel = monthNames[parseInt(month) - 1] || String(month).padStart(2, '0');
+    const companyShort = company.name.toUpperCase().replace(/\s+SDN\s+BHD.*$/i, '').trim();
+    const filename = `KWSP ${companyShort} ${monthLabel} ${year}.txt`;
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.send(content);
+
+  } catch (error) {
+    console.error('Error generating combined EPF file:', error);
+    res.status(500).json({ error: 'Failed to generate combined EPF file: ' + error.message });
+  }
+});
+
+/**
+ * GET /api/payroll/combined-perkeso-file
+ * Generate combined PERKESO ASSIST file for ALL departments of a company in a month/year
+ * Same fixed-width format as per-run PERKESO file (278 chars per line)
+ */
+router.get('/combined-perkeso-file', authenticateAdmin, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const companyId = req.companyId;
+
+    if (!companyId || !month || !year) {
+      return res.status(400).json({ error: 'Company, month, and year are required' });
+    }
+
+    // Get company SOCSO code
+    const compResult = await pool.query(
+      'SELECT name, socso_code, payroll_config FROM companies WHERE id = $1', [companyId]
+    );
+    if (compResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    const company = compResult.rows[0];
+    const socsoCode = company.socso_code || (company.payroll_config && company.payroll_config.socso_code) || '';
+    if (!socsoCode) {
+      return res.status(400).json({ error: 'SOCSO employer code not configured for this company' });
+    }
+
+    // Get ALL payroll items across all department runs for this month/year
+    const itemsResult = await pool.query(`
+      SELECT pi.*, e.name as employee_name, e.ic_number
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      WHERE pr.company_id = $1 AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('draft', 'finalized')
+      ORDER BY e.name
+    `, [companyId, month, year]);
+
+    if (itemsResult.rows.length === 0) {
+      return res.status(400).json({ error: 'No payroll data found for this period' });
+    }
+
+    const monthStr = String(month).padStart(2, '0') + String(year);
+    const lines = [];
+
+    for (const item of itemsResult.rows) {
+      const ic = (item.ic_number || '').replace(/-/g, '').trim();
+      const name = (item.employee_name || '').toUpperCase().trim();
+
+      const statutoryBase = parseFloat(item.statutory_base) || 0;
+      const socsoEr = parseFloat(item.socso_employer) || 0;
+      const socsoEe = parseFloat(item.socso_employee) || 0;
+      const eisEr = parseFloat(item.eis_employer) || 0;
+      const eisEe = parseFloat(item.eis_employee) || 0;
+
+      const wagesSen = Math.round(statutoryBase * 100);
+      const socsoErSen = Math.round(socsoEr * 100);
+      const socsoEeSen = Math.round(socsoEe * 100);
+      const eisErSen = Math.round(eisEr * 100);
+      const eisEeSen = Math.round(eisEe * 100);
+
+      const line =
+        socsoCode.padEnd(12, ' ') +
+        ' '.repeat(20) +
+        ic.padEnd(12, ' ') +
+        name.padEnd(150, ' ') +
+        monthStr +
+        String(wagesSen).padStart(14, ' ') +
+        String(socsoErSen).padStart(6, ' ') +
+        String(socsoEeSen).padStart(6, ' ') +
+        String(eisErSen).padStart(6, ' ') +
+        String(eisEeSen).padStart(6, ' ') +
+        ' '.repeat(40);
+
+      lines.push(line);
+    }
+
+    const content = lines.join('\r\n') + '\r\n';
+
+    const monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const monthLabel = monthNames[parseInt(month) - 1] || String(month).padStart(2, '0');
+    const companyShort = company.name.toUpperCase().replace(/\s+SDN\s+BHD.*$/i, '').trim();
+    const filename = `PERKESO ${companyShort} ${monthLabel} ${year}.txt`;
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.send(content);
+
+  } catch (error) {
+    console.error('Error generating combined PERKESO file:', error);
+    res.status(500).json({ error: 'Failed to generate combined PERKESO file: ' + error.message });
+  }
+});
+
+/**
  * GET /api/payroll/runs/:id/salary-report
  * Generate salary report with all employee details and bank info
  * Returns CSV for draft, or data for PDF generation

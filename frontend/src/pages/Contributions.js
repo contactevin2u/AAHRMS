@@ -110,40 +110,42 @@ function Contributions() {
     try {
       const params = { month: combinedMonth, year: combinedYear };
       let res;
-      let filename;
+      let fallbackFilename;
 
       switch (type) {
         case 'epf':
-          res = await contributionsApi.exportCombinedEPF(params);
-          filename = `EPF_All_${combinedMonth}_${combinedYear}.csv`;
+          res = await payrollV2Api.getCombinedEpfFile(params);
+          fallbackFilename = `KWSP_All_${combinedMonth}_${combinedYear}.txt`;
           break;
         case 'socso':
-          res = await contributionsApi.exportCombinedSOCSO(params);
-          filename = `SOCSO_All_${combinedMonth}_${combinedYear}.csv`;
-          break;
-        case 'eis':
-          res = await contributionsApi.exportCombinedEIS(params);
-          filename = `EIS_All_${combinedMonth}_${combinedYear}.csv`;
-          break;
-        case 'pcb':
-          res = await contributionsApi.exportCombinedPCB(params);
-          filename = `PCB_All_${combinedMonth}_${combinedYear}.csv`;
+          res = await payrollV2Api.getCombinedPerkesoFile(params);
+          fallbackFilename = `PERKESO_All_${combinedMonth}_${combinedYear}.txt`;
           break;
         default:
           return;
       }
 
-      const blob = new Blob([res.data], { type: 'text/csv' });
+      const blob = new Blob([res.data], { type: 'text/plain' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
+      // Try to get filename from Content-Disposition header
+      const disposition = res.headers['content-disposition'];
+      let filename = fallbackFilename;
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      alert('Failed to export file');
+      const errorMsg = error.response?.data instanceof Blob
+        ? await error.response.data.text().then(t => { try { return JSON.parse(t).error; } catch { return t; } })
+        : (error.response?.data?.error || error.message);
+      alert('Failed to export file: ' + errorMsg);
     }
   };
 
@@ -268,7 +270,7 @@ function Contributions() {
                   <div className="contribution-card epf">
                     <div className="card-header">
                       <h3>EPF (KWSP)</h3>
-                      <button onClick={() => handleCombinedExport('epf')} className="export-btn">Export All</button>
+                      <button onClick={() => handleCombinedExport('epf')} className="export-btn">Download .txt</button>
                     </div>
                     <div className="card-body">
                       <div className="contrib-row"><span>Employee</span><span>{formatAmount(combinedSummary.contributions.epf.employee)}</span></div>
@@ -279,32 +281,21 @@ function Contributions() {
 
                   <div className="contribution-card socso">
                     <div className="card-header">
-                      <h3>SOCSO (PERKESO)</h3>
-                      <button onClick={() => handleCombinedExport('socso')} className="export-btn">Export All</button>
+                      <h3>SOCSO + EIS (PERKESO)</h3>
+                      <button onClick={() => handleCombinedExport('socso')} className="export-btn">Download .txt</button>
                     </div>
                     <div className="card-body">
-                      <div className="contrib-row"><span>Employee</span><span>{formatAmount(combinedSummary.contributions.socso.employee)}</span></div>
-                      <div className="contrib-row"><span>Employer</span><span>{formatAmount(combinedSummary.contributions.socso.employer)}</span></div>
-                      <div className="contrib-row total"><span>Total to Pay</span><span>{formatAmount(combinedSummary.contributions.socso.total)}</span></div>
-                    </div>
-                  </div>
-
-                  <div className="contribution-card eis">
-                    <div className="card-header">
-                      <h3>EIS (SIP)</h3>
-                      <button onClick={() => handleCombinedExport('eis')} className="export-btn">Export All</button>
-                    </div>
-                    <div className="card-body">
-                      <div className="contrib-row"><span>Employee</span><span>{formatAmount(combinedSummary.contributions.eis.employee)}</span></div>
-                      <div className="contrib-row"><span>Employer</span><span>{formatAmount(combinedSummary.contributions.eis.employer)}</span></div>
-                      <div className="contrib-row total"><span>Total to Pay</span><span>{formatAmount(combinedSummary.contributions.eis.total)}</span></div>
+                      <div className="contrib-row"><span>SOCSO Employee</span><span>{formatAmount(combinedSummary.contributions.socso.employee)}</span></div>
+                      <div className="contrib-row"><span>SOCSO Employer</span><span>{formatAmount(combinedSummary.contributions.socso.employer)}</span></div>
+                      <div className="contrib-row"><span>EIS Employee</span><span>{formatAmount(combinedSummary.contributions.eis.employee)}</span></div>
+                      <div className="contrib-row"><span>EIS Employer</span><span>{formatAmount(combinedSummary.contributions.eis.employer)}</span></div>
+                      <div className="contrib-row total"><span>Total to Pay</span><span>{formatAmount(combinedSummary.contributions.socso.total + combinedSummary.contributions.eis.total)}</span></div>
                     </div>
                   </div>
 
                   <div className="contribution-card pcb">
                     <div className="card-header">
                       <h3>PCB (LHDN)</h3>
-                      <button onClick={() => handleCombinedExport('pcb')} className="export-btn">Export All</button>
                     </div>
                     <div className="card-body">
                       <div className="contrib-row total"><span>Total Tax</span><span>{formatAmount(combinedSummary.contributions.pcb.total)}</span></div>

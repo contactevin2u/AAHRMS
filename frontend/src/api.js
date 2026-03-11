@@ -215,6 +215,8 @@ export const payrollV2Api = {
     params: exclude.length ? { exclude: exclude.join(',') } : {},
     responseType: 'blob'
   }),
+  getCombinedEpfFile: (params) => api.get('/payroll/combined-epf-file', { params, responseType: 'blob' }),
+  getCombinedPerkesoFile: (params) => api.get('/payroll/combined-perkeso-file', { params, responseType: 'blob' }),
   getSalaryReport: (id, format = 'csv') => api.get(`/payroll/runs/${id}/salary-report`, {
     params: { format },
     responseType: format === 'csv' ? 'blob' : 'json'
