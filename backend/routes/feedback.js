@@ -37,15 +37,25 @@ router.post('/submit', async (req, res) => {
   }
 });
 
-// ADMIN: Get all feedback (requires auth)
+// ADMIN: Get all feedback (requires auth, filtered by company)
 router.get('/all', authenticateAdmin, async (req, res) => {
   try {
     const { category, is_read, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
+    // Determine company_id for filtering
+    const companyId = req.companyId || null;
+
     let query = 'SELECT * FROM anonymous_feedback WHERE 1=1';
     const params = [];
     let paramCount = 0;
+
+    // Filter by company if a company is selected
+    if (companyId) {
+      paramCount++;
+      query += ` AND company_id = $${paramCount}`;
+      params.push(parseInt(companyId));
+    }
 
     if (category) {
       paramCount++;
@@ -75,6 +85,12 @@ router.get('/all', authenticateAdmin, async (req, res) => {
     let countQuery = 'SELECT COUNT(*) FROM anonymous_feedback WHERE 1=1';
     const countParams = [];
     let countParamNum = 0;
+
+    if (companyId) {
+      countParamNum++;
+      countQuery += ` AND company_id = $${countParamNum}`;
+      countParams.push(parseInt(companyId));
+    }
 
     if (category) {
       countParamNum++;
@@ -153,6 +169,10 @@ router.patch('/:id/notes', authenticateAdmin, async (req, res) => {
 // ADMIN: Get statistics
 router.get('/stats', authenticateAdmin, async (req, res) => {
   try {
+    const companyId = req.companyId || null;
+    const companyFilter = companyId ? 'WHERE company_id = $1' : '';
+    const companyParams = companyId ? [parseInt(companyId)] : [];
+
     const stats = await pool.query(`
       SELECT
         COUNT(*) as total,
@@ -160,14 +180,16 @@ router.get('/stats', authenticateAdmin, async (req, res) => {
         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as last_week,
         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') as last_month
       FROM anonymous_feedback
-    `);
+      ${companyFilter}
+    `, companyParams);
 
     const byCategory = await pool.query(`
       SELECT category, COUNT(*) as count
       FROM anonymous_feedback
+      ${companyFilter}
       GROUP BY category
       ORDER BY count DESC
-    `);
+    `, companyParams);
 
     res.json({
       overview: stats.rows[0],

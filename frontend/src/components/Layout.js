@@ -249,6 +249,12 @@ function Layout({ children }) {
         <span className="nav-icon">💰</span>
         <span>Payroll</span>
       </NavLink>
+
+      {/* Feedback */}
+      <NavLink to="/admin/feedback" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+        <span className="nav-icon">💬</span>
+        <span>Feedback</span>
+      </NavLink>
     </>
   );
 

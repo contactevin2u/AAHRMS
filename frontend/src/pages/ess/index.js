@@ -28,6 +28,7 @@ export { default as ESSPayslips } from './ESSPayslips';
 export { default as ESSNotifications } from './ESSNotifications';
 export { default as ESSLetters } from './ESSLetters';
 export { default as ESSBenefits } from './ESSBenefits';
+export { default as ESSFeedback } from './ESSFeedback';
 
 // Supervisor/Manager Pages
 export { default as ESSTeamSchedule } from './ESSTeamSchedule';

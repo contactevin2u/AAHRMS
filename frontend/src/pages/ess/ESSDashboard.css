@@ -159,6 +159,16 @@
   color: white;
 }
 
+.action-card.feedback {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: white;
+}
+
+.action-card.feedback .action-icon,
+.action-card.feedback .action-label {
+  color: white;
+}
+
 .action-icon {
   font-size: 28px;
   display: block;

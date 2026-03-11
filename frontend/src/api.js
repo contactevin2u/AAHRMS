@@ -749,6 +749,9 @@ export const essApi = {
   getBenefits: () => api.get('/ess/benefits', essApiConfig),
   getBenefitsHistory: (params) => api.get('/ess/benefits/history', { params, ...essApiConfig }),
 
+  // Anonymous Feedback (AA Alive only)
+  submitFeedback: (data) => api.post('/ess/feedback/submit', data, essApiConfig),
+
   // Schedules (Mimix only)
   getTodaySchedule: () => api.get('/ess/schedules/today', essApiConfig),
   getMySchedule: (year, month) => api.get('/ess/schedules/my-schedule', { params: { year, month }, ...essApiConfig }),

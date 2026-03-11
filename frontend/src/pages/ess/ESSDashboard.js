@@ -259,6 +259,12 @@ function ESSDashboard() {
               <span className="action-label">{t('dashboard.quickActions.payslips')}</span>
             </Link>
           )}
+          {employeeInfo?.company_id === 1 && (
+            <Link to="/ess/feedback" className="action-card feedback">
+              <span className="action-icon">&#x1F4AC;</span>
+              <span className="action-label">{t('dashboard.quickActions.feedback')}</span>
+            </Link>
+          )}
         </div>
 
         {/* Stats Cards */}

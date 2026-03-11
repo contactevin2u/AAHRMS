@@ -24,6 +24,7 @@ const schedulesRoutes = require('./schedules');
 // const shiftSwapRoutes = require('./shiftSwap');
 const managerOverviewRoutes = require('./managerOverview');
 const otApprovalRoutes = require('./otApproval');
+const feedbackRoutes = require('./feedback');
 
 // Mount sub-routes
 // Auth routes (login, password reset, etc.) - no prefix needed
@@ -67,5 +68,8 @@ router.use('/manager-overview', managerOverviewRoutes);
 
 // OT Batch Approval routes (supervisors/managers only)
 router.use('/ot-approvals', otApprovalRoutes);
+
+// Anonymous Feedback routes (authenticated for company_id, but anonymous)
+router.use('/feedback', feedbackRoutes);
 
 module.exports = router;

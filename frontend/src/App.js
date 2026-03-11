@@ -32,7 +32,7 @@ import Analytics from './pages/Analytics';
 // Mimix Staff Portal - redirects to ESS
 import MimixLogin from './pages/MimixLogin';
 // New Unified ESS PWA (5 main nav items + auth + support pages)
-import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSProfile, ESSSchedule, ESSRequests, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters, ESSTeamSchedule, ESSOTApproval, ESSManagerOverview } from './pages/ess';
+import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSFeedback, ESSProfile, ESSSchedule, ESSRequests, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters, ESSTeamSchedule, ESSOTApproval, ESSManagerOverview } from './pages/ess';
 import Schedules from './pages/Schedules';
 import IndoorSalesSchedule from './pages/IndoorSalesSchedule';
 import IndoorSalesCommission from './pages/IndoorSalesCommission';
@@ -479,6 +479,14 @@ function App() {
           element={
             <ESSProtectedRoute>
               <ESSBenefits />
+            </ESSProtectedRoute>
+          }
+        />
+        <Route
+          path="/ess/feedback"
+          element={
+            <ESSProtectedRoute>
+              <ESSFeedback />
             </ESSProtectedRoute>
           }
         />
