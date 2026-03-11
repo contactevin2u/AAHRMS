@@ -10,8 +10,22 @@ function Contributions() {
   const [details, setDetails] = useState([]);
   const [yearReport, setYearReport] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('summary'); // 'summary' or 'yearly'
+  const [view, setView] = useState('summary'); // 'summary', 'yearly', or 'combined'
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [combinedMonth, setCombinedMonth] = useState(new Date().getMonth() + 1);
+  const [combinedYear, setCombinedYear] = useState(new Date().getFullYear());
+  const [combinedSummary, setCombinedSummary] = useState(null);
+  const [combinedDetails, setCombinedDetails] = useState([]);
+  const [combinedLoading, setCombinedLoading] = useState(false);
+
+  // Check if current company is AA Alive
+  const isAAAlive = () => {
+    const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+    const companyId = adminInfo.role === 'super_admin'
+      ? parseInt(localStorage.getItem('selectedCompanyId') || '0')
+      : adminInfo.company_id;
+    return companyId === 1;
+  };
 
   useEffect(() => {
     fetchRuns();
@@ -68,6 +82,68 @@ function Contributions() {
       setYearReport(res.data);
     } catch (error) {
       console.error('Error fetching yearly report:', error);
+    }
+  };
+
+  const fetchCombinedSummary = async () => {
+    setCombinedLoading(true);
+    try {
+      const res = await contributionsApi.getCombinedSummary({ month: combinedMonth, year: combinedYear });
+      setCombinedSummary(res.data);
+      setCombinedDetails(res.data.details || []);
+    } catch (error) {
+      console.error('Error fetching combined summary:', error);
+      setCombinedSummary(null);
+      setCombinedDetails([]);
+    } finally {
+      setCombinedLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === 'combined') {
+      fetchCombinedSummary();
+    }
+  }, [combinedMonth, combinedYear, view]);
+
+  const handleCombinedExport = async (type) => {
+    try {
+      const params = { month: combinedMonth, year: combinedYear };
+      let res;
+      let filename;
+
+      switch (type) {
+        case 'epf':
+          res = await contributionsApi.exportCombinedEPF(params);
+          filename = `EPF_All_${combinedMonth}_${combinedYear}.csv`;
+          break;
+        case 'socso':
+          res = await contributionsApi.exportCombinedSOCSO(params);
+          filename = `SOCSO_All_${combinedMonth}_${combinedYear}.csv`;
+          break;
+        case 'eis':
+          res = await contributionsApi.exportCombinedEIS(params);
+          filename = `EIS_All_${combinedMonth}_${combinedYear}.csv`;
+          break;
+        case 'pcb':
+          res = await contributionsApi.exportCombinedPCB(params);
+          filename = `PCB_All_${combinedMonth}_${combinedYear}.csv`;
+          break;
+        default:
+          return;
+      }
+
+      const blob = new Blob([res.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      alert('Failed to export file');
     }
   };
 
@@ -139,8 +215,16 @@ function Contributions() {
               className={`toggle-btn ${view === 'summary' ? 'active' : ''}`}
               onClick={() => setView('summary')}
             >
-              Monthly View
+              Per Department
             </button>
+            {isAAAlive() && (
+              <button
+                className={`toggle-btn ${view === 'combined' ? 'active' : ''}`}
+                onClick={() => setView('combined')}
+              >
+                All Staff
+              </button>
+            )}
             <button
               className={`toggle-btn ${view === 'yearly' ? 'active' : ''}`}
               onClick={() => setView('yearly')}
@@ -150,7 +234,138 @@ function Contributions() {
           </div>
         </header>
 
-        {view === 'summary' ? (
+        {view === 'combined' ? (
+          <div className="combined-view">
+            <div className="combined-selectors">
+              <div className="selector-group">
+                <label>Month:</label>
+                <select value={combinedMonth} onChange={(e) => setCombinedMonth(parseInt(e.target.value))}>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={m}>{getMonthName(m)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="selector-group">
+                <label>Year:</label>
+                <select value={combinedYear} onChange={(e) => setCombinedYear(parseInt(e.target.value))}>
+                  {[2024, 2025, 2026].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {combinedLoading ? (
+              <div className="loading">Loading...</div>
+            ) : combinedSummary ? (
+              <>
+                <div className="summary-header">
+                  <h2>{getMonthName(combinedMonth)} {combinedYear} - All Departments</h2>
+                  <span className="employee-count">{combinedSummary.employee_count} employees</span>
+                </div>
+
+                <div className="contribution-cards">
+                  <div className="contribution-card epf">
+                    <div className="card-header">
+                      <h3>EPF (KWSP)</h3>
+                      <button onClick={() => handleCombinedExport('epf')} className="export-btn">Export All</button>
+                    </div>
+                    <div className="card-body">
+                      <div className="contrib-row"><span>Employee</span><span>{formatAmount(combinedSummary.contributions.epf.employee)}</span></div>
+                      <div className="contrib-row"><span>Employer</span><span>{formatAmount(combinedSummary.contributions.epf.employer)}</span></div>
+                      <div className="contrib-row total"><span>Total to Pay</span><span>{formatAmount(combinedSummary.contributions.epf.total)}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="contribution-card socso">
+                    <div className="card-header">
+                      <h3>SOCSO (PERKESO)</h3>
+                      <button onClick={() => handleCombinedExport('socso')} className="export-btn">Export All</button>
+                    </div>
+                    <div className="card-body">
+                      <div className="contrib-row"><span>Employee</span><span>{formatAmount(combinedSummary.contributions.socso.employee)}</span></div>
+                      <div className="contrib-row"><span>Employer</span><span>{formatAmount(combinedSummary.contributions.socso.employer)}</span></div>
+                      <div className="contrib-row total"><span>Total to Pay</span><span>{formatAmount(combinedSummary.contributions.socso.total)}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="contribution-card eis">
+                    <div className="card-header">
+                      <h3>EIS (SIP)</h3>
+                      <button onClick={() => handleCombinedExport('eis')} className="export-btn">Export All</button>
+                    </div>
+                    <div className="card-body">
+                      <div className="contrib-row"><span>Employee</span><span>{formatAmount(combinedSummary.contributions.eis.employee)}</span></div>
+                      <div className="contrib-row"><span>Employer</span><span>{formatAmount(combinedSummary.contributions.eis.employer)}</span></div>
+                      <div className="contrib-row total"><span>Total to Pay</span><span>{formatAmount(combinedSummary.contributions.eis.total)}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="contribution-card pcb">
+                    <div className="card-header">
+                      <h3>PCB (LHDN)</h3>
+                      <button onClick={() => handleCombinedExport('pcb')} className="export-btn">Export All</button>
+                    </div>
+                    <div className="card-body">
+                      <div className="contrib-row total"><span>Total Tax</span><span>{formatAmount(combinedSummary.contributions.pcb.total)}</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grand-total">
+                  <span>Total Contributions to Pay Government</span>
+                  <span className="amount">{formatAmount(combinedSummary.contributions.grand_total)}</span>
+                </div>
+
+                <div className="details-section">
+                  <h3>Employee Breakdown (All Departments)</h3>
+                  <div className="details-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Employee</th>
+                          <th>Department</th>
+                          <th>IC Number</th>
+                          <th>Gross</th>
+                          <th>EPF (EE)</th>
+                          <th>EPF (ER)</th>
+                          <th>SOCSO (EE)</th>
+                          <th>SOCSO (ER)</th>
+                          <th>EIS (EE)</th>
+                          <th>EIS (ER)</th>
+                          <th>PCB</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {combinedDetails.map(item => (
+                          <tr key={item.id}>
+                            <td>
+                              <strong>{item.employee_name}</strong>
+                              <br />
+                              <small>{item.emp_code}</small>
+                            </td>
+                            <td>{item.department_name || '-'}</td>
+                            <td>{item.ic_number || '-'}</td>
+                            <td>{formatAmount(item.gross_salary)}</td>
+                            <td>{formatAmount(item.epf_employee)}</td>
+                            <td>{formatAmount(item.epf_employer)}</td>
+                            <td>{formatAmount(item.socso_employee)}</td>
+                            <td>{formatAmount(item.socso_employer)}</td>
+                            <td>{formatAmount(item.eis_employee)}</td>
+                            <td>{formatAmount(item.eis_employer)}</td>
+                            <td>{formatAmount(item.pcb)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="no-data">No payroll data found for this period</div>
+            )}
+          </div>
+        ) : view === 'summary' ? (
           <div className="contributions-layout">
             {/* Runs List */}
             <div className="runs-panel">

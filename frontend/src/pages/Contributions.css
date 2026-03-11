@@ -553,3 +553,39 @@
 .monthly-breakdown tr.draft-row:hover {
   background: #fef3c7;
 }
+
+/* Combined View */
+.combined-view {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 20px;
+  padding: 25px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.combined-selectors {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 25px;
+}
+
+.combined-selectors .selector-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.combined-selectors label {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.combined-selectors select {
+  padding: 10px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1rem;
+  color: #1e293b;
+  background: white;
+}

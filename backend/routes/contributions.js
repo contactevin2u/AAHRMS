@@ -343,4 +343,269 @@ router.get('/export/pcb/:runId', authenticateAdmin, async (req, res) => {
   }
 });
 
+// ===== COMBINED EXPORTS (All departments for a company in one file) =====
+
+// Combined EPF export for all departments in a month/year
+router.get('/export-combined/epf', authenticateAdmin, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const companyId = req.companyId;
+
+    if (!month || !year || !companyId) {
+      return res.status(400).json({ error: 'month, year, and company are required' });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        e.epf_number,
+        e.name as employee_name,
+        e.ic_number,
+        pi.epf_employee,
+        pi.epf_employer,
+        pi.gross_salary,
+        d.name as department_name
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE pr.company_id = $1 AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('draft', 'finalized')
+        AND (pi.epf_employee > 0 OR pi.epf_employer > 0)
+      ORDER BY d.name, e.name
+    `, [companyId, month, year]);
+
+    let csv = 'EPF Number,Employee Name,IC Number,Department,Employee Contribution,Employer Contribution,Total Wages\n';
+    result.rows.forEach(row => {
+      csv += `"${row.epf_number || ''}","${row.employee_name}","${row.ic_number || ''}","${row.department_name || ''}",${row.epf_employee},${row.epf_employer},${row.gross_salary}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=EPF_All_${month}_${year}.csv`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting combined EPF:', error);
+    res.status(500).json({ error: 'Failed to export combined EPF data' });
+  }
+});
+
+// Combined SOCSO export for all departments in a month/year
+router.get('/export-combined/socso', authenticateAdmin, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const companyId = req.companyId;
+
+    if (!month || !year || !companyId) {
+      return res.status(400).json({ error: 'month, year, and company are required' });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        e.socso_number,
+        e.name as employee_name,
+        e.ic_number,
+        pi.socso_employee,
+        pi.socso_employer,
+        pi.gross_salary,
+        d.name as department_name
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE pr.company_id = $1 AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('draft', 'finalized')
+        AND (pi.socso_employee > 0 OR pi.socso_employer > 0)
+      ORDER BY d.name, e.name
+    `, [companyId, month, year]);
+
+    let csv = 'SOCSO Number,Employee Name,IC Number,Department,Employee Contribution,Employer Contribution,Total Wages\n';
+    result.rows.forEach(row => {
+      csv += `"${row.socso_number || ''}","${row.employee_name}","${row.ic_number || ''}","${row.department_name || ''}",${row.socso_employee},${row.socso_employer},${row.gross_salary}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=SOCSO_All_${month}_${year}.csv`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting combined SOCSO:', error);
+    res.status(500).json({ error: 'Failed to export combined SOCSO data' });
+  }
+});
+
+// Combined EIS export for all departments in a month/year
+router.get('/export-combined/eis', authenticateAdmin, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const companyId = req.companyId;
+
+    if (!month || !year || !companyId) {
+      return res.status(400).json({ error: 'month, year, and company are required' });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        e.socso_number as eis_number,
+        e.name as employee_name,
+        e.ic_number,
+        pi.eis_employee,
+        pi.eis_employer,
+        pi.gross_salary,
+        d.name as department_name
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE pr.company_id = $1 AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('draft', 'finalized')
+        AND (pi.eis_employee > 0 OR pi.eis_employer > 0)
+      ORDER BY d.name, e.name
+    `, [companyId, month, year]);
+
+    let csv = 'EIS Number,Employee Name,IC Number,Department,Employee Contribution,Employer Contribution,Total Wages\n';
+    result.rows.forEach(row => {
+      csv += `"${row.eis_number || ''}","${row.employee_name}","${row.ic_number || ''}","${row.department_name || ''}",${row.eis_employee},${row.eis_employer},${row.gross_salary}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=EIS_All_${month}_${year}.csv`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting combined EIS:', error);
+    res.status(500).json({ error: 'Failed to export combined EIS data' });
+  }
+});
+
+// Combined PCB export for all departments in a month/year
+router.get('/export-combined/pcb', authenticateAdmin, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const companyId = req.companyId;
+
+    if (!month || !year || !companyId) {
+      return res.status(400).json({ error: 'month, year, and company are required' });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        e.tax_number,
+        e.name as employee_name,
+        e.ic_number,
+        pi.pcb,
+        pi.gross_salary,
+        d.name as department_name
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE pr.company_id = $1 AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('draft', 'finalized')
+        AND pi.pcb > 0
+      ORDER BY d.name, e.name
+    `, [companyId, month, year]);
+
+    let csv = 'Tax Number,Employee Name,IC Number,Department,PCB Amount,Total Wages\n';
+    result.rows.forEach(row => {
+      csv += `"${row.tax_number || ''}","${row.employee_name}","${row.ic_number || ''}","${row.department_name || ''}",${row.pcb},${row.gross_salary}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=PCB_All_${month}_${year}.csv`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting combined PCB:', error);
+    res.status(500).json({ error: 'Failed to export combined PCB data' });
+  }
+});
+
+// Combined summary for all departments in a month/year
+router.get('/summary-combined', authenticateAdmin, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const companyId = req.companyId;
+
+    if (!month || !year || !companyId) {
+      return res.status(400).json({ error: 'month, year, and company are required' });
+    }
+
+    const totalsResult = await pool.query(`
+      SELECT
+        SUM(pi.epf_employee) as total_epf_employee,
+        SUM(pi.epf_employer) as total_epf_employer,
+        SUM(pi.socso_employee) as total_socso_employee,
+        SUM(pi.socso_employer) as total_socso_employer,
+        SUM(pi.eis_employee) as total_eis_employee,
+        SUM(pi.eis_employer) as total_eis_employer,
+        SUM(pi.pcb) as total_pcb,
+        COUNT(DISTINCT pi.employee_id) as employee_count
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.company_id = $1 AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('draft', 'finalized')
+    `, [companyId, month, year]);
+
+    const totals = totalsResult.rows[0];
+    const epfTotal = parseFloat(totals.total_epf_employee || 0) + parseFloat(totals.total_epf_employer || 0);
+    const socsoTotal = parseFloat(totals.total_socso_employee || 0) + parseFloat(totals.total_socso_employer || 0);
+    const eisTotal = parseFloat(totals.total_eis_employee || 0) + parseFloat(totals.total_eis_employer || 0);
+    const pcbTotal = parseFloat(totals.total_pcb || 0);
+
+    // Get details by employee
+    const detailsResult = await pool.query(`
+      SELECT
+        pi.id,
+        e.employee_id as emp_code,
+        e.name as employee_name,
+        e.ic_number,
+        e.epf_number,
+        e.socso_number,
+        e.tax_number,
+        d.name as department_name,
+        pi.basic_salary,
+        pi.gross_salary,
+        pi.epf_employee,
+        pi.epf_employer,
+        pi.socso_employee,
+        pi.socso_employer,
+        pi.eis_employee,
+        pi.eis_employer,
+        pi.pcb
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE pr.company_id = $1 AND pr.month = $2 AND pr.year = $3
+        AND pr.status IN ('draft', 'finalized')
+      ORDER BY d.name, e.name
+    `, [companyId, month, year]);
+
+    res.json({
+      month: parseInt(month),
+      year: parseInt(year),
+      contributions: {
+        epf: {
+          employee: parseFloat(totals.total_epf_employee || 0),
+          employer: parseFloat(totals.total_epf_employer || 0),
+          total: epfTotal
+        },
+        socso: {
+          employee: parseFloat(totals.total_socso_employee || 0),
+          employer: parseFloat(totals.total_socso_employer || 0),
+          total: socsoTotal
+        },
+        eis: {
+          employee: parseFloat(totals.total_eis_employee || 0),
+          employer: parseFloat(totals.total_eis_employer || 0),
+          total: eisTotal
+        },
+        pcb: { total: pcbTotal },
+        grand_total: epfTotal + socsoTotal + eisTotal + pcbTotal
+      },
+      employee_count: parseInt(totals.employee_count || 0),
+      details: detailsResult.rows
+    });
+  } catch (error) {
+    console.error('Error fetching combined summary:', error);
+    res.status(500).json({ error: 'Failed to fetch combined summary' });
+  }
+});
+
 module.exports = router;

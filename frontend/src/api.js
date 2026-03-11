@@ -317,11 +317,18 @@ export const contributionsApi = {
   getDetails: (runId) => api.get(`/contributions/details/${runId}`),
   getReport: (params) => api.get('/contributions/report', { params }),
 
-  // Export files for government submission
+  // Export files for government submission (per department/run)
   exportEPF: (runId) => api.get(`/contributions/export/epf/${runId}`, { responseType: 'blob' }),
   exportSOCSO: (runId) => api.get(`/contributions/export/socso/${runId}`, { responseType: 'blob' }),
   exportEIS: (runId) => api.get(`/contributions/export/eis/${runId}`, { responseType: 'blob' }),
   exportPCB: (runId) => api.get(`/contributions/export/pcb/${runId}`, { responseType: 'blob' }),
+
+  // Combined exports (all departments for a month/year)
+  getCombinedSummary: (params) => api.get('/contributions/summary-combined', { params }),
+  exportCombinedEPF: (params) => api.get('/contributions/export-combined/epf', { params, responseType: 'blob' }),
+  exportCombinedSOCSO: (params) => api.get('/contributions/export-combined/socso', { params, responseType: 'blob' }),
+  exportCombinedEIS: (params) => api.get('/contributions/export-combined/eis', { params, responseType: 'blob' }),
+  exportCombinedPCB: (params) => api.get('/contributions/export-combined/pcb', { params, responseType: 'blob' }),
 };
 
 // Resignations
