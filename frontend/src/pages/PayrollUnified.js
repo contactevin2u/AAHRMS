@@ -86,6 +86,10 @@ function PayrollUnified() {
   const [yearReport, setYearReport] = useState(null);
   const [contribView, setContribView] = useState('summary');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [combinedContribMonth, setCombinedContribMonth] = useState(new Date().getMonth() + 1);
+  const [combinedContribYear, setCombinedContribYear] = useState(new Date().getFullYear());
+  const [combinedContribSummary, setCombinedContribSummary] = useState(null);
+  const [combinedContribLoading, setCombinedContribLoading] = useState(false);
 
   // ========== EFFECTS ==========
   useEffect(() => {
@@ -109,7 +113,10 @@ function PayrollUnified() {
     if (contribView === 'yearly' && mainTab === 'contributions') {
       fetchYearlyReport();
     }
-  }, [selectedYear, contribView, mainTab]);
+    if (contribView === 'allstaff' && mainTab === 'contributions') {
+      fetchCombinedContribSummary();
+    }
+  }, [selectedYear, contribView, mainTab, combinedContribMonth, combinedContribYear]);
 
   // ========== PAYROLL FUNCTIONS ==========
   const fetchDepartments = async () => {
@@ -1159,6 +1166,58 @@ function PayrollUnified() {
     }
   };
 
+  const fetchCombinedContribSummary = async () => {
+    setCombinedContribLoading(true);
+    try {
+      const res = await contributionsApi.getCombinedSummary({ month: combinedContribMonth, year: combinedContribYear });
+      setCombinedContribSummary(res.data);
+    } catch (error) {
+      console.error('Error fetching combined summary:', error);
+      setCombinedContribSummary(null);
+    } finally {
+      setCombinedContribLoading(false);
+    }
+  };
+
+  const handleCombinedContribDownload = async (type) => {
+    const params = { month: combinedContribMonth, year: combinedContribYear };
+    try {
+      let res, fallbackFilename, mimeType = 'text/plain';
+      if (type === 'epf') {
+        res = await payrollV2Api.getCombinedEpfFile(params);
+        fallbackFilename = `KWSP_All_${params.month}_${params.year}.txt`;
+      } else if (type === 'perkeso') {
+        res = await payrollV2Api.getCombinedPerkesoFile(params);
+        fallbackFilename = `PERKESO_All_${params.month}_${params.year}.txt`;
+      } else if (type === 'pcb') {
+        res = await contributionsApi.exportCombinedPCB(params);
+        fallbackFilename = `PCB_All_${params.month}_${params.year}.csv`;
+        mimeType = 'text/csv';
+      } else return;
+
+      const blob = new Blob([res.data], { type: mimeType });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const disposition = res.headers['content-disposition'];
+      let filename = fallbackFilename;
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      const errorMsg = error.response?.data instanceof Blob
+        ? await error.response.data.text().then(t => { try { return JSON.parse(t).error; } catch { return t; } })
+        : (error.response?.data?.error || error.message);
+      alert('Failed to download file: ' + errorMsg);
+    }
+  };
+
   const handleContribRunSelect = (runId) => {
     setSelectedContribRunId(runId);
     fetchContribSummary(runId);
@@ -1830,7 +1889,8 @@ function PayrollUnified() {
         {mainTab === 'contributions' && (
           <div className="contributions-page" style={{ padding: 0 }}>
             <div className="view-toggle" style={{ marginBottom: '20px' }}>
-              <button className={`toggle-btn ${contribView === 'summary' ? 'active' : ''}`} onClick={() => setContribView('summary')}>Monthly</button>
+              <button className={`toggle-btn ${contribView === 'summary' ? 'active' : ''}`} onClick={() => setContribView('summary')}>Per Department</button>
+              <button className={`toggle-btn ${contribView === 'allstaff' ? 'active' : ''}`} onClick={() => setContribView('allstaff')}>All Staff</button>
               <button className={`toggle-btn ${contribView === 'yearly' ? 'active' : ''}`} onClick={() => setContribView('yearly')}>Yearly</button>
             </div>
 
@@ -1927,6 +1987,125 @@ function PayrollUnified() {
                     </>
                   ) : <div className="no-selection"><p>Select a run</p></div>}
                 </div>
+              </div>
+            ) : contribView === 'allstaff' ? (
+              <div className="combined-view">
+                <div className="combined-selectors" style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+                  <div className="selector-group">
+                    <label style={{ marginRight: 8 }}>Month:</label>
+                    <select value={combinedContribMonth} onChange={(e) => setCombinedContribMonth(parseInt(e.target.value))}>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                        <option key={m} value={m}>{getMonthName(m)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="selector-group">
+                    <label style={{ marginRight: 8 }}>Year:</label>
+                    <select value={combinedContribYear} onChange={(e) => setCombinedContribYear(parseInt(e.target.value))}>
+                      {[2024, 2025, 2026].map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {combinedContribLoading ? (
+                  <div className="loading">Loading...</div>
+                ) : combinedContribSummary ? (
+                  <>
+                    <div className="summary-header">
+                      <h2>{getMonthName(combinedContribMonth)} {combinedContribYear} - All Departments</h2>
+                      <span className="employee-count">{combinedContribSummary.employee_count} employees</span>
+                    </div>
+
+                    <div className="contribution-cards">
+                      <div className="contribution-card epf">
+                        <div className="card-header">
+                          <h3>EPF (KWSP)</h3>
+                          <button onClick={() => handleCombinedContribDownload('epf')} className="export-btn">Download .txt</button>
+                        </div>
+                        <div className="card-body">
+                          <div className="contrib-row"><span>Employee</span><span>{formatAmount(combinedContribSummary.contributions.epf.employee)}</span></div>
+                          <div className="contrib-row"><span>Employer</span><span>{formatAmount(combinedContribSummary.contributions.epf.employer)}</span></div>
+                          <div className="contrib-row total"><span>Total</span><span>{formatAmount(combinedContribSummary.contributions.epf.total)}</span></div>
+                        </div>
+                      </div>
+
+                      <div className="contribution-card socso">
+                        <div className="card-header">
+                          <h3>SOCSO + EIS (PERKESO)</h3>
+                          <button onClick={() => handleCombinedContribDownload('perkeso')} className="export-btn">Download .txt</button>
+                        </div>
+                        <div className="card-body">
+                          <div className="contrib-row"><span>SOCSO Employee</span><span>{formatAmount(combinedContribSummary.contributions.socso.employee)}</span></div>
+                          <div className="contrib-row"><span>SOCSO Employer</span><span>{formatAmount(combinedContribSummary.contributions.socso.employer)}</span></div>
+                          <div className="contrib-row"><span>EIS Employee</span><span>{formatAmount(combinedContribSummary.contributions.eis.employee)}</span></div>
+                          <div className="contrib-row"><span>EIS Employer</span><span>{formatAmount(combinedContribSummary.contributions.eis.employer)}</span></div>
+                          <div className="contrib-row total"><span>Total</span><span>{formatAmount(combinedContribSummary.contributions.socso.total + combinedContribSummary.contributions.eis.total)}</span></div>
+                        </div>
+                      </div>
+
+                      <div className="contribution-card pcb">
+                        <div className="card-header">
+                          <h3>PCB (LHDN)</h3>
+                          <button onClick={() => handleCombinedContribDownload('pcb')} className="export-btn">Download CSV</button>
+                        </div>
+                        <div className="card-body">
+                          <div className="contrib-row total"><span>Total Tax</span><span>{formatAmount(combinedContribSummary.contributions.pcb.total)}</span></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grand-total">
+                      <span>Total Government Contributions</span>
+                      <span className="amount">{formatAmount(combinedContribSummary.contributions.grand_total)}</span>
+                    </div>
+
+                    {combinedContribSummary.details && combinedContribSummary.details.length > 0 && (
+                      <div className="details-section" style={{ marginTop: 20 }}>
+                        <h3>Employee Breakdown (All Departments)</h3>
+                        <div className="details-table">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Employee</th>
+                                <th>Department</th>
+                                <th>IC Number</th>
+                                <th>Gross</th>
+                                <th>EPF (EE)</th>
+                                <th>EPF (ER)</th>
+                                <th>SOCSO (EE)</th>
+                                <th>SOCSO (ER)</th>
+                                <th>EIS (EE)</th>
+                                <th>EIS (ER)</th>
+                                <th>PCB</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {combinedContribSummary.details.map(item => (
+                                <tr key={item.id}>
+                                  <td><strong>{item.employee_name}</strong><br /><small>{item.emp_code}</small></td>
+                                  <td>{item.department_name || '-'}</td>
+                                  <td>{item.ic_number || '-'}</td>
+                                  <td>{formatAmount(item.gross_salary)}</td>
+                                  <td>{formatAmount(item.epf_employee)}</td>
+                                  <td>{formatAmount(item.epf_employer)}</td>
+                                  <td>{formatAmount(item.socso_employee)}</td>
+                                  <td>{formatAmount(item.socso_employer)}</td>
+                                  <td>{formatAmount(item.eis_employee)}</td>
+                                  <td>{formatAmount(item.eis_employer)}</td>
+                                  <td>{formatAmount(item.pcb)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="no-data">No payroll data found for this period</div>
+                )}
               </div>
             ) : (
               <div className="yearly-report">
