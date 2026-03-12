@@ -250,11 +250,13 @@ router.get('/', authenticateAdmin, async (req, res) => {
 
     let query = `
       SELECT e.*, d.name as department_name, d.payroll_structure_code, o.name as outlet_name,
-             p.name as position_name, p.role as position_role
+             p.name as position_name, p.role as position_role,
+             c.name as company_name
       FROM employees e
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN outlets o ON e.outlet_id = o.id
       LEFT JOIN positions p ON e.position_id = p.id
+      LEFT JOIN companies c ON e.company_id = c.id
       WHERE 1=1
     `;
     const params = [];

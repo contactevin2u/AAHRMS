@@ -390,3 +390,100 @@
   background: #fee2e2;
   color: #991b1b;
 }
+
+/* Letterhead Settings */
+.letterhead-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 24px;
+}
+
+.letterhead-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.letterhead-card h3 {
+  margin: 0 0 4px 0;
+  color: #1e293b;
+  font-size: 1.2rem;
+}
+
+.company-code-label {
+  margin: 0 0 20px 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.letterhead-section {
+  margin-bottom: 20px;
+}
+
+.letterhead-section > label {
+  display: block;
+  font-weight: 600;
+  color: #475569;
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+}
+
+.letterhead-preview {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafafa;
+}
+
+.letterhead-preview img {
+  max-width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.stamp-preview img {
+  max-height: 100px;
+}
+
+.letterhead-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.upload-label {
+  cursor: pointer;
+  display: inline-block;
+}
+
+.letterhead-upload .upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fafafa;
+}
+
+.letterhead-upload .upload-area:hover {
+  border-color: #3b82f6;
+  background: #f0f4ff;
+}
+
+.letterhead-upload .upload-area span {
+  color: #475569;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.letterhead-upload .upload-area small {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}

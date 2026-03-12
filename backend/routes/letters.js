@@ -14,11 +14,13 @@ router.get('/', authenticateAdmin, async (req, res) => {
         e.name as employee_name,
         e.employee_id as employee_code,
         d.name as department_name,
-        o.name as outlet_name
+        o.name as outlet_name,
+        c.name as company_name
       FROM hr_letters l
       LEFT JOIN employees e ON l.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN outlets o ON e.outlet_id = o.id
+      LEFT JOIN companies c ON e.company_id = c.id
       WHERE 1=1
     `;
     const params = [];
@@ -74,10 +76,23 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
         e.name as employee_name,
         e.employee_id as employee_code,
         e.email as employee_email,
-        d.name as department_name
+        e.ic_number,
+        e.position,
+        e.designation,
+        e.join_date,
+        d.name as department_name,
+        c.name as company_name,
+        c.code as company_code,
+        c.registration_number,
+        c.address as company_address,
+        c.phone as company_phone,
+        c.email as company_email,
+        c.letterhead_url,
+        c.company_stamp_url
       FROM hr_letters l
       LEFT JOIN employees e ON l.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN companies c ON e.company_id = c.id
       WHERE l.id = $1
     `, [id]);
 
@@ -148,7 +163,9 @@ router.post('/', authenticateAdmin, async (req, res) => {
       salary_adjustment: 'Salary Adjustment Letter',
       general_notice: 'General Notice',
       termination: 'Termination Letter',
-      confirmation: 'Confirmation Letter'
+      confirmation: 'Confirmation Letter',
+      offer_letter: 'Offer Letter',
+      bank_account_opening: 'Bank Account Opening Letter'
     };
 
     // Create notification for the employee

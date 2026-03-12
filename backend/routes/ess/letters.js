@@ -36,7 +36,9 @@ function getLetterTypeName(type) {
     salary_adjustment: 'Salary Adjustment Letter',
     general_notice: 'General Notice',
     termination: 'Termination Letter',
-    confirmation: 'Confirmation Letter'
+    confirmation: 'Confirmation Letter',
+    offer_letter: 'Offer Letter',
+    bank_account_opening: 'Bank Account Opening Letter'
   };
   return typeNames[type] || 'HR Letter';
 }

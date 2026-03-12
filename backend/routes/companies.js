@@ -1,9 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { requireSystemAdmin, isSuperAdmin } = require('../middleware/tenant');
+const { uploadCompanyAsset, deleteFile, extractPublicId } = require('../utils/cloudinaryStorage');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
 
 // All routes require authentication
 router.use(authenticateAdmin);
@@ -313,7 +327,7 @@ router.get('/current/info', async (req, res) => {
     }
 
     const result = await pool.query(`
-      SELECT id, name, code, logo_url, address, phone, email, registration_number, status
+      SELECT id, name, code, logo_url, address, phone, email, registration_number, status, letterhead_url, company_stamp_url
       FROM companies
       WHERE id = $1
     `, [req.companyId]);
@@ -329,6 +343,82 @@ router.get('/current/info', async (req, res) => {
   } catch (error) {
     console.error('Error fetching current company:', error);
     res.status(500).json({ error: 'Failed to fetch company info' });
+  }
+});
+
+// =====================================================
+// LETTERHEAD & STAMP MANAGEMENT
+// =====================================================
+
+// Upload letterhead for a company
+router.post('/:id/letterhead', upload.single('letterhead'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    const url = await uploadCompanyAsset(base64, id, 'letterhead');
+
+    await pool.query('UPDATE companies SET letterhead_url = $1 WHERE id = $2', [url, id]);
+    res.json({ success: true, letterhead_url: url });
+  } catch (error) {
+    console.error('Error uploading letterhead:', error);
+    res.status(500).json({ error: 'Failed to upload letterhead' });
+  }
+});
+
+// Delete letterhead
+router.delete('/:id/letterhead', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT letterhead_url FROM companies WHERE id = $1', [id]);
+    if (result.rows[0]?.letterhead_url) {
+      const publicId = extractPublicId(result.rows[0].letterhead_url);
+      if (publicId) await deleteFile(publicId);
+    }
+    await pool.query('UPDATE companies SET letterhead_url = NULL WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting letterhead:', error);
+    res.status(500).json({ error: 'Failed to delete letterhead' });
+  }
+});
+
+// Upload company stamp
+router.post('/:id/stamp', upload.single('stamp'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    const url = await uploadCompanyAsset(base64, id, 'stamp');
+
+    await pool.query('UPDATE companies SET company_stamp_url = $1 WHERE id = $2', [url, id]);
+    res.json({ success: true, company_stamp_url: url });
+  } catch (error) {
+    console.error('Error uploading stamp:', error);
+    res.status(500).json({ error: 'Failed to upload company stamp' });
+  }
+});
+
+// Delete company stamp
+router.delete('/:id/stamp', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT company_stamp_url FROM companies WHERE id = $1', [id]);
+    if (result.rows[0]?.company_stamp_url) {
+      const publicId = extractPublicId(result.rows[0].company_stamp_url);
+      if (publicId) await deleteFile(publicId);
+    }
+    await pool.query('UPDATE companies SET company_stamp_url = NULL WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting stamp:', error);
+    res.status(500).json({ error: 'Failed to delete company stamp' });
   }
 });
 

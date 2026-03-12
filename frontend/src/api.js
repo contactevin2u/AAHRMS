@@ -611,6 +611,10 @@ export const companiesApi = {
   getAdmins: (id) => api.get(`/companies/${id}/admins`),
   getStats: (id) => api.get(`/companies/${id}/stats`),
   getCurrentInfo: () => api.get('/companies/current/info'),
+  uploadLetterhead: (id, formData) => api.post(`/companies/${id}/letterhead`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteLetterhead: (id) => api.delete(`/companies/${id}/letterhead`),
+  uploadStamp: (id, formData) => api.post(`/companies/${id}/stamp`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteStamp: (id) => api.delete(`/companies/${id}/stamp`),
 };
 
 // Admin User Management

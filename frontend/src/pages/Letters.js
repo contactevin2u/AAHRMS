@@ -24,9 +24,7 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
   const [filters, setFilters] = useState({
     employee_id: '',
     letter_type: '',
-    status: '',
-    department_id: propDeptId || '',
-    outlet_id: propOutletId || ''
+    status: ''
   });
 
   const [form, setForm] = useState({
@@ -49,7 +47,7 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
   const [showTranslateModal, setShowTranslateModal] = useState(false);
 
   // Auto-fill placeholders (replaced automatically based on selected employee/company)
-  const autoFillPlaceholders = ['employee_name', 'company_name', 'effective_date', 'position'];
+  const autoFillPlaceholders = ['employee_name', 'company_name', 'effective_date', 'position', 'nric', 'join_month_year', 'company_full_name'];
 
   // User-input placeholders (require manual input)
   const userInputPlaceholders = {
@@ -62,7 +60,12 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
     improvement_2: { label: 'Improvement Area 2', placeholder: 'e.g., Communication' },
     improvement_3: { label: 'Improvement Area 3', placeholder: 'e.g., Productivity' },
     review_period: { label: 'Review Period', placeholder: 'e.g., 30 days' },
-    final_pay_date: { label: 'Final Pay Date', placeholder: 'e.g., 2024-02-28' }
+    final_pay_date: { label: 'Final Pay Date', placeholder: 'e.g., 2024-02-28' },
+    bank_name: { label: 'Bank Name', placeholder: 'e.g., CIMB Bank, Maybank' },
+    offer_position: { label: 'Offered Position', placeholder: 'e.g., Driver, Crew Member' },
+    offer_salary: { label: 'Offered Salary (RM)', placeholder: 'e.g., 2000' },
+    start_date: { label: 'Start Date', placeholder: 'e.g., 1 April 2026' },
+    offer_details: { label: 'Additional Details', placeholder: 'Enter any additional terms...' }
   };
 
   const letterTypes = [
@@ -73,7 +76,9 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
     { value: 'salary_adjustment', label: 'Salary Adjustment Letter', color: '#27ae60' },
     { value: 'general_notice', label: 'General Notice', color: '#7a8a9a' },
     { value: 'termination', label: 'Termination Letter', color: '#c0392b' },
-    { value: 'confirmation', label: 'Confirmation Letter', color: '#3498db' }
+    { value: 'confirmation', label: 'Confirmation Letter', color: '#3498db' },
+    { value: 'offer_letter', label: 'Offer Letter', color: '#8e44ad' },
+    { value: 'bank_account_opening', label: 'Bank Account Opening Letter', color: '#16a085' }
   ];
 
   useEffect(() => {
@@ -83,12 +88,10 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const empParams = { status: 'active' };
-      if (propDeptId) empParams.department_id = propDeptId;
-      if (propOutletId) empParams.outlet_id = propOutletId;
+      // Fetch ALL employees regardless of company/department for HR letters
       const [lettersRes, employeesRes, templatesRes, statsRes] = await Promise.all([
         lettersApi.getAll(filters),
-        employeeApi.getAll(empParams),
+        employeeApi.getAll({ status: 'active' }),
         lettersApi.getTemplates(),
         lettersApi.getStats()
       ]);
@@ -115,6 +118,13 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
     return allPlaceholders.filter(p => !autoFillPlaceholders.includes(p) && userInputPlaceholders[p]);
   };
 
+  // Format join date as "MMM YYYY"
+  const formatJoinMonthYear = (joinDate) => {
+    if (!joinDate) return '{{join_month_year}}';
+    const d = new Date(joinDate);
+    return d.toLocaleDateString('en-MY', { year: 'numeric', month: 'short' }).toUpperCase();
+  };
+
   // Replace auto-fill placeholders with actual values
   const replaceAutoFillPlaceholders = (content, subject, employeeId = null) => {
     // Use passed employeeId or fall back to form.employee_id
@@ -124,14 +134,20 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
     );
     const today = new Date().toLocaleDateString('en-MY', { year: 'numeric', month: 'long', day: 'numeric' });
 
+    // Get company name from employee data
+    const companyName = selectedEmployee?.company_name || selectedEmployee?.outlet_name || 'AA Alive Sdn. Bhd.';
+
     let newContent = content;
     let newSubject = subject;
 
     const replacements = {
       employee_name: selectedEmployee?.name || '{{employee_name}}',
-      company_name: 'AA Group',
+      company_name: companyName,
+      company_full_name: companyName.toUpperCase(),
       effective_date: today,
-      position: selectedEmployee?.position || selectedEmployee?.designation || '{{position}}'
+      position: selectedEmployee?.position || selectedEmployee?.designation || '{{position}}',
+      nric: selectedEmployee?.ic_number || '{{nric}}',
+      join_month_year: formatJoinMonthYear(selectedEmployee?.join_date)
     };
 
     Object.entries(replacements).forEach(([key, value]) => {
@@ -498,6 +514,7 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
               <tr>
                 <th>Date</th>
                 <th>Employee</th>
+                <th>Company</th>
                 <th>Type</th>
                 <th>Subject</th>
                 <th>Status</th>
@@ -515,6 +532,7 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
                       <span className="emp-id">{letter.employee_code}</span>
                     </div>
                   </td>
+                  <td>{letter.company_name || '-'}</td>
                   <td>
                     <span
                       className="type-badge"
@@ -566,7 +584,7 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
                       <option value="">Choose employee...</option>
                       {employees.map(emp => (
                         <option key={emp.id} value={emp.id}>
-                          {emp.employee_id} - {emp.name} ({emp.department_name || 'No Dept'})
+                          {emp.employee_id} - {emp.name} ({emp.company_name || emp.outlet_name || emp.department_name || 'No Dept'})
                         </option>
                       ))}
                     </select>
@@ -823,22 +841,37 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
             <div className="modal-body">
               {/* Letter Preview with Letterhead */}
               <div className="letter-preview" id="letter-print">
-                {/* Letterhead */}
-                <div className="letterhead">
-                  <div className="letterhead-logo">
-                    <img src="/logo.png" alt="AA Alive" />
+                {/* Letterhead - Dynamic per company */}
+                {selectedLetter.letterhead_url ? (
+                  <div className="letterhead letterhead-image">
+                    <img src={selectedLetter.letterhead_url} alt="Letterhead" className="letterhead-full-img" />
                   </div>
-                  <div className="letterhead-info">
-                    <h1>AA Alive Sdn. Bhd.</h1>
-                    <p className="company-reg">Company No.: 1204108-D</p>
-                    <p className="company-address">
-                      1, Jalan Perusahaan Amari, Kawasan Industri Batu Caves,<br />
-                      68100 Batu Caves, Selangor
-                    </p>
+                ) : (
+                  <div className="letterhead">
+                    <div className="letterhead-logo">
+                      <img src="/logo.png" alt={selectedLetter.company_name || 'Company'} />
+                    </div>
+                    <div className="letterhead-info">
+                      <h1>{selectedLetter.company_name || 'AA Alive Sdn. Bhd.'}</h1>
+                      {selectedLetter.registration_number && (
+                        <p className="company-reg">Company No.: {selectedLetter.registration_number}</p>
+                      )}
+                      {selectedLetter.company_address && (
+                        <p className="company-address">{selectedLetter.company_address}</p>
+                      )}
+                      {selectedLetter.company_phone && (
+                        <p className="company-phone">TEL: {selectedLetter.company_phone}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="letter-divider"></div>
+
+                {/* Letter Subject (as title) */}
+                <div className="letter-title">
+                  <strong>{selectedLetter.subject}</strong>
+                </div>
 
                 {/* Letter Date */}
                 <div className="letter-date">
@@ -849,34 +882,46 @@ function Letters({ departmentId: propDeptId, outletId: propOutletId, embedded = 
                   })}
                 </div>
 
-                {/* Letter Recipient */}
-                <div className="letter-recipient">
-                  <p><strong>To:</strong></p>
-                  <p>{selectedLetter.employee_name}</p>
-                  <p>Employee ID: {selectedLetter.employee_code}</p>
-                  {selectedLetter.department_name && <p>Department: {selectedLetter.department_name}</p>}
-                </div>
-
-                {/* Letter Subject */}
-                <div className="letter-subject-line">
-                  <strong>Subject: {selectedLetter.subject}</strong>
-                </div>
+                {/* "To Whom It May Concern" for bank/offer letters, recipient details for others */}
+                {['bank_account_opening', 'offer_letter'].includes(selectedLetter.letter_type) ? (
+                  <div className="letter-recipient">
+                    <p>To Whom It May Concern,</p>
+                  </div>
+                ) : (
+                  <div className="letter-recipient">
+                    <p><strong>To:</strong></p>
+                    <p>{selectedLetter.employee_name}</p>
+                    <p>Employee ID: {selectedLetter.employee_code}</p>
+                    {selectedLetter.department_name && <p>Department: {selectedLetter.department_name}</p>}
+                  </div>
+                )}
 
                 {/* Letter Body */}
                 <div className="letter-body">
                   <pre>{selectedLetter.content}</pre>
                 </div>
 
+                {/* Company Stamp if available */}
+                {selectedLetter.company_stamp_url && (
+                  <div className="company-stamp">
+                    <img src={selectedLetter.company_stamp_url} alt="Company Stamp" />
+                  </div>
+                )}
+
                 {/* Signature Section */}
                 <div className="letter-signature">
                   <div className="signature-block">
                     <div className="signature-line"></div>
-                    <p className="signature-name">{selectedLetter.issued_by_name}</p>
+                    <p className="signature-name">Name: {selectedLetter.issued_by_name}</p>
                     {selectedLetter.issued_by_designation && (
-                      <p className="signature-designation">{selectedLetter.issued_by_designation}</p>
+                      <p className="signature-designation">Position: {selectedLetter.issued_by_designation}</p>
                     )}
                     <p className="signature-date">
-                      Date: {new Date(selectedLetter.created_at).toLocaleDateString('en-MY')}
+                      Date: {new Date(selectedLetter.created_at).toLocaleDateString('en-MY', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
                     </p>
                   </div>
                 </div>

@@ -22,7 +22,9 @@ function ESSLetters() {
     salary_adjustment: { label: 'Salary Adj', color: '#27ae60' },
     general_notice: { label: 'Notice', color: '#7a8a9a' },
     termination: { label: 'Termination', color: '#c0392b' },
-    confirmation: { label: 'Confirmation', color: '#3498db' }
+    confirmation: { label: 'Confirmation', color: '#3498db' },
+    offer_letter: { label: 'Offer', color: '#8e44ad' },
+    bank_account_opening: { label: 'Bank Letter', color: '#16a085' }
   };
 
   useEffect(() => {

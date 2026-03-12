@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { earningsApi } from '../api';
+import React, { useState, useEffect, useRef } from 'react';
+import { earningsApi, companiesApi } from '../api';
 import api from '../api';
 import Layout from '../components/Layout';
 import './Settings.css';
@@ -25,6 +25,11 @@ function Settings() {
   const [adminForm, setAdminForm] = useState({
     username: '', password: '', name: '', email: '', role: 'boss'
   });
+
+  // Letterhead management state
+  const [letterheadUploading, setLetterheadUploading] = useState(false);
+  const letterheadRef = useRef(null);
+  const stampRef = useRef(null);
 
   // Modal states
   const [showCommissionModal, setShowCommissionModal] = useState(false);
@@ -69,10 +74,69 @@ function Settings() {
   // Company management functions
   const fetchCompanies = async () => {
     try {
-      const response = await api.get('/companies');
-      setCompanies(response.data);
+      if (isSuperAdmin) {
+        const response = await api.get('/companies');
+        setCompanies(response.data);
+      } else {
+        // Non-super-admin: get own company info
+        const response = await companiesApi.getCurrentInfo();
+        if (response.data.company) {
+          setCompanies([response.data.company]);
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch companies:', err);
+    }
+  };
+
+  // Letterhead management functions
+  const handleUploadLetterhead = async (companyId, file) => {
+    setLetterheadUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('letterhead', file);
+      await companiesApi.uploadLetterhead(companyId, formData);
+      alert('Letterhead uploaded successfully!');
+      fetchCompanies();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to upload letterhead');
+    } finally {
+      setLetterheadUploading(false);
+    }
+  };
+
+  const handleDeleteLetterhead = async (companyId) => {
+    if (!window.confirm('Remove letterhead for this company?')) return;
+    try {
+      await companiesApi.deleteLetterhead(companyId);
+      fetchCompanies();
+    } catch (err) {
+      alert('Failed to delete letterhead');
+    }
+  };
+
+  const handleUploadStamp = async (companyId, file) => {
+    setLetterheadUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('stamp', file);
+      await companiesApi.uploadStamp(companyId, formData);
+      alert('Company stamp uploaded successfully!');
+      fetchCompanies();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to upload stamp');
+    } finally {
+      setLetterheadUploading(false);
+    }
+  };
+
+  const handleDeleteStamp = async (companyId) => {
+    if (!window.confirm('Remove company stamp for this company?')) return;
+    try {
+      await companiesApi.deleteStamp(companyId);
+      fetchCompanies();
+    } catch (err) {
+      alert('Failed to delete stamp');
     }
   };
 
@@ -247,6 +311,12 @@ function Settings() {
           >
             Allowances
           </button>
+          <button
+            className={`tab-btn ${activeTab === 'letterhead' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('letterhead'); if (companies.length === 0) fetchCompanies(); }}
+          >
+            Letterhead
+          </button>
           {isSuperAdmin && (
             <button
               className={`tab-btn ${activeTab === 'companies' ? 'active' : ''}`}
@@ -343,6 +413,120 @@ function Settings() {
                           <button onClick={() => handleDeleteAllowance(allow.id)} className="delete-btn">
                             Delete
                           </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'letterhead' && (
+              <div className="type-section">
+                <div className="section-header">
+                  <h2>Company Letterhead & Stamp</h2>
+                </div>
+                <p className="section-desc">
+                  Upload letterhead images and company stamps for each company. These will appear on HR letters automatically.
+                </p>
+
+                {companies.length === 0 ? (
+                  <div className="no-data"><p>Loading companies...</p></div>
+                ) : (
+                  <div className="letterhead-grid">
+                    {companies.map(company => (
+                      <div key={company.id} className="letterhead-card">
+                        <h3>{company.name}</h3>
+                        <p className="company-code-label">{company.code}</p>
+
+                        {/* Letterhead Section */}
+                        <div className="letterhead-section">
+                          <label>Letterhead Image</label>
+                          {company.letterhead_url ? (
+                            <div className="letterhead-preview">
+                              <img src={company.letterhead_url} alt="Letterhead" />
+                              <div className="letterhead-actions">
+                                <button
+                                  className="delete-btn"
+                                  onClick={() => handleDeleteLetterhead(company.id)}
+                                >
+                                  Remove
+                                </button>
+                                <label className="edit-btn upload-label">
+                                  Change
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    hidden
+                                    onChange={(e) => {
+                                      if (e.target.files[0]) handleUploadLetterhead(company.id, e.target.files[0]);
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="letterhead-upload">
+                              <label className="upload-area" style={{ opacity: letterheadUploading ? 0.5 : 1 }}>
+                                <span>Click to upload letterhead image</span>
+                                <small>PNG or JPG, max 5MB</small>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  hidden
+                                  disabled={letterheadUploading}
+                                  onChange={(e) => {
+                                    if (e.target.files[0]) handleUploadLetterhead(company.id, e.target.files[0]);
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Company Stamp Section */}
+                        <div className="letterhead-section">
+                          <label>Company Stamp / Chop</label>
+                          {company.company_stamp_url ? (
+                            <div className="letterhead-preview stamp-preview">
+                              <img src={company.company_stamp_url} alt="Company Stamp" />
+                              <div className="letterhead-actions">
+                                <button
+                                  className="delete-btn"
+                                  onClick={() => handleDeleteStamp(company.id)}
+                                >
+                                  Remove
+                                </button>
+                                <label className="edit-btn upload-label">
+                                  Change
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    hidden
+                                    onChange={(e) => {
+                                      if (e.target.files[0]) handleUploadStamp(company.id, e.target.files[0]);
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="letterhead-upload">
+                              <label className="upload-area" style={{ opacity: letterheadUploading ? 0.5 : 1 }}>
+                                <span>Click to upload company stamp</span>
+                                <small>PNG (transparent background recommended), max 5MB</small>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  hidden
+                                  disabled={letterheadUploading}
+                                  onChange={(e) => {
+                                    if (e.target.files[0]) handleUploadStamp(company.id, e.target.files[0]);
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

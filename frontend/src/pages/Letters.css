@@ -956,3 +956,49 @@
   color: #2c3e50;
   font-size: 0.95rem;
 }
+
+/* Letterhead Image (uploaded) */
+.letterhead-image {
+  display: block;
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.letterhead-full-img {
+  max-width: 100%;
+  height: auto;
+  max-height: 150px;
+  object-fit: contain;
+}
+
+/* Letter Title */
+.letter-title {
+  text-align: left;
+  margin-bottom: 20px;
+  font-size: 1.05rem;
+}
+
+.letter-title strong {
+  color: #2c3e50;
+  text-decoration: underline;
+}
+
+/* Company Phone in letterhead */
+.letterhead-info .company-phone {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+/* Company Stamp */
+.company-stamp {
+  margin-top: 30px;
+  margin-bottom: 10px;
+}
+
+.company-stamp img {
+  max-width: 200px;
+  height: auto;
+  max-height: 120px;
+  object-fit: contain;
+}

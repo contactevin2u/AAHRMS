@@ -287,10 +287,50 @@ async function uploadProfilePicture(base64Data, companyId, employeeId) {
   }
 }
 
+/**
+ * Upload company letterhead to Cloudinary
+ *
+ * @param {string} base64Data - Base64 encoded image
+ * @param {number} companyId - Company ID
+ * @param {string} type - 'letterhead' or 'stamp'
+ * @returns {Promise<string>} - Cloudinary secure URL
+ */
+async function uploadCompanyAsset(base64Data, companyId, type) {
+  try {
+    let uploadData = base64Data;
+    if (!base64Data.startsWith('data:')) {
+      uploadData = `data:image/png;base64,${base64Data}`;
+    }
+
+    const publicId = `hrms/company/${companyId}/${type}`;
+
+    const result = await cloudinary.uploader.upload(uploadData, {
+      public_id: publicId,
+      resource_type: 'image',
+      overwrite: true,
+      folder: '',
+      transformation: [
+        {
+          width: type === 'letterhead' ? 800 : 400,
+          crop: 'limit',
+          quality: 'auto:good',
+          format: 'png'
+        }
+      ]
+    });
+
+    return result.secure_url;
+  } catch (error) {
+    console.error(`Cloudinary ${type} upload error:`, error);
+    throw new Error(`Failed to upload ${type}: ${error.message}`);
+  }
+}
+
 module.exports = {
   uploadAttendance,
   uploadClaim,
   uploadProfilePicture,
+  uploadCompanyAsset,
   deleteFile,
   extractPublicId
 };
