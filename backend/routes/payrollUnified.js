@@ -4338,7 +4338,7 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
     // Get payroll run with outlet info
     const runResult = await pool.query(`
       SELECT pr.*, o.epf_code as outlet_epf_code, o.name as outlet_name,
-             c.name as company_name, c.epf_code as company_epf_code
+             c.name as company_name, c.epf_code as company_epf_code, c.payroll_config
       FROM payroll_runs pr
       JOIN companies c ON pr.company_id = c.id
       LEFT JOIN outlets o ON pr.outlet_id = o.id
@@ -4354,7 +4354,7 @@ router.get('/runs/:id/epf-file', authenticateAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const epfCode = run.outlet_epf_code || run.company_epf_code || '';
+    const epfCode = run.outlet_epf_code || run.company_epf_code || (run.payroll_config && run.payroll_config.epf_code) || '';
     if (!epfCode) {
       return res.status(400).json({ error: 'EPF employer code not configured for this outlet/company' });
     }
@@ -4647,17 +4647,17 @@ router.get('/combined-epf-file', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Company, month, and year are required' });
     }
 
-    // Get company EPF code
+    // Get company EPF code (from column or payroll_config)
     const compResult = await pool.query(
-      'SELECT name, epf_code FROM companies WHERE id = $1', [companyId]
+      'SELECT name, epf_code, payroll_config FROM companies WHERE id = $1', [companyId]
     );
     if (compResult.rows.length === 0) {
       return res.status(404).json({ error: 'Company not found' });
     }
     const company = compResult.rows[0];
-    const epfCode = company.epf_code || '';
+    const epfCode = company.epf_code || (company.payroll_config && company.payroll_config.epf_code) || '';
     if (!epfCode) {
-      return res.status(400).json({ error: 'EPF employer code not configured for this company' });
+      return res.status(400).json({ error: 'EPF employer code not configured. Go to Payroll Settings to set your KWSP employer code.' });
     }
 
     // Get ALL payroll items across all department runs for this month/year
@@ -4796,7 +4796,7 @@ router.get('/combined-perkeso-file', authenticateAdmin, async (req, res) => {
     const company = compResult.rows[0];
     const socsoCode = company.socso_code || (company.payroll_config && company.payroll_config.socso_code) || '';
     if (!socsoCode) {
-      return res.status(400).json({ error: 'SOCSO employer code not configured for this company' });
+      return res.status(400).json({ error: 'SOCSO employer code not configured. Go to Payroll Settings to set your PERKESO employer code.' });
     }
 
     // Get ALL payroll items across all department runs for this month/year
