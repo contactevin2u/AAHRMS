@@ -19,7 +19,8 @@ function ESSLeave({ embedded = false }) {
     leave_type_id: '',
     start_date: '',
     end_date: '',
-    reason: ''
+    reason: '',
+    day_type: 'full', // 'full', 'half_am', 'half_pm'
   });
 
   useEffect(() => {
@@ -58,28 +59,33 @@ function ESSLeave({ embedded = false }) {
     setSubmitting(true);
     try {
       let response;
+      const isHalfDay = applyForm.day_type !== 'full';
+      const halfDayValue = applyForm.day_type === 'half_am' ? 'AM' : applyForm.day_type === 'half_pm' ? 'PM' : null;
+
       if (requiresMC && mcFile) {
         // Use FormData for MC file upload
         const formData = new FormData();
         formData.append('leave_type_id', parseInt(applyForm.leave_type_id, 10));
         formData.append('start_date', applyForm.start_date);
-        formData.append('end_date', applyForm.end_date);
+        formData.append('end_date', isHalfDay ? applyForm.start_date : applyForm.end_date);
         formData.append('reason', applyForm.reason);
         formData.append('mc_file', mcFile);
+        if (isHalfDay) formData.append('half_day', halfDayValue);
         console.log('[Leave Apply] Submitting with MC file');
         response = await essApi.applyLeaveWithFile(formData);
       } else {
         const payload = {
           leave_type_id: parseInt(applyForm.leave_type_id, 10),
           start_date: applyForm.start_date,
-          end_date: applyForm.end_date,
-          reason: applyForm.reason
+          end_date: isHalfDay ? applyForm.start_date : applyForm.end_date,
+          reason: applyForm.reason,
+          ...(isHalfDay && { half_day: halfDayValue })
         };
         console.log('[Leave Apply] Submitting:', payload);
         response = await essApi.applyLeave(payload);
       }
       setShowApplyModal(false);
-      setApplyForm({ leave_type_id: '', start_date: '', end_date: '', reason: '' });
+      setApplyForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', day_type: 'full' });
       setMcFile(null);
 
       // Show different message based on auto-approval status
@@ -196,7 +202,7 @@ function ESSLeave({ embedded = false }) {
                       {getStatusBadge(app.status, app.auto_approved)}
                     </div>
                     <div className="app-dates">
-                      {formatDate(app.start_date)} - {formatDate(app.end_date)} ({app.days || app.total_days || calculateDays(app.start_date, app.end_date)} day{(app.days || app.total_days || calculateDays(app.start_date, app.end_date)) > 1 ? 's' : ''})
+                      {formatDate(app.start_date)}{app.half_day ? ` (${app.half_day})` : app.start_date !== app.end_date ? ` - ${formatDate(app.end_date)}` : ''} ({app.days || app.total_days || calculateDays(app.start_date, app.end_date)} day{(app.days || app.total_days || calculateDays(app.start_date, app.end_date)) !== 1 ? 's' : ''})
                     </div>
                     <div className="app-reason">{app.reason}</div>
                     {/* AI Auto-approved notice */}
@@ -288,7 +294,7 @@ function ESSLeave({ embedded = false }) {
                     <div className="history-date">{formatDate(app.start_date)}</div>
                     <div className="history-details">
                       <span className="history-type">{app.leave_type_name || app.leave_type || app.type}</span>
-                      <span className="history-days">{app.days || app.total_days || calculateDays(app.start_date, app.end_date)} day{(app.days || app.total_days || calculateDays(app.start_date, app.end_date)) > 1 ? 's' : ''}</span>
+                      <span className="history-days">{app.days || app.total_days || calculateDays(app.start_date, app.end_date)} day{(app.days || app.total_days || calculateDays(app.start_date, app.end_date)) !== 1 ? 's' : ''}{app.half_day ? ` (${app.half_day})` : ''}</span>
                     </div>
                     {getStatusBadge(app.status, app.auto_approved)}
                     {/* AI Auto-approved notice */}
@@ -337,16 +343,69 @@ function ESSLeave({ embedded = false }) {
                       })}
                     </select>
                   </div>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>{t('leave.startDate')} *</label>
-                      <input type="date" value={applyForm.start_date} onChange={e => setApplyForm({...applyForm, start_date: e.target.value})} required />
+                  <div className="form-group">
+                    <label>Duration *</label>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
+                      <button type="button"
+                        onClick={() => setApplyForm({...applyForm, day_type: 'full'})}
+                        style={{
+                          flex: 1, padding: '10px', borderRadius: '8px', border: '2px solid',
+                          borderColor: applyForm.day_type === 'full' ? '#3b82f6' : '#e2e8f0',
+                          background: applyForm.day_type === 'full' ? '#eff6ff' : '#fff',
+                          color: applyForm.day_type === 'full' ? '#1d4ed8' : '#64748b',
+                          fontWeight: applyForm.day_type === 'full' ? '600' : '400',
+                          cursor: 'pointer', fontSize: '14px'
+                        }}>
+                        Full Day
+                      </button>
+                      <button type="button"
+                        onClick={() => setApplyForm({...applyForm, day_type: 'half_am', end_date: applyForm.start_date})}
+                        style={{
+                          flex: 1, padding: '10px', borderRadius: '8px', border: '2px solid',
+                          borderColor: applyForm.day_type === 'half_am' ? '#3b82f6' : '#e2e8f0',
+                          background: applyForm.day_type === 'half_am' ? '#eff6ff' : '#fff',
+                          color: applyForm.day_type === 'half_am' ? '#1d4ed8' : '#64748b',
+                          fontWeight: applyForm.day_type === 'half_am' ? '600' : '400',
+                          cursor: 'pointer', fontSize: '14px'
+                        }}>
+                        Half Day (AM)
+                      </button>
+                      <button type="button"
+                        onClick={() => setApplyForm({...applyForm, day_type: 'half_pm', end_date: applyForm.start_date})}
+                        style={{
+                          flex: 1, padding: '10px', borderRadius: '8px', border: '2px solid',
+                          borderColor: applyForm.day_type === 'half_pm' ? '#3b82f6' : '#e2e8f0',
+                          background: applyForm.day_type === 'half_pm' ? '#eff6ff' : '#fff',
+                          color: applyForm.day_type === 'half_pm' ? '#1d4ed8' : '#64748b',
+                          fontWeight: applyForm.day_type === 'half_pm' ? '600' : '400',
+                          cursor: 'pointer', fontSize: '14px'
+                        }}>
+                        Half Day (PM)
+                      </button>
                     </div>
-                    <div className="form-group">
-                      <label>{t('leave.endDate')} *</label>
-                      <input type="date" value={applyForm.end_date} onChange={e => setApplyForm({...applyForm, end_date: e.target.value})} required />
-                    </div>
+                    {applyForm.day_type !== 'full' && (
+                      <small style={{ color: '#3b82f6', fontSize: '12px' }}>
+                        {applyForm.day_type === 'half_am' ? 'Morning leave (AM) - 0.5 day' : 'Afternoon leave (PM) - 0.5 day'}
+                      </small>
+                    )}
                   </div>
+                  {applyForm.day_type === 'full' ? (
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>{t('leave.startDate')} *</label>
+                        <input type="date" value={applyForm.start_date} onChange={e => setApplyForm({...applyForm, start_date: e.target.value})} required />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('leave.endDate')} *</label>
+                        <input type="date" value={applyForm.end_date} onChange={e => setApplyForm({...applyForm, end_date: e.target.value})} required />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="form-group">
+                      <label>Date *</label>
+                      <input type="date" value={applyForm.start_date} onChange={e => setApplyForm({...applyForm, start_date: e.target.value, end_date: e.target.value})} required />
+                    </div>
+                  )}
                   <div className="form-group">
                     <label>{t('leave.reason')} *</label>
                     <textarea value={applyForm.reason} onChange={e => setApplyForm({...applyForm, reason: e.target.value})} rows={3} required placeholder={t('leave.reasonPlaceholder')} />
