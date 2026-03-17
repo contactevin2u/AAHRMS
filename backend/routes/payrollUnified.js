@@ -170,7 +170,7 @@ async function calculatePartTimeHours(employeeId, periodStart, periodEnd, compan
       AND s.status IN ('scheduled', 'completed', 'confirmed')
     WHERE cr.employee_id = $1
       AND cr.work_date BETWEEN $2 AND $3
-      AND cr.status = 'completed'
+      AND cr.status IN ('completed', 'approved')
   `, [employeeId, periodStart, periodEnd]);
 
   // Get public holidays for the period (only those with extra_pay enabled)
@@ -358,6 +358,76 @@ function getWorkingDaysInMonth(year, month, workDaysPerWeek = 5) {
 }
 
 /**
+ * Get calendar-based working days for Mimix (outlet) companies.
+ * Working Days = Calendar Days in Month - Rest Days assigned to employee.
+ * Falls back to getWorkingDaysInMonth if no rest days assigned.
+ *
+ * @param {number} employeeId
+ * @param {number} month
+ * @param {number} year
+ * @param {number} workDaysPerWeek - fallback if no rest days assigned
+ * @returns {Promise<{calendarDays: number, restDays: number, workingDays: number, hasRestDays: boolean}>}
+ */
+async function getCalendarBasedWorkingDays(employeeId, month, year, workDaysPerWeek = 6) {
+  const calendarDays = new Date(year, month, 0).getDate();
+
+  const result = await pool.query(
+    'SELECT COUNT(*) as count FROM rest_day_assignments WHERE employee_id = $1 AND month = $2 AND year = $3',
+    [employeeId, month, year]
+  );
+  const restDays = parseInt(result.rows[0].count) || 0;
+
+  if (restDays === 0) {
+    // No rest days assigned - fall back to standard calculation
+    const fallback = getWorkingDaysInMonth(year, month, workDaysPerWeek);
+    return { calendarDays, restDays: 0, workingDays: fallback, hasRestDays: false };
+  }
+
+  return {
+    calendarDays,
+    restDays,
+    workingDays: calendarDays - restDays,
+    hasRestDays: true
+  };
+}
+
+/**
+ * Batch-load rest day counts for multiple employees in one query.
+ * Returns a Map of employeeId -> { calendarDays, restDays, workingDays, hasRestDays }
+ */
+async function batchGetCalendarBasedWorkingDays(employeeIds, month, year, workDaysPerWeek = 6) {
+  const calendarDays = new Date(year, month, 0).getDate();
+  const fallbackWorkingDays = getWorkingDaysInMonth(year, month, workDaysPerWeek);
+
+  if (!employeeIds.length) return new Map();
+
+  const result = await pool.query(
+    `SELECT employee_id, COUNT(*) as count
+     FROM rest_day_assignments
+     WHERE employee_id = ANY($1) AND month = $2 AND year = $3
+     GROUP BY employee_id`,
+    [employeeIds, month, year]
+  );
+
+  const restDayMap = new Map();
+  for (const row of result.rows) {
+    restDayMap.set(row.employee_id, parseInt(row.count) || 0);
+  }
+
+  const resultMap = new Map();
+  for (const empId of employeeIds) {
+    const restDays = restDayMap.get(empId) || 0;
+    if (restDays > 0) {
+      resultMap.set(empId, { calendarDays, restDays, workingDays: calendarDays - restDays, hasRestDays: true });
+    } else {
+      resultMap.set(empId, { calendarDays, restDays: 0, workingDays: fallbackWorkingDays, hasRestDays: false });
+    }
+  }
+
+  return resultMap;
+}
+
+/**
  * Get payroll period dates based on configuration
  */
 function getPayrollPeriod(month, year, periodConfig) {
@@ -494,7 +564,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
 
     // Get period dates
     const period = getPayrollPeriod(month, year, periodConfig);
-    const workingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
+    const defaultWorkingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
+    let workingDays = defaultWorkingDays;
 
     // Create payroll run
     const runResult = await client.query(`
@@ -700,7 +771,21 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
     let stats = { created: 0, totalGross: 0, totalNet: 0, totalDeductions: 0, totalEmployerCost: 0 };
     let warnings = [];
 
+    // Pre-load rest day data for outlet companies (batch query for performance)
+    let restDayMap = new Map();
+    if (isOutletBased) {
+      const empIds = employees.rows.map(e => e.id);
+      restDayMap = await batchGetCalendarBasedWorkingDays(empIds, month, year, rates.work_days_per_week);
+    }
+
     for (const emp of employees.rows) {
+      // Per-employee working days for Mimix (calendar-based with rest days)
+      if (isOutletBased && restDayMap.has(emp.id)) {
+        workingDays = restDayMap.get(emp.id).workingDays;
+      } else {
+        workingDays = defaultWorkingDays;
+      }
+
       const prevPayroll = prevPayrollMap[emp.id];
       let basicSalary = prevPayroll?.basic_salary || parseFloat(emp.basic_salary) || 0;
       let fixedAllowance = prevPayroll?.fixed_allowance || parseFloat(emp.fixed_allowance) || 0;
@@ -947,7 +1032,7 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
           const clockInResult = await client.query(`
             SELECT COUNT(DISTINCT work_date) as days_worked
             FROM clock_in_records WHERE employee_id = $1 AND company_id = $2
-            AND work_date >= $3::date AND work_date <= $4::date AND status = 'completed'
+            AND work_date >= $3::date AND work_date <= $4::date AND status IN ('completed', 'approved')
           `, [emp.id, companyId, periodStart, periodEnd]);
           const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
 
@@ -1725,7 +1810,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
               FROM clock_in_records cr
               WHERE cr.employee_id = pi.employee_id
                 AND cr.work_date BETWEEN $2 AND $3
-                AND cr.status = 'completed'
+                AND cr.status IN ('completed', 'approved')
                 AND (
                   NOT $4  -- If not outlet-based, count all days
                   OR EXISTS (
@@ -1741,7 +1826,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
               FROM clock_in_records cr
               WHERE cr.employee_id = pi.employee_id
                 AND cr.work_date BETWEEN $2 AND $3
-                AND cr.status = 'completed'
+                AND cr.status IN ('completed', 'approved')
                 AND (
                   NOT $4
                   OR EXISTS (
@@ -1757,7 +1842,7 @@ router.get('/runs/:id', authenticateAdmin, async (req, res) => {
               FROM clock_in_records cr
               WHERE cr.employee_id = pi.employee_id
                 AND cr.work_date BETWEEN $2 AND $3
-                AND cr.status = 'completed'
+                AND cr.status IN ('completed', 'approved')
                 AND NOT EXISTS (
                   SELECT 1 FROM schedules s
                   WHERE s.employee_id = cr.employee_id
@@ -1862,7 +1947,8 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
 
     // Get period dates
     const period = getPayrollPeriod(month, year, periodConfig);
-    const workingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
+    const defaultWorkingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
+    let workingDays = defaultWorkingDays;
 
     // Create payroll run with appropriate grouping column
     const runResult = await client.query(`
@@ -2112,7 +2198,21 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
     let stats = { created: 0, totalGross: 0, totalNet: 0, totalDeductions: 0, totalEmployerCost: 0 };
     let warnings = [];
 
+    // Pre-load rest day data for outlet companies (batch query for performance)
+    let restDayMap2 = new Map();
+    if (isOutletBased) {
+      const empIds = employees.rows.map(e => e.id);
+      restDayMap2 = await batchGetCalendarBasedWorkingDays(empIds, month, year, rates.work_days_per_week);
+    }
+
     for (const emp of employees.rows) {
+      // Per-employee working days for Mimix (calendar-based with rest days)
+      if (isOutletBased && restDayMap2.has(emp.id)) {
+        workingDays = restDayMap2.get(emp.id).workingDays;
+      } else {
+        workingDays = defaultWorkingDays;
+      }
+
       // Salary carry-forward
       const prevPayroll = prevPayrollMap[emp.id];
       let basicSalary = prevPayroll?.basic_salary || parseFloat(emp.basic_salary) || 0;
@@ -2364,7 +2464,7 @@ router.post('/runs', authenticateAdmin, async (req, res) => {
             FROM clock_in_records
             WHERE employee_id = $1
               AND work_date BETWEEN $2 AND $3
-              AND status = 'completed'
+              AND status IN ('completed', 'approved')
           `, [emp.id, periodStart, periodEnd]);
           const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
           const totalHoursWorked = parseFloat(clockInResult.rows[0]?.total_hours) || 0;
@@ -2627,7 +2727,8 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
 
     // Get period dates
     const period = getPayrollPeriod(month, year, periodConfig);
-    const workingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
+    const defaultWorkingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
+    let workingDays = defaultWorkingDays;
 
     // Build employee query
     const periodStart = period.start.toISOString().split('T')[0];
@@ -2689,7 +2790,21 @@ router.post('/preview', authenticateAdmin, async (req, res) => {
     const previewItems = [];
     let totalGross = 0, totalNet = 0, totalDeductions = 0;
 
+    // Pre-load rest day data for outlet companies
+    let restDayMapPreview = new Map();
+    if (isOutletBased) {
+      const empIds = employees.rows.map(e => e.id);
+      restDayMapPreview = await batchGetCalendarBasedWorkingDays(empIds, month, year, rates.work_days_per_week);
+    }
+
     for (const emp of employees.rows) {
+      // Per-employee working days for Mimix
+      if (isOutletBased && restDayMapPreview.has(emp.id)) {
+        workingDays = restDayMapPreview.get(emp.id).workingDays;
+      } else {
+        workingDays = defaultWorkingDays;
+      }
+
       // Apply salary changes if provided (for what-if scenarios)
       let basicSalary = parseFloat(emp.basic_salary) || 0;
       let fixedAllowance = parseFloat(emp.fixed_allowance) || 0;
@@ -2913,7 +3028,12 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
 
     // Combined deduction for days not worked (unpaid + absent)
     // deduction_override can be provided to set exact deduction amount (even 0)
-    const workingDays = getWorkingDaysInMonth(item.year, item.month, rates.work_days_per_week);
+    let workingDays = getWorkingDaysInMonth(item.year, item.month, rates.work_days_per_week);
+    // For Mimix: use calendar-based working days from rest day assignments
+    if (settings.groupingType === 'outlet') {
+      const calWd = await getCalendarBasedWorkingDays(item.employee_id, item.month, item.year, rates.work_days_per_week);
+      workingDays = calWd.workingDays;
+    }
     const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
     const calculatedDeduction = Math.round(dailyRate * daysNotWorked * 100) / 100;
     const combinedDeduction = updates.deduction_override !== undefined && updates.deduction_override !== null && updates.deduction_override !== ''
@@ -3274,7 +3394,12 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
     // PRESERVE absent days values - don't recalculate
     // Users can manually edit absent days/deduction in the edit form
     // The recalculate endpoint should only recalculate OT and statutory
-    const workingDays = getWorkingDaysInMonth(item.year, item.month, rates.work_days_per_week);
+    let workingDays = getWorkingDaysInMonth(item.year, item.month, rates.work_days_per_week);
+    // For Mimix: use calendar-based working days from rest day assignments
+    if (settings.groupingType === 'outlet') {
+      const calWd = await getCalendarBasedWorkingDays(item.employee_id, item.month, item.year, rates.work_days_per_week);
+      workingDays = calWd.workingDays;
+    }
     let absentDays = parseFloat(item.absent_days) || 0;
     let absentDayDeduction = parseFloat(item.absent_day_deduction) || 0;
 
@@ -3634,7 +3759,8 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
       start: new Date(run.period_start_date),
       end: new Date(run.period_end_date)
     };
-    const workingDays = getWorkingDaysInMonth(run.year, run.month, rates.work_days_per_week);
+    const defaultWorkingDays = getWorkingDaysInMonth(run.year, run.month, rates.work_days_per_week);
+    let workingDays = defaultWorkingDays;
 
     await client.query('BEGIN');
 
@@ -3655,7 +3781,19 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
       WHERE e.id = ANY($1) AND e.company_id = $2
     `, [newEmployeeIds, companyId]);
 
+    // Pre-load rest day data for outlet companies
+    let restDayMapAdd = new Map();
+    if (settings.groupingType === 'outlet') {
+      restDayMapAdd = await batchGetCalendarBasedWorkingDays(newEmployeeIds, run.month, run.year, rates.work_days_per_week);
+    }
+
     for (const emp of empResult.rows) {
+      // Per-employee working days for Mimix
+      if (settings.groupingType === 'outlet' && restDayMapAdd.has(emp.id)) {
+        workingDays = restDayMapAdd.get(emp.id).workingDays;
+      } else {
+        workingDays = defaultWorkingDays;
+      }
       const isPartTime = emp.work_type === 'part_time' || emp.employment_type === 'part_time';
       let basicSalary = parseFloat(emp.basic_salary) || 0;
       let fixedAllowance = parseFloat(emp.fixed_allowance) || 0;
@@ -3726,7 +3864,7 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
           const clockInResult = await client.query(`
             SELECT COUNT(DISTINCT work_date) as days_worked
             FROM clock_in_records
-            WHERE employee_id = $1 AND work_date BETWEEN $2 AND $3 AND status = 'completed'
+            WHERE employee_id = $1 AND work_date BETWEEN $2 AND $3 AND status IN ('completed', 'approved')
           `, [emp.id, periodStart, periodEnd]);
           const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
 
@@ -5351,7 +5489,7 @@ router.get('/items/:id/attendance-details', authenticateAdmin, async (req, res) 
     };
 
     const allClockIns = clockInsResult.rows
-      .filter(r => r.status === 'completed')
+      .filter(r => r.status === 'completed' || r.status === 'approved')
       .map(r => {
         const rawOtHours = (parseFloat(r.ot_minutes) || 0) / 60;
         return {

@@ -847,6 +847,13 @@ const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='claims' AND column_name='duplicate_of_claim_id') THEN
           ALTER TABLE claims ADD COLUMN duplicate_of_claim_id INTEGER REFERENCES claims(id);
         END IF;
+        -- AI extracted invoice number and time for better duplicate detection
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='claims' AND column_name='ai_extracted_invoice_no') THEN
+          ALTER TABLE claims ADD COLUMN ai_extracted_invoice_no VARCHAR(100);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='claims' AND column_name='ai_extracted_time') THEN
+          ALTER TABLE claims ADD COLUMN ai_extracted_time VARCHAR(20);
+        END IF;
       END $$;
 
       CREATE INDEX IF NOT EXISTS idx_claims_receipt_hash ON claims(receipt_hash);
@@ -2096,6 +2103,29 @@ Human Resources Department
           ALTER TABLE employees ADD COLUMN last_working_day DATE;
         END IF;
       END $$;
+
+      -- =====================================================
+      -- REST DAY ASSIGNMENTS (Mimix flexible weekly rest days)
+      -- =====================================================
+      CREATE TABLE IF NOT EXISTS rest_day_assignments (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        company_id INTEGER NOT NULL REFERENCES companies(id),
+        rest_date DATE NOT NULL,
+        week_start DATE NOT NULL,
+        week_end DATE NOT NULL,
+        month INTEGER NOT NULL,
+        year INTEGER NOT NULL,
+        assigned_by INTEGER REFERENCES admin_users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(employee_id, rest_date)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_rest_day_employee ON rest_day_assignments(employee_id);
+      CREATE INDEX IF NOT EXISTS idx_rest_day_month_year ON rest_day_assignments(month, year);
+      CREATE INDEX IF NOT EXISTS idx_rest_day_company ON rest_day_assignments(company_id);
+      CREATE INDEX IF NOT EXISTS idx_rest_day_week ON rest_day_assignments(week_start);
 
       -- Seed default exit clearance templates (only if empty)
       INSERT INTO exit_clearance_templates (company_id, category, item_name, sort_order)

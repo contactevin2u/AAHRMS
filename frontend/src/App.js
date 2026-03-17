@@ -34,6 +34,7 @@ import MimixLogin from './pages/MimixLogin';
 // New Unified ESS PWA (5 main nav items + auth + support pages)
 import { ESSLogin, ESSChangePassword, ESSDashboard, ESSAttendance, ESSBenefits, ESSFeedback, ESSProfile, ESSSchedule, ESSRequests, ESSCalendar, ESSLeave, ESSPayslips, ESSClaims, ESSNotifications, ESSLetters, ESSTeamSchedule, ESSOTApproval, ESSManagerOverview } from './pages/ess';
 import Schedules from './pages/Schedules';
+import RestDayAssignment from './pages/RestDayAssignment';
 import IndoorSalesSchedule from './pages/IndoorSalesSchedule';
 import IndoorSalesCommission from './pages/IndoorSalesCommission';
 import PublicHolidays from './pages/PublicHolidays';
@@ -316,6 +317,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Schedules />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/rest-days"
+          element={
+            <ProtectedRoute>
+              <RestDayAssignment />
             </ProtectedRoute>
           }
         />

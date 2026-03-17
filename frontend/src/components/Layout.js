@@ -427,6 +427,9 @@ function Layout({ children }) {
               <NavLink to="/admin/schedules" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                 Schedules
               </NavLink>
+              <NavLink to="/admin/rest-days" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
+                Rest Days
+              </NavLink>
             )}
             <NavLink to="/admin/attendance" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
               Attendance

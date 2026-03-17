@@ -859,4 +859,15 @@ export const driverClaimsApi = {
   updateAmount: (id, amount) => api.post(`/driver-claims/update-amount/${id}`, { amount }),
 };
 
+// Rest Day Management (Mimix)
+export const restDaysApi = {
+  getWeeks: (month, year) => api.get('/rest-days/weeks', { params: { month, year } }),
+  getAll: (params) => api.get('/rest-days', { params }),
+  assign: (data) => api.post('/rest-days/assign', data),
+  bulkAssign: (data) => api.post('/rest-days/bulk-assign', data),
+  remove: (id) => api.delete(`/rest-days/${id}`),
+  getSummary: (params) => api.get('/rest-days/summary', { params }),
+  getEmployees: (params) => api.get('/rest-days/employees', { params }),
+};
+
 export default api;
