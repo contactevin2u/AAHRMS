@@ -8,8 +8,9 @@ const router = express.Router();
 const https = require('https');
 const pool = require('../../db');
 
-const API_URL = process.env.AAALIVE_API_URL || 'https://orderops-api-v1.onrender.com/_api/external';
-const API_KEY = process.env.AAALIVE_API_KEY;
+// Use new HRMS-specific endpoints if available, fallback to old ones
+const API_URL = process.env.ORDEROPS_API_URL || process.env.AAALIVE_API_URL || 'https://orderops-api-v1.onrender.com/_api/external';
+const API_KEY = process.env.ORDEROPS_API_KEY || process.env.AAALIVE_API_KEY;
 const AA_ALIVE_COMPANY_ID = 1;
 const OT_THRESHOLD = 540; // AA Alive: OT after 9 hours
 
@@ -71,11 +72,15 @@ const DRIVER_MAPPING = {
   'DIN': 'ADIN',
   'ADIN': 'ADIN',
   'ADAM': 'ADAM',
+  'adam': 'ADAM',
   'ASLIE': 'ASLIE',
+  'Aslie': 'ASLIE',
   'SAIFUL': 'SAIFUL',
   'FAKHRUL': 'FAKHRUL',
   'MAHADI': 'MAHADI',
+  'mahadi': 'MAHADI',
   'ASRI': 'ASRI',
+  'Asri': 'ASRI',
   'FAIQ': 'FAIQ',
   'PIAN': 'PIAN',
   'SHUKRI': 'SHUKRI',
@@ -83,7 +88,19 @@ const DRIVER_MAPPING = {
   'SABAH': 'SABAH',
   'IQZAT': 'IQZAT',
   'oyeng': 'SHUKRI',
-  'OYENG': 'SHUKRI'
+  'OYENG': 'SHUKRI',
+  'Farhan': 'FARHAN',
+  'FARHAN': 'FARHAN',
+  'Hasim': 'HASIM',
+  'HASIM': 'HASIM',
+  'Hasnal': 'HASNAL',
+  'HASNAL': 'HASNAL',
+  'Sharif': 'SHARIFF',
+  'SHARIF': 'SHARIFF',
+  'Zainal': 'ZAINAL',
+  'ZAINAL': 'ZAINAL',
+  'Zam': 'ZAMZURI',
+  'ZAM': 'ZAMZURI'
 };
 
 /**
@@ -98,7 +115,7 @@ router.get('/test', async (req, res) => {
 
     const testDate = req.query.date || new Date().toISOString().split('T')[0];
 
-    console.log(`Testing AA Alive API for date: ${testDate}`);
+    console.log(`Testing AA Alive API for date: ${testDate} (URL: ${API_URL})`);
 
     const response = await httpsGet(`${API_URL}/shifts?shift_date=${testDate}`, {
       'X-API-Key': API_KEY
@@ -253,10 +270,15 @@ router.post('/sync', async (req, res) => {
       try {
         // Extract fields from OrderOps response
         const driverName = shift.driver_name;
-        const clockInMyt = shift.clock_in_at_myt;  // "2026-01-26 08:43:10"
+        // Use adjusted times if available (more accurate), fallback to original
+        const clockInMyt = shift.adjusted_clock_in_at_myt || shift.clock_in_at_myt;  // "2026-01-26 08:43:10"
         const clockOutMyt = shift.clock_out_at_myt;
         const clockInLocation = shift.clock_in_location;
         const clockOutLocation = shift.clock_out_location;
+        const clockInLat = shift.clock_in_lat;
+        const clockInLng = shift.clock_in_lng;
+        const clockOutLat = shift.clock_out_lat;
+        const clockOutLng = shift.clock_out_lng;
         const isOutstation = shift.is_outstation;
         const totalWorkingHours = shift.total_working_hours;
         const shiftStatus = shift.status;
@@ -324,15 +346,16 @@ router.post('/sync', async (req, res) => {
             const totalHrs = totalMin ? (totalMin / 60).toFixed(2) : null;
             const otMin = totalMin ? Math.max(0, totalMin - OT_THRESHOLD) : 0;
             const otHrs = (otMin / 60).toFixed(2);
+            const gpsOut = clockOutLat && clockOutLng ? `${clockOutLat},${clockOutLng}` : null;
 
             await client.query(`
               UPDATE clock_in_records SET
-                clock_out_1 = $1, address_out_1 = $2,
-                total_work_minutes = $3, total_work_hours = $4, total_hours = $4,
-                ot_minutes = $5, ot_hours = $6,
+                clock_out_1 = $1, address_out_1 = $2, location_out_1 = $3,
+                total_work_minutes = $4, total_work_hours = $5, total_hours = $5,
+                ot_minutes = $6, ot_hours = $7,
                 attendance_status = 'present', status = 'completed', updated_at = NOW()
-              WHERE id = $7
-            `, [clockOut, clockOutLocation || null, totalMin, totalHrs, otMin, otHrs, existing.id]);
+              WHERE id = $8
+            `, [clockOut, clockOutLocation || null, gpsOut, totalMin, totalHrs, otMin, otHrs, existing.id]);
 
             results.success.push({
               employee_id: employee.employee_id,
@@ -349,21 +372,29 @@ router.post('/sync', async (req, res) => {
           }
         } else {
           // Create new record
-          const notes = isOutstation ? 'Synced from OrderOps (Outstation)' : 'Synced from OrderOps';
+          const outstationNote = isOutstation ? (shift.outstation_location ? `Outstation: ${shift.outstation_location}` : 'Outstation') : '';
+          const notes = `Synced from OrderOps${outstationNote ? ` (${outstationNote})` : ''}`;
           const totalMin = calcWorkMinutes(clockIn, clockOut);
           const totalHrs = totalMin ? (totalMin / 60).toFixed(2) : (totalWorkingHours || null);
           const otMin = totalMin ? Math.max(0, totalMin - OT_THRESHOLD) : 0;
           const otHrs = (otMin / 60).toFixed(2);
+
+          // Build location strings with GPS coordinates if available
+          const locIn = clockInLocation || (clockInLat && clockInLng ? `${clockInLat},${clockInLng}` : null);
+          const locOut = clockOutLocation || (clockOutLat && clockOutLng ? `${clockOutLat},${clockOutLng}` : null);
+          const gpsIn = clockInLat && clockInLng ? `${clockInLat},${clockInLng}` : null;
+          const gpsOut = clockOutLat && clockOutLng ? `${clockOutLat},${clockOutLng}` : null;
 
           await client.query(`
             INSERT INTO clock_in_records (
               employee_id, company_id, work_date,
               clock_in_1, clock_out_1,
               address_in_1, address_out_1,
+              location_in_1, location_out_1,
               total_work_minutes, total_work_hours, total_hours,
               ot_minutes, ot_hours,
               attendance_status, notes, status, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $10, $11, 'present', $12, $13, NOW(), NOW())
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13, 'present', $14, $15, NOW(), NOW())
           `, [
             employee.id,
             AA_ALIVE_COMPANY_ID,
@@ -372,6 +403,8 @@ router.post('/sync', async (req, res) => {
             clockOut || null,
             clockInLocation || null,
             clockOutLocation || null,
+            gpsIn,
+            gpsOut,
             totalMin,
             totalHrs,
             otMin,

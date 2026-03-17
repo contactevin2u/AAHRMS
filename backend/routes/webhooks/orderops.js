@@ -27,11 +27,15 @@ const DRIVER_MAPPING = {
   'DIN': 'ADIN',
   'ADIN': 'ADIN',
   'ADAM': 'ADAM',
+  'adam': 'ADAM',
   'ASLIE': 'ASLIE',
+  'Aslie': 'ASLIE',
   'SAIFUL': 'SAIFUL',
   'FAKHRUL': 'FAKHRUL',
   'MAHADI': 'MAHADI',
+  'mahadi': 'MAHADI',
   'ASRI': 'ASRI',
+  'Asri': 'ASRI',
   'FAIQ': 'FAIQ',
   'PIAN': 'PIAN',
   'SHUKRI': 'SHUKRI',
@@ -39,7 +43,19 @@ const DRIVER_MAPPING = {
   'SABAH': 'SABAH',
   'IQZAT': 'IQZAT',
   'oyeng': 'SHUKRI',
-  'OYENG': 'SHUKRI'
+  'OYENG': 'SHUKRI',
+  'Farhan': 'FARHAN',
+  'FARHAN': 'FARHAN',
+  'Hasim': 'HASIM',
+  'HASIM': 'HASIM',
+  'Hasnal': 'HASNAL',
+  'HASNAL': 'HASNAL',
+  'Sharif': 'SHARIFF',
+  'SHARIF': 'SHARIFF',
+  'Zainal': 'ZAINAL',
+  'ZAINAL': 'ZAINAL',
+  'Zam': 'ZAMZURI',
+  'ZAM': 'ZAMZURI'
 };
 
 /**
