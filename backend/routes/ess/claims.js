@@ -245,15 +245,17 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     }
   }
 
-  // If not already auto-approved by meal allowance, check AI verification (AA Alive only)
+  // For drivers: always skip approval, go directly to approved (pending release)
+  if (!autoApproved && isDriver) {
+    claimStatus = 'approved';
+    autoApproved = true;
+    approvedAt = new Date();
+    autoApprovalReason = 'Driver claim - auto approved (pending release)';
+  }
+
+  // If not already auto-approved, check AI verification for non-drivers (AA Alive only)
   if (!autoApproved && companyId === 1 && verification) {
-    if (isDriver && verification.aiData?.amount) {
-      // Drivers: AI extracted amount from receipt - auto-approve with AI amount
-      claimStatus = 'approved';
-      autoApproved = true;
-      approvedAt = new Date();
-      autoApprovalReason = `AI extracted: RM${verification.aiData.amount.toFixed(2)} from ${verification.aiData.merchant || 'receipt'}`;
-    } else if (!isDriver && verification.canAutoApprove && !amount_mismatch_ignored) {
+    if (!isDriver && verification.canAutoApprove && !amount_mismatch_ignored) {
       claimStatus = 'approved';
       autoApproved = true;
       approvedAt = new Date();
@@ -261,10 +263,11 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     }
   }
 
-  // For drivers: use AI-extracted amount if available, default claim_date to today
+  // For drivers: driver-entered amount overrides AI amount, default claim_date to today
   const finalClaimDate = claim_date || new Date().toISOString().split('T')[0];
+  const driverEnteredAmount = parseFloat(amount);
   const finalAmount = isDriver
-    ? (verification?.aiData?.amount || parseFloat(amount) || 0)
+    ? (driverEnteredAmount > 0 ? driverEnteredAmount : (verification?.aiData?.amount || 0))
     : (parseFloat(amount) || 0);
 
   // Insert claim with AI data
@@ -272,9 +275,10 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     `INSERT INTO claims (
       employee_id, claim_date, category, description, amount, receipt_url, status,
       receipt_hash, ai_extracted_amount, ai_extracted_merchant, ai_extracted_date,
+      ai_extracted_invoice_no, ai_extracted_time,
       ai_confidence, amount_mismatch_ignored, auto_approved, approved_at, auto_approval_reason
     )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
      RETURNING *`,
     [
       req.employee.id,
@@ -288,6 +292,8 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
       verification?.aiData?.amount || null,
       verification?.aiData?.merchant || null,
       verification?.aiData?.date || null,
+      verification?.aiData?.invoiceNumber || null,
+      verification?.aiData?.time || null,
       verification?.aiData?.confidence || null,
       amount_mismatch_ignored || false,
       autoApproved,

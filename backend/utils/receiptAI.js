@@ -196,8 +196,10 @@ async function extractReceiptData(imageData) {
 
 {
   "amount": <total amount as a number, use the final total/grand total if available>,
-  "merchant": "<merchant/store name>",
+  "merchant": "<full merchant/store name including branch or location if shown>",
   "date": "<date in YYYY-MM-DD format if visible, otherwise null>",
+  "time": "<time in HH:MM:SS format if visible, otherwise null>",
+  "invoice_number": "<invoice number, receipt number, or transaction reference if visible, otherwise null>",
   "confidence": "<high if clearly readable, low if partially readable, unreadable if cannot extract>",
   "items_detected": <number of line items detected>,
   "currency": "<currency code if detected, default MYR>"
@@ -206,6 +208,9 @@ async function extractReceiptData(imageData) {
 Important:
 - For amount, extract the TOTAL/GRAND TOTAL, not subtotals
 - If multiple totals exist, use the largest final amount
+- For merchant, include the full name with branch/location (e.g. "PETRONAS PS Sg Pelek" not just "PETRONAS")
+- For invoice_number, look for fields like "INV NO", "Invoice", "Receipt No", "Transaction No", etc.
+- For time, look for the transaction time on the receipt
 - If you cannot read the receipt clearly, set confidence to "unreadable" and amount to null
 - Return ONLY the JSON object, no explanation`
             },
@@ -239,6 +244,8 @@ Important:
         amount: data.amount,
         merchant: data.merchant || null,
         date: data.date || null,
+        time: data.time || null,
+        invoiceNumber: data.invoice_number || null,
         confidence: data.confidence || 'low',
         itemsDetected: data.items_detected || 0,
         currency: data.currency || 'MYR',
@@ -320,15 +327,19 @@ async function checkDuplicateReceipt(receiptHash, companyId, excludeClaimId = nu
 }
 
 /**
- * Check for similar receipts based on AI-extracted data (merchant + date + amount)
+ * Check for similar receipts based on AI-extracted data
+ * Uses merchant + date + amount + invoice_number + time to determine duplicates.
+ * If invoice_number or time differ, the receipts are NOT considered duplicates.
  * @param {string} merchant - Merchant name
  * @param {string} date - Receipt date
  * @param {number} amount - Receipt amount
  * @param {number} companyId - Company ID
+ * @param {string} invoiceNumber - Invoice/receipt number (optional)
+ * @param {string} time - Transaction time (optional)
  * @param {number} excludeClaimId - Optional claim ID to exclude
  * @returns {Object} - Similar receipt check result
  */
-async function checkSimilarReceipt(merchant, date, amount, companyId, excludeClaimId = null) {
+async function checkSimilarReceipt(merchant, date, amount, companyId, invoiceNumber = null, time = null, excludeClaimId = null) {
   try {
     if (!merchant || !date || !amount) {
       return { isSimilar: false, similarClaims: [] };
@@ -336,7 +347,8 @@ async function checkSimilarReceipt(merchant, date, amount, companyId, excludeCla
 
     let query = `
       SELECT c.id, c.employee_id, c.amount, c.claim_date, c.category, c.status,
-             c.ai_extracted_merchant, e.name as employee_name
+             c.ai_extracted_merchant, c.ai_extracted_invoice_no, c.ai_extracted_time,
+             e.name as employee_name
       FROM claims c
       JOIN employees e ON c.employee_id = e.id
       WHERE e.company_id = $1
@@ -348,26 +360,44 @@ async function checkSimilarReceipt(merchant, date, amount, companyId, excludeCla
     const params = [companyId, amount, date, merchant];
 
     if (excludeClaimId) {
-      query += ` AND c.id != $5`;
       params.push(excludeClaimId);
+      query += ` AND c.id != $${params.length}`;
     }
 
     const result = await pool.query(query, params);
 
     if (result.rows.length > 0) {
-      return {
-        isSimilar: true,
-        similarClaims: result.rows.map(row => ({
-          id: row.id,
-          employeeId: row.employee_id,
-          employeeName: row.employee_name,
-          amount: row.amount,
-          date: row.claim_date,
-          category: row.category,
-          status: row.status,
-          merchant: row.ai_extracted_merchant
-        }))
-      };
+      // Filter out non-duplicates: if the new receipt has an invoice number or time
+      // that differs from the existing one, it's NOT a duplicate
+      const trueDuplicates = result.rows.filter(row => {
+        // If both have invoice numbers and they differ, NOT a duplicate
+        if (invoiceNumber && row.ai_extracted_invoice_no &&
+            invoiceNumber.toLowerCase() !== row.ai_extracted_invoice_no.toLowerCase()) {
+          return false;
+        }
+        // If both have times and they differ, NOT a duplicate
+        if (time && row.ai_extracted_time &&
+            time !== row.ai_extracted_time) {
+          return false;
+        }
+        return true;
+      });
+
+      if (trueDuplicates.length > 0) {
+        return {
+          isSimilar: true,
+          similarClaims: trueDuplicates.map(row => ({
+            id: row.id,
+            employeeId: row.employee_id,
+            employeeName: row.employee_name,
+            amount: row.amount,
+            date: row.claim_date,
+            category: row.category,
+            status: row.status,
+            merchant: row.ai_extracted_merchant
+          }))
+        };
+      }
     }
 
     return { isSimilar: false, similarClaims: [] };
@@ -428,12 +458,14 @@ async function verifyReceipt(imageData, claimedAmount, companyId, excludeClaimId
       return result;
     }
 
-    // Step 5: Check for similar receipts (same merchant + date + amount from AI)
+    // Step 5: Check for similar receipts (merchant + date + amount + invoice + time from AI)
     const similarCheck = await checkSimilarReceipt(
       aiData.merchant,
       aiData.date,
       aiData.amount,
       companyId,
+      aiData.invoiceNumber,
+      aiData.time,
       excludeClaimId
     );
     if (similarCheck.isSimilar) {
