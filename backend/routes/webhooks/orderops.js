@@ -55,7 +55,9 @@ const DRIVER_MAPPING = {
   'Zainal': 'ZAINAL',
   'ZAINAL': 'ZAINAL',
   'Zam': 'ZAMZURI',
-  'ZAM': 'ZAMZURI'
+  'ZAM': 'ZAMZURI',
+  'PAKOK': 'FAKHRUL',
+  'Pakok': 'FAKHRUL'
 };
 
 /**
