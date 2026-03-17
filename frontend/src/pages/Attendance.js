@@ -1081,6 +1081,8 @@ const Attendance = ({ departmentId: propDeptId, outletId: propOutletId, embedded
                 <th>Date</th>
                 <th>Employee</th>
                 {!isSupervisor && <th>{isAAAlive ? 'Department' : 'Outlet'}</th>}
+                <th>Clock In</th>
+                <th>Clock Out</th>
                 <th>Hours</th>
                 <th>OT</th>
                 {!isAAAlive && <th>OT Status</th>}
@@ -1109,7 +1111,7 @@ const Attendance = ({ departmentId: propDeptId, outletId: propOutletId, embedded
                 if (filteredRecords.length === 0) {
                   return (
                     <tr>
-                      <td colSpan={!isSupervisor ? (!isAAAlive ? 10 : 9) : (!isAAAlive ? 9 : 8)} className="no-data">
+                      <td colSpan={!isSupervisor ? (!isAAAlive ? 12 : 11) : (!isAAAlive ? 11 : 10)} className="no-data">
                         No attendance records found
                       </td>
                     </tr>
@@ -1118,7 +1120,7 @@ const Attendance = ({ departmentId: propDeptId, outletId: propOutletId, embedded
                 return filteredRecords.map(record => {
                   const calcHours = calculateActualHours(record);
                   const isExpanded = expandedRows[record.id];
-                  const colCount = !isSupervisor ? (!isAAAlive ? 10 : 9) : (!isAAAlive ? 9 : 8);
+                  const colCount = !isSupervisor ? (!isAAAlive ? 12 : 11) : (!isAAAlive ? 11 : 10);
                   return (
                     <React.Fragment key={record.id}>
                     <tr className={`${selectedRecords.includes(record.id) ? 'selected' : ''} ${isExpanded ? 'expanded-parent' : ''}`}>
@@ -1145,6 +1147,12 @@ const Attendance = ({ departmentId: propDeptId, outletId: propOutletId, embedded
                         </span>
                       </td>
                       {!isSupervisor && <td>{isAAAlive ? (record.department_name || '-') : (record.outlet_name || '-')}</td>}
+                      <td className="clock-time-cell">
+                        {isAAAlive ? renderEditableClockTime(record, 'clock_in_1', record.clock_in_1) : formatTime(record.clock_in_1)}
+                      </td>
+                      <td className="clock-time-cell">
+                        {isAAAlive ? renderEditableClockTime(record, 'clock_out_1', record.clock_out_1) : formatTime(record.clock_out_1)}
+                      </td>
                       <td className="hours-cell">
                         {renderEditableHours(record, 'total_work_hours', record.total_hours, true)}
                       </td>
@@ -1291,6 +1299,37 @@ const Attendance = ({ departmentId: propDeptId, outletId: propOutletId, embedded
                 });
               })()}
             </tbody>
+            {(() => {
+              const filtered = filters.ot_status ? records.filter(r => {
+                const hasOT = r.ot_hours > 0;
+                const otApproved = r.ot_approved === true;
+                const otRejected = r.ot_approved === false && r.ot_rejection_reason;
+                const otPending = hasOT && r.ot_approved === null;
+                switch (filters.ot_status) {
+                  case 'pending': return otPending;
+                  case 'approved': return otApproved;
+                  case 'rejected': return otRejected;
+                  case 'no_ot': return !hasOT;
+                  default: return true;
+                }
+              }) : records;
+              if (filtered.length === 0) return null;
+              const totalHours = filtered.reduce((sum, r) => sum + (parseFloat(r.total_hours) || 0), 0);
+              const totalOT = filtered.reduce((sum, r) => sum + (parseFloat(r.ot_hours) || 0), 0);
+              const approvedOT = filtered.filter(r => r.ot_approved === true).reduce((sum, r) => sum + (parseFloat(r.ot_hours) || 0), 0);
+              const colsBefore = !isSupervisor ? 5 : 4; // checkbox + expand + date + employee + (dept/outlet)
+              return (
+                <tfoot>
+                  <tr style={{ fontWeight: 'bold', background: '#f0f4ff', borderTop: '2px solid #3b82f6' }}>
+                    <td colSpan={colsBefore} style={{ textAlign: 'right', paddingRight: '12px' }}>Total</td>
+                    <td className="hours-cell">{totalHours.toFixed(1)}h</td>
+                    <td className="hours-cell ot">{totalOT.toFixed(1)}h</td>
+                    {!isAAAlive && <td style={{ fontSize: '0.8rem' }}>Approved: {approvedOT.toFixed(1)}h</td>}
+                    <td colSpan={2}>{filtered.length} records</td>
+                  </tr>
+                </tfoot>
+              );
+            })()}
           </table>
         </div>
       )}

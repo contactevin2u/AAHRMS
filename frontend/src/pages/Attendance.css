@@ -158,6 +158,14 @@
   font-size: 12px;
 }
 
+.clock-time-cell {
+  text-align: center;
+  font-weight: 500;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
 .hours-cell {
   text-align: center;
   font-weight: 500;
