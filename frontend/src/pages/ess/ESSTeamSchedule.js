@@ -357,24 +357,20 @@ function ESSTeamSchedule({ embedded = false }) {
           </div>
         </div>
 
-        {/* Shift Legend - Only show working shifts (no schedule = off day) */}
+        {/* Shift Legend */}
         {shiftTemplates.length > 0 && (
           <div className="ts-shift-legend">
-            {shiftTemplates.filter(t => !t.is_off).map(t => (
+            {shiftTemplates.map(t => (
               <div key={t.id} className="ts-shift-chip" style={{ backgroundColor: t.color + '20', borderColor: t.color }}>
                 <span className="ts-shift-dot" style={{ backgroundColor: t.color }}></span>
                 <span className="ts-shift-code">{t.code}</span>
-                <span className="ts-shift-time">{t.start_time}-{t.end_time}</span>
+                <span className="ts-shift-time">{t.is_off ? 'Rest Day' : `${t.start_time}-${t.end_time}`}</span>
               </div>
             ))}
             <div className="ts-shift-chip leave">
               <span className="ts-shift-dot" style={{ backgroundColor: '#F59E0B' }}></span>
               <span className="ts-shift-code">Leave</span>
               <span className="ts-shift-time">Approved</span>
-            </div>
-            <div className="ts-shift-chip off">
-              <span className="ts-shift-code">-</span>
-              <span className="ts-shift-time">No schedule = Off</span>
             </div>
           </div>
         )}
@@ -678,7 +674,7 @@ function ESSTeamSchedule({ embedded = false }) {
                 <div className="ts-assign-section">
                   <label>1. Select Shift</label>
                   <div className="ts-shift-grid">
-                    {shiftTemplates.filter(t => !t.is_off).map(t => {
+                    {shiftTemplates.map(t => {
                       const isSelected = selectedShift?.id === t.id;
                       return (
                         <button
@@ -697,7 +693,7 @@ function ESSTeamSchedule({ embedded = false }) {
                       );
                     })}
                   </div>
-                  <p className="ts-hint">No schedule = Day Off (don't need to assign)</p>
+                  <p className="ts-hint">Assign "OFF" for rest day (affects payroll calculation)</p>
                 </div>
               )}
 

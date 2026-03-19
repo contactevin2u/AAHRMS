@@ -18,6 +18,7 @@ const {
   isMimixCompany,
   isAAAliveIndoorSalesManager
 } = require('../../middleware/essPermissions');
+const { syncRestDayFromSchedule, removeRestDayFromSchedule } = require('../../utils/restDayScheduleSync');
 
 // Helper: sync has_schedule on clock_in_records when a schedule is created/updated
 const syncClockInHasSchedule = async (employeeId, scheduleDate, scheduleId) => {
@@ -1077,6 +1078,13 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
       await syncClockInHasSchedule(employee_id, schedule_date, result.rows[0].id);
     }
 
+    // Sync rest day assignment
+    if (template.is_off) {
+      await syncRestDayFromSchedule(employee_id, targetEmployee.company_id, schedule_date, req.employee.id);
+    } else {
+      await removeRestDayFromSchedule(employee_id, schedule_date);
+    }
+
     return res.json({
       message: 'Schedule updated successfully',
       schedule: {
@@ -1104,6 +1112,13 @@ router.post('/team-schedules', authenticateEmployee, asyncHandler(async (req, re
   // Sync has_schedule on clock_in_records
   if (!template.is_off) {
     await syncClockInHasSchedule(employee_id, schedule_date, result.rows[0].id);
+  }
+
+  // Sync rest day assignment
+  if (template.is_off) {
+    await syncRestDayFromSchedule(employee_id, targetEmployee.company_id, schedule_date, req.employee.id);
+  } else {
+    await removeRestDayFromSchedule(employee_id, schedule_date);
   }
 
   res.status(201).json({
@@ -1238,6 +1253,13 @@ router.post('/team-schedules/bulk', authenticateEmployee, asyncHandler(async (re
       if (!template.is_off) {
         await syncClockInHasSchedule(employee_id, schedule_date, scheduleId);
       }
+
+      // Sync rest day assignment
+      if (template.is_off) {
+        await syncRestDayFromSchedule(employee_id, targetEmployee.company_id, schedule_date, req.employee.id);
+      } else {
+        await removeRestDayFromSchedule(employee_id, schedule_date);
+      }
     } catch (err) {
       errors.push({ employee_id: sched.employee_id, schedule_date: sched.schedule_date, error: err.message });
     }
@@ -1364,6 +1386,13 @@ router.delete('/team-schedules/:id', authenticateEmployee, asyncHandler(async (r
   }
 
   await pool.query('DELETE FROM schedules WHERE id = $1', [id]);
+
+  // If it was an "off" day, remove the rest day assignment
+  if (schedule.status === 'off') {
+    const schedDate = new Date(schedule.schedule_date);
+    const dateStr = schedDate.toISOString().split('T')[0];
+    await removeRestDayFromSchedule(schedule.employee_id, dateStr);
+  }
 
   res.json({ message: 'Schedule deleted successfully' });
 }));

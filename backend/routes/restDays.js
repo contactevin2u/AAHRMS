@@ -15,6 +15,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
+const { syncScheduleFromRestDay, removeScheduleFromRestDay } = require('../utils/restDayScheduleSync');
 
 /**
  * Generate Mon-Sun week ranges for a given month
@@ -256,6 +257,17 @@ router.post('/assign', authenticateAdmin, async (req, res) => {
         );
       }
 
+      // Sync schedule: if old rest day was replaced, remove old schedule first
+      if (existingResult.rows.length > 0) {
+        const oldDate = formatDate(new Date(existingResult.rows[0].rest_date));
+        if (oldDate !== rest_date) {
+          await removeScheduleFromRestDay(employee_id, oldDate, client);
+        }
+      }
+
+      // Create/update "Off" schedule for the new rest date
+      await syncScheduleFromRestDay(employee_id, companyId, rest_date, client);
+
       await client.query('COMMIT');
       res.json(result.rows[0]);
     } catch (err) {
@@ -314,6 +326,21 @@ router.post('/bulk-assign', authenticateAdmin, async (req, res) => {
           weekDates[wsKey] = dateStr;
         }
 
+        // Get existing rest days before deleting (to clean up old schedules)
+        const oldRestDays = await client.query(
+          'SELECT rest_date FROM rest_day_assignments WHERE employee_id = $1 AND month = $2 AND year = $3',
+          [employee_id, parseInt(month), parseInt(year)]
+        );
+
+        // Remove old "Off" schedules for dates that are no longer rest days
+        const newDatesSet = new Set(rest_dates);
+        for (const row of oldRestDays.rows) {
+          const oldDate = formatDate(new Date(row.rest_date));
+          if (!newDatesSet.has(oldDate)) {
+            await removeScheduleFromRestDay(employee_id, oldDate, client);
+          }
+        }
+
         // Delete existing rest days for this employee/month
         await client.query(
           'DELETE FROM rest_day_assignments WHERE employee_id = $1 AND month = $2 AND year = $3',
@@ -337,6 +364,9 @@ router.post('/bulk-assign', authenticateAdmin, async (req, res) => {
              parseInt(month), parseInt(year), adminId]
           );
           totalAssigned++;
+
+          // Sync: create/update "Off" schedule for this rest date
+          await syncScheduleFromRestDay(employee_id, companyId, dateStr, client);
         }
 
         // Audit log
@@ -376,6 +406,9 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
 
     const old = existing.rows[0];
     await pool.query('DELETE FROM rest_day_assignments WHERE id = $1', [id]);
+
+    // Sync: remove "Off" schedule for this rest date
+    await removeScheduleFromRestDay(old.employee_id, formatDate(new Date(old.rest_date)));
 
     // Audit log
     await pool.query(

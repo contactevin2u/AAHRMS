@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const { authenticateAdmin } = require('../middleware/auth');
 const { getCompanyFilter, isAdmin } = require('../middleware/tenant');
+const { syncRestDayFromSchedule, removeRestDayFromSchedule } = require('../utils/restDayScheduleSync');
 
 // Helper to format time for display
 const formatTime = (time) => {
@@ -977,6 +978,14 @@ router.post('/roster/assign', authenticateAdmin, async (req, res) => {
       await syncClockInHasSchedule(employee_id, schedule_date, schedule.id);
     }
 
+    // Sync rest day assignment
+    if (t.is_off) {
+      await syncRestDayFromSchedule(employee_id, companyId, schedule_date, adminId);
+    } else {
+      // If changing from off to a working shift, remove rest day
+      await removeRestDayFromSchedule(employee_id, schedule_date);
+    }
+
     res.json({
       ...schedule,
       shift_code: t.code,
@@ -1059,6 +1068,13 @@ router.post('/roster/bulk-assign', authenticateAdmin, async (req, res) => {
         if (!t.is_off) {
           await syncClockInHasSchedule(a.employee_id, a.schedule_date, scheduleId);
         }
+
+        // Sync rest day assignment
+        if (t.is_off) {
+          await syncRestDayFromSchedule(a.employee_id, companyId, a.schedule_date, adminId);
+        } else {
+          await removeRestDayFromSchedule(a.employee_id, a.schedule_date);
+        }
       } catch (err) {
         results.errors.push({ employee_id: a.employee_id, date: a.schedule_date, error: err.message });
       }
@@ -1084,6 +1100,13 @@ router.delete('/roster/clear', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Employee ID and date are required' });
     }
 
+    // Check if the schedule being cleared is an "off" day
+    const existingSchedule = await pool.query(
+      'SELECT id, status FROM schedules WHERE employee_id = $1 AND schedule_date = $2',
+      [employee_id, schedule_date]
+    );
+    const wasOff = existingSchedule.rows[0]?.status === 'off';
+
     let query = 'DELETE FROM schedules WHERE employee_id = $1 AND schedule_date = $2';
     let params = [employee_id, schedule_date];
 
@@ -1093,6 +1116,12 @@ router.delete('/roster/clear', authenticateAdmin, async (req, res) => {
     }
 
     await pool.query(query, params);
+
+    // If it was an "off" day, also remove the rest day assignment
+    if (wasOff) {
+      await removeRestDayFromSchedule(employee_id, schedule_date);
+    }
+
     res.json({ message: 'Schedule cleared successfully' });
   } catch (error) {
     console.error('Error clearing schedule:', error);
@@ -1508,6 +1537,13 @@ router.post('/roster/department/assign', authenticateAdmin, async (req, res) => 
       await syncClockInHasSchedule(employee_id, schedule_date, deptSchedule.id);
     }
 
+    // Sync rest day assignment
+    if (t.is_off) {
+      await syncRestDayFromSchedule(employee_id, companyId, schedule_date, adminId);
+    } else {
+      await removeRestDayFromSchedule(employee_id, schedule_date);
+    }
+
     res.json({
       ...deptSchedule,
       shift_code: t.code,
@@ -1578,6 +1614,13 @@ router.post('/roster/department/bulk-assign', authenticateAdmin, async (req, res
         // Sync has_schedule on clock_in_records
         if (!t.is_off) {
           await syncClockInHasSchedule(a.employee_id, a.schedule_date, scheduleId);
+        }
+
+        // Sync rest day assignment
+        if (t.is_off) {
+          await syncRestDayFromSchedule(a.employee_id, companyId, a.schedule_date, adminId);
+        } else {
+          await removeRestDayFromSchedule(a.employee_id, a.schedule_date);
         }
       } catch (err) {
         results.errors.push({ employee_id: a.employee_id, date: a.schedule_date, error: err.message });
