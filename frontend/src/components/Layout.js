@@ -321,15 +321,6 @@ function Layout({ children }) {
             <NavLink to="/admin/payroll-v2" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
               Payroll
             </NavLink>
-            <NavLink to="/admin/payroll-guide" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-              Calculation Guide
-            </NavLink>
-            <NavLink to="/admin/ai-change-logs" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-              AI Change History
-            </NavLink>
-            <NavLink to="/admin/payroll-settings" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-              Payroll Settings
-            </NavLink>
           </div>
         )}
       </div>
@@ -458,20 +449,11 @@ function Layout({ children }) {
             <NavLink to="/admin/payroll-v2" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
               Payroll
             </NavLink>
-            <NavLink to="/admin/payroll-guide" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-              Calculation Guide
-            </NavLink>
-            <NavLink to="/admin/ai-change-logs" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-              AI Change History
-            </NavLink>
             {!usesOutlets() && (
               <NavLink to="/admin/sales-entry" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
                 Sales Entry
               </NavLink>
             )}
-            <NavLink to="/admin/payroll-settings" className={({ isActive }) => `nav-item sub ${isActive ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)}>
-              Payroll Settings
-            </NavLink>
           </div>
         )}
       </div>
