@@ -746,4 +746,187 @@ Return ONLY a JSON array of strings, e.g. ["insight 1", "insight 2", "insight 3"
   }
 });
 
+/**
+ * GET /api/analytics/yearly-overview?year=Y
+ * Aggregated payroll data for the entire year
+ */
+router.get('/yearly-overview', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    if (!companyId) return res.status(403).json({ error: 'Company context required' });
+
+    const year = parseInt(req.query.year);
+    if (!year) return res.status(400).json({ error: 'year is required' });
+
+    // Yearly totals
+    const current = await pool.query(`
+      SELECT
+        COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
+        COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
+        COALESCE(SUM(pi.net_pay), 0) AS total_net,
+        COALESCE(SUM(pi.total_deductions), 0) AS total_deductions,
+        COUNT(DISTINCT pi.employee_id) AS employee_count,
+        CASE WHEN COUNT(DISTINCT pi.employee_id) > 0
+          THEN ROUND(SUM(pi.net_pay) / COUNT(DISTINCT pi.employee_id), 2)
+          ELSE 0 END AS avg_salary,
+        COALESCE(SUM(pi.epf_employer), 0) AS total_epf_employer,
+        COALESCE(SUM(pi.socso_employer), 0) AS total_socso_employer,
+        COALESCE(SUM(pi.eis_employer), 0) AS total_eis_employer,
+        COALESCE(SUM(pi.ot_amount), 0) AS total_ot,
+        COALESCE(SUM(pi.ot_hours), 0) AS total_ot_hours,
+        COUNT(DISTINCT pr.id) AS payroll_runs_count
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.company_id = $1
+        AND pr.year = $2
+        AND pr.status IN ('finalized', 'approved')
+    `, [companyId, year]);
+
+    // Monthly breakdown within the year
+    const monthly = await pool.query(`
+      SELECT pr.month,
+        COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
+        COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
+        COALESCE(SUM(pi.net_pay), 0) AS total_net,
+        COALESCE(SUM(pi.total_deductions), 0) AS total_deductions,
+        COUNT(DISTINCT pi.employee_id) AS employee_count,
+        COALESCE(SUM(pi.epf_employer), 0) + COALESCE(SUM(pi.socso_employer), 0) + COALESCE(SUM(pi.eis_employer), 0) AS total_employer_statutory
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.company_id = $1
+        AND pr.year = $2
+        AND pr.status IN ('finalized', 'approved')
+      GROUP BY pr.month
+      ORDER BY pr.month
+    `, [companyId, year]);
+
+    const d = current.rows[0];
+    const employerEPF = parseFloat(d.total_epf_employer);
+    const employerSOCSO = parseFloat(d.total_socso_employer);
+    const employerEIS = parseFloat(d.total_eis_employer);
+    const totalEmployerCost = parseFloat(d.total_gross) + employerEPF + employerSOCSO + employerEIS;
+
+    const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    res.json({
+      year,
+      totalGross: parseFloat(d.total_gross),
+      totalGrossExClaims: parseFloat(d.total_gross_ex_claims),
+      totalNet: parseFloat(d.total_net),
+      totalDeductions: parseFloat(d.total_deductions),
+      employeeCount: parseInt(d.employee_count),
+      avgSalary: parseFloat(d.avg_salary),
+      totalEmployerCost: Math.round(totalEmployerCost * 100) / 100,
+      employerEPF,
+      employerSOCSO,
+      employerEIS,
+      totalOT: parseFloat(d.total_ot),
+      totalOTHours: parseFloat(d.total_ot_hours),
+      payrollRunsCount: parseInt(d.payroll_runs_count),
+      monthly: monthly.rows.map(r => ({
+        month: r.month,
+        label: monthNames[r.month],
+        totalGross: parseFloat(r.total_gross),
+        totalGrossExClaims: parseFloat(r.total_gross_ex_claims),
+        totalNet: parseFloat(r.total_net),
+        totalDeductions: parseFloat(r.total_deductions),
+        employeeCount: parseInt(r.employee_count),
+        totalEmployerCost: parseFloat(r.total_gross) + parseFloat(r.total_employer_statutory)
+      }))
+    });
+  } catch (error) {
+    console.error('Yearly overview error:', error);
+    res.status(500).json({ error: 'Failed to fetch yearly overview' });
+  }
+});
+
+/**
+ * GET /api/analytics/year-comparison
+ * Compare payroll data across all available years (for YoY charts)
+ */
+router.get('/year-comparison', authenticateAdmin, async (req, res) => {
+  try {
+    const companyId = req.companyId;
+    if (!companyId) return res.status(403).json({ error: 'Company context required' });
+
+    // Get all years with data
+    const years = await pool.query(`
+      SELECT DISTINCT pr.year
+      FROM payroll_runs pr
+      WHERE pr.company_id = $1 AND pr.status IN ('finalized', 'approved')
+      ORDER BY pr.year
+    `, [companyId]);
+
+    // Per-year summary
+    const yearlyData = await pool.query(`
+      SELECT pr.year,
+        COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
+        COALESCE(SUM(pi.gross_salary - COALESCE(pi.claims_amount, 0)), 0) AS total_gross_ex_claims,
+        COALESCE(SUM(pi.net_pay), 0) AS total_net,
+        COALESCE(SUM(pi.total_deductions), 0) AS total_deductions,
+        COUNT(DISTINCT pi.employee_id) AS employee_count,
+        COALESCE(SUM(pi.epf_employer), 0) + COALESCE(SUM(pi.socso_employer), 0) + COALESCE(SUM(pi.eis_employer), 0) AS total_employer_statutory,
+        COALESCE(SUM(pi.ot_amount), 0) AS total_ot,
+        COUNT(DISTINCT pr.id) AS months_count
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.company_id = $1
+        AND pr.status IN ('finalized', 'approved')
+      GROUP BY pr.year
+      ORDER BY pr.year
+    `, [companyId]);
+
+    // Monthly breakdown per year (for overlaid comparison chart)
+    const monthlyByYear = await pool.query(`
+      SELECT pr.year, pr.month,
+        COALESCE(SUM(pi.gross_salary), 0) AS total_gross,
+        COALESCE(SUM(pi.net_pay), 0) AS total_net,
+        COALESCE(SUM(pi.total_deductions), 0) AS total_deductions,
+        COUNT(DISTINCT pi.employee_id) AS employee_count,
+        COALESCE(SUM(pi.gross_salary), 0) + COALESCE(SUM(pi.epf_employer), 0) + COALESCE(SUM(pi.socso_employer), 0) + COALESCE(SUM(pi.eis_employer), 0) AS total_employer_cost
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      WHERE pr.company_id = $1
+        AND pr.status IN ('finalized', 'approved')
+      GROUP BY pr.year, pr.month
+      ORDER BY pr.year, pr.month
+    `, [companyId]);
+
+    const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Build monthly comparison data: [{month: 'Jan', 2025: net, 2026: net}, ...]
+    const monthlyComparison = [];
+    for (let m = 1; m <= 12; m++) {
+      const row = { month: monthNames[m] };
+      for (const yr of years.rows) {
+        const found = monthlyByYear.rows.find(r => r.year === yr.year && r.month === m);
+        row[`net_${yr.year}`] = found ? parseFloat(found.total_net) : 0;
+        row[`gross_${yr.year}`] = found ? parseFloat(found.total_gross) : 0;
+        row[`cost_${yr.year}`] = found ? parseFloat(found.total_employer_cost) : 0;
+        row[`headcount_${yr.year}`] = found ? parseInt(found.employee_count) : 0;
+      }
+      monthlyComparison.push(row);
+    }
+
+    res.json({
+      years: years.rows.map(r => r.year),
+      yearly: yearlyData.rows.map(r => ({
+        year: r.year,
+        totalGross: parseFloat(r.total_gross),
+        totalGrossExClaims: parseFloat(r.total_gross_ex_claims),
+        totalNet: parseFloat(r.total_net),
+        totalDeductions: parseFloat(r.total_deductions),
+        employeeCount: parseInt(r.employee_count),
+        totalEmployerCost: parseFloat(r.total_gross) + parseFloat(r.total_employer_statutory),
+        totalOT: parseFloat(r.total_ot),
+        monthsCount: parseInt(r.months_count)
+      })),
+      monthlyComparison
+    });
+  } catch (error) {
+    console.error('Year comparison error:', error);
+    res.status(500).json({ error: 'Failed to fetch year comparison' });
+  }
+});
+
 module.exports = router;

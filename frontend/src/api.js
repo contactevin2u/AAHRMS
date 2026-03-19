@@ -842,6 +842,8 @@ export const analyticsApi = {
   getHeadcount: () => api.get('/analytics/headcount'),
   getAttendanceSummary: () => api.get('/analytics/attendance-summary'),
   getAiInsights: () => api.get('/analytics/ai-insights'),
+  getYearlyOverview: (year) => api.get('/analytics/yearly-overview', { params: { year } }),
+  getYearComparison: () => api.get('/analytics/year-comparison'),
 };
 
 // Driver Claims Portal
