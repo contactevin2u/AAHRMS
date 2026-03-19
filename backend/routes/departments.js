@@ -247,6 +247,43 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Update department name
+router.put('/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Department name is required' });
+    }
+
+    const companyId = req.companyId || req.admin?.company_id;
+
+    // Check for duplicate name
+    const duplicate = await pool.query(
+      'SELECT id FROM departments WHERE LOWER(name) = LOWER($1) AND company_id = $2 AND id != $3',
+      [name.trim(), companyId, id]
+    );
+    if (duplicate.rows.length > 0) {
+      return res.status(400).json({ error: 'A department with this name already exists' });
+    }
+
+    const result = await pool.query(
+      'UPDATE departments SET name = $1 WHERE id = $2 AND company_id = $3 RETURNING *',
+      [name.trim(), id, companyId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Department not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating department:', error);
+    res.status(500).json({ error: 'Failed to update department' });
+  }
+});
+
 // Update salary config for department
 router.put('/:id/salary-config', authenticateAdmin, async (req, res) => {
   try {

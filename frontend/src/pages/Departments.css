@@ -341,6 +341,83 @@
   box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
 }
 
+/* Department name edit */
+.dept-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dept-edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.dept-card:hover .dept-edit-btn {
+  opacity: 1;
+}
+
+.dept-edit-btn:hover {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.dept-name-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.dept-name-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 2px solid #3b82f6;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+  outline: none;
+  min-width: 0;
+}
+
+.dept-save-btn,
+.dept-cancel-btn {
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.dept-save-btn {
+  background: #10b981;
+  color: white;
+}
+
+.dept-save-btn:hover {
+  background: #059669;
+}
+
+.dept-cancel-btn {
+  background: #ef4444;
+  color: white;
+}
+
+.dept-cancel-btn:hover {
+  background: #dc2626;
+}
+
 @media (max-width: 768px) {
   .departments-grid {
     grid-template-columns: 1fr;
