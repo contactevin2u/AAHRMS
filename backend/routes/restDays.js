@@ -481,7 +481,25 @@ router.get('/summary', authenticateAdmin, async (req, res) => {
         'SELECT COUNT(*) as count FROM rest_day_assignments WHERE employee_id = $1 AND month = $2 AND year = $3',
         [emp.id, m, y]
       );
-      const restDays = parseInt(restResult.rows[0].count) || 0;
+      let restDays = parseInt(restResult.rows[0].count) || 0;
+      let fromSchedule = false;
+
+      // If no rest days assigned, count actual scheduled working days
+      // Days without a schedule are treated as off days automatically
+      if (restDays === 0) {
+        const schedResult = await pool.query(
+          `SELECT COUNT(*) as count FROM schedules s
+           LEFT JOIN shift_templates st ON s.shift_template_id = st.id
+           WHERE s.employee_id = $1 AND s.schedule_date BETWEEN $2 AND $3
+             AND (st.is_off IS NULL OR st.is_off = false)`,
+          [emp.id, periodStart, periodEnd]
+        );
+        const scheduledDays = parseInt(schedResult.rows[0].count) || 0;
+        if (scheduledDays > 0) {
+          restDays = calendarDays - scheduledDays;
+          fromSchedule = true;
+        }
+      }
 
       // Count public holidays
       const phResult = await pool.query(
@@ -550,7 +568,8 @@ router.get('/summary', authenticateAdmin, async (req, res) => {
         unpaid_deduction: unpaidDeduction,
         absent_deduction: absentDeduction,
         estimated_pay: estimatedPay,
-        rest_days_assigned: restDays > 0
+        rest_days_assigned: restDays > 0,
+        from_schedule: fromSchedule
       });
     }
 

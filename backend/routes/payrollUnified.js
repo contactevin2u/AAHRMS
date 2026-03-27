@@ -378,7 +378,24 @@ async function getCalendarBasedWorkingDays(employeeId, month, year, workDaysPerW
   const restDays = parseInt(result.rows[0].count) || 0;
 
   if (restDays === 0) {
-    // No rest days assigned - fall back to standard calculation
+    // No rest days assigned - count actual scheduled working days
+    // Days without a schedule are treated as off days automatically
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+    const schedResult = await pool.query(
+      `SELECT COUNT(*) as count FROM schedules s
+       LEFT JOIN shift_templates st ON s.shift_template_id = st.id
+       WHERE s.employee_id = $1 AND s.schedule_date BETWEEN $2 AND $3
+         AND (st.is_off IS NULL OR st.is_off = false)`,
+      [employeeId, startDate, endDate]
+    );
+    const scheduledDays = parseInt(schedResult.rows[0].count) || 0;
+
+    if (scheduledDays > 0) {
+      return { calendarDays, restDays: calendarDays - scheduledDays, workingDays: scheduledDays, hasRestDays: false, fromSchedule: true };
+    }
+
+    // No schedules at all - fall back to standard calculation
     const fallback = getWorkingDaysInMonth(year, month, workDaysPerWeek);
     return { calendarDays, restDays: 0, workingDays: fallback, hasRestDays: false };
   }
@@ -414,13 +431,41 @@ async function batchGetCalendarBasedWorkingDays(employeeIds, month, year, workDa
     restDayMap.set(row.employee_id, parseInt(row.count) || 0);
   }
 
+  // Find employees without rest days - count their actual scheduled working days
+  const noRestDayEmpIds = employeeIds.filter(id => !restDayMap.has(id) || restDayMap.get(id) === 0);
+  const scheduledDaysMap = new Map();
+
+  if (noRestDayEmpIds.length > 0) {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+    const schedResult = await pool.query(
+      `SELECT s.employee_id, COUNT(*) as count
+       FROM schedules s
+       LEFT JOIN shift_templates st ON s.shift_template_id = st.id
+       WHERE s.employee_id = ANY($1) AND s.schedule_date BETWEEN $2 AND $3
+         AND (st.is_off IS NULL OR st.is_off = false)
+       GROUP BY s.employee_id`,
+      [noRestDayEmpIds, startDate, endDate]
+    );
+    for (const row of schedResult.rows) {
+      scheduledDaysMap.set(row.employee_id, parseInt(row.count) || 0);
+    }
+  }
+
   const resultMap = new Map();
   for (const empId of employeeIds) {
     const restDays = restDayMap.get(empId) || 0;
     if (restDays > 0) {
       resultMap.set(empId, { calendarDays, restDays, workingDays: calendarDays - restDays, hasRestDays: true });
     } else {
-      resultMap.set(empId, { calendarDays, restDays: 0, workingDays: fallbackWorkingDays, hasRestDays: false });
+      const scheduledDays = scheduledDaysMap.get(empId) || 0;
+      if (scheduledDays > 0) {
+        // Use actual scheduled days as working days - unscheduled days are auto off days
+        resultMap.set(empId, { calendarDays, restDays: calendarDays - scheduledDays, workingDays: scheduledDays, hasRestDays: false, fromSchedule: true });
+      } else {
+        // No schedules at all - fall back to standard calculation
+        resultMap.set(empId, { calendarDays, restDays: 0, workingDays: fallbackWorkingDays, hasRestDays: false });
+      }
     }
   }
 
