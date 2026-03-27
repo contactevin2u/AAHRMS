@@ -46,6 +46,11 @@ function PayrollUnified() {
   const [exclusionSelections, setExclusionSelections] = useState({}); // { employee_id: boolean }
   const [attendanceDetailsTab, setAttendanceDetailsTab] = useState('days_worked');
 
+  // Recalculate modal state
+  const [showRecalcModal, setShowRecalcModal] = useState(false);
+  const [recalcOptions, setRecalcOptions] = useState({ earnings: false, claims: false, epf: false, socso: false, eis: false, pcb: false });
+  const [recalcLoading, setRecalcLoading] = useState(false);
+
   // AI Assistant state
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [aiInstruction, setAiInstruction] = useState('');
@@ -319,16 +324,20 @@ function PayrollUnified() {
     }
   };
 
-  const handleRecalculateAll = async (id) => {
-    if (window.confirm('Recalculate statutory deductions (EPF, SOCSO, EIS, PCB)? OT and absent values will be preserved.')) {
-      try {
-        const res = await payrollV2Api.recalculateAll(id);
-        fetchRunDetails(id);
-        fetchRuns();
-        alert(`Recalculated ${res.data.recalculated} of ${res.data.total} employees.`);
-      } catch (error) {
-        alert(error.response?.data?.error || 'Failed to recalculate');
-      }
+  const handleRecalculate = async () => {
+    const hasSelection = Object.values(recalcOptions).some(v => v);
+    if (!selectedRun || !hasSelection) return;
+    setRecalcLoading(true);
+    try {
+      const res = await payrollV2Api.recalculate(selectedRun.id, recalcOptions);
+      fetchRunDetails(selectedRun.id);
+      fetchRuns();
+      setShowRecalcModal(false);
+      alert(res.data.message);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to recalculate');
+    } finally {
+      setRecalcLoading(false);
     }
   };
 
@@ -1480,7 +1489,7 @@ function PayrollUnified() {
                           <button onClick={() => handleDownloadBankFile(selectedRun.id, 'maybankBulk')} className="download-btn" style={{marginLeft: '8px'}}>Maybank CSV</button>
                           <button onClick={() => openExclusionModal('perkeso')} className="download-btn" style={{marginLeft: '8px'}}>PERKESO</button>
                           <button onClick={() => openExclusionModal('epf')} className="download-btn" style={{marginLeft: '8px'}}>KWSP</button>
-                          <button onClick={() => handleRecalculateAll(selectedRun.id)} className="recalculate-btn">Recalculate Statutory</button>
+                          <button onClick={() => { setRecalcOptions({ earnings: true, claims: true, epf: true, socso: true, eis: true, pcb: true }); setShowRecalcModal(true); }} className="recalculate-btn">Recalculate</button>
                           <button onClick={() => handlePublishDraftPayslips(selectedRun.id)} className="download-btn" style={{marginLeft: '8px', background: selectedRun.draft_payslips_visible ? '#f59e0b' : '#8b5cf6', color: 'white', border: 'none'}}>
                             {selectedRun.draft_payslips_visible ? 'Hide Draft Payslip' : 'Publish Draft Payslip'}
                           </button>
@@ -2963,6 +2972,102 @@ function PayrollUnified() {
             </div>
           </div>
         )}
+
+        {/* Recalculate Modal */}
+        {showRecalcModal && (() => {
+          const allKeys = ['earnings', 'claims', 'epf', 'socso', 'eis', 'pcb'];
+          const allChecked = allKeys.every(k => recalcOptions[k]);
+          const noneChecked = !allKeys.some(k => recalcOptions[k]);
+          const toggleAll = () => {
+            const val = !allChecked;
+            setRecalcOptions({ earnings: val, claims: val, epf: val, socso: val, eis: val, pcb: val });
+          };
+          const optionStyle = (checked) => ({
+            display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px',
+            background: checked ? '#f0f9ff' : '#f9fafb',
+            border: checked ? '1px solid #3b82f6' : '1px solid #e5e7eb',
+            borderRadius: '8px', cursor: 'pointer', marginBottom: '8px'
+          });
+          return (
+          <div className="modal-overlay" onClick={() => setShowRecalcModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth: '420px'}}>
+              <div className="modal-header">
+                <h2>Recalculate Payroll</h2>
+                <button className="close-btn" onClick={() => setShowRecalcModal(false)}>&times;</button>
+              </div>
+              <div className="modal-body" style={{padding: '20px'}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px'}}>
+                  <span style={{color: '#666', fontSize: '0.9rem'}}>Select what to recalculate:</span>
+                  <label style={{fontSize: '0.8rem', cursor: 'pointer', color: '#3b82f6', fontWeight: 600}}>
+                    <input type="checkbox" checked={allChecked} onChange={toggleAll} style={{marginRight: '4px'}} />
+                    Select All
+                  </label>
+                </div>
+
+                <label style={optionStyle(recalcOptions.earnings)}>
+                  <input type="checkbox" checked={recalcOptions.earnings} onChange={(e) => setRecalcOptions({...recalcOptions, earnings: e.target.checked})} />
+                  <div>
+                    <div style={{fontWeight: 600}}>Earnings & Deductions</div>
+                    <div style={{fontSize: '0.75rem', color: '#666'}}>Basic, allowance, OT, commission, PH pay, short hours, absent days</div>
+                  </div>
+                </label>
+
+                <label style={optionStyle(recalcOptions.claims)}>
+                  <input type="checkbox" checked={recalcOptions.claims} onChange={(e) => setRecalcOptions({...recalcOptions, claims: e.target.checked})} />
+                  <div>
+                    <div style={{fontWeight: 600}}>Claims</div>
+                    <div style={{fontSize: '0.75rem', color: '#666'}}>Pull latest approved expense claims</div>
+                  </div>
+                </label>
+
+                <div style={{fontSize: '0.8rem', fontWeight: 600, color: '#374151', margin: '12px 0 8px 0'}}>Statutory Deductions</div>
+
+                <label style={optionStyle(recalcOptions.epf)}>
+                  <input type="checkbox" checked={recalcOptions.epf} onChange={(e) => setRecalcOptions({...recalcOptions, epf: e.target.checked})} />
+                  <div>
+                    <div style={{fontWeight: 600}}>EPF (KWSP)</div>
+                    <div style={{fontSize: '0.75rem', color: '#666'}}>Employee & employer EPF contributions</div>
+                  </div>
+                </label>
+
+                <label style={optionStyle(recalcOptions.socso)}>
+                  <input type="checkbox" checked={recalcOptions.socso} onChange={(e) => setRecalcOptions({...recalcOptions, socso: e.target.checked})} />
+                  <div>
+                    <div style={{fontWeight: 600}}>SOCSO (PERKESO)</div>
+                    <div style={{fontSize: '0.75rem', color: '#666'}}>Employee & employer SOCSO contributions</div>
+                  </div>
+                </label>
+
+                <label style={optionStyle(recalcOptions.eis)}>
+                  <input type="checkbox" checked={recalcOptions.eis} onChange={(e) => setRecalcOptions({...recalcOptions, eis: e.target.checked})} />
+                  <div>
+                    <div style={{fontWeight: 600}}>EIS (SIP)</div>
+                    <div style={{fontSize: '0.75rem', color: '#666'}}>Employment Insurance System contributions</div>
+                  </div>
+                </label>
+
+                <label style={optionStyle(recalcOptions.pcb)}>
+                  <input type="checkbox" checked={recalcOptions.pcb} onChange={(e) => setRecalcOptions({...recalcOptions, pcb: e.target.checked})} />
+                  <div>
+                    <div style={{fontWeight: 600}}>PCB (Tax)</div>
+                    <div style={{fontSize: '0.75rem', color: '#666'}}>Monthly tax deduction (Potongan Cukai Bulanan)</div>
+                  </div>
+                </label>
+              </div>
+              <div className="modal-footer" style={{padding: '16px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px'}}>
+                <button onClick={() => setShowRecalcModal(false)} className="cancel-btn">Cancel</button>
+                <button
+                  onClick={handleRecalculate}
+                  className="finalize-btn"
+                  disabled={recalcLoading || noneChecked}
+                >
+                  {recalcLoading ? 'Recalculating...' : 'Recalculate'}
+                </button>
+              </div>
+            </div>
+          </div>
+          );
+        })()}
 
         {/* EPF/PERKESO Exclusion Modal */}
         {showExclusionModal && selectedRun?.items && (

@@ -816,9 +816,9 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       let otExtraDays = 0, otExtraDaysAmount = 0;
       let employeeRoleType = null;
 
-      // Indoor Sales logic (Mimix only - not AA Alive)
+      // Indoor Sales logic (AA Alive Indoor Sales department)
       let salesAmount = 0, salaryCalculationMethod = null;
-      if (!isAAAlive && features.indoor_sales_logic && emp.payroll_structure_code === 'indoor_sales') {
+      if (features.indoor_sales_logic && emp.payroll_structure_code === 'indoor_sales') {
         salesAmount = salesMap[emp.id] || 0;
         const calculatedCommission = salesAmount * (rates.indoor_sales_commission_rate / 100);
         if (calculatedCommission >= rates.indoor_sales_basic) {
@@ -3508,10 +3508,14 @@ router.post('/items/:id/recalculate', authenticateAdmin, async (req, res) => {
 });
 
 /**
- * POST /api/payroll/runs/:id/recalculate-all
- * Recalculate all items in a payroll run
+ * POST /api/payroll/runs/:id/recalculate
+ * Flexible recalculation endpoint. Accepts options in body:
+ *   { earnings: true, claims: true, epf: true, socso: true, eis: true, pcb: true }
+ * - earnings: recalculate basic, allowances, OT, commission, PH, deductions from source data
+ * - claims: re-fetch approved claims from claims table
+ * - epf/socso/eis/pcb: recalculate individual statutory components
  */
-router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => {
+router.post('/runs/:id/recalculate', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const companyId = req.companyId;
@@ -3519,12 +3523,23 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
       return res.status(403).json({ error: 'Company context required' });
     }
 
+    const opts = req.body || {};
+    const doEarnings = !!opts.earnings;
+    const doClaims = !!opts.claims;
+    const doEpf = !!opts.epf;
+    const doSocso = !!opts.socso;
+    const doEis = !!opts.eis;
+    const doPcb = !!opts.pcb;
+
+    if (!doEarnings && !doClaims && !doEpf && !doSocso && !doEis && !doPcb) {
+      return res.status(400).json({ error: 'No recalculation options selected' });
+    }
+
     // Get run
     const runResult = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [id]);
     if (runResult.rows.length === 0) {
       return res.status(404).json({ error: 'Payroll run not found' });
     }
-
     const run = runResult.rows[0];
     if (run.company_id !== companyId) {
       return res.status(403).json({ error: 'Access denied' });
@@ -3533,175 +3548,489 @@ router.post('/runs/:id/recalculate-all', authenticateAdmin, async (req, res) => 
       return res.status(400).json({ error: 'Cannot recalculate finalized payroll' });
     }
 
-    // Get all items
-    const itemsResult = await pool.query(
-      'SELECT id FROM payroll_items WHERE payroll_run_id = $1',
-      [id]
-    );
+    const { month, year } = run;
+    const settings = await getCompanySettings(companyId);
+    const { features, rates, statutory } = settings;
+    const isAAAlive = companyId === AA_ALIVE_COMPANY_ID;
+    const isOutletBased = settings.groupingType === 'outlet';
+    const periodStart = run.period_start_date instanceof Date
+      ? run.period_start_date.toISOString().split('T')[0]
+      : String(run.period_start_date).split('T')[0];
+    const periodEnd = run.period_end_date instanceof Date
+      ? run.period_end_date.toISOString().split('T')[0]
+      : String(run.period_end_date).split('T')[0];
+    const defaultWorkingDays = getWorkingDaysInMonth(year, month, rates.work_days_per_week);
 
-    let recalculatedCount = 0;
+    // Pre-fetch claims map if needed
+    let claimsMap = {};
+    if (doClaims) {
+      const claimsResult = await pool.query(`
+        SELECT employee_id, SUM(amount) as total_claims
+        FROM claims WHERE status = 'approved' AND linked_payroll_item_id IS NULL
+        GROUP BY employee_id
+      `);
+      claimsResult.rows.forEach(r => { claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0; });
+    }
+
+    // Pre-fetch data needed for earnings recalculation
+    let commissionsMap = {}, allowancesMap = {}, unpaidLeaveMap = {}, advancesMap = {}, restDayMap = new Map();
+    let aaConfig = null;
+
+    if (doEarnings) {
+      if (features.flexible_commissions) {
+        const commResult = await pool.query(`
+          SELECT ec.employee_id, SUM(ec.amount) as total
+          FROM employee_commissions ec
+          JOIN commission_types ct ON ec.commission_type_id = ct.id
+          WHERE ec.is_active = TRUE AND ct.is_active = TRUE
+          GROUP BY ec.employee_id
+        `);
+        commResult.rows.forEach(r => { commissionsMap[r.employee_id] = parseFloat(r.total) || 0; });
+      }
+
+      if (features.flexible_allowances) {
+        const allowResult = await pool.query(`
+          SELECT ea.employee_id,
+            SUM(ea.amount) as total,
+            SUM(CASE WHEN at.is_taxable THEN ea.amount ELSE 0 END) as taxable,
+            SUM(CASE WHEN NOT at.is_taxable THEN ea.amount ELSE 0 END) as exempt
+          FROM employee_allowances ea
+          JOIN allowance_types at ON ea.allowance_type_id = at.id
+          WHERE ea.is_active = TRUE AND at.is_active = TRUE
+          GROUP BY ea.employee_id
+        `);
+        allowResult.rows.forEach(r => {
+          allowancesMap[r.employee_id] = { total: parseFloat(r.total) || 0, taxable: parseFloat(r.taxable) || 0, exempt: parseFloat(r.exempt) || 0 };
+        });
+      }
+
+      if (features.unpaid_leave_deduction) {
+        const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
+        const endOfMonth = new Date(year, month, 0).toISOString().split('T')[0];
+        const unpaidResult = await pool.query(`
+          SELECT lr.employee_id,
+            SUM(GREATEST(0,
+              (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+              - (SELECT COUNT(*) FROM generate_series(
+                  GREATEST(lr.start_date, $2::date), LEAST(lr.end_date, $1::date), '1 day'::interval
+                ) d WHERE EXTRACT(DOW FROM d) IN (0, 6))
+            )) as unpaid_days
+          FROM leave_requests lr
+          JOIN leave_types lt ON lr.leave_type_id = lt.id
+          WHERE lt.is_paid = FALSE AND lr.status = 'approved'
+            AND lr.start_date <= $1 AND lr.end_date >= $2
+          GROUP BY lr.employee_id
+        `, [endOfMonth, startOfMonth]);
+        unpaidResult.rows.forEach(r => { unpaidLeaveMap[r.employee_id] = parseFloat(r.unpaid_days) || 0; });
+      }
+
+      try {
+        const advancesResult = await pool.query(`
+          SELECT employee_id, SUM(
+            CASE WHEN deduction_method = 'full' THEN remaining_balance
+                 WHEN deduction_method = 'installment' THEN LEAST(installment_amount, remaining_balance)
+                 ELSE remaining_balance END
+          ) as total_advance_deduction
+          FROM salary_advances
+          WHERE company_id = $1 AND status = 'active' AND remaining_balance > 0
+            AND ((expected_deduction_year < $2) OR (expected_deduction_year = $2 AND expected_deduction_month <= $3))
+          GROUP BY employee_id
+        `, [companyId, year, month]);
+        advancesResult.rows.forEach(r => { advancesMap[r.employee_id] = parseFloat(r.total_advance_deduction) || 0; });
+      } catch (e) { /* table might not exist */ }
+
+      if (isAAAlive) {
+        aaConfig = await getAAAliveConfig(companyId);
+      }
+
+      if (isOutletBased) {
+        // We'll get employee IDs from items below
+      }
+    }
+
+    // Get all items with employee data
+    const itemsResult = await pool.query(`
+      SELECT pi.*, pr.month, pr.year, pr.period_start_date, pr.period_end_date,
+             e.id as emp_id, e.department_id, e.fixed_ot_amount,
+             e.default_basic_salary, e.default_allowance,
+             e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
+             e.residency_status, e.allowance_pcb, e.work_type, e.employment_type, e.hourly_rate,
+             e.name as emp_name, e.employee_id as emp_code, e.outlet_id,
+             d.name as department_name, d.payroll_structure_code
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      WHERE pi.payroll_run_id = $1
+    `, [id]);
+
+    // Pre-fetch rest day data for outlet companies
+    if (doEarnings && isOutletBased) {
+      const empIds = itemsResult.rows.map(r => r.emp_id);
+      restDayMap = await batchGetCalendarBasedWorkingDays(empIds, month, year, rates.work_days_per_week);
+    }
+
+    // Previous payroll map for carry-forward
+    let prevPayrollMap = {};
+    if (doEarnings && features.salary_carry_forward) {
+      const prevMonth = month === 1 ? 12 : month - 1;
+      const prevYear = month === 1 ? year - 1 : year;
+      const prevResult = await pool.query(`
+        SELECT pi.employee_id, pi.basic_salary, pi.fixed_allowance, pi.net_pay
+        FROM payroll_items pi
+        JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+        WHERE pr.month = $1 AND pr.year = $2 AND pr.company_id = $3
+      `, [prevMonth, prevYear, companyId]);
+      prevResult.rows.forEach(row => { prevPayrollMap[row.employee_id] = row; });
+    }
+
+    let updatedCount = 0;
     let errors = [];
 
-    // Recalculate each item
-    for (const item of itemsResult.rows) {
+    for (const i of itemsResult.rows) {
       try {
-        // Call the recalculate logic inline (simplified)
-        const itemData = await pool.query(`
-          SELECT pi.*, pr.month, pr.year, pr.period_start_date, pr.period_end_date,
-                 e.id as emp_id, e.department_id, e.fixed_ot_amount,
-                 e.ic_number, e.date_of_birth, e.marital_status, e.spouse_working, e.children_count,
-                 e.residency_status, e.allowance_pcb, e.work_type, e.employment_type, e.hourly_rate,
-                 d.name as department_name
-          FROM payroll_items pi
-          JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
-          JOIN employees e ON pi.employee_id = e.id
-          LEFT JOIN departments d ON e.department_id = d.id
-          WHERE pi.id = $1
-        `, [item.id]);
-
-        const i = itemData.rows[0];
-        const settings = await getCompanySettings(companyId);
-        const { rates, statutory, features } = settings;
-
-        // PRESERVE OT values - don't recalculate
-        // Users can manually edit OT in the edit form
-        let otHours = parseFloat(i.ot_hours) || 0;
-        let otAmount = parseFloat(i.ot_amount) || 0;
         const isPartTime = i.work_type === 'part_time' || i.employment_type === 'part_time';
+        let workingDays = defaultWorkingDays;
+        if (isOutletBased && restDayMap.has(i.emp_id)) {
+          workingDays = restDayMap.get(i.emp_id).workingDays;
+        }
 
-        // Calculate wages for part-time employees
+        // Start with existing values
+        let basicSalary = parseFloat(i.basic_salary) || 0;
         let wages = parseFloat(i.wages) || 0;
         let partTimeHoursWorked = parseFloat(i.part_time_hours) || 0;
+        let fixedAllowance = parseFloat(i.fixed_allowance) || 0;
+        let commissionAmount = parseFloat(i.commission_amount) || 0;
+        let otHours = parseFloat(i.ot_hours) || 0;
+        let otAmount = parseFloat(i.ot_amount) || 0;
+        let phDaysWorked = parseFloat(i.ph_days_worked) || 0;
         let phPay = parseFloat(i.ph_pay) || 0;
-
-        // Recalculate PH for AA Alive drivers using calendar daily rate
-        const isDriverItem = i.employee_role_type === 'driver' || (i.department_name || '').toLowerCase().includes('driver');
-        if (companyId === AA_ALIVE_COMPANY_ID && isDriverItem && !isPartTime) {
-          try {
-            const phDaysWorked = await calculatePHDaysWorked(
-              i.emp_id, companyId,
-              i.period_start_date.toISOString().split('T')[0],
-              i.period_end_date.toISOString().split('T')[0]
-            );
-            const basicForPH = parseFloat(i.basic_salary) || 0;
-            if (phDaysWorked > 0 && basicForPH > 0) {
-              const calendarDays = new Date(i.year, i.month, 0).getDate();
-              phPay = Math.round(phDaysWorked * (basicForPH / calendarDays) * 1.0 * 100) / 100;
-            } else {
-              phPay = 0;
-            }
-          } catch (e) { console.warn('PH recalc failed:', e.message); }
-        }
-
-        if (isPartTime) {
-          try {
-            const partTimeData = await calculatePartTimeHours(
-              i.emp_id,
-              i.period_start_date,
-              i.period_end_date,
-              companyId, rates
-            );
-            wages = partTimeData.normalPay || 0;
-            partTimeHoursWorked = partTimeData.normalHours || 0;
-            phPay = partTimeData.phPay || 0;
-          } catch (e) {
-            console.warn('Part-time hours calculation failed:', e.message);
-          }
-        }
-
-        // Calculate values
-        const basicSalary = isPartTime ? 0 : (parseFloat(i.basic_salary) || 0);
-        const fixedAllowance = parseFloat(i.fixed_allowance) || 0;
+        let unpaidDays = parseFloat(i.unpaid_leave_days) || 0;
+        let unpaidDeduction = parseFloat(i.unpaid_leave_deduction) || 0;
+        let shortHours = parseFloat(i.short_hours) || 0;
+        let shortHoursDeduction = parseFloat(i.short_hours_deduction) || 0;
+        let absentDays = parseFloat(i.absent_days) || 0;
+        let absentDayDeduction = parseFloat(i.absent_day_deduction) || 0;
+        let attendanceBonus = parseFloat(i.attendance_bonus) || 0;
+        let lateDays = parseFloat(i.late_days) || 0;
+        let claimsAmount = parseFloat(i.claims_amount) || 0;
+        let advanceDeduction = parseFloat(i.advance_deduction) || 0;
         const incentiveAmount = parseFloat(i.incentive_amount) || 0;
-        const commissionAmount = parseFloat(i.commission_amount) || 0;
         const tradeCommission = parseFloat(i.trade_commission_amount) || 0;
         const outstationAmount = parseFloat(i.outstation_amount) || 0;
         const bonus = parseFloat(i.bonus) || 0;
-        const claimsAmount = parseFloat(i.claims_amount) || 0;
-        const advanceDeduction = parseFloat(i.advance_deduction) || 0;
-        const unpaidDeduction = parseFloat(i.unpaid_leave_deduction) || 0;
         const otherDeductions = parseFloat(i.other_deductions) || 0;
         const zakat = parseFloat(i.zakat) || 0;
-        const shortHoursDeduction = parseFloat(i.short_hours_deduction) || 0;
-        const absentDayDeduction = parseFloat(i.absent_day_deduction) || 0;
+        let otExtraDays = parseFloat(i.ot_extra_days) || 0;
+        let otExtraDaysAmount = parseFloat(i.ot_extra_days_amount) || 0;
+        let upsellCommission = parseFloat(i.upsell_commission) || 0;
+        let orderCommission = parseFloat(i.order_commission) || 0;
+        let tripAllowance = parseFloat(i.trip_allowance) || 0;
+        let tripAllowanceDays = parseFloat(i.trip_allowance_days) || 0;
+        let employeeRoleType = i.employee_role_type;
 
-        const grossSalary = Math.max(0, basicSalary + wages + fixedAllowance + otAmount + phPay + incentiveAmount +
-                          commissionAmount + tradeCommission + outstationAmount + bonus + claimsAmount - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+        // ===== EARNINGS RECALCULATION =====
+        if (doEarnings) {
+          const prevPayroll = prevPayrollMap[i.emp_id];
+          basicSalary = prevPayroll?.basic_salary || parseFloat(i.default_basic_salary) || 0;
+          fixedAllowance = prevPayroll?.fixed_allowance || parseFloat(i.default_allowance) || 0;
 
-        // Statutory base - EPF/SOCSO/EIS based on actual pay received (after deductions)
-        const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
-        let statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
-        if (statutory.statutory_on_ot) statutoryBase += otAmount;
-        if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
-        if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
-        if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
+          if (isPartTime) {
+            const partTimeData = await calculatePartTimeHours(i.emp_id, periodStart, periodEnd, companyId, rates);
+            wages = partTimeData.normalPay || 0;
+            partTimeHoursWorked = partTimeData.normalHours || 0;
+            phPay = partTimeData.phPay || 0;
+            basicSalary = 0;
+            fixedAllowance = 0;
+          }
 
-        let ytdData = null;
-        if (features.ytd_pcb_calculation) {
-          ytdData = await getYTDData(i.emp_id, i.year, i.month);
+          commissionAmount = isPartTime ? 0 : (commissionsMap[i.emp_id] || 0);
+          const flexAllowData = isPartTime ? { total: 0, taxable: 0, exempt: 0 } : (allowancesMap[i.emp_id] || { total: 0, taxable: 0, exempt: 0 });
+          const flexAllowance = flexAllowData.total;
+          fixedAllowance = fixedAllowance + flexAllowance;
+
+          // OT / PH / Driver calculations
+          otHours = 0; otAmount = 0; phDaysWorked = 0; phPay = isPartTime ? phPay : 0;
+          otExtraDays = 0; otExtraDaysAmount = 0;
+          upsellCommission = 0; orderCommission = 0;
+          tripAllowance = 0; tripAllowanceDays = 0;
+
+          if (isAAAlive && !isPartTime) {
+            employeeRoleType = await getEmployeeRoleType(i);
+            if (employeeRoleType === 'driver') {
+              try {
+                const driverPayroll = await calculateDriverPayroll(i, basicSalary, periodStart, periodEnd, month, year, aaConfig);
+                otHours = driverPayroll.dailyOT.totalOTHours;
+                otAmount = driverPayroll.dailyOT.totalOTAmount;
+                otExtraDays = driverPayroll.monthlyOT.extraDays;
+                otExtraDaysAmount = driverPayroll.monthlyOT.totalAmount;
+                orderCommission = driverPayroll.commissions.order;
+                upsellCommission = driverPayroll.commissions.upsell;
+                tripAllowanceDays = driverPayroll.tripAllowance.days;
+                tripAllowance = driverPayroll.tripAllowance.total;
+                commissionAmount = commissionAmount + orderCommission + upsellCommission;
+              } catch (e) { console.warn(`Driver recalc failed for ${i.emp_name}:`, e.message); }
+            } else if (employeeRoleType === 'security') {
+              try {
+                const securityPayroll = await calculateSecurityPayroll(i, periodStart, periodEnd, workingDays);
+                wages = securityPayroll.totalWages;
+                partTimeHoursWorked = securityPayroll.totalHoursWorked;
+                basicSalary = 0;
+              } catch (e) { console.warn(`Security recalc failed for ${i.emp_name}:`, e.message); }
+            } else {
+              if (features.auto_ot_from_clockin) {
+                try {
+                  const otResult = await calculateOTFromClockIn(i.emp_id, companyId, i.department_id, periodStart, periodEnd, basicSalary, workingDays);
+                  otHours = otResult.total_ot_hours || 0;
+                  otAmount = otResult.total_ot_amount || 0;
+                } catch (e) { console.warn(`OT recalc failed for ${i.emp_name}:`, e.message); }
+              }
+            }
+          } else if (!isAAAlive) {
+            if (features.auto_ot_from_clockin) {
+              try {
+                const otResult = await calculateOTFromClockIn(i.emp_id, companyId, i.department_id, periodStart, periodEnd, basicSalary, workingDays);
+                otHours = otResult.total_ot_hours || 0;
+                otAmount = otResult.total_ot_amount || 0;
+              } catch (e) { console.warn(`OT recalc failed for ${i.emp_name}:`, e.message); }
+            }
+            if (otHours > 0 && otHours < 1) { otHours = 0; otAmount = 0; }
+            else if (otHours >= 1) {
+              otHours = Math.floor(otHours * 2) / 2;
+              if (isPartTime) {
+                const partTimeHourlyRate = rates.part_time_hourly_rate || 8.72;
+                otAmount = Math.round(partTimeHourlyRate * 1.5 * otHours * 100) / 100;
+              } else if (basicSalary > 0) {
+                const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+                otAmount = Math.round(hourlyRate * 1.5 * otHours * 100) / 100;
+              }
+            }
+          }
+
+          const fixedOT = parseFloat(i.fixed_ot_amount) || 0;
+          if (otAmount === 0 && fixedOT > 0) otAmount = fixedOT;
+
+          // PH pay
+          if (isAAAlive && employeeRoleType === 'driver') {
+            try {
+              phDaysWorked = await calculatePHDaysWorked(i.emp_id, companyId, periodStart, periodEnd);
+              if (phDaysWorked > 0 && basicSalary > 0) {
+                const calendarDays = new Date(year, month, 0).getDate();
+                phPay = Math.round(phDaysWorked * (basicSalary / calendarDays) * 1.0 * 100) / 100;
+              }
+            } catch (e) { console.warn(`PH recalc failed for ${i.emp_name}:`, e.message); }
+          } else if (!isPartTime && features.auto_ph_pay && basicSalary > 0) {
+            try {
+              phDaysWorked = await calculatePHDaysWorked(i.emp_id, companyId, periodStart, periodEnd);
+              if (phDaysWorked > 0) {
+                const odr = basicSalary / 26;
+                phPay = Math.round(phDaysWorked * odr * rates.ph_multiplier * 100) / 100;
+              }
+            } catch (e) { console.warn(`PH recalc failed for ${i.emp_name}:`, e.message); }
+          }
+
+          // Deductions
+          const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
+          unpaidDays = unpaidLeaveMap[i.emp_id] || 0;
+          unpaidDeduction = Math.round(dailyRate * unpaidDays * 100) / 100;
+          absentDays = 0; absentDayDeduction = 0;
+          shortHours = 0; shortHoursDeduction = 0;
+          lateDays = 0; attendanceBonus = 0;
+
+          const isSecurity = isAAAlive && employeeRoleType === 'security';
+          if (!isPartTime && !isSecurity && basicSalary > 0) {
+            try {
+              const expectedHoursPerDay = rates.standard_work_hours || 8;
+              if (isOutletBased) {
+                const scheduleBasedPay = await calculateScheduleBasedPay(i.emp_id, periodStart, periodEnd);
+                shortHours = scheduleBasedPay.shortHours || 0;
+                lateDays = scheduleBasedPay.lateDays || 0;
+              } else {
+                const clockInResult = await pool.query(`
+                  SELECT work_date, total_work_hours FROM clock_in_records
+                  WHERE employee_id = $1 AND company_id = $2 AND work_date >= $3::date AND work_date <= $4::date
+                    AND clock_in_1 IS NOT NULL AND clock_out_1 IS NOT NULL
+                `, [i.emp_id, companyId, periodStart, periodEnd]);
+                for (const rec of clockInResult.rows) {
+                  const hoursWorked = parseFloat(rec.total_work_hours) || 0;
+                  const baseHours = Math.min(hoursWorked, expectedHoursPerDay);
+                  const deficit = expectedHoursPerDay - baseHours;
+                  if (deficit > 0) shortHours += deficit;
+                }
+                shortHours = Math.round(shortHours * 100) / 100;
+              }
+              if (shortHours > 0) {
+                const hourlyRate = basicSalary / workingDays / (rates.standard_work_hours || 8);
+                shortHoursDeduction = Math.round(hourlyRate * shortHours * 100) / 100;
+              }
+            } catch (e) { console.warn(`Short hours recalc failed for ${i.emp_name}:`, e.message); }
+          }
+
+          // Absent days
+          if (!isPartTime && !isSecurity) {
+            try {
+              const clockInResult = await pool.query(`
+                SELECT COUNT(DISTINCT work_date) as days_worked FROM clock_in_records
+                WHERE employee_id = $1 AND company_id = $2 AND work_date >= $3::date AND work_date <= $4::date
+                  AND status IN ('completed', 'approved')
+              `, [i.emp_id, companyId, periodStart, periodEnd]);
+              const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
+              if (daysWorked < workingDays) {
+                const paidLeaveResult = await pool.query(`
+                  SELECT COALESCE(SUM(GREATEST(0,
+                    (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+                    - (SELECT COUNT(*) FROM generate_series(GREATEST(lr.start_date, $2::date),
+                        LEAST(lr.end_date, $1::date), '1 day'::interval) d WHERE EXTRACT(DOW FROM d) IN (0, 6))
+                  )), 0) as paid_leave_days
+                  FROM leave_requests lr JOIN leave_types lt ON lr.leave_type_id = lt.id
+                  WHERE lr.employee_id = $3 AND lt.is_paid = TRUE AND lr.status = 'approved'
+                    AND lr.start_date <= $1 AND lr.end_date >= $2
+                `, [periodEnd, periodStart, i.emp_id]);
+                const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
+                absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
+                absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
+              }
+            } catch (e) { console.warn(`Absent recalc failed for ${i.emp_name}:`, e.message); }
+          }
+
+          // Attendance bonus (outlet-based)
+          if (!isPartTime && isOutletBased) {
+            const totalPenalty = lateDays + absentDays;
+            if (totalPenalty === 0) attendanceBonus = 400;
+            else if (totalPenalty === 1) attendanceBonus = 300;
+            else if (totalPenalty === 2) attendanceBonus = 200;
+            else if (totalPenalty === 3) attendanceBonus = 100;
+            else attendanceBonus = 0;
+          }
+
+          advanceDeduction = advancesMap[i.emp_id] || 0;
         }
 
-        // Calculate statutory with breakdown for proper PCB calculation
-        // EPF/SOCSO/EIS on statutoryBase, PCB on full gross
-        const salaryBreakdown = {
-          basic: basicSalary + wages,  // Include wages for part-time
-          allowance: fixedAllowance + outstationAmount + incentiveAmount,
-          commission: commissionAmount + tradeCommission,
-          bonus: bonus,
-          ot: otAmount + phPay,
-          pcbGross: grossSalary
-        };
-        const statutoryResult = calculateAllStatutory(statutoryBase, i, i.month, ytdData, salaryBreakdown);
+        // ===== CLAIMS REFRESH =====
+        if (doClaims) {
+          claimsAmount = claimsMap[i.employee_id] || 0;
+        }
 
-        const epfEmployee = statutory.epf_enabled ? statutoryResult.epf.employee : 0;
-        const epfEmployer = statutory.epf_enabled ? statutoryResult.epf.employer : 0;
-        const socsoEmployee = statutory.socso_enabled ? statutoryResult.socso.employee : 0;
-        const socsoEmployer = statutory.socso_enabled ? statutoryResult.socso.employer : 0;
-        const eisEmployee = statutory.eis_enabled ? statutoryResult.eis.employee : 0;
-        const eisEmployer = statutory.eis_enabled ? statutoryResult.eis.employer : 0;
-        const pcb = statutory.pcb_enabled ? statutoryResult.pcb : 0;
+        // ===== RECALCULATE GROSS =====
+        const totalAllowances = fixedAllowance;
+        let grossSalary, statutoryBase;
 
-        const totalDeductions = unpaidDeduction + shortHoursDeduction + absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions + zakat;
+        if (isAAAlive && employeeRoleType === 'driver' && !isPartTime) {
+          const grossBeforeDeductions = basicSalary + otAmount + otExtraDaysAmount + phPay +
+            upsellCommission + orderCommission + tripAllowance + commissionAmount +
+            totalAllowances + claimsAmount;
+          grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+          statutoryBase = basicSalary + commissionAmount;
+        } else {
+          const grossBeforeDeductions = basicSalary + wages + totalAllowances + otAmount + phPay +
+            commissionAmount + claimsAmount + attendanceBonus + incentiveAmount +
+            tradeCommission + outstationAmount + bonus;
+          grossSalary = Math.max(0, grossBeforeDeductions - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+          const actualBasicPay = Math.max(0, (basicSalary + wages) - unpaidDeduction - shortHoursDeduction - absentDayDeduction);
+          statutoryBase = actualBasicPay + commissionAmount + tradeCommission + bonus;
+          if (statutory.statutory_on_ot) statutoryBase += otAmount;
+          if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
+          if (statutory.statutory_on_allowance) statutoryBase += totalAllowances;
+          if (statutory.statutory_on_incentive) statutoryBase += incentiveAmount;
+        }
+
+        // ===== STATUTORY RECALCULATION =====
+        let epfEmployee = parseFloat(i.epf_employee) || 0;
+        let epfEmployer = parseFloat(i.epf_employer) || 0;
+        let socsoEmployee = parseFloat(i.socso_employee) || 0;
+        let socsoEmployer = parseFloat(i.socso_employer) || 0;
+        let eisEmployee = parseFloat(i.eis_employee) || 0;
+        let eisEmployer = parseFloat(i.eis_employer) || 0;
+        let pcb = parseFloat(i.pcb) || 0;
+
+        if (doEpf || doSocso || doEis || doPcb) {
+          let ytdData = null;
+          if (features.ytd_pcb_calculation) {
+            ytdData = await getYTDData(i.emp_id, i.year, i.month);
+          }
+
+          const allowancePcb = i.allowance_pcb || 'excluded';
+          const fixedAllowanceTaxable = allowancePcb === 'excluded' ? 0 : fixedAllowance;
+          const salaryBreakdown = {
+            basic: basicSalary + wages,
+            allowance: totalAllowances + outstationAmount + incentiveAmount,
+            taxableAllowance: fixedAllowanceTaxable,
+            commission: commissionAmount + tradeCommission,
+            bonus: bonus,
+            ot: otAmount + phPay,
+            pcbGross: grossSalary
+          };
+          const statutoryResult = calculateAllStatutory(statutoryBase, i, i.month, ytdData, salaryBreakdown);
+
+          if (doEpf && statutory.epf_enabled) { epfEmployee = statutoryResult.epf.employee; epfEmployer = statutoryResult.epf.employer; }
+          if (doSocso && statutory.socso_enabled) { socsoEmployee = statutoryResult.socso.employee; socsoEmployer = statutoryResult.socso.employer; }
+          if (doEis && statutory.eis_enabled) { eisEmployee = statutoryResult.eis.employee; eisEmployer = statutoryResult.eis.employer; }
+          if (doPcb && statutory.pcb_enabled) { pcb = statutoryResult.pcb; }
+        }
+
+        const totalDeductions = unpaidDeduction + shortHoursDeduction + absentDayDeduction +
+          epfEmployee + socsoEmployee + eisEmployee + pcb + advanceDeduction + otherDeductions + zakat;
         const netPay = Math.max(0, grossSalary + unpaidDeduction + shortHoursDeduction + absentDayDeduction - totalDeductions);
         const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
         await pool.query(`
           UPDATE payroll_items SET
-            basic_salary = $1, wages = $16, part_time_hours = $17, ph_pay = $18,
-            ot_hours = $2, ot_amount = $3,
-            gross_salary = $4, statutory_base = $5,
-            epf_employee = $6, epf_employer = $7,
-            socso_employee = $8, socso_employer = $9,
-            eis_employee = $10, eis_employer = $11,
-            pcb = $12,
-            total_deductions = $13, net_pay = $14, employer_total_cost = $15,
+            basic_salary = $1, wages = $2, part_time_hours = $3, fixed_allowance = $4,
+            commission_amount = $5, claims_amount = $6,
+            ot_hours = $7, ot_amount = $8, ph_days_worked = $9, ph_pay = $10,
+            unpaid_leave_days = $11, unpaid_leave_deduction = $12, advance_deduction = $13,
+            short_hours = $14, short_hours_deduction = $15, absent_days = $16, absent_day_deduction = $17,
+            attendance_bonus = $18, late_days = $19,
+            gross_salary = $20, statutory_base = $21,
+            epf_employee = $22, epf_employer = $23, socso_employee = $24, socso_employer = $25,
+            eis_employee = $26, eis_employer = $27, pcb = $28,
+            total_deductions = $29, net_pay = $30, employer_total_cost = $31,
+            upsell_commission = $32, order_commission = $33, trip_allowance = $34, trip_allowance_days = $35,
+            ot_extra_days = $36, ot_extra_days_amount = $37, employee_role_type = $38,
             updated_at = NOW()
-          WHERE id = $19
+          WHERE id = $39
         `, [
-          basicSalary, otHours, otAmount, grossSalary, statutoryBase,
+          basicSalary, wages, partTimeHoursWorked, fixedAllowance,
+          commissionAmount, claimsAmount,
+          otHours, otAmount, phDaysWorked, phPay,
+          unpaidDays, unpaidDeduction, advanceDeduction,
+          shortHours, shortHoursDeduction, absentDays, absentDayDeduction,
+          attendanceBonus, lateDays,
+          grossSalary, statutoryBase,
           epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
           eisEmployee, eisEmployer, pcb,
           totalDeductions, netPay, employerCost,
-          wages, partTimeHoursWorked, phPay, item.id
+          upsellCommission, orderCommission, tripAllowance, tripAllowanceDays,
+          otExtraDays, otExtraDaysAmount, employeeRoleType,
+          i.id
         ]);
 
-        recalculatedCount++;
+        updatedCount++;
       } catch (e) {
-        errors.push(`Item ${item.id}: ${e.message}`);
+        errors.push(`${i.emp_name || i.id}: ${e.message}`);
       }
     }
 
     // Update run totals
     await updateRunTotals(id);
 
+    const selected = [];
+    if (doEarnings) selected.push('Earnings');
+    if (doClaims) selected.push('Claims');
+    if (doEpf) selected.push('EPF');
+    if (doSocso) selected.push('SOCSO');
+    if (doEis) selected.push('EIS');
+    if (doPcb) selected.push('PCB');
+
     res.json({
-      message: `Recalculated ${recalculatedCount} of ${itemsResult.rows.length} items`,
-      recalculated: recalculatedCount,
+      message: `Recalculated ${selected.join(', ')} for ${updatedCount} of ${itemsResult.rows.length} employees`,
+      updated: updatedCount,
       total: itemsResult.rows.length,
+      selected,
       errors: errors.length > 0 ? errors : undefined
     });
   } catch (error) {
-    console.error('Error recalculating all items:', error);
+    console.error('Error recalculating:', error);
     res.status(500).json({ error: 'Failed to recalculate: ' + error.message });
   }
 });
