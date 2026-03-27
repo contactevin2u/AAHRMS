@@ -376,7 +376,13 @@ function PayrollUnified() {
         } catch (e) { /* ignore */ }
       }
 
-      const available = res.data.filter(e => !existingIds.has(e.id) && !otherRunIds.has(e.id));
+      // Filter to same department/outlet as the payroll run
+      const available = res.data.filter(e => {
+        if (existingIds.has(e.id) || otherRunIds.has(e.id)) return false;
+        if (selectedRun.outlet_id) return e.outlet_id === selectedRun.outlet_id;
+        if (selectedRun.department_id) return e.department_id === selectedRun.department_id;
+        return true;
+      });
       setAvailableEmployees(available);
       setAddEmployeeSearch('');
       setShowAddEmployeeModal(true);
