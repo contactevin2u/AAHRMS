@@ -360,8 +360,23 @@ function PayrollUnified() {
     if (!selectedRun) return;
     try {
       const res = await employeeApi.getAll({ status: 'active' });
+
+      // Exclude employees already in this payroll run
       const existingIds = new Set((selectedRun.items || []).map(i => i.employee_id));
-      const available = res.data.filter(e => !existingIds.has(e.id));
+
+      // Exclude employees in other payroll runs for the same month
+      const sameMonthRuns = runs.filter(r =>
+        r.month === selectedRun.month && r.year === selectedRun.year && r.id !== selectedRun.id
+      );
+      const otherRunIds = new Set();
+      for (const r of sameMonthRuns) {
+        try {
+          const details = await payrollV2Api.getRun(r.id);
+          (details.data.items || []).forEach(i => otherRunIds.add(i.employee_id));
+        } catch (e) { /* ignore */ }
+      }
+
+      const available = res.data.filter(e => !existingIds.has(e.id) && !otherRunIds.has(e.id));
       setAvailableEmployees(available);
       setAddEmployeeSearch('');
       setShowAddEmployeeModal(true);

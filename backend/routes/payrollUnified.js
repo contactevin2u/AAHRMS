@@ -4106,6 +4106,28 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
     );
     let nextSortOrder = maxSortResult.rows[0].max_sort;
 
+    // Check if any of these employees already exist in another payroll run for the same month
+    const dupeCheck = await client.query(`
+      SELECT pi.employee_id, e.name as emp_name, pr.id as run_id,
+             COALESCE(d.name, o.name, 'Unknown') as run_name
+      FROM payroll_items pi
+      JOIN payroll_runs pr ON pi.payroll_run_id = pr.id
+      JOIN employees e ON pi.employee_id = e.id
+      LEFT JOIN departments d ON pr.department_id = d.id
+      LEFT JOIN outlets o ON pr.outlet_id = o.id
+      WHERE pi.employee_id = ANY($1)
+        AND pr.month = $2 AND pr.year = $3
+        AND pr.company_id = $4
+        AND pr.id != $5
+    `, [newEmployeeIds, run.month, run.year, companyId, id]);
+
+    if (dupeCheck.rows.length > 0) {
+      const dupeNames = dupeCheck.rows.map(r => `${r.emp_name} (already in ${r.run_name})`).join(', ');
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(400).json({ error: `Cannot add: ${dupeNames}` });
+    }
+
     // Get employees to add
     const empResult = await client.query(`
       SELECT e.*, e.default_basic_salary as basic_salary, e.default_allowance as fixed_allowance
@@ -4184,15 +4206,38 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
         } catch (e) { console.warn(`PH calc failed for ${emp.name}:`, e.message); }
       }
 
-      // Calculate absent days from clock-in records
+      // Calculate deductions
       let absentDays = 0, absentDayDeduction = 0;
+      let unpaidDays = 0, unpaidDeduction = 0;
       const dailyRate = basicSalary > 0 ? basicSalary / workingDays : 0;
+      const requiresClockIn = emp.clock_in_required || settings.groupingType === 'outlet';
+
+      // Unpaid leave deduction applies to ALL employees
       if (!isPartTime && basicSalary > 0) {
         try {
           const periodStart = period.start.toISOString().split('T')[0];
           const periodEnd = period.end.toISOString().split('T')[0];
+          const unpaidLeaveResult = await client.query(`
+            SELECT COALESCE(SUM(
+              GREATEST(0, (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
+              - (SELECT COUNT(*) FROM generate_series(GREATEST(lr.start_date, $2::date),
+                  LEAST(lr.end_date, $1::date), '1 day'::interval) d WHERE EXTRACT(DOW FROM d) IN (0, 6)))
+            ), 0) as unpaid_leave_days
+            FROM leave_requests lr JOIN leave_types lt ON lr.leave_type_id = lt.id
+            WHERE lr.employee_id = $3 AND lt.is_paid = FALSE AND lr.status = 'approved'
+              AND lr.start_date <= $1 AND lr.end_date >= $2
+          `, [periodEnd, periodStart, emp.id]);
+          unpaidDays = parseFloat(unpaidLeaveResult.rows[0]?.unpaid_leave_days) || 0;
+          unpaidDeduction = Math.round(dailyRate * unpaidDays * 100) / 100;
+        } catch (e) { console.warn(`Unpaid leave calc failed for ${emp.name}:`, e.message); }
+      }
 
-          // Count days worked
+      // Absent day deduction ONLY for clock-in required employees
+      if (!isPartTime && basicSalary > 0 && requiresClockIn) {
+        try {
+          const periodStart = period.start.toISOString().split('T')[0];
+          const periodEnd = period.end.toISOString().split('T')[0];
+
           const clockInResult = await client.query(`
             SELECT COUNT(DISTINCT work_date) as days_worked
             FROM clock_in_records
@@ -4200,7 +4245,6 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
           `, [emp.id, periodStart, periodEnd]);
           const daysWorked = parseInt(clockInResult.rows[0]?.days_worked) || 0;
 
-          // Count paid leave days
           const paidLeaveResult = await client.query(`
             SELECT COALESCE(SUM(
               GREATEST(0, (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
@@ -4213,27 +4257,14 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
           `, [periodEnd, periodStart, emp.id]);
           const paidLeaveDays = parseFloat(paidLeaveResult.rows[0]?.paid_leave_days) || 0;
 
-          // Count unpaid leave days
-          const unpaidLeaveResult = await client.query(`
-            SELECT COALESCE(SUM(
-              GREATEST(0, (LEAST(lr.end_date, $1::date) - GREATEST(lr.start_date, $2::date) + 1)
-              - (SELECT COUNT(*) FROM generate_series(GREATEST(lr.start_date, $2::date),
-                  LEAST(lr.end_date, $1::date), '1 day'::interval) d WHERE EXTRACT(DOW FROM d) IN (0, 6)))
-            ), 0) as unpaid_leave_days
-            FROM leave_requests lr JOIN leave_types lt ON lr.leave_type_id = lt.id
-            WHERE lr.employee_id = $3 AND lt.is_paid = FALSE AND lr.status = 'approved'
-              AND lr.start_date <= $1 AND lr.end_date >= $2
-          `, [periodEnd, periodStart, emp.id]);
-          const unpaidDays = parseFloat(unpaidLeaveResult.rows[0]?.unpaid_leave_days) || 0;
-
           absentDays = Math.max(0, workingDays - daysWorked - paidLeaveDays - unpaidDays);
           absentDayDeduction = Math.round(dailyRate * absentDays * 100) / 100;
         } catch (e) { console.warn(`Absent calc failed for ${emp.name}:`, e.message); }
       }
 
-      // Calculate gross and statutory (with absent deduction)
-      const grossSalary = basicSalary + fixedAllowance + otAmount + phPay - absentDayDeduction;
-      let statutoryBase = Math.max(0, basicSalary - absentDayDeduction);
+      // Calculate gross and statutory
+      const grossSalary = Math.max(0, basicSalary + fixedAllowance + otAmount + phPay - unpaidDeduction - absentDayDeduction);
+      let statutoryBase = Math.max(0, basicSalary - unpaidDeduction - absentDayDeduction);
       if (statutory.statutory_on_ot) statutoryBase += otAmount;
       if (statutory.statutory_on_ph_pay) statutoryBase += phPay;
       if (statutory.statutory_on_allowance) statutoryBase += fixedAllowance;
@@ -4249,7 +4280,7 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
         pcbGross: grossSalary
       };
 
-      // Calculate statutory deductions (correct function signature)
+      // Calculate statutory deductions
       const statutoryResult = calculateAllStatutory(statutoryBase, emp, run.month, null, salaryBreakdown);
 
       const epfEmployee = statutory.epf_enabled ? (statutoryResult.epf?.employee || 0) : 0;
@@ -4260,8 +4291,8 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
       const eisEmployer = statutory.eis_enabled ? (statutoryResult.eis?.employer || 0) : 0;
       const pcb = statutory.pcb_enabled ? (statutoryResult.pcb || 0) : 0;
 
-      const totalDeductions = absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb;
-      const netPay = Math.max(0, grossSalary + absentDayDeduction - totalDeductions);
+      const totalDeductions = unpaidDeduction + absentDayDeduction + epfEmployee + socsoEmployee + eisEmployee + pcb;
+      const netPay = Math.max(0, grossSalary + unpaidDeduction + absentDayDeduction - totalDeductions);
       const employerCost = grossSalary + epfEmployer + socsoEmployer + eisEmployer;
 
       // Insert payroll item
@@ -4270,16 +4301,18 @@ router.post('/runs/:id/add-employees', authenticateAdmin, async (req, res) => {
           payroll_run_id, employee_id,
           basic_salary, fixed_allowance, ot_hours, ot_amount,
           ph_days_worked, ph_pay,
+          unpaid_leave_days, unpaid_leave_deduction,
           absent_days, absent_day_deduction,
           gross_salary, statutory_base,
           epf_employee, epf_employer, socso_employee, socso_employer,
           eis_employee, eis_employer, pcb,
           total_deductions, net_pay, employer_total_cost,
           sort_order
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
       `, [
         id, emp.id, basicSalary, fixedAllowance, otHours, otAmount,
         phDaysWorked, phPay,
+        unpaidDays, unpaidDeduction,
         absentDays, absentDayDeduction,
         grossSalary, statutoryBase,
         epfEmployee, epfEmployer, socsoEmployee, socsoEmployer,
