@@ -737,9 +737,10 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
     if (features.auto_claims_linking) {
       const claimsResult = await client.query(`
         SELECT employee_id, SUM(amount) as total_claims
-        FROM claims WHERE status = 'approved' AND linked_payroll_item_id IS NULL
+        FROM claims WHERE status = 'approved'
+          AND claim_date >= $1::date AND claim_date <= $2::date
         GROUP BY employee_id
-      `);
+      `, [`${year}-${String(month).padStart(2, '0')}-01`, new Date(year, month, 0).toISOString().split('T')[0]]);
       claimsResult.rows.forEach(r => { claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0; });
     }
 
@@ -1541,9 +1542,10 @@ router.post('/runs/all-departments', authenticateAdmin, async (req, res) => {
     if (features.auto_claims_linking) {
       const claimsResult = await client.query(`
         SELECT employee_id, SUM(amount) as total_claims
-        FROM claims WHERE status = 'approved' AND linked_payroll_item_id IS NULL
+        FROM claims WHERE status = 'approved'
+          AND claim_date >= $1::date AND claim_date <= $2::date
         GROUP BY employee_id
-      `);
+      `, [`${year}-${String(month).padStart(2, '0')}-01`, new Date(year, month, 0).toISOString().split('T')[0]]);
       claimsResult.rows.forEach(r => { claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0; });
     }
 
@@ -3566,9 +3568,10 @@ router.post('/runs/:id/recalculate', authenticateAdmin, async (req, res) => {
     if (doClaims) {
       const claimsResult = await pool.query(`
         SELECT employee_id, SUM(amount) as total_claims
-        FROM claims WHERE status = 'approved' AND linked_payroll_item_id IS NULL
+        FROM claims WHERE status = 'approved'
+          AND claim_date >= $1::date AND claim_date <= $2::date
         GROUP BY employee_id
-      `);
+      `, [`${year}-${String(month).padStart(2, '0')}-01`, new Date(year, month, 0).toISOString().split('T')[0]]);
       claimsResult.rows.forEach(r => { claimsMap[r.employee_id] = parseFloat(r.total_claims) || 0; });
     }
 
@@ -4425,7 +4428,8 @@ router.post('/runs/:id/finalize', authenticateAdmin, async (req, res) => {
           WHERE employee_id = $2
             AND status = 'approved'
             AND linked_payroll_item_id IS NULL
-        `, [item.id, item.employee_id]);
+            AND claim_date >= $3::date AND claim_date <= $4::date
+        `, [item.id, item.employee_id, startOfMonth, endOfMonth]);
       }
     }
 
