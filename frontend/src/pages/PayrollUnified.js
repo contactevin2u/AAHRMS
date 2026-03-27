@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { payrollV2Api, departmentApi, payrollApi, outletsApi, contributionsApi } from '../api';
+import { payrollV2Api, departmentApi, payrollApi, outletsApi, contributionsApi, employeeApi } from '../api';
 import Layout from '../components/Layout';
 import './PayrollV2.css';
 import './Contributions.css';
@@ -45,6 +45,12 @@ function PayrollUnified() {
   const [showExclusionModal, setShowExclusionModal] = useState(null); // 'epf' | 'perkeso' | null
   const [exclusionSelections, setExclusionSelections] = useState({}); // { employee_id: boolean }
   const [attendanceDetailsTab, setAttendanceDetailsTab] = useState('days_worked');
+
+  // Add employee modal state
+  const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
+  const [availableEmployees, setAvailableEmployees] = useState([]);
+  const [addEmployeeSearch, setAddEmployeeSearch] = useState('');
+  const [addingEmployee, setAddingEmployee] = useState(null);
 
   // Recalculate modal state
   const [showRecalcModal, setShowRecalcModal] = useState(false);
@@ -350,20 +356,39 @@ function PayrollUnified() {
     }
   };
 
+  const openAddEmployeeModal = async () => {
+    if (!selectedRun) return;
+    try {
+      const res = await employeeApi.getAll({ status: 'active' });
+      const existingIds = new Set((selectedRun.items || []).map(i => i.employee_id));
+      const available = res.data.filter(e => !existingIds.has(e.id));
+      setAvailableEmployees(available);
+      setAddEmployeeSearch('');
+      setShowAddEmployeeModal(true);
+    } catch (error) {
+      alert('Failed to fetch employees');
+    }
+  };
+
   const handleAddEmployee = async (employeeId, employeeName) => {
     if (!selectedRun || !employeeId) return;
+    setAddingEmployee(employeeId);
 
     try {
       const res = await payrollV2Api.addEmployees(selectedRun.id, [employeeId]);
       fetchRunDetails(selectedRun.id);
       fetchRuns();
       if (res.data.added > 0) {
+        // Remove from available list
+        setAvailableEmployees(prev => prev.filter(e => e.id !== employeeId));
         alert(`Added ${employeeName}:\nNet Pay: RM ${res.data.employees[0]?.net_pay?.toFixed(2) || '0.00'}`);
       } else {
         alert(res.data.message || 'Employee not added');
       }
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to add employee');
+    } finally {
+      setAddingEmployee(null);
     }
   };
 
@@ -1490,6 +1515,7 @@ function PayrollUnified() {
                           <button onClick={() => openExclusionModal('perkeso')} className="download-btn" style={{marginLeft: '8px'}}>PERKESO</button>
                           <button onClick={() => openExclusionModal('epf')} className="download-btn" style={{marginLeft: '8px'}}>KWSP</button>
                           <button onClick={() => { setRecalcOptions({ earnings: true, claims: true, epf: true, socso: true, eis: true, pcb: true }); setShowRecalcModal(true); }} className="recalculate-btn">Recalculate</button>
+                          <button onClick={openAddEmployeeModal} className="download-btn" style={{marginLeft: '8px', background: '#059669', color: 'white', border: 'none'}}>+ Add Employee</button>
                           <button onClick={() => handlePublishDraftPayslips(selectedRun.id)} className="download-btn" style={{marginLeft: '8px', background: selectedRun.draft_payslips_visible ? '#f59e0b' : '#8b5cf6', color: 'white', border: 'none'}}>
                             {selectedRun.draft_payslips_visible ? 'Hide Draft Payslip' : 'Publish Draft Payslip'}
                           </button>
@@ -2968,6 +2994,66 @@ function PayrollUnified() {
                 <button type="button" onClick={() => setShowAttendanceDetails(false)} className="btn-secondary">
                   Close
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Employee Modal */}
+        {showAddEmployeeModal && (
+          <div className="modal-overlay" onClick={() => setShowAddEmployeeModal(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth: '500px'}}>
+              <div className="modal-header">
+                <h2>Add Employee to Payroll</h2>
+                <button className="close-btn" onClick={() => setShowAddEmployeeModal(false)}>&times;</button>
+              </div>
+              <div className="modal-body" style={{padding: '16px 20px'}}>
+                <input
+                  type="text"
+                  placeholder="Search employee name..."
+                  value={addEmployeeSearch}
+                  onChange={(e) => setAddEmployeeSearch(e.target.value)}
+                  style={{width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.9rem', marginBottom: '12px', boxSizing: 'border-box'}}
+                  autoFocus
+                />
+                <div style={{maxHeight: '350px', overflowY: 'auto'}}>
+                  {availableEmployees
+                    .filter(e => !addEmployeeSearch || e.name.toLowerCase().includes(addEmployeeSearch.toLowerCase()) || (e.employee_id || '').toLowerCase().includes(addEmployeeSearch.toLowerCase()))
+                    .length === 0 ? (
+                    <div style={{textAlign: 'center', color: '#9ca3af', padding: '20px'}}>
+                      {addEmployeeSearch ? 'No matching employees found' : 'All employees are already in this payroll'}
+                    </div>
+                  ) : (
+                    availableEmployees
+                      .filter(e => !addEmployeeSearch || e.name.toLowerCase().includes(addEmployeeSearch.toLowerCase()) || (e.employee_id || '').toLowerCase().includes(addEmployeeSearch.toLowerCase()))
+                      .map(emp => (
+                        <div key={emp.id} style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '10px 12px', borderBottom: '1px solid #f3f4f6',
+                          background: addingEmployee === emp.id ? '#f0f9ff' : 'transparent'
+                        }}>
+                          <div>
+                            <div style={{fontWeight: 600, fontSize: '0.9rem'}}>{emp.name}</div>
+                            <div style={{fontSize: '0.75rem', color: '#6b7280'}}>{emp.employee_id} {emp.department_name ? `· ${emp.department_name}` : ''}</div>
+                          </div>
+                          <button
+                            onClick={() => handleAddEmployee(emp.id, emp.name)}
+                            disabled={addingEmployee === emp.id}
+                            style={{
+                              padding: '6px 14px', background: '#059669', color: 'white',
+                              border: 'none', borderRadius: '6px', cursor: 'pointer',
+                              fontSize: '0.8rem', fontWeight: 600, opacity: addingEmployee === emp.id ? 0.6 : 1
+                            }}
+                          >
+                            {addingEmployee === emp.id ? 'Adding...' : 'Add'}
+                          </button>
+                        </div>
+                      ))
+                  )}
+                </div>
+              </div>
+              <div className="modal-footer" style={{padding: '12px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end'}}>
+                <button onClick={() => setShowAddEmployeeModal(false)} className="cancel-btn">Close</button>
               </div>
             </div>
           </div>
