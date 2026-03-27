@@ -150,7 +150,7 @@
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
-.card-header {
+.resignation-card .card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -159,7 +159,7 @@
   border-bottom: 2px solid #e2e8f0;
 }
 
-.card-header h3 {
+.resignation-card .card-header h3 {
   margin: 0 0 5px 0;
   color: #1e293b;
   font-size: 1.2rem;
