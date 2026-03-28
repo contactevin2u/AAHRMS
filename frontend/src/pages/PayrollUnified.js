@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { payrollV2Api, departmentApi, payrollApi, outletsApi, contributionsApi, employeeApi } from '../api';
+import { payrollV2Api, departmentApi, payrollApi, outletsApi, contributionsApi, employeeApi, earningsApi } from '../api';
 import Layout from '../components/Layout';
 import './PayrollV2.css';
 import './Contributions.css';
@@ -51,6 +51,10 @@ function PayrollUnified() {
   const [availableEmployees, setAvailableEmployees] = useState([]);
   const [addEmployeeSearch, setAddEmployeeSearch] = useState('');
   const [addingEmployee, setAddingEmployee] = useState(null);
+
+  // Allowance editor popup state
+  const [showAllowancePopup, setShowAllowancePopup] = useState(false);
+  const [allowanceTypes, setAllowanceTypes] = useState([]);
 
   // Recalculate modal state
   const [showRecalcModal, setShowRecalcModal] = useState(false);
@@ -2410,27 +2414,89 @@ function PayrollUnified() {
                       <label>Basic Salary</label>
                       <input type="number" step="0.01" value={itemForm.basic_salary} onChange={(e) => handleBasicSalaryChange(parseFloat(e.target.value) || 0)} />
                     </div>
-                    <div className="form-group">
-                      <label>Allowance (Total: RM {parseFloat(itemForm.fixed_allowance || 0).toFixed(2)})</label>
-                      {Array.isArray(itemForm.allowance_details) && itemForm.allowance_details.length > 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          {itemForm.allowance_details.map((a, idx) => (
-                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
-                              <span style={{ flex: 1, color: '#475569' }}>{a.name}</span>
-                              <span style={{ width: 80, textAlign: 'right', fontWeight: 500 }}>RM {(a.amount || 0).toFixed(2)}</span>
-                              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: a.is_taxable ? '#dc2626' : '#16a34a', cursor: 'pointer', userSelect: 'none' }}>
-                                <input type="checkbox" checked={a.is_taxable} onChange={() => {
-                                  const updated = [...itemForm.allowance_details];
-                                  updated[idx] = { ...updated[idx], is_taxable: !updated[idx].is_taxable };
-                                  setItemForm({ ...itemForm, allowance_details: updated });
-                                }} style={{ width: 14, height: 14 }} />
-                                {a.is_taxable ? 'Taxable' : 'Exempt'}
-                              </label>
+                    <div className="form-group" style={{ position: 'relative' }}>
+                      <label
+                        onClick={async () => {
+                          if (allowanceTypes.length === 0) {
+                            try { const r = await earningsApi.getAllowanceTypes(); setAllowanceTypes(r.data || []); } catch(e) {}
+                          }
+                          setShowAllowancePopup(true);
+                        }}
+                        style={{ cursor: 'pointer', color: '#2563eb', textDecoration: 'underline', userSelect: 'none' }}
+                      >
+                        Allowance (RM {parseFloat(itemForm.fixed_allowance || 0).toFixed(2)})
+                      </label>
+                      <input type="number" step="0.01" value={itemForm.fixed_allowance} readOnly style={{ background: '#f1f5f9', cursor: 'pointer' }} onClick={async () => {
+                        if (allowanceTypes.length === 0) {
+                          try { const r = await earningsApi.getAllowanceTypes(); setAllowanceTypes(r.data || []); } catch(e) {}
+                        }
+                        setShowAllowancePopup(true);
+                      }} />
+
+                      {showAllowancePopup && (
+                        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.3)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onClick={(e) => { if (e.target === e.currentTarget) setShowAllowancePopup(false); }}>
+                          <div style={{ background: 'white', borderRadius: 12, padding: 24, width: 420, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+                            onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                              <h3 style={{ margin: 0, fontSize: 16 }}>Allowance Details</h3>
+                              <button onClick={() => setShowAllowancePopup(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
                             </div>
-                          ))}
+
+                            {(itemForm.allowance_details || []).map((a, idx) => (
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+                                <span style={{ flex: 1, fontSize: 14, color: '#334155' }}>{a.name}</span>
+                                <input type="number" step="0.01" value={a.amount} onChange={(e) => {
+                                  const updated = [...itemForm.allowance_details];
+                                  const newAmt = parseFloat(e.target.value) || 0;
+                                  updated[idx] = { ...updated[idx], amount: newAmt };
+                                  const total = updated.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+                                  setItemForm({ ...itemForm, allowance_details: updated, fixed_allowance: total });
+                                }} style={{ width: 90, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, textAlign: 'right' }} />
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: a.is_taxable ? '#dc2626' : '#16a34a', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                  <input type="checkbox" checked={a.is_taxable} onChange={() => {
+                                    const updated = [...itemForm.allowance_details];
+                                    updated[idx] = { ...updated[idx], is_taxable: !updated[idx].is_taxable };
+                                    setItemForm({ ...itemForm, allowance_details: updated });
+                                  }} style={{ width: 14, height: 14 }} />
+                                  {a.is_taxable ? 'PCB' : 'No PCB'}
+                                </label>
+                                <button onClick={() => {
+                                  const updated = itemForm.allowance_details.filter((_, i) => i !== idx);
+                                  const total = updated.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+                                  setItemForm({ ...itemForm, allowance_details: updated, fixed_allowance: total });
+                                }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: '0 4px' }} title="Remove">&times;</button>
+                              </div>
+                            ))}
+
+                            {(itemForm.allowance_details || []).length === 0 && (
+                              <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 16 }}>No allowances added</p>
+                            )}
+
+                            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                              <select id="add-allowance-select" style={{ flex: 1, padding: '6px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}>
+                                <option value="">+ Add allowance...</option>
+                                {allowanceTypes.filter(at => at.is_active && !(itemForm.allowance_details || []).find(d => d.allowance_type_id === at.id))
+                                  .map(at => <option key={at.id} value={at.id}>{at.name}</option>)}
+                              </select>
+                              <button onClick={() => {
+                                const sel = document.getElementById('add-allowance-select');
+                                const typeId = parseInt(sel.value);
+                                if (!typeId) return;
+                                const type = allowanceTypes.find(t => t.id === typeId);
+                                if (!type) return;
+                                const updated = [...(itemForm.allowance_details || []), { allowance_type_id: type.id, name: type.name, amount: 0, is_taxable: type.is_taxable }];
+                                setItemForm({ ...itemForm, allowance_details: updated });
+                                sel.value = '';
+                              }} style={{ padding: '6px 12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Add</button>
+                            </div>
+
+                            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                              <span style={{ fontWeight: 600, fontSize: 14 }}>Total: RM {(itemForm.allowance_details || []).reduce((s, a) => s + (parseFloat(a.amount) || 0), 0).toFixed(2)}</span>
+                              <button onClick={() => setShowAllowancePopup(false)} style={{ padding: '6px 16px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Done</button>
+                            </div>
+                          </div>
                         </div>
-                      ) : (
-                        <input type="number" step="0.01" value={itemForm.fixed_allowance} onChange={(e) => setItemForm({ ...itemForm, fixed_allowance: parseFloat(e.target.value) || 0 })} />
                       )}
                     </div>
                   </div>
