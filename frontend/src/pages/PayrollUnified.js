@@ -2440,7 +2440,7 @@ function PayrollUnified() {
                             onClick={(e) => e.stopPropagation()}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                               <h3 style={{ margin: 0, fontSize: 16 }}>Allowance Details</h3>
-                              <button onClick={() => setShowAllowancePopup(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
+                              <button type="button" onClick={() => setShowAllowancePopup(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
                             </div>
 
                             {(itemForm.allowance_details || []).map((a, idx) => (
@@ -2461,7 +2461,7 @@ function PayrollUnified() {
                                   }} style={{ width: 14, height: 14 }} />
                                   {a.is_taxable ? 'PCB' : 'No PCB'}
                                 </label>
-                                <button onClick={() => {
+                                <button type="button" onClick={() => {
                                   const updated = itemForm.allowance_details.filter((_, i) => i !== idx);
                                   const total = updated.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
                                   setItemForm({ ...itemForm, allowance_details: updated, fixed_allowance: total });
@@ -2479,7 +2479,7 @@ function PayrollUnified() {
                                 {allowanceTypes.filter(at => at.is_active && !(itemForm.allowance_details || []).find(d => d.allowance_type_id === at.id))
                                   .map(at => <option key={at.id} value={at.id}>{at.name}</option>)}
                               </select>
-                              <button onClick={() => {
+                              <button type="button" onClick={() => {
                                 const sel = document.getElementById('add-allowance-select');
                                 const typeId = parseInt(sel.value);
                                 if (!typeId) return;
@@ -2489,7 +2489,7 @@ function PayrollUnified() {
                                 setItemForm({ ...itemForm, allowance_details: updated });
                                 sel.value = '';
                               }} style={{ padding: '6px 12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Add</button>
-                              <button onClick={async () => {
+                              <button type="button" onClick={async () => {
                                 const name = prompt('Enter new allowance type name:');
                                 if (!name || !name.trim()) return;
                                 try {
@@ -2504,7 +2504,7 @@ function PayrollUnified() {
 
                             <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
                               <span style={{ fontWeight: 600, fontSize: 14 }}>Total: RM {(itemForm.allowance_details || []).reduce((s, a) => s + (parseFloat(a.amount) || 0), 0).toFixed(2)}</span>
-                              <button onClick={() => setShowAllowancePopup(false)} style={{ padding: '6px 16px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Done</button>
+                              <button type="button" onClick={() => setShowAllowancePopup(false)} style={{ padding: '6px 16px', background: '#1e293b', color: 'white', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Done</button>
                             </div>
                           </div>
                         </div>
