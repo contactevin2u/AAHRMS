@@ -2489,6 +2489,17 @@ function PayrollUnified() {
                                 setItemForm({ ...itemForm, allowance_details: updated });
                                 sel.value = '';
                               }} style={{ padding: '6px 12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Add</button>
+                              <button onClick={async () => {
+                                const name = prompt('Enter new allowance type name:');
+                                if (!name || !name.trim()) return;
+                                try {
+                                  const res = await earningsApi.createAllowanceType({ name: name.trim(), is_taxable: false });
+                                  const newType = res.data;
+                                  setAllowanceTypes(prev => [...prev, newType]);
+                                  const updated = [...(itemForm.allowance_details || []), { allowance_type_id: newType.id, name: newType.name, amount: 0, is_taxable: newType.is_taxable }];
+                                  setItemForm({ ...itemForm, allowance_details: updated });
+                                } catch(e) { alert(e.response?.data?.error || 'Failed to create'); }
+                              }} style={{ padding: '6px 8px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#475569', whiteSpace: 'nowrap' }}>+ New</button>
                             </div>
 
                             <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
