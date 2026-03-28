@@ -174,6 +174,15 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
     });
   }
 
+  // Auto-reject medical claims for AA Alive (company_id = 1)
+  if (driverCheck.rows[0] && categoryLower.includes('medical')) {
+    return res.status(400).json({
+      error: 'Claim rejected',
+      reason: 'Medical claims are not claimable for AA Alive. Please contact HR if you have questions.',
+      autoRejected: true
+    });
+  }
+
   // Get employee's company_id and resignation info
   const empResult = await pool.query(
     'SELECT company_id, employment_status, last_working_day FROM employees WHERE id = $1',
