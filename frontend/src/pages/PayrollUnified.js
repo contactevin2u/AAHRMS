@@ -981,6 +981,7 @@ function PayrollUnified() {
       trip_allowance_days: item.trip_allowance_days || 0,
       ot_extra_days: item.ot_extra_days || 0,
       ot_extra_days_amount: item.ot_extra_days_amount || 0,
+      allowance_details: item.allowance_details || [],
     });
     setShowItemModal(true);
     const statutoryBase = (parseFloat(item.basic_salary) || 0) + wages + (parseFloat(item.commission_amount) || 0) +
@@ -2410,8 +2411,27 @@ function PayrollUnified() {
                       <input type="number" step="0.01" value={itemForm.basic_salary} onChange={(e) => handleBasicSalaryChange(parseFloat(e.target.value) || 0)} />
                     </div>
                     <div className="form-group">
-                      <label>Allowance</label>
-                      <input type="number" step="0.01" value={itemForm.fixed_allowance} onChange={(e) => setItemForm({ ...itemForm, fixed_allowance: parseFloat(e.target.value) || 0 })} />
+                      <label>Allowance (Total: RM {(itemForm.fixed_allowance || 0).toFixed(2)})</label>
+                      {Array.isArray(itemForm.allowance_details) && itemForm.allowance_details.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {itemForm.allowance_details.map((a, idx) => (
+                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
+                              <span style={{ flex: 1, color: '#475569' }}>{a.name}</span>
+                              <span style={{ width: 80, textAlign: 'right', fontWeight: 500 }}>RM {(a.amount || 0).toFixed(2)}</span>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: a.is_taxable ? '#dc2626' : '#16a34a', cursor: 'pointer', userSelect: 'none' }}>
+                                <input type="checkbox" checked={a.is_taxable} onChange={() => {
+                                  const updated = [...itemForm.allowance_details];
+                                  updated[idx] = { ...updated[idx], is_taxable: !updated[idx].is_taxable };
+                                  setItemForm({ ...itemForm, allowance_details: updated });
+                                }} style={{ width: 14, height: 14 }} />
+                                {a.is_taxable ? 'Taxable' : 'Exempt'}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <input type="number" step="0.01" value={itemForm.fixed_allowance} onChange={(e) => setItemForm({ ...itemForm, fixed_allowance: parseFloat(e.target.value) || 0 })} />
+                      )}
                     </div>
                   </div>
                   {/* OT row - hidden for part-time since they have it in the blue breakdown box */}

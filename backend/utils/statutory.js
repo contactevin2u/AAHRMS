@@ -740,6 +740,10 @@ const calculatePCBFull = (params) => {
   // Round up to nearest 5 cents (LHDN requirement)
   currentMonthSTD = Math.ceil(currentMonthSTD * 20) / 20;
 
+  // LHDN: Minimum PCB is RM10 for Pengiraan Berkomputer
+  // If PCB before zakat < RM10, no PCB is required
+  if (currentMonthSTD < 10) currentMonthSTD = 0;
+
   // Return detailed breakdown
   return {
     // Final PCB amount

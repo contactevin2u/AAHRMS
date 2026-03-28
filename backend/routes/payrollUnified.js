@@ -732,25 +732,33 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
       commResult.rows.forEach(r => { commissionsMap[r.employee_id] = parseFloat(r.total) || 0; });
     }
 
-    // Get flexible allowances
+    // Get flexible allowances (individual items for per-allowance taxable control)
     let allowancesMap = {};
+    let allowanceDetailsMap = {};
     if (features.flexible_allowances) {
       const allowResult = await client.query(`
-        SELECT ea.employee_id,
-          SUM(ea.amount) as total,
-          SUM(CASE WHEN at.is_taxable THEN ea.amount ELSE 0 END) as taxable,
-          SUM(CASE WHEN NOT at.is_taxable THEN ea.amount ELSE 0 END) as exempt
+        SELECT ea.employee_id, ea.allowance_type_id, at.name, ea.amount, at.is_taxable
         FROM employee_allowances ea
         JOIN allowance_types at ON ea.allowance_type_id = at.id
         WHERE ea.is_active = TRUE AND at.is_active = TRUE
-        GROUP BY ea.employee_id
+        ORDER BY ea.employee_id, at.name
       `);
       allowResult.rows.forEach(r => {
-        allowancesMap[r.employee_id] = {
-          total: parseFloat(r.total) || 0,
-          taxable: parseFloat(r.taxable) || 0,
-          exempt: parseFloat(r.exempt) || 0
-        };
+        const empId = r.employee_id;
+        const amt = parseFloat(r.amount) || 0;
+        if (!allowancesMap[empId]) {
+          allowancesMap[empId] = { total: 0, taxable: 0, exempt: 0 };
+          allowanceDetailsMap[empId] = [];
+        }
+        allowancesMap[empId].total += amt;
+        if (r.is_taxable) allowancesMap[empId].taxable += amt;
+        else allowancesMap[empId].exempt += amt;
+        allowanceDetailsMap[empId].push({
+          allowance_type_id: r.allowance_type_id,
+          name: r.name,
+          amount: amt,
+          is_taxable: r.is_taxable
+        });
       });
     }
 
@@ -1144,11 +1152,14 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
         ytdData = await getYTDData(emp.id, year, month);
       }
 
-      const allowancePcb = emp.allowance_pcb || 'excluded';
-      const fixedAllowanceTaxable = allowancePcb === 'excluded' ? 0 : fixedAllowance;
+      // Build allowance details for this employee (for per-allowance taxable control)
+      const empAllowanceDetails = allowanceDetailsMap[emp.id] || [];
+      const taxableAllowanceTotal = empAllowanceDetails
+        .filter(a => a.is_taxable).reduce((sum, a) => sum + a.amount, 0);
+
       const salaryBreakdown = {
         basic: basicSalary, allowance: totalAllowances,
-        taxableAllowance: flexAllowData.taxable + fixedAllowanceTaxable,
+        taxableAllowance: taxableAllowanceTotal,
         commission: commissionAmount, bonus: 0, ot: otAmount, pcbGross: grossSalary
       };
       const statutoryResult = calculateAllStatutory(statutoryBase, emp, month, ytdData, salaryBreakdown);
@@ -1182,8 +1193,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
           sales_amount, salary_calculation_method,
           upsell_commission, order_commission, trip_allowance, trip_allowance_days,
           ot_extra_days, ot_extra_days_amount, employee_role_type,
-          sort_order
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44)
+          sort_order, allowance_details
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45)
       `, [
         runId, emp.id, basicSalary, wages, partTimeHoursWorked, totalAllowances, commissionAmount, claimsAmount,
         otHours, otAmount, phDaysWorked, phPay,
@@ -1197,7 +1208,8 @@ async function generatePayrollRunInternal({ companyId, month, year, outletId, de
         salesAmount, salaryCalculationMethod,
         upsellCommission, orderCommission, tripAllowance, tripAllowanceDays,
         otExtraDays, otExtraDaysAmount, employeeRoleType,
-        (stats.created + 1) * 10
+        (stats.created + 1) * 10,
+        empAllowanceDetails.length > 0 ? JSON.stringify(empAllowanceDetails) : null
       ]);
 
       stats.created++;
@@ -3157,11 +3169,20 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       ytdData = await getYTDData(item.employee_id, item.year, item.month);
     }
 
+    // Handle allowance_details update (per-allowance taxable toggle)
+    const allowanceDetails = updates.allowance_details !== undefined
+      ? updates.allowance_details
+      : (item.allowance_details || null);
+    const taxableAllowanceFromDetails = Array.isArray(allowanceDetails)
+      ? allowanceDetails.filter(a => a.is_taxable).reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0)
+      : 0;
+
     // Recalculate statutory with breakdown for proper PCB calculation
     // EPF/SOCSO/EIS on statutoryBase, PCB on full gross
     const salaryBreakdown = {
       basic: basicSalary + wages,  // Include wages for part-time
       allowance: fixedAllowance + outstationAmount + incentiveAmount,  // All allowance-type items
+      taxableAllowance: taxableAllowanceFromDetails,
       commission: commissionAmount + tradeCommission + orderCommission + upsellCommission,
       bonus: bonus,
       ot: otAmount + phPay + otExtraDaysAmount,  // OT and PH pay as additional
@@ -3234,6 +3255,7 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
         trip_allowance = $39, trip_allowance_days = $40,
         ot_extra_days = $41, ot_extra_days_amount = $42,
         zakat = $43,
+        allowance_details = $44,
         updated_at = NOW()
       WHERE id = $28
       RETURNING *
@@ -3258,7 +3280,8 @@ router.put('/items/:id', authenticateAdmin, async (req, res) => {
       upsellCommission, orderCommission,
       tripAllowanceAmount, tripAllowanceDays,
       otExtraDays, otExtraDaysAmount,
-      zakat
+      zakat,
+      allowanceDetails ? JSON.stringify(allowanceDetails) : null
     ]);
 
     // Update run totals
