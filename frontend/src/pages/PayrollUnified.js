@@ -2411,7 +2411,7 @@ function PayrollUnified() {
                       <input type="number" step="0.01" value={itemForm.basic_salary} onChange={(e) => handleBasicSalaryChange(parseFloat(e.target.value) || 0)} />
                     </div>
                     <div className="form-group">
-                      <label>Allowance (Total: RM {(itemForm.fixed_allowance || 0).toFixed(2)})</label>
+                      <label>Allowance (Total: RM {parseFloat(itemForm.fixed_allowance || 0).toFixed(2)})</label>
                       {Array.isArray(itemForm.allowance_details) && itemForm.allowance_details.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {itemForm.allowance_details.map((a, idx) => (
