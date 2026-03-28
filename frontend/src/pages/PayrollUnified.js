@@ -2239,7 +2239,7 @@ function PayrollUnified() {
 
         {/* Edit/View Item Modal */}
         {showItemModal && editingItem && (
-          <div className="modal-overlay" onClick={() => setShowItemModal(false)}>
+          <div className="modal-overlay" onClick={() => { if (!showAllowancePopup) setShowItemModal(false); }}>
             <div className="modal large" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
                 <h2 style={{margin: 0}}>{viewMode ? 'View' : 'Edit'} - {editingItem.employee_name}</h2>
@@ -2435,7 +2435,7 @@ function PayrollUnified() {
 
                       {showAllowancePopup && (
                         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.3)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          onClick={(e) => { if (e.target === e.currentTarget) setShowAllowancePopup(false); }}>
+                          onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setShowAllowancePopup(false); }}>
                           <div style={{ background: 'white', borderRadius: 12, padding: 24, width: 420, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
                             onClick={(e) => e.stopPropagation()}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
