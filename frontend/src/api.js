@@ -54,6 +54,13 @@ const onRefreshed = (token) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Retry on 408 (Render server sleeping/timeout) - up to 2 retries
+    if (error.response?.status === 408 && (!error.config._retryCount || error.config._retryCount < 2)) {
+      error.config._retryCount = (error.config._retryCount || 0) + 1;
+      await new Promise(r => setTimeout(r, 2000));
+      return api(error.config);
+    }
+
     if (error.response?.status === 401) {
       const path = window.location.pathname;
       const requestUrl = error.config?.url || '';

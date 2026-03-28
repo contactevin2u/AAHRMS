@@ -195,15 +195,24 @@ router.post('/', authenticateEmployee, asyncHandler(async (req, res) => {
   // Get the base64 data for AI processing
   const receiptData = receipt_base64 || receipt_url;
 
-  // Run AI verification for all AA Alive claims (company_id = 1)
-  // For drivers: AI extracts amount from receipt (driver doesn't enter amount)
-  // For non-drivers: AI verifies amount matches receipt
+  // For drivers: fast duplicate check using receipt hash only (no slow AI call)
+  // For non-drivers: full AI verification (amount match, duplicate, receipt extraction)
   let verification = ai_verification;
   if (companyId === 1 && !verification && receiptData && receiptData.startsWith('data:')) {
     if (isDriver) {
-      // Drivers: run AI to extract amount from receipt, use 0 as comparison amount
-      // AI will extract the real amount which we'll use as claim amount
-      verification = await verifyReceipt(receiptData, 0, companyId);
+      // Hash-based duplicate check only — skips OpenAI to avoid Render timeout
+      const receiptHash = generateReceiptHash(receiptData);
+      const duplicateCheck = await checkDuplicateReceipt(receiptHash, companyId);
+      if (duplicateCheck.isDuplicate) {
+        return res.status(400).json({
+          error: 'Claim rejected',
+          reason: `Duplicate receipt detected. This receipt was already submitted by ${duplicateCheck.originalClaim.employeeName} on claim #${duplicateCheck.originalClaim.id}.`,
+          duplicateInfo: duplicateCheck.originalClaim,
+          autoRejected: true
+        });
+      }
+      // Store hash for future duplicate checks
+      verification = { receiptHash };
     } else if (amount) {
       verification = await verifyReceipt(receiptData, parseFloat(amount), companyId);
     }
