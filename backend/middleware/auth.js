@@ -19,7 +19,8 @@ const authenticateAdmin = (req, res, next) => {
     if (decoded.role === 'super_admin' && !decoded.company_id) {
       // Allow super_admin to select company context via header or query
       const selectedCompany = req.headers['x-company-id'] || req.query.company_id;
-      req.companyId = selectedCompany ? parseInt(selectedCompany) : null;
+      const parsed = selectedCompany ? parseInt(selectedCompany) : null;
+      req.companyId = (parsed && !isNaN(parsed)) ? parsed : null;
       req.isSuperAdmin = true;
     } else {
       req.companyId = decoded.company_id;
