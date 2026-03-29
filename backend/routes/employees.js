@@ -1919,6 +1919,7 @@ router.get('/birthdays', authenticateAdmin, async (req, res) => {
           OR
           (e.date_of_birth IS NULL AND e.ic_number IS NOT NULL
            AND LENGTH(REPLACE(REPLACE(e.ic_number, '-', ''), ' ', '')) >= 6
+           AND SUBSTRING(REPLACE(REPLACE(e.ic_number, '-', ''), ' ', '') FROM 3 FOR 2) ~ '^\d+$'
            AND CAST(SUBSTRING(REPLACE(REPLACE(e.ic_number, '-', ''), ' ', '') FROM 3 FOR 2) AS INTEGER) = $${paramIndex})
         )
       ORDER BY
