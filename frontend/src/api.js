@@ -118,6 +118,16 @@ api.interceptors.response.use(
         window.location.href = '/';
       }
     }
+
+    // Handle 403 expired token for admin routes (redirect to login)
+    if (error.response?.status === 403) {
+      const path = window.location.pathname;
+      if (path.startsWith('/admin') && error.response?.data?.error?.includes('expired')) {
+        localStorage.removeItem('adminToken');
+        window.location.href = '/';
+      }
+    }
+
     return Promise.reject(error);
   }
 );
