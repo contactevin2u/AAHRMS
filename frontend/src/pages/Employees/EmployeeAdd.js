@@ -147,7 +147,7 @@ function EmployeeAdd() {
             employeeAllowances={employeeAllowances}
             setEmployeeAllowances={setEmployeeAllowances}
             salaryAutoPopulated={false}
-            onDepartmentChange={() => {}}
+            onDepartmentChange={(deptId) => setForm(prev => ({ ...prev, department_id: deptId }))}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
             saving={saving}
