@@ -201,4 +201,18 @@ app.listen(PORT, () => {
   } catch (error) {
     console.error('Failed to initialize scheduled jobs:', error);
   }
+
+  // Keep-alive: ping self every 14 minutes to prevent Render free tier from sleeping
+  if (process.env.RENDER) {
+    const https = require('https');
+    const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL || `https://${process.env.RENDER_SERVICE_NAME}.onrender.com`;
+    setInterval(() => {
+      https.get(`${KEEP_ALIVE_URL}/api/health`, (res) => {
+        console.log(`Keep-alive ping: ${res.statusCode}`);
+      }).on('error', (err) => {
+        console.error('Keep-alive ping failed:', err.message);
+      });
+    }, 14 * 60 * 1000);
+    console.log('Keep-alive ping enabled (every 14 min)');
+  }
 });
